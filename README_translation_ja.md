@@ -58,5 +58,7 @@ npm run textlint
 
 設定ファイルは `.textlintrc.json` にあります。
 
+ルール一覧は[Collection of textlint rule · textlint/textlint Wiki](https://github.com/textlint/textlint/wiki/Collection-of-textlint-rule)を参照してください。
+
 [prh/prh: proofreading helper](https://github.com/prh/prh)用のルールは[lxc-jp/textlint-prh-rules: A collection of prh rules](https://github.com/lxc-jp/textlint-prh-rules)をgit submoduleで`.textlint-prh-rules/`に配置しています。
 
