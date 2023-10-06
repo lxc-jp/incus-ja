@@ -4,7 +4,22 @@
     "comments": true
   },
   "rules": {
+    "@textlint-ja/textlint-rule-no-insert-dropping-sa": true,
+    "textlint-rule-ja-hiragana-fukushi": true,
+    "textlint-rule-ja-hiragana-hojodoushi": true,
+    "textlint-rule-ja-hiragana-keishikimeishi": true,
+    "textlint-rule-ja-no-inappropriate-words": true,
+    "textlint-rule-ja-no-mixed-period": true,
+    "textlint-rule-ja-no-redundant-expression": true,
+    "textlint-rule-ja-unnatural-alphabet": true,
+    "textlint-rule-no-doubled-conjunction": true,
+    "textlint-rule-no-doubled-conjunctive-particle-ga": true,
+    "textlint-rule-no-doubled-joshi": true,
+    "textlint-rule-no-double-negative-ja": true,
     "textlint-rule-no-dropping-the-ra": true,
+    "textlint-rule-no-hankaku-kana": true,
+    "textlint-rule-no-mix-dearu-desumasu": true,
+    "textlint-rule-no-mixed-zenkaku-and-hankaku-alphabet": true,
     "textlint-rule-prh": {
       "rulePaths": [
         ".textlint-prh-rules/media/WEB+DB_PRESS.yml"
