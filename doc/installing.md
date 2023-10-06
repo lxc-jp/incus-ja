@@ -1,13 +1,13 @@
 (installing)=
-# How to install Incus
+# Incusをインストールするには
 
-The easiest way to install Incus is to {ref}`install one of the available packages <installing-from-package>`, but you can also {ref}`install Incus from the sources <installing_from_source>`.
+Incusをインストールする最も簡単な方法は{ref}`利用可能なパッケージの1つをインストール <installing-from-package>`ですが、{ref}`ソースからIncusをインストール <installing_from_source>`も可能です。
 
-After installing Incus, make sure you have an `incus-admin` group on your system.
-Users in this group can interact with Incus.
-See {ref}`installing-manage-access` for instructions.
+Incusをインストールしたら、システム上に`incus-admin`グループが存在することを確認してください。
+このグループのユーザーがIncusを操作できます。
+手順は{ref}`installing-manage-access`を参照してください。
 
-## Choose your release
+## リリースを選択する
 
 % Include content from [support.md](support.md)
 ```{include} support.md
@@ -15,153 +15,152 @@ See {ref}`installing-manage-access` for instructions.
     :end-before: <!-- Include end release -->
 ```
 
-LTS releases are recommended for production environments, because they benefit from regular bugfix and security updates.
-However, there are no new features added to an LTS release, nor any kind of behavioral change.
+本番環境にはLTSを推奨します。通常のバグフィクスとセキュリティアップデートの恩恵を受けられるからです。
+しかし、長期リリースには新しい機能はやどんな種類の挙動の変更も追加されません。
 
-To get all the latest features and monthly updates to Incus, use the feature release branch instead.
+LXDの最新の機能と毎月の更新を得るには、代わりに機能リリースを使ってください。
 
 (installing-from-package)=
-## Install Incus from a package
+## Incusをパッケージからインストールする
 
-The Incus daemon only works on Linux.
-The client tool ([`incus`](incus.md)) is available on most platforms.
+IncusデーモンはLinuxでのみ稼働します。
+クライアントツール（[`incus`](incus.md)）はほとんどのプラットフォームで利用できます。
 
 ### Linux
 
-The easiest way to install Incus on Linux is to install the {ref}`installing-zabbly-package`, which is available for both Debian and Ubuntu.
+LinuxでIncusをインストールする最も簡単な方法は{ref}`installing-zabbly-package`です。これはDebianとUbuntuで利用できます。
 
 (installing-zabbly-package)=
-#### Debian and Ubuntu package from Zabbly
-Currently the easiest way to install Incus is to use the Debian or Ubuntu packages provided by [Zabbly](https://zabbly.com).
-There are two repositories available, one for the current stable release and one for daily (untested) builds.
+#### ZabblyのDebianとUbuntuパッケージをインストールする
+現時点ではIncusをインストールする最も簡単な方法は[Zabbly](https://zabbly.com)で提供されるDebianまたはUbuntuのパッケージを使うことです。
+最新の安定版リリースと（テストされていない）デイリービルドの2つのリポジトリがあります。
 
-Installation instructions may be found here: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)
+インストール手順は[`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)にあります。
 
-If you prefer a different installation method, see {ref}`installing`.
+他のインストール方法については{ref}`installing`を参照してください。
 
-1. Allow your user to control Incus
+1. あなたのユーザーにIncusを制御する許可を与えます。
 
-   Access to Incus in the packages above is controlled through two groups:
+   上記のパッケージに含まれるIncusへのアクセスは2つのグループで制御されます。
 
-   - `incus` allows basic user access, no configuration and all actions restricted to a per-user project.
-   - `incus-admin` allows full control over Incus.
+   - `incus`は基本的なユーザーアクセスを許可します。設定はできずすべてのアクションはユーザーごとのプロジェクトに限定されます。
+   - `incus-admin`はIncusの完全なコントロールを許可します。
 
-   To control Incus without having to run all commands as root, you can add yourself to the `incus-admin` group:
+   すべてのコマンドをrootで実行することなくIncusを制御するには、あなた自身を`incus-admin`グループに追加してください。
 
        sudo adduser YOUR-USERNAME incus-admin
        newgrp incus-admin
 
-   The `newgrp` step is needed in any terminal that interacts with Incus until you restart your user session.
+   `newgrp`の手順はあなたの端末セッションを再起動しないままでIncusを利用する場合に必要です（訳注：端末を起動し直す場合は不要です）。
 
-1. Initialize Incus with:
+1. Incusを初期化します。
 
        incus admin init --minimal
 
-   This will create a minimal setup with default options.
-   If you want to tune the initialization options, see {ref}`initialize` for more information.
+   この手順はフォルトのオプションで最小セットアップの構成を作成します。
+   初期化オプションをチューニングしたい場合、詳細は{ref}`initialize`を参照してください。
 
-### Other operating systems
+### 他のOS
 
 ```{important}
-The builds for other operating systems include only the client, not the server.
+他のOS用のビルドはクライアントのみを含み、サーバは含みません。
 ```
 
 ````{tabs}
 
 ```{group-tab} macOS
 
-Incus publishes builds of the Incus client for macOS through [Homebrew](https://brew.sh/).
+IncusはmacOSのIncusクライアントのビルドを[Homebrew](https://brew.sh/)で公開しています（訳注：2023-10-07時点で公開されていないようです）。
 
-To install the feature branch of Incus, run:
+機能リリースのIncusをインストールするには、以下のようにします。
 
     brew install incus
 ```
 
 ```{group-tab} Windows
 
-The Incus client on Windows is provided as a [Chocolatey](https://community.chocolatey.org/packages/lxc) package.
-To install it:
+Windows版のIncusクライアントは[Chocolatey](https://community.chocolatey.org/packages/incus)パッケージとして提供されています（訳注：2023-10-07時点では提供されていないようです）。
+インストールするためには以下のようにします。
 
-1. Install Chocolatey by following the [installation instructions](https://docs.chocolatey.org/en-us/choco/setup).
-1. Install the Incus client:
+1. [インストール手順](https://docs.chocolatey.org/en-us/choco/setup)に従ってChocolateyをインストールします。
+1. Incusクライアントをインストールします。
 
         choco install incus
 ```
 
 ````
 
-You can also find native builds of the Incus client on [GitHub](https://github.com/lxc/incus/actions).
-To download a specific build:
+[GitHub](https://github.com/lxc/incus/actions)にもIncusクライアントのネイティブビルドがあります。
+特定のビルドをダウンロードするには以下のようにします。
 
-1. Make sure that you are logged into your GitHub account.
-1. Filter for the branch or tag that you are interested in (for example, the latest release tag or `main`).
-1. Select the latest build and download the suitable artifact.
+1. GitHubアカウントにログインします。
+1. 興味のあるブランチやタグ(たとえば、最新のリリースタグあるいは`main`)でフィルタリングします。
+1. 最新のビルドを選択し、適切なアーティファクトをダウンロードします。
 
 (installing_from_source)=
-## Install Incus from source
+## Incusをソースからインストールする
 
-Follow these instructions if you want to build and install Incus from the source code.
+Incusをソースコードからビルドとインストールしたい場合、以下の手順に従ってください。
 
-We recommend having the latest versions of `liblxc` (>= 4.0.0 required)
-available for Incus development. Additionally, Incus requires Golang 1.18 or
-later to work. On Ubuntu, you can get those with:
+Incusの開発には`liblxc`の最新バージョン（4.0.0以上が必要）を使用することをお勧めします。
+さらにIncusが動作するためにはGolang 1.18以上が必要です。
+Ubuntuでは次のようにインストールできます。
 
 ```bash
 sudo apt update
 sudo apt install acl attr autoconf automake dnsmasq-base git golang libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
 ```
 
-There are a few storage drivers for Incus besides the default `dir` driver.
-Installing these tools adds a bit to initramfs and may slow down your
-host boot, but are needed if you'd like to use a particular driver:
+デフォルトのストレージドライバである`dir`ドライバに加えて、Incusではいくつかのストレージドライバが使えます。
+これらのツールをインストールすると、initramfsへの追加が行われ、ホストのブートが少しだけ遅くなるかもしれませんが、特定のドライバを使いたい場合には必要です。
 
 ```bash
 sudo apt install lvm2 thin-provisioning-tools
 sudo apt install btrfs-progs
 ```
 
-To run the test suite, you'll also need:
+テストスイートを実行するには、次のパッケージも必要です。
 
 ```bash
 sudo apt install busybox-static curl gettext jq sqlite3 socat bind9-dnsutils
 ```
 
-### From source: Build the latest version
+### ソースから最新版をビルドする
 
-These instructions for building from source are suitable for individual developers who want to build the latest version
-of Incus, or build a specific release of Incus which may not be offered by their Linux distribution. Source builds for
-integration into Linux distributions are not covered here and may be covered in detail in a separate document in the
-future.
+この方法はIncusの最新版をビルドしたい開発者やLinuxディストリビューションで提供されないIncusの特定のリリースをビルドするためのものです。
+Linuxディストリビューションへ統合するためのソースからのビルドはここでは説明しません。
+それは将来、別のドキュメントで取り扱うかもしれません。
 
 ```bash
 git clone https://github.com/lxc/incus
 cd incus
 ```
 
-This will download the current development tree of Incus and place you in the source tree.
-Then proceed to the instructions below to actually build and install Incus.
+これでIncusの現在の開発ツリーをダウンロードしてソースツリー内に移動します。
+その後下記の手順にしたがって実際にIncusをビルド、インストールしてください。
 
-### From source: Build a release
+### ソースからリリース版をビルドする
 
-The Incus release tarballs bundle a complete dependency tree as well as a
-local copy of `libraft` and `libcowsql` for Incus' database setup.
+Incusのリリースtarballは完全な依存ツリーと`libraft`とIncusデータベースのセットアップに使用する`libcowsql`のローカルコピーをバンドルしています。
 
 ```bash
 tar zxvf incus-0.1.tar.gz
 cd incus-0.1
 ```
 
-This will unpack the release tarball and place you inside of the source tree.
-Then proceed to the instructions below to actually build and install Incus.
+これでリリースtarballを展開し、ソースツリー内に移動します。
+その後下記の手順にしたがって実際にIncusをビルド、インストールしてください。
 
-### Start the build
+### ビルドを開始する
 
-The actual building is done by two separate invocations of the Makefile: `make deps` -- which builds libraries required
-by Incus -- and `make`, which builds Incus itself. At the end of `make deps`, a message will be displayed which will specify environment variables that should be set prior to invoking `make`. As new versions of Incus are released, these environment
-variable settings may change, so be sure to use the ones displayed at the end of the `make deps` process, as the ones
-below (shown for example purposes) may not exactly match what your version of Incus requires:
+実際のビルドはMakefileの2回の別々の実行により行われます。
+一つは`make deps`でこれはIncusに必要とされるライブラリをビルドします。
+もう一つは`make`でIncus自体をビルドします。
+`make deps`の最後に`make`の実行に必要な環境変数を設定するための手順が表示されます。
+新しいバージョンのIncusがリリースされたらこれらの環境変数の設定は変わるかもしれませんので、`make deps`の最後に表示された手順を使うようにしてください。
+下記の手順（例示のために表示します）はあなたがビルドするIncusのバージョンのものとは一致しないかもしれません。
 
-We recommend having at least 2GiB of RAM to allow the build to complete.
+ビルドには最低2GiBのRAMを搭載することを推奨します。
 
 ```{terminal}
 :input: make deps
@@ -178,50 +177,47 @@ Please set the following in your environment (possibly ~/.bashrc)
 :input: make
 ```
 
-### From source: Install
+### ソースからのビルド結果のインストール
 
-Once the build completes, you simply keep the source tree, add the directory referenced by `$(go env GOPATH)/bin` to
-your shell path, and set the `LD_LIBRARY_PATH` variable printed by `make deps` to your environment. This might look
-something like this for a `~/.bashrc` file:
+ビルドが完了したら、ソースツリーを維持したまま、あなたのお使いのシェルのパスに`$(go env GOPATH)/bin`を追加し、`LD_LIBRARY_PATH`環境変数を`make deps`で表示された値に設定します。これは`~/.bashrc`ファイルの場合は以下のようになります。
 
 ```bash
 export PATH="${PATH}:$(go env GOPATH)/bin"
 export LD_LIBRARY_PATH="$(go env GOPATH)/deps/cowsql/.libs/:$(go env GOPATH)/deps/raft/.libs/:${LD_LIBRARY_PATH}"
 ```
 
-Now, the `incusd` and `incus` binaries will be available to you and can be used to set up Incus. The binaries will automatically find and use the dependencies built in `$(go env GOPATH)/deps` thanks to the `LD_LIBRARY_PATH` environment variable.
+これで`incusd`と`incus`コマンドの実行ファイルが利用可能になりIncusをセットアップするのに使用できます。
+`LD_LIBRARY_PATH`環境変数のおかげで実行ファイルは`$(go env GOPATH)/deps`にビルドされた依存ライブラリを自動的に見つけて使用します。
 
-### Machine setup
+### マシンセットアップ
 
-You'll need sub{u,g}ids for root, so that Incus can create the unprivileged containers:
+LXDが非特権コンテナを作成できるように、rootユーザーに対するsub{u,g}idの設定が必要です。
 
 ```bash
 echo "root:1000000:1000000000" | sudo tee -a /etc/subuid /etc/subgid
 ```
 
-Now you can run the daemon (the `--group sudo` bit allows everyone in the `sudo`
-group to talk to Incus; you can create your own group if you want):
+これでデーモンを実行できます(`sudo`グループに属する全員がIncusとやりとりできるように `--group sudo` を指定します。別に指定したいグループを作ることもできます)。
 
 ```bash
 sudo -E PATH=${PATH} LD_LIBRARY_PATH=${LD_LIBRARY_PATH} $(go env GOPATH)/bin/incus --group sudo
 ```
 
 ```{note}
-If `newuidmap/newgidmap` tools are present on your system and `/etc/subuid`, `etc/subgid` exist, they must be configured to allow the root user a contiguous range of at least 10M UID/GID.
+`newuidmap/newgidmap`ツールがシステムに存在し、`/etc/subuid`、`/etc/subgid`が存在する場合は、rootユーザーに少なくとも10MのUID/GIDの連続した範囲を許可するように設定する必要があります。
 ```
 
 (installing-manage-access)=
-## Manage access to Incus
+## Incusへのアクセスを管理する
 
-Access control for Incus is based on group membership.
-The root user and all members of the `incus-admin` group can interact with the local daemon.
-See {ref}`security-daemon-access` for more information.
+Incusのアクセス制御はグループのメンバーシップに基づいています。
+rootユーザーと`incus-admin`グループのすべてのメンバーはローカルデーモンとやりとりできます。
+詳細は{ref}`security-daemon-access`を参照してください。
 
-If the `incus-admin` group is missing on your system, create it and restart the Incus daemon.
-You can then add trusted users to the group.
-Anyone added to this group will have full control over Incus.
+お使いのシステムに`incus-admin`グループが存在しない場合は、作成してIncusデーモンを再起動してください。
+このグループに追加されたメンバーはIncusの完全な制御ができます。
 
-Because group membership is normally only applied at login, you might need to either re-open your user session or use the `newgrp incus-admin` command in the shell you're using to talk to Incus.
+グループのメンバーシップは通常ログイン時にのみ適用されますので、セッションを開き直すか、Incusとやりとりするシェル上で`newgrp incus-admin`コマンドを実行する必要があります。
 
 ````{important}
 % Include content from [../README.md](../README.md)
@@ -232,15 +228,15 @@ Because group membership is normally only applied at login, you might need to ei
 ````
 
 (installing-upgrade)=
-## Upgrade Incus
+## Incusをアップグレードする
 
-After upgrading Incus to a newer version, Incus might need to update its database to a new schema.
-This update happens automatically when the daemon starts up after a Incus upgrade.
-A backup of the database before the update is stored in the same location as the active database (at `/var/lib/incus/database`).
+Incusを新しいバージョンにアップグレードした後、Incusはデータベースを新しいスキーマにアップデートする必要があるかもしれません。
+このアップデートはIncusのアップグレードの後のデーモン起動時に自動的に実行されます。
+アップデート前のデータベースのバックアップはアクティブなデータベースと同じ場所（`/var/lib/incus/database`）に保存されます。
 
 ```{important}
-After a schema update, older versions of Incus might regard the database as invalid.
-That means that downgrading Incus might render your Incus installation unusable.
+スキーマのアップデート後は、古いバージョンのIncusはデータベースを無効とみなすかもしれません。
+これはつまりIncusをダウングレードしてもあなたのIncusの環境は利用不可能と言われるかもしれないということです。
 
-In that case, if you need to downgrade, restore the database backup before starting the downgrade.
+このようなダウングレードが必要な場合は、ダウングレードを行う前にデータベースのバックアップをリストアしてください。
 ```

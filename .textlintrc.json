@@ -5,11 +5,8 @@
   },
   "rules": {
     "@textlint-ja/textlint-rule-no-insert-dropping-sa": true,
-    "textlint-rule-ja-hiragana-hojodoushi": true,
-    "textlint-rule-ja-hiragana-keishikimeishi": true,
     "textlint-rule-ja-no-inappropriate-words": true,
     "textlint-rule-ja-no-mixed-period": true,
-    "textlint-rule-ja-no-redundant-expression": true,
     "textlint-rule-ja-unnatural-alphabet": true,
     "textlint-rule-no-doubled-conjunction": true,
     "textlint-rule-no-doubled-conjunctive-particle-ga": true,
