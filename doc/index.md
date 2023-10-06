@@ -1,5 +1,6 @@
 # Incus
 
+(準備中)
 Incus is a modern, secure and powerful system container and virtual machine manager.
 
 % Include content from [../README.md](../README.md)
