@@ -1,0 +1,3 @@
+[submodule ".textlint-prh-rules"]
+	path = .textlint-prh-rules
+	url = https://github.com/lxc-jp/textlint-prh-rules

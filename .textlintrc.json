@@ -1,0 +1,14 @@
+{
+  "plugins": {},
+  "filters": {
+    "comments": true
+  },
+  "rules": {
+    "textlint-rule-no-dropping-the-ra": true,
+    "textlint-rule-prh": {
+      "rulePaths": [
+        ".textlint-prh-rules/media/WEB+DB_PRESS.yml"
+      ]
+    }
+  }
+}
