@@ -20,8 +20,8 @@ import filecmp
 ############################################################
 
 # Product name
-project = 'Canonical LXD'
-author = 'LXD contributors'
+project = 'Incus'
+author = 'Incus contributors'
 
 # Uncomment if your product uses release numbers
 # release = '1.0'
@@ -47,11 +47,11 @@ copyright = '2014-%s %s' % (datetime.date.today().year, author)
 
 ## Open Graph configuration - defines what is displayed in the website preview
 # The URL of the documentation output
-ogp_site_url = 'https://documentation.ubuntu.com/lxd/en/latest/'
+ogp_site_url = 'https://incus-ja.readthedocs.io/ja/latest/'
 # The documentation website name (usually the same as the product name)
-ogp_site_name = 'LXD documentation'
+ogp_site_name = 'Incus Japanese documentation'
 # An image or logo that is used in the preview
-ogp_image = 'https://documentation.ubuntu.com/lxd/en/latest/_static/tag.png'
+ogp_image = 'https://linuxcontainers.org/static/img/containers.small.png'
 
 # Update with the favicon for your product (default is the circle of friends)
 html_favicon = '.sphinx/_static/favicon.ico'
