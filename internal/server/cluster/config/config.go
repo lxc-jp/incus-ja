@@ -574,7 +574,7 @@ var ConfigSchema = config.Schema{
 	"loki.api.ca_cert": {},
 
 	// gendoc:generate(entity=server, group=loki, key=loki.api.url)
-	// Specify the protocol, name or IP and port. For example `https://loki.example.com:3100`. LXD will automatically add the `/loki/api/v1/push` suffix so there's no need to add it here.
+	// Specify the protocol, name or IP and port. For example `https://loki.example.com:3100`. Incus will automatically add the `/loki/api/v1/push` suffix so there's no need to add it here.
 	// ---
 	//  type: string
 	//  scope: global
@@ -600,13 +600,13 @@ var ConfigSchema = config.Schema{
 
 	// gendoc:generate(entity=server, group=loki, key=loki.types)
 	// Specify a comma-separated list of events to send to the Loki server.
-	// The events can be any combination of `lifecycle`, `logging`, and `ovn`.
+	// The events can be any combination of `lifecycle`, `logging`, and `network-acl`.
 	// ---
 	//  type: string
 	//  scope: global
 	//  defaultdesc: `lifecycle,logging`
 	//  shortdesc: Events to send to the Loki server
-	"loki.types": {Validator: validate.Optional(validate.IsListOf(validate.IsOneOf("lifecycle", "logging", "ovn"))), Default: "lifecycle,logging"},
+	"loki.types": {Validator: validate.Optional(validate.IsListOf(validate.IsOneOf("lifecycle", "logging", "network-acl"))), Default: "lifecycle,logging"},
 
 	// gendoc:generate(entity=server, group=oidc, key=oidc.client.id)
 	//
