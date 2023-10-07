@@ -5,7 +5,6 @@
   },
   "rules": {
     "@textlint-ja/textlint-rule-no-insert-dropping-sa": true,
-    "textlint-rule-ja-hiragana-fukushi": true,
     "textlint-rule-ja-hiragana-hojodoushi": true,
     "textlint-rule-ja-hiragana-keishikimeishi": true,
     "textlint-rule-ja-no-inappropriate-words": true,
