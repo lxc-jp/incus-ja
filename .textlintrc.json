@@ -18,7 +18,7 @@
     "textlint-rule-no-mixed-zenkaku-and-hankaku-alphabet": true,
     "textlint-rule-prh": {
       "rulePaths": [
-        ".textlint-prh-rules/media/WEB+DB_PRESS.yml"
+        ".textlint-incus-ja-prh-rules.yml"
       ]
     }
   }

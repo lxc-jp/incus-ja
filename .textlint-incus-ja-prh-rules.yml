@@ -1,0 +1,66 @@
+meta:
+  reviewer:
+    - hnakamur
+    - tenforward
+related: https://github.com/lxc-jp/incus-ja/
+version: 1
+rules:
+  # カタカナの長音記号をつけない単語
+  - expected: アーキテクチャ
+    pattern: アーキテクチャー
+  - expected: エディタ
+    pattern: エディター
+  - expected: コンテナ
+    pattern: コンテナー
+  - expected: セマフォ
+    pattern: セマフォー
+  - expected: ダーティ
+    pattern: ダーティー
+  - expected: ブラウザ
+    pattern: ブラウザー
+
+  # カタカナの長音記号をつける単語
+  - expected: コントローラー$1
+    pattern: /コントローラ([^ー])/
+  - expected: コンピューター$1
+    pattern: /コンピュータ([^ー])/
+  - expected: セキュリティー$1
+    pattern: /セキュリティ([^ー])/
+  - expected: ディスクリプター$1
+    pattern: /ディスクリプタ([^ー])/
+  - expected: ディレクトリー$1
+    pattern: /ディレクトリ([^ー])/
+  - expected: ドライバー$1
+    pattern: /ドライバ([^ー])/
+  - expected: バッファー$1
+    pattern: /バッファ([^ー])/
+  - expected: パラメーター$1
+    pattern: /パラメータ([^ー])/
+  - expected: プロセッサー$1
+    pattern: /プロセッサ([^ー])/
+  - expected: メモリー$1
+    pattern: /メモリ([^ー])/
+  - expected: ユーザー$1
+    pattern: /ユーザ([^ー])/
+  - expected: リーダー$1
+    pattern: /リーダ([^ー])/
+
+  # カタカナではなく英語にする単語
+  - expected: Namespace
+    pattern: ネームスペース
+
+  # 一般的なカタカタ語の表記ゆれ
+  - expected: インターフェース
+    pattern: /インタ(ーフェイ|フェー|フェイ)ス/
+  - expected: レプリケーション
+    pattern: リプリケーション
+
+  # ひらがなに開く単語
+  - expected: すべて
+    pattern: 全て
+  - expected: さいごに
+    pattern: 最後に
+
+  # Incusに特有な単語の表記ゆれ
+  - expected: トラストパスワード
+    pattern: 信頼パスワード
