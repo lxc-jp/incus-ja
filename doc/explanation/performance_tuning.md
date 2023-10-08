@@ -1,19 +1,19 @@
 (performance-tuning)=
-# About performance tuning
+# パフォーマンスチューニングについて
 
-When you are ready to move your Incus setup to production, you should take some time to optimize the performance of your system.
-There are different aspects that impact performance.
-The following steps help you to determine the choices and settings that you should tune to improve your Incus setup.
+お使いの Incus 環境を本番稼働に移行する準備が出来たら、システムのパフォーマンスを最適化するためにいくらか時間を取るほうが良いです。
+パフォーマンスに影響を与えるいくつかの視点があります。
+お使いの Incus 環境を改善するためにチューニングするべき選択肢と設定を決定するのに以下の手順が役立ちます。
 
-## Run benchmarks
+## ベンチマークを実行する
 
-Incus provides a benchmarking tool to evaluate the performance of your system.
-You can use the tool to initialize or launch a number of containers and measure the time it takes for the system to create the containers.
-By running the tool repeatedly with different Incus configurations, system settings or even hardware setups, you can compare the performance and evaluate which is the ideal configuration.
+Incus はシステムのパフォーマンスを評価するためにベンチマークツールを提供しています。
+このツールを使って複数のコンテナを初期化・起動し、システムがコンテナを作成するのに必要な時間を計測できます。
+異なる Incus の設定、システム設定、さらにはハードウェア構成に対して繰り返しツールを実行することで、パフォーマンスを比較し、どの設定が理想的か評価できます。
 
-See {ref}`benchmark-performance` for instructions on running the tool.
+ツールを実行する手順については {ref}`benchmark-performance` を参照してください。
 
-## Monitor instance metrics
+## インスタンスのメトリクスをモニターする
 
 % Include content from [../metrics.md](../metrics.md)
 ```{include} ../metrics.md
@@ -21,28 +21,28 @@ See {ref}`benchmark-performance` for instructions on running the tool.
     :end-before: <!-- Include end metrics intro -->
 ```
 
-You should regularly monitor the metrics to evaluate the resources that your instances use.
-The numbers help you to determine if there are any spikes or bottlenecks, or if usage patterns change and require updates to your configuration.
+あなたのインスタンスが使用しているリソースを見積もるために定期的にメトリクスをモニターするほうが良いです。
+スパイクやボトルネックがある場合や、使用量のパターンが変化したり、設定を見直す必要がある場合に、これらの数値が役立ちます。
 
-See {ref}`metrics` for more information about metrics collection.
+メトリクス収集についての詳細な情報は {ref}`metrics` を参照してください。
 
-## Tune server settings
+## サーバー設定をチューニングする
 
-The default kernel settings for most Linux distributions are not optimized for running a large number of containers or virtual machines.
-Therefore, you should check and modify the relevant server settings to avoid hitting limits caused by the default settings.
+ほとんどの Linux ディストリビューションのデフォルトのカーネル設定は大量のコンテナや仮想マシンを稼働させるのに最適化されていません。
+ですので、デフォルトの設定で引き起こされる制限にひっかかるのを避けるため、関連する設定を確認、変更するほうが良いです。
 
-Typical errors that you might see when you encounter those limits are:
+これらの制限にひっかかかった場合の典型的なエラーは以下のようなものです:
 
 * `Failed to allocate directory watch: Too many open files`
 * `<Error> <Error>: Too many open files`
 * `failed to open stream: Too many open files in...`
 * `neighbour: ndisc_cache: neighbor table overflow!`
 
-See {ref}`server-settings` for a list of relevant server settings and suggested values.
+関連するサーバー設定と提案される値の一覧は {ref}`server-settings` を参照してください。
 
-## Tune the network bandwidth
+## ネットワーク帯域幅をチューニングする
 
-If you have a lot of local activity between instances or between the Incus host and the instances, or if you have a fast internet connection, you should consider increasing the network bandwidth of your Incus setup.
-You can do this by increasing the transmit and receive queue lengths.
+インスタンス間あるいは Incus ホストとインスタンス間で大量のローカルなアクティビティがある場合、あるいは高速なインターネット接続をお持ちの場合、 Incus のセットアップのネットワーク帯域幅を増やすことを検討すると良いです。
+これは送信と受信のキューの長さを拡張することで実現できます。
 
-See {ref}`network-increase-bandwidth` for instructions.
+手順については {ref}`network-increase-bandwidth` を参照してください。
