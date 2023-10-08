@@ -1,107 +1,108 @@
 (backups)=
-# How to back up a Incus server
+# Incusサーバーをバックアップする
 
-In a production setup, you should always back up the contents of your Incus server.
+本番環境では、常に Incus サーバーのデータをバックアップすべきです。
 
-The Incus server contains a variety of different entities, and when choosing your backup strategy, you must decide which of these entities you want to back up and how frequently you want to save them.
+Incus サーバーはさまざまなエンティティを含んでおり、バックアップ戦略を選択する際には、これらのエンティティのうちどれをバックアップの対象にするかとどれぐらいの頻度で保存するかを決定する必要があります。
 
-## What to back up
+## 何をバックアップするか
 
-The various contents of your Incus server are located on your file system and, in addition, recorded in the {ref}`Incus database <database>`.
-Therefore, only backing up the database or only backing up the files on disk does not give you a full functional backup.
+Incus サーバーのさまざまなコンテンツはファイルシステム上に配置されるものと、それに加えて、{ref}`Incus database <database>`に記録されるものがあります。
+ですので、データベースをバックアップするだけあるいはディスク上のファイルをバックアップするだけでは完全に機能するバックアップにはなりません。
 
-Your Incus server contains the following entities:
+Incus サーバーは以下のエンティティを含んでいます:
 
-- Instances (database records and file systems)
-- Images (database records, image files, and file systems)
-- Networks (database records and state files)
-- Profiles (database records)
-- Storage volumes (database records and file systems)
+- インスタンス (データベースのレコードとファイルシステム)
+- イメージ (データベースのレコード、イメージファイル、そしてファイルシステム)
+- ネットワーク (データベースのレコードと状態ファイル)
+- プロファイル (データベースのレコード)
+- ストレージボリューム (データベースのレコードとファイルシステム)
 
-Consider which of these you need to back up.
-For example, if you don't use custom images, you don't need to back up your images since they are available on the image server.
-If you use only the `default` profile, or only the standard `incusbr0` network bridge, you might not need to worry about backing them up, because they can easily be re-created.
+これらのうちどれをバックアップする必要があるかを検討してください。
+たとえば、カスタムイメージを使用していなければ、イメージはイメージサーバーに存在するのでバックアップは不要です。
+`default`プロファイルしか使用していなかったり、標準の`incusbr0`ネットワークブリッジしか使用していない場合、それらは簡単に再生成できますので、バックアップする必要はないかもしれません。
 
-## Full backup
+## フルバックアップ
 
-To create a full backup of all contents of your Incus server, back up the `/var/lib/incus` directory.
+Incus サーバーのすべてのコンテンツをフルバックアップするには、`/var/lib/incus`ディレクトリーをバックアップしてください。
 
-This directory contains your local storage, the Incus database, and your configuration.
-It does not contain separate storage devices, however.
-That means that whether the directory also contains the data of your instances depends on the storage drivers that you use.
+このディレクトリーはローカルストーレジ、Incus データベース、あなたの設定を含みます。
+ただし、分離されたストレージデバイスは含みません。
+つまりディレクトリーがあなたのインスタンスのデータも含むかはお使いのストレージドライバーによります。
 
 ```{important}
-If your Incus server uses any external storage (for example, LVM volume groups, ZFS zpools, or any other resource that isn't directly self-contained to Incus), you must back this up separately.
+Incusサーバが外部ストレージ（たとえば、LVMボリュームグループ、ZFS zpool、あるいは何か他のIncus自身に直接含まれないような外部リソース）を使っている場合、それらは別途バックアップが必要です。
 
-See {ref}`howto-storage-backup-volume` for instructions.
+手順については{ref}`howto-storage-backup-volume`を参照してください。
 ```
 
-To back up your data, create a tarball of `/var/lib/incus`.
-If your system uses `/etc/subuid` and `/etc/subgid` file, you should also back up these files.
-Restoring them avoids needless shifting of instance file systems.
+データをバックアップするには、`/var/lib/incus`の tarball を作成してください。
+あなたのシステムが`/etc/subuid`と`/etc/subgid`ファイルをお使いの場合、これらのファイルもバックアップしてください。
+これらをリストアするとインスタンスのファイルシステムで不要なシフトを防げます。
 
-To restore your data, complete the following steps:
+データをリストアするには、以下の手順を実行してください:
 
-1. Stop Incus on your server (for example, with `sudo systemctl stop incus.service incus.socket`).
-1. Delete the directory (`/var/lib/incus/`).
-1. Restore the directory from the backup.
-1. Delete and restore any external storage devices.
-1. Restore the `/etc/subuid` and `/etc/subgid` files if present.
-1. Restart Incus (for example, with `sudo systemctl start incus.socket incus.service` or by restarting your machine).
+1. サーバー上の Incus を停止します（たとえば、`sudo systemctl stop incus.service incus.socket`で）。
+1. ディレクトリー（`/var/lib/incus/`）を削除します。
+1. バックアップからディレクトリーをリストアします。
+1. 外部のストレージデバイスを削除しリストアします。
+1. `/etc/subuid`と`/etc/subgid`ファイルがある場合はリストアします。
+1. Incus を再起動します（たとえば、`sudo systemctl start incus.socket incus.service`またはマシンを再起動して）。
 
-## Partial backup
+## 部分的なバックアップ
 
-If you decide to only back up specific entities, you have different options for how to do this.
-You should consider doing some of these partial backups even if you are doing full backups in addition.
-It can be easier and safer to, for example, restore a single instance or reconfigure a profile than to restore the full Incus server.
+特定のエンティティをバックアップするだけに決めた場合、実行にはいくつかの異なる選択肢があります。
+フルバックアップをしている場合であっても、追加でこれらの部分的なバックアップを検討するのが良いです。
+たとえば、完全な Incus サーバーをリストアするよりも単一のインスタンスをリストアしたりプロファイルを再設定するほうが簡単で安全です。
 
-### Back up instances and volumes
+### インスタンスとボリュームのバックアップ
 
-Instances and storage volumes are backed up in a very similar way (because when backing up an instance, you basically back up its instance volume, see {ref}`storage-volume-types`).
+インスタンスとストレージボリュームは非常に似た方法でバックアップされます（というのはインスタンスをバックアップする際は、基本的にはそのインスタンスボリュームをバックアップするからです。{ref}`storage-volume-types`参照）。
 
-See {ref}`instances-backup` and {ref}`howto-storage-backup-volume` for detailed information.
-The following sections give a brief summary of the options you have for backing up instances and volumes.
+詳細な情報は{ref}`instances-backup`と{ref}`howto-storage-backup-volume`を参照してください。
+以下のセクションでインスタンスとボリュームをバックアップする際の選択肢の簡単な要約を示します。
 
-#### Secondary backup Incus server
+#### Incusサーバーのセカンダリバックアップ
 
-Incus supports copying and moving instances and storage volumes between two hosts.
-See {ref}`move-instances` and {ref}`howto-storage-move-volume` for instructions.
+Incus は 2 つのホスト間でインスタンスとストレージボリュームのコピーと移動を
+サポートしています。
+手順は{ref}`move-instances`と{ref}`howto-storage-move-volume`を参照してください。
 
-So if you have a spare server, you can regularly copy your instances and storage volumes to that secondary server to back them up.
-If needed, you can either switch over to the secondary server or copy your instances or storage volumes back from it.
+ですので予備のサーバーがあれば、インスタンスとストレージボリュームをバックアップとして定期的にそのセカンダリサーバーにコピーできます。
+必要な場合、セカンダリサーバーに切り替えたり、インスタンスやストレージボリュームをセカンダリサーバーからコピーできます。
 
-If you use the secondary server as a pure storage server, it doesn't need to be as powerful as your main Incus server.
+セカンダリサーバーを純粋にストレージサーバーとして使う場合、メインの Incus サーバーほど強力である必要はありません。
 
-#### Export tarballs
+#### tarballのエクスポート
 
-You can use the `export` command to export instances and volumes to a backup tarball.
-By default, those tarballs include all snapshots.
+`export`コマンドを使ってインスタンスとボリュームをバックアップの tarball にエクスポートできます。
+デフォルトでは、これらの tarball はすべてのスナップショットを含みます。
 
-You can use an optimized export option, which is usually quicker and results in a smaller size of the tarball.
-However, you must then use the same storage driver when restoring the backup tarball.
+最適化された export オプションを使用でき、すると通常はより短時間でエクスポートでき tarball のサイズも小さくなります。
+しかし、バックアップの tarball をリストアする際は同じストレージドライバーを使う必要があります。
 
-See {ref}`instances-backup-export` and {ref}`storage-backup-export` for instructions.
+手順は{ref}`instances-backup-export`と{ref}`storage-backup-export`を参照してください。
 
-#### Snapshots
+#### スナップショット
 
-Snapshots save the state of an instance or volume at a specific point in time.
-However, they are stored in the same storage pool and are therefore likely to be lost if the original data is deleted or lost.
-This means that while snapshots are very quick and easy to create and restore, they don't constitute a secure backup.
+スナップショットはインスタンスやボリュームの特定の日時での状態を保存します。
+しかし、それらは同じストレージプール内に保管されますので、オリジナルのデータが削除されたり失われたりした場合はスナップショットも失われる可能性が高いです。
+つまりスナップショットは非常に高速で手軽に作成とリストアができますが、安全なバックアップを構成するものではありません。
 
-See {ref}`instances-snapshots` and {ref}`storage-backup-snapshots` for more information.
+詳細な情報は{ref}`instances-snapshots`と{ref}`storage-backup-snapshots`を参照してください。
 
 (backup-database)=
-### Back up the database
+### データベースのバックアップ
 
-While there is no trivial method to restore the contents of the {ref}`Incus database <database>`, it can still be very convenient to keep a backup of its content.
-Such a backup can make it much easier to re-create, for example, networks or profiles if the need arises.
+{ref}`Incus database <database>`の内容をリストアする自明な方法はありませんが、それでもその内容のバックアップをとっておくと非常に便利です。
+たとえば、ネットワークやプロファイルを再生成する必要がでたときに、バックアップがあれば非常に容易になります。
 
-Use the following command to dump the content of the local database to a file:
+ローカルデータベースの内容をダンプするには以下のコマンドを使用します:
 
     incus admin sql local .dump > <output_file>
 
-Use the following command to dump the content of the global database to a file:
+グローバルデータベースの内容をダンプするには以下のコマンドを使用します:
 
     incus admin sql global .dump > <output_file>
 
-You should include these two commands in your regular Incus backup.
+定期的な Incus のバックアップにこれら 2 つのコマンドを含めておくと良いでしょう。
