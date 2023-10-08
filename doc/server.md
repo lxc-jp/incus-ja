@@ -4,14 +4,14 @@
 ```{toctree}
 :maxdepth: 1
 
-Configure the server <howto/server_configure>
+サーバーを設定するには <howto/server_configure>
 /server_config
-System settings <reference/server_settings>
-Backups <backup>
-Performance tuning <explanation/performance_tuning>
-Benchmarking <howto/benchmark_performance>
-Monitor metrics <metrics>
-Recover instances <howto/disaster_recovery>
-Database </database>
+システム設定 <reference/server_settings>
+バックアップ <backup>
+パフォーマンスチューニング <explanation/performance_tuning>
+ベンチマーク <howto/benchmark_performance>
+メトリクス監視 <metrics>
+インスタンスの復旧 <howto/disaster_recovery>
+データベース </database>
 /architectures
 ```
