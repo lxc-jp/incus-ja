@@ -1,23 +1,21 @@
 (metrics)=
-# How to monitor metrics
+# メトリクスを監視するには
 
 <!-- Include start metrics intro -->
-Incus collects metrics for all running instances as well as some internal metrics.
-These metrics cover the CPU, memory, network, disk and process usage.
-They are meant to be consumed by Prometheus, and you can use Grafana to display the metrics as graphs.
-See {ref}`provided-metrics` for lists of available metrics.
+Incus はすべての実行中のインスタンスについてのメトリクスといくつかの内部メトリクスを収集します。
+これは CPU、メモリー、ネットワーク、ディスク、プロセスの使用量を含みます。
+Prometheus で読み取って Grafana でグラフを表示するのに使うことを想定しています。
+利用可能なメトリクスの一覧は{ref}`provided-metrics`を参照してください。
 <!-- Include end metrics intro -->
 
-In a cluster environment, Incus returns only the values for instances running on the server that is being accessed.
-Therefore, you must scrape each cluster member separately.
+クラスタ環境では、 Incus はアクセスされているサーバー上で稼働中のインスタンスの値だけを返します。ですので、各クラスタメンバーから別々にデータを取得する必要があります。。
 
-The instance metrics are updated when calling the `/1.0/metrics` endpoint.
-To handle multiple scrapers, they are cached for 8 seconds.
-Fetching metrics is a relatively expensive operation for Incus to perform, so if the impact is too high, consider scraping at a higher than default interval.
+インスタンスメトリクスは `/1.0/metrics` エンドポイントを呼ぶと更新されます。
+複数のスクレイパーに対応するためメトリクスは 8 秒キャッシュします。メトリクスの取得は比較的重い処理ですので、影響が大きすぎるようならデフォルトの間隔より長い間隔でスクレイピングすることを検討してください。
 
-## Query the raw data
+##  生データを取得する
 
-To view the raw data that Incus collects, use the [`incus query`](incus_query.md) command to query the `/1.0/metrics` endpoint:
+Incus が収集した生データを見るには、`1.0/metrics` エンドポイントに [`incus query`](incus_query.md) コマンドで問い合わせてください。
 
 ```{terminal}
 :input: incus query /1.0/metrics
@@ -45,87 +43,87 @@ incus_disk_read_bytes_total{device="loop3",name="vm",project="default",type="vir
 ...
 ```
 
-## Set up Prometheus
+## Prometheusをセットアップする
 
-To gather and store the raw metrics, you should set up [Prometheus](https://prometheus.io/).
-You can then configure it to scrape the metrics through the metrics API endpoint.
+生のメトリクスを収集し保管するには、[Prometheus](https://prometheus.io/)をセットアップするのが良いです。
+メトリクス API エンドポイントを使ってメトリクスを収集するように設定できます。
 
-### Expose the metrics endpoint
+### メトリクスエンドポイントを公開する
 
-To expose the `/1.0/metrics` API endpoint, you must set the address on which it should be available.
+`/1.0/metrics` API エンドポイントを公開するには、利用可能にするアドレスを設定する必要があります。
 
-To do so, you can set either the {config:option}`server-core:core.metrics_address` server configuration option or the {config:option}`server-core:core.https_address` server configuration option.
-The `core.metrics_address` option is intended for metrics only, while the `core.https_address` option exposes the full API.
-So if you want to use a different address for the metrics API than for the full API, or if you want to expose only the metrics endpoint but not the full API, you should set the `core.metrics_address` option.
+そのためには、{config:option}`server-core:core.metrics_address`サーバー設定オプションか{config:option}`server-core:core.https_address`サーバー設定オプションのいずれかを設定できます。
+`core.metrics_address`オプションはメトリクスのみを公開し、`core.https_address`は完全な API を公開します。
+ですので、完全な API とメトリクスの API で別のアドレスを使いたい場合、あるいはメトリクスの API のみ公開し完全な API は公開したくない場合は`core.metrics_address`オプションを設定するのが良いです。
 
-For example, to expose the full API on the `8443` port, enter the following command:
+例えば、完全な API を`8443`ポートで公開するには、次のコマンドを入力します:
 
     incus config set core.https_address ":8443"
 
-To expose only the metrics API endpoint on the `8444` port, enter the following command:
+メトリクス API エンドポイントのみを`8444`ポートで公開するには、次のコマンドを入力します:
 
     incus config set core.metrics_address ":8444"
 
-To expose only the metrics API endpoint on a specific IP address and port, enter a command similar to the following:
+メトリクス API エンドポイントのみを指定した IP アドレスとポートで公開するには、次のようなコマンドを入力します:
 
     incus config set core.metrics_address "192.0.2.101:8444"
 
-### Add a metrics certificate to Incus
+### メトリクス用証明書の追加
 
-Authentication for the `/1.0/metrics` API endpoint is done through a metrics certificate.
-A metrics certificate (type `metrics`) is different from a client certificate (type `client`) in that it is meant for metrics only and doesn't work for interaction with instances or any other Incus entities.
+`/1.0/metrics` API エンドポイントの認証はメトリクス証明書で行われます。
+メトリクス証明書（タイプが`metrics`）は、メトリクス専用でインスタンスや他の Incus のエンティティの操作には使用できないという点でクライアント証明書（タイプが`client`）とは異なります。
 
-To create a certificate, enter the following command:
+新しい証明書は以下のように作成します:
 
     openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -sha384 -keyout metrics.key -nodes -out metrics.crt -days 3650 -subj "/CN=metrics.local"
 
 ```{note}
-The command requires OpenSSL version 1.1.0 or later.
+上のコマンドは OpenSSL 1.1.0以降が必要です。
 ```
 
-Then add this certificate to the list of trusted clients, specifying the type as `metrics`:
+作成後、証明書を信頼済みクライアントのリストに`metrics`というタイプを指定して追加する必要があります:
 
     incus config trust add metrics.crt --type=metrics
 
-If requiring TLS client authentication isn't possible in your environment, the `/1.0/metrics` API endpoint can be made available to unauthenticated clients.
-While not recommended, this might be acceptable if you have other controls in place to restrict who can reach that API endpoint. To disable the authentication on the metrics API:
+あなたの環境で TLS クライアント証明書を要求することができない場合、`/1.0/metrics` API エンドポイントを認証されていないクライアントで利用可能にできます。
+お勧めはしませんが、API エンドポイントに誰がアクセスできるかを別の手段で制御できるのであれば許容できるかもしれません。メトリクス API の認証を無効にするには以下のようにします:
 
 ```bash
 # Disable authentication (NOT RECOMMENDED)
 incus config set core.metrics_authentication false
 ```
 
-### Make the metrics certificate available for Prometheus
+### メトリクス用証明書をPrometheusで利用可能にする
 
-If you run Prometheus on a different machine than your Incus server, you must copy the required certificates to the Prometheus machine:
+Prometheus を Incus サーバーと別のマシンで稼働させる場合、必要な証明書を Prometheus のマシンにコピーする必要があります。
 
-- The metrics certificate (`metrics.crt`) and key (`metrics.key`) that you created
-- The Incus server certificate (`server.crt`) located in `/var/lib/incus/`
+- 作成したメトリクス用証明書（`metrics.crt`）と鍵（`metrics.key`）
+- `/var/lib/incus/`に置かれている Incus サーバー証明書（`server.crt`）
 
-Copy these files into a `tls` directory that is accessible to Prometheus, for example, `/etc/prometheus/tls`.
-See the following example commands:
+これらのファイルを Prometheus からアクセスできる`tls`ディレクトリー、例えば、`/etc/prometheus/tls`にコピーしてください。
+次の例のコマンドを参照してください:
 
 ```bash
-# Create tls directory
+# tls ディレクトリーを作成
 mkdir /etc/prometheus/tls/
 
-# Copy newly created certificate and key to tls directory
+# 新規に作成された証明書と鍵を tls ディレクトリーにコピー
 cp metrics.crt metrics.key /etc/prometheus/tls/
 
-# Copy Incus server certificate to tls directory
+# Incus サーバー証明書を tls ディレクトリーにコピー
 cp /var/lib/incus/server.crt /etc/prometheus/tls/
 
-# Make the files accessible by prometheus
+# ファイルを Prometheus からアクセス可能にします
 chown -R prometheus:prometheus /etc/prometheus/tls
 ```
 
-### Configure Prometheus to scrape from Incus
+### PrometheusをIncusからデータ収集できるように設定する
 
-Finally, you must add Incus as a target to the Prometheus configuration.
+最後に、 Incus をターゲットとして Prometheus の設定に追加する必要があります。
 
-To do so, edit `/etc/prometheus/prometheus.yaml` and add a job for Incus.
+そのためには、`/etc/prometheus/prometheus.yaml`を編集し、Incus にジョブを追加します。
 
-Here's what the configuration needs to look like:
+必要な設定は以下のようになります:
 
 ```yaml
 scrape_configs:
@@ -138,16 +136,16 @@ scrape_configs:
       ca_file: 'tls/server.crt'
       cert_file: 'tls/metrics.crt'
       key_file: 'tls/metrics.key'
-      # XXX: server_name is required if the target name
-      #      is not covered by the certificate (not in the SAN list)
+      # XXX: server_name は targets のホスト名が証明書でカバーされない
+      #      （証明書の SAN リストに含まれない）場合は必須です
       server_name: 'foo'
 ```
 
 ````{note}
-The `server_name` must be specified if the Incus server certificate does not contain the same host name as used in the `targets` list.
-To verify this, open `server.crt` and check the Subject Alternative Name (SAN) section.
+Incus サーバ証明書が`targets`リスト内で使用するのと同じホスト名を含まない場合は`server_name`の指定は必須です。
+これを確認するには、`server.crt`を開いて Subject Alternative Name (SAN) セクションを確認してください。
 
-For example, assume that `server.crt` has the following content:
+例えば、`server.crt` が以下の内容を持つとします:
 
 ```{terminal}
 :input: openssl x509 -noout -text -in /etc/prometheus/tls/server.crt
@@ -158,24 +156,23 @@ For example, assume that `server.crt` has the following content:
 ...
 ```
 
-Since the Subject Alternative Name (SAN) list doesn't include the host name provided in the `targets` list (`foo.example.com`), you must override the name used for comparison using the `server_name` directive.
+Subject Alternative Name (SAN) リストが `targets` リスト（`foo.example.com`）のホスト名を含んでいないので、 `server_name` ディレクティブを使用して比較に使用する名前を上書きする必要があります。
 ````
 
-Here is an example of a `prometheus.yml` configuration where multiple jobs are used to scrape the metrics of multiple Incus servers:
+以下は複数の Incus サーバーのメトリックを収集するために複数のジョブを使用する `prometheus.yaml` の設定例です:
 
 ```yaml
 scrape_configs:
-  # abydos, langara and orilla are part of a single cluster (called `hdc` here)
-  # initially bootstrapped by abydos which is why all 3 targets
-  # share the same `ca_file` and `server_name`. That `ca_file` corresponds
-  # to the `/var/lib/incus/cluster.crt` file found on every member of
-  # the Incus cluster.
+  # abydos, langara, orilla は最初にabydosからブートストラップした単一クラスタで
+  # (ここでは`hdc`と呼びます)、このため3ノードで`ca_file`と`server_name`を共有しています。
+  # `ca_file`は Incus クラスタの各メンバー上に存在する`/var/lib/incus/cluster.crt`
+  # ファイルに対応しています。
   #
-  # Note: the `project` param is are provided when not using the `default` project
-  #       or when multiple projects are used.
+  # 注意: `project`パラメータは`default`プロジェクトを使用しないか複数のプロジェクトを
+  #       使用する場合に提供されます。
   #
-  # Note: each member of the cluster only provide metrics for instances it runs locally
-  #       this is why the `incus-hdc` cluster lists 3 targets
+  # 注意: クラスタの各メンバーはローカルで稼働するインスタンスのメトリクスだけを提供します。
+  #       これが`incus-hdc`クラスタが3つのターゲットを一覧表示している理由です。
   - job_name: "incus-hdc"
     metrics_path: '/1.0/metrics'
     params:
@@ -192,8 +189,8 @@ scrape_configs:
       key_file: 'tls/metrics.key'
       server_name: 'abydos'
 
-  # jupiter, mars and saturn are 3 standalone Incus servers.
-  # Note: only the `default` project is used on them, so it is not specified.
+# jupiter, mars, saturn は3つのスタンドアロンの Incus サーバーです。
+  # 注意: これらでは`default`プロジェクトのみが使用されているため、プロジェクトの設定は省略しています。
   - job_name: "incus-jupiter"
     metrics_path: '/1.0/metrics'
     scheme: 'https'
@@ -228,64 +225,62 @@ scrape_configs:
       server_name: 'saturn'
 ```
 
-After editing the configuration, restart Prometheus (for example, `systemctl restart prometheus`) to start scraping.
+設定を編集後、Prometheus を再起動する（例えば、`systemctl restart prometheus`）とデータ収集を開始します。
 
-## Set up a Grafana dashboard
+## Grafanaダッシュボードをセットアップする
 
-To visualize the metrics data, set up [Grafana](https://grafana.com/).
-Incus provides a [Grafana dashboard](https://grafana.com/grafana/dashboards/19727-incus/) that is configured to display the Incus metrics scraped by Prometheus.
+メトリクスデータを可視化するには、[Grafana](https://grafana.com/)を設定します。
+Incus は、Prometheus によって収集された Incus メトリクスを表示するように設定された[Grafanaダッシュボード](https://grafana.com/grafana/dashboards/19727-incus/)を提供します。
 
 ```{note}
-The dashboard requires Grafana 8.4 or later.
+このダッシュボードはGrafana 8.4以降が必要です。
 ```
 
-See the Grafana documentation for instructions on installing and signing in:
+Grafana のドキュメントを参照して、インストールとサインインの手順を確認してください:
 
-- [Install Grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/)
-- [Sign in to Grafana](https://grafana.com/docs/grafana/latest/setup-grafana/sign-in-to-grafana/)
+- [Grafanaをインストールする](https://grafana.com/docs/grafana/latest/setup-grafana/installation/)
+- [Grafanaにサインインする](https://grafana.com/docs/grafana/latest/setup-grafana/sign-in-to-grafana/)
 
-Complete the following steps to import the [Incus dashboard](https://grafana.com/grafana/dashboards/19727-incus/):
+次の手順で[Incusダッシュボード](https://grafana.com/grafana/dashboards/19727-incus/)をインポートします:
 
-1. Configure Prometheus as the data source:
+1. Prometheus をデータソースとして設定します:
 
-   1. Go to {guilabel}`Configuration` > {guilabel}`Data sources`.
-   1. Click {guilabel}`Add data source`.
+   1. {guilabel}`Configuration` > {guilabel}`Data sources`に移動します。
+   1. {guilabel}`Add data source`をクリックします。
 
-      ![Add data source in Grafana](images/grafana_add_datasource.png)
+      ![Grafanaでデータソースを追加](images/grafana_add_datasource.png)
 
-   1. Select {guilabel}`Prometheus`.
+   1. {guilabel}`Prometheus`を選択します。
 
-      ![Select Prometheus as the data source](images/grafana_select_prometheus.png)
+      ![データソースとしてPrometheusを選択](images/grafana_select_prometheus.png)
 
-   1. In the {guilabel}`URL` field, enter `http://localhost:9090/`.
+   1. {guilabel}`URL`フィールドに`http://localhost:9090/`を入力します。
 
-      ![Enter Prometheus URL](images/grafana_configure_datasource.png)
+      ![Prometheus URLを入力](images/grafana_configure_datasource.png)
 
-   1. Keep the default configuration for the other fields and click {guilabel}`Save & test`.
+   1. 他のフィールドはデフォルトの設定のままにし、{guilabel}`保存＆テスト`をクリックします。
 
-1. Import the Incus dashboard:
+   1. {guilabel}`Dashboards` > {guilabel}`Browse`に移動します。
+   1. {guilabel}`New`をクリックし、{guilabel}`Import`を選択します。
 
-   1. Go to {guilabel}`Dashboards` > {guilabel}`Browse`.
-   1. Click {guilabel}`New` and select {guilabel}`Import`.
+      ![Grafanaでダッシュボードをインポート](images/grafana_dashboard_import.png)
 
-      ![Import a dashboard in Grafana](images/grafana_dashboard_import.png)
+   1. {guilabel}`Import via grafana.com`フィールドにダッシュボード ID `19727`を入力します。
 
-   1. In the {guilabel}`Import via grafana.com` field, enter the dashboard ID `19727`.
+      ![Incus ダッシュボードIDを入力](images/grafana_dashboard_id.png)
 
-      ![Enter the Incus dashboard ID](images/grafana_dashboard_id.png)
+   1. {guilabel}`Load`をクリックします。
+   1. {guilabel}`Incus`のドロップダウンメニューから、設定した Prometheus のデータソースを選択します。
 
-   1. Click {guilabel}`Load`.
-   1. In the {guilabel}`Incus` drop-down menu, select the Prometheus data source that you configured.
+      ![Prometheusのデータソースを選択](images/grafana_dashboard_select_datasource.png)
 
-      ![Select the Prometheus data source](images/grafana_dashboard_select_datasource.png)
+   1. {guilabel}`Import`をクリックします。
 
-   1. Click {guilabel}`Import`.
+これで Incus ダッシュボードが表示されるはずです。
+プロジェクトを選択し、インスタンスによってフィルタリングすることができます。
 
-You should now see the Incus dashboard.
-You can select the project and filter by instances.
+![Incus Grafanaダッシュボードのリソース概要](images/grafana_resources.png)
 
-![Resource overview in the Incus Grafana dashboard](images/grafana_resources.png)
+ページの下部で、各インスタンスのデータを見ることができます。
 
-At the bottom of the page, you can see data for each instance.
-
-![Instance data in the Incus Grafana dashboard](images/grafana_instances.png)
+![Incus Grafanaダッシュボードのインスタンスデータ](images/grafana_instances.png)
