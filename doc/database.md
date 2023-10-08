@@ -1,28 +1,29 @@
 (database)=
-# About the Incus database
+# Incus データベースについて
 
-Incus uses a distributed database to store the server configuration and state, which allows for quicker queries than if the configuration was stored inside each instance's directory (as it is done by LXC, for example).
+サーバーの設定と状態を保管するために Incus は分散データーベースを使用します。
+これにより（例えば、LXC でそうされているように）設定が各インスタンスのディレクトリー内に保管される場合より高速に問い合わせができます。
 
-To understand the advantages, consider a query against the configuration of all instances, like "what instances are using `br0`?".
-To answer that question without a database, you would have to iterate through every single instance, load and parse its configuration, and then check which network devices are defined in there.
-With a database, you can run a simple query on the database to retrieve this information.
+利点を理解するため、すべてへのインスタンスに「どのインスタンスが`br0`を使用しているか？」のような問い合わせをすることを考えてみましょう。
+データベースが無ければ、この問いに答えるためには、設定を読み込んで解釈し、どのネットワークデバイスが設定上に定義されているかの確認を、ひとつひとつのインスタンスに対して行う必要があります。
+データベースがあれば、この情報を得るためにデータベースにシンプルな問い合わせを実行できます。
 
 ## Cowsql
 
-In a Incus cluster, all members of the cluster must share the same database state.
-Therefore, Incus uses [Cowsql](https://github.com/cowsql/cowsql), a distributed version of SQLite.
-Cowsql provides replication, fault-tolerance, and automatic failover without the need of external database processes.
+Incus クラスタ内では、クラスタのすべてのメンバーが同じデータベースの状態を共有する必要があります。
+このため、Incus は SQLIte の分散版である[Cowsql](https://github.com/cowsql/cowsql)を使用しています。
+Cowsql はレプリケーション、冗長性、外部のデータベースプロセスを必要としない自動フェールオーバーの機能を提供します。
 
-When using Incus as a single machine and not as a cluster, the Cowsql database effectively behaves like a regular SQLite database.
+Incus をクラスタではなく単一マシンとして使用する場合は、Cowsql のデータベースは実質的には通常の SQLite データベースのように振る舞います。
 
-## File location
+## ファイルの保管場所
 
-The database files are stored in the `database` sub-directory of your Incus data directory (`/var/lib/incus/database/`).
+データベースは Incus のデータディレクトリー（`/var/lib/incus/database/`）の`database`サブディレクトリーに保管されます。
 
-Upgrading Incus to a newer version might require updating the database schema.
-In this case, Incus automatically stores a backup of the database and then runs the update.
-See {ref}`installing-upgrade` for more information.
+Incus を新しいバージョンにアップグレードする際はデータベーススキーマの更新が必要かもしれません。
+この場合、Incus は自動的にデータベースのバックアップをしてから更新を実行します。
+詳細は{ref}`installing-upgrade`を参照してください。
 
-## Backup
+## バックアップ
 
-See {ref}`backup-database` for instructions on how to back up the contents of the Incus database.
+Incus データベースの内容をどのようにバックアップするかについての手順は{ref}`backup-database`を参照してください。
