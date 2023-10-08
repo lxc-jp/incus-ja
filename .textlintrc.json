@@ -4,14 +4,16 @@
     "comments": true
   },
   "rules": {
+    "ja-space-between-half-and-full-width": {
+      "space": ["alphabets", "numbers"]
+    },
     "@textlint-ja/textlint-rule-no-insert-dropping-sa": true,
     "textlint-rule-ja-no-inappropriate-words": true,
-    "textlint-rule-ja-no-mixed-period": true,
+    "textlint-rule-ja-no-mixed-period": {
+      "periodMark": "。",
+      "allowPeriodMarks": [":"]
+    },
     "textlint-rule-ja-unnatural-alphabet": true,
-    "textlint-rule-no-doubled-conjunction": true,
-    "textlint-rule-no-doubled-conjunctive-particle-ga": true,
-    "textlint-rule-no-doubled-joshi": true,
-    "textlint-rule-no-double-negative-ja": true,
     "textlint-rule-no-dropping-the-ra": true,
     "textlint-rule-no-hankaku-kana": true,
     "textlint-rule-no-mix-dearu-desumasu": true,

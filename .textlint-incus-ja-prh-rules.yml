@@ -20,30 +20,38 @@ rules:
     pattern: ブラウザー
 
   # カタカナの長音記号をつける単語
-  - expected: コントローラー$1
-    pattern: /コントローラ([^ー])/
-  - expected: コンピューター$1
-    pattern: /コンピュータ([^ー])/
-  - expected: セキュリティー$1
-    pattern: /セキュリティ([^ー])/
-  - expected: ディスクリプター$1
-    pattern: /ディスクリプタ([^ー])/
-  - expected: ディレクトリー$1
-    pattern: /ディレクトリ([^ー])/
-  - expected: ドライバー$1
-    pattern: /ドライバ([^ー])/
-  - expected: バッファー$1
-    pattern: /バッファ([^ー])/
-  - expected: パラメーター$1
-    pattern: /パラメータ([^ー])/
-  - expected: プロセッサー$1
-    pattern: /プロセッサ([^ー])/
-  - expected: メモリー$1
-    pattern: /メモリ([^ー])/
-  - expected: ユーザー$1
-    pattern: /ユーザ([^ー])/
-  - expected: リーダー$1
-    pattern: /リーダ([^ー])/
+  # https://github.com/prh/prh/blob/602794323a717b9511ea23e32c5b1e760cf16227/misc/prh.yml#L86
+  - expected: コントローラー
+    pattern: /コントローラ(?!ー)/
+  - expected: コンピューター
+    pattern: /コンピュータ(?!ー)/
+  - expected: サーバー
+    pattern: /サーバ(?!ー)/
+  - expected: セキュリティー
+    pattern: /セキュリティ(?!ー)/
+  - expected: ディスクリプター
+    pattern: /ディスクリプタ(?!ー)/
+  - expected: ディレクトリー
+    pattern: /ディレクトリ(?!ー)/
+  - expected: ドライバー
+    pattern: /ドライバ(?!ー)/
+  - expected: バッファー
+    pattern: /バッファ(?!ー)/
+  - expected: パラメーター
+    pattern: /パラメータ(?!ー)/
+  - expected: プロセッサー
+    pattern: /プロセッサ(?!ー)/
+  - expected: メモリー
+    pattern: /メモリ(?!ー)/
+  - expected: ユーザー
+    pattern: /ユーザ(?!ー)/
+  - expected: リーダー
+    pattern: /リーダ(?!(ー|ブル))/
+    specs:
+      - from: リーダ
+        to:   リーダー
+      - from: リーダブル
+        to:   リーダブル
 
   # カタカナではなく英語にする単語
   - expected: Namespace
@@ -58,9 +66,7 @@ rules:
   # ひらがなに開く単語
   - expected: すべて
     pattern: 全て
-  - expected: さいごに
-    pattern: 最後に
 
-  # Incusに特有な単語の表記ゆれ
-  - expected: トラストパスワード
-    pattern: 信頼パスワード
+  # LXDからの移行
+  - expected: Incus
+    pattern: /LXD(?!_DIR)/
