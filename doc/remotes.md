@@ -1,24 +1,25 @@
-# How to add remote servers
+# リモートサーバーを追加するには
 
-Remote servers are a concept in the Incus command-line client.
-By default, the command-line client interacts with the local Incus daemon, but you can add other servers or clusters to interact with.
+リモートサーバーは Incus コマンドラインクライアント内の概念です。
+デフォルトでは、コマンドラインクライアントはローカルの Incus デーモンとやりとりしますが、他のサーバーやクラスタを追加できます。
 
-One use case for remote servers is to distribute images that can be used to create instances on local servers.
-See {ref}`remote-image-servers` for more information.
+リモートサーバーの用途の 1 つはローカルサーバーでインスタンスを作成するのに使えるイメージを配布することです。
+詳細は{ref}`remote-image-servers`を参照してください。
 
-You can also add a full Incus server as a remote server to your client.
-In this case, you can interact with the remote server in the same way as with your local daemon.
-For example, you can manage instances or update the server configuration on the remote server.
+完全な Incus サーバーをお使いのクライアントにリモートサーバーとして追加することもできます。
+この場合、ローカルのデーモンと同様にリモートサーバーとやりとりできます。
+例えば、リモートサーバー上のインスタンスを管理したりサーバー設定を更新できます。
 
-## Authentication
+## 認証
 
-To be able to add a Incus server as a remote server, the server's API must be exposed, which means that its {config:option}`server-core:core.https_address` server configuration option must be set.
+Incus サーバーをリモートサーバーとして追加できるようにするには、サーバーの API が公開されている必要があります。
+それはつまり、{config:option}`server-core:core.https_address`サーバー設定オプションが設定されている必要があることを意味します。
 
-When adding the server, you must then authenticate with it using the chosen method for {ref}`authentication`.
+サーバーを追加する際は、{ref}`authentication`の方法で認証する必要があります。
 
-See {ref}`server-expose` for more information.
+詳細は{ref}`server-expose`を参照してください。
 
-## List configured remotes
+## 追加されたリモートを一覧表示する
 
 % Include parts of the content from file [howto/images_remote.md](howto/images_remote.md)
 ```{include} howto/images_remote.md
@@ -26,7 +27,7 @@ See {ref}`server-expose` for more information.
    :end-before: <!-- Include end list remotes -->
 ```
 
-## Add a remote Incus server
+## リモートのIncusサーバーを追加する
 
 % Include parts of the content from file [howto/images_remote.md](howto/images_remote.md)
 ```{include} howto/images_remote.md
@@ -34,31 +35,32 @@ See {ref}`server-expose` for more information.
    :end-before: <!-- Include end add remotes -->
 ```
 
-## Select a default remote
+## デフォルトのリモートを選択する
 
-The Incus command-line client is pre-configured with the `local` remote, which is the local Incus daemon.
+Incus コマンドラインクライアントは`local`リモート、つまりローカルの Incus デーモン、に接続する用に初期設定されています。
 
-To select a different remote as the default remote, enter the following command:
+別のリモートをデフォルトのリモートとして選択するには、以下のように入力します:
 
     incus remote switch <remote_name>
 
-To see which server is configured as the default remote, enter the following command:
+どのサーバーがデフォルトのリモートとして設定されているか確認するには、以下のように入力します。
 
     incus remote get-default
 
-## Configure a global remote
+## グローバルのリモートを設定する
 
-You can configure remotes on a global, per-system basis.
-These remotes are available for every user of the Incus server for which you add the configuration.
+グローバルなシステム毎の設定としてリモートを設定できます。
+これらのリモートは、設定を追加した Incus サーバーのすべてのユーザーで利用できます。
 
-Users can override these system remotes (for example, by running [`incus remote rename`](incus_remote_rename.md) or [`incus remote set-url`](incus_remote_set-url.md)), which results in the remote and its associated certificates being copied to the user configuration.
+ユーザーはこれらのシステムで設定されたリモートを（例えば [`incus remote rename`](incus_remote_rename.md)または[`incus remote set-url`](incus_remote_set-url.md)を実行することで）オーバーライドできます。
+その結果、リモートと対応する証明書がユーザー設定にコピーされます。
 
-To configure a global remote, create or edit a `config.yml` file that is located in `/etc/incus/`.
+グローバルリモートを設定するには、`/etc/incus/`に置かれた`config.yml`ファイルを編集します。
 
-Certificates for the remotes must be stored in the `servercerts` directory in the same location (for example, `/etc/incus/servercerts/`).
-They must match the remote name (for example, `foo.crt`).
+リモートへの接続用の証明書は同じ場所の`servercerts`ディレクトリー(例えば、 `/etc/incus/servercerts/`)に保管する必要があります。
+証明書はリモート名に対応する(例えば、`foo.crt`)必要があります。
 
-See the following example configuration:
+以下の設定例を参照してください:
 
 ```
 remotes:

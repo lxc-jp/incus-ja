@@ -1,111 +1,111 @@
-# Frequently asked questions
+# よく聞かれる質問（FAQ）
 
-The following sections give answers to frequently asked questions.
-They explain how to resolve common issues and point you to more detailed information.
+以下のセクションは、よくある質問への回答を提供します。
+それらは一般的な問題の解決方法を説明し、より詳細な情報へと導きます。
 
-## Why do my instances not have network access?
+## なぜ私のインスタンスはネットワークアクセスがないのですか？
 
-Most likely, your firewall blocks network access for your instances.
-See {ref}`network-bridge-firewall` for more information about the problem and how to fix it.
+最も可能性が高いのは、あなたのファイアウォールがインスタンスのネットワークアクセスをブロックしているためです。
+問題とその修正方法についての詳細は {ref}`network-bridge-firewall` をご覧ください。
 
-Another frequent reason for connectivity issues is running Incus and Docker on the same host.
-See {ref}`network-incus-docker` for instructions on how to fix such issues.
+接続問題の別の一般的な原因は、Incus と Docker を同じホスト上で実行していることです。
+このような問題を修正する方法については {ref}`network-incus-docker` を参照してください。
 
-## How to enable the Incus server for remote access?
+## Incus サーバーをリモートアクセス可能にするにはどうすればよいですか？
 
-By default, the Incus server is not accessible from the network, because it only listens on a local Unix socket.
+デフォルトでは、 Incus サーバーはネットワークからアクセスできません。なぜなら、それはローカルの Unix ソケットでしかリッスンしていないからです。
 
-You can enable it for remote access by following the instructions in {ref}`server-expose`.
+リモートアクセスを可能にするためには、 {ref}`server-expose` の指示に従ってください。
 
-## When I do a `incus remote add`, it asks for a token?
+## `incus remote add`を行うと、トークンを求められるのはなぜですか？
 
-To be able to access the remote API, clients must authenticate with the Incus server.
+リモート API にアクセスするためには、クライアントは Incus サーバーに対して認証を行わなければなりません。
 
-See {ref}`server-authenticate` for instructions on how to authenticate using a trust token.
+トラストトークンを使用して認証する方法については {ref}`server-authenticate` を参照してください。
 
-## Why should I not run privileged containers?
+## なぜ特権コンテナを実行すべきではないのですか？
 
-A privileged container can do things that affect the entire host - for example, it can use things in `/sys` to reset the network card, which will reset it for the entire host, causing network blips.
-See {ref}`container-security` for more information.
+特権コンテナは、ホスト全体に影響を与えることができます - 例えば、`/sys`内のものを使ってネットワークカードをリセットすると、ホスト全体のそれがリセットされ、ネットワークが一時的に断線します。
+詳細は {ref}`container-security` をご覧ください。
 
-Almost everything can be run in an unprivileged container, or - in cases of things that require unusual privileges, like wanting to mount NFS file systems inside the container - you might need to use bind mounts.
+ほとんどのものは非特権コンテナで実行できます。また、NFS ファイルシステムをコンテナ内にマウントしたいなど、通常とは異なる特権を必要とするものの場合、バインドマウントを使用する必要があるかもしれません。
 
-## Can I bind-mount my home directory in a container?
+## ホームディレクトリーをコンテナにバインドマウントすることはできますか？
 
-Yes, you can do this by using a {ref}`disk device <devices-disk>`:
+はい、それは{ref}`ディスクデバイス <devices-disk>`を使用することで可能です:
 
     incus config device add container-name home disk source=/home/${USER} path=/home/ubuntu
 
-For unprivileged containers, you need to make sure that the user in the container has working read/write permissions.
-Otherwise, all files will show up as the overflow UID/GID (`65536:65536`) and access to anything that's not world-readable will fail.
-Use either of the following methods to grant the required permissions:
+非特権コンテナの場合、コンテナ内のユーザーが適切な読み書き権限を持っていることを確認する必要があります。
+そうでないと、すべてのファイルはオーバーフローUID/GID（`65536:65536`）として表示され、ワールドリーダブルでないものへのアクセスは失敗します。
+必要な権限を付与するために以下の方法のいずれかを使用してください:
 
-- Pass `shift=true` to the [`incus config device add`](incus_config_device_add.md) call. This depends on the kernel and file system supporting either idmapped mounts or shiftfs (see [`incus info`](incus_info.md)).
-- Add a `raw.idmap` entry (see [Idmaps for user namespace](userns-idmap.md)).
-- Place recursive POSIX ACLs on your home directory.
+- [`incus config device add`](incus_config_device_add.md)の実行時に`shift=true`を指定します。これはカーネルとファイルシステムが idmapped マウントあるいは shiftfs をサポートしているかに依存します（ [`incus info`](incus_info.md)参照）。
+- `raw.idmap`エントリを追加します（[User Namespace の Idmap](userns-idmap.md)参照）。
+- ホームディレクトリーに再帰的な POSIX ACL を配置します。
 
-Privileged containers do not have this issue because all UID/GID in the container are the same as outside.
-But that's also the cause of most of the security issues with such privileged containers.
+特権コンテナはこの問題を持っていません、なぜならコンテナ内のすべての UID/GID は外部と同じだからです。
+しかし、それが特権コンテナのセキュリティー問題のほとんどの原因でもあります。
 
-## How can I run Docker inside a Incus container?
+## Incus コンテナの内部で Docker を実行するには？
 
-To run Docker inside a Incus container, set the {config:option}`instance-security:security.nesting` property of the container to `true`:
+Incus コンテナの内部で Docker を実行するには、コンテナの {config:option}`instance-security:security.nesting` プロパティを `true` にセットします:
 
     incus config set <container> security.nesting true
 
-Note that Incus containers cannot load kernel modules, so depending on your Docker configuration, you might need to have extra kernel modules loaded by the host.
-You can do so by setting a comma-separated list of kernel modules that your container needs:
+Incus コンテナはカーネルモジュールをロードできないため、 Docker の設定によっては、ホストで追加のカーネルモジュールをロードする必要があるかもしれません。
+コンテナが必要とするカーネルモジュールのカンマ区切りのリストを設定することでこれを行うことができます:
 
     incus config set <container_name> linux.kernel_modules <modules>
 
-In addition, creating a `/.dockerenv` file in your container can help Docker ignore some errors it's getting due to running in a nested environment.
+さらに、コンテナ内に`/.dockerenv`ファイルを作成すると、Docker がネストした環境で実行されているために発生するいくつかのエラーを無視するのに役立ちます。
 
-## Where does the Incus client (`incus`) store its configuration?
+## Incus クライアント（`incus`）は設定をどこに保存しますか？
 
-The [`incus`](incus.md) command stores its configuration under `~/.config/incus`.
+[`incus`](incus.md) コマンドはその設定を `~/.config/incus` に保存します。
 
-Various configuration files are stored in that directory, for example:
+様々な設定ファイルがそのディレクトリーに保存されます。例えば:
 
-- `client.crt`: client certificate (generated on demand)
-- `client.key`: client key (generated on demand)
-- `config.yml`: configuration file (info about `remotes`, `aliases`, etc.)
-- `servercerts/`: directory with server certificates belonging to `remotes`
+- `client.crt`：クライアント証明書（要求に応じて生成されます）
+- `client.key`：クライアントキー（要求に応じて生成されます）
+- `config.yml`：設定ファイル（`remotes`、`aliases`などの情報）
+- `servercerts/`：`remotes`に関連するサーバー証明書が保存されているディレクトリー
 
-## Why can I not ping my Incus instance from another host?
+## なぜ他のホストから Incus インスタンスに ping を送ることができないのですか？
 
-Many switches do not allow MAC address changes, and will either drop traffic with an incorrect MAC or disable the port totally.
-If you can ping a Incus instance from the host, but are not able to ping it from a different host, this could be the cause.
+多くのスイッチは MAC アドレスの変更を許可せず、不正な MAC を持つトラフィックをドロップするか、ポートを完全に無効にします。
+ホストから Incus インスタンスには ping を送ることができますが、異なるホストから ping を送ることができない場合、これが原因かもしれません。
 
-The way to diagnose this problem is to run a `tcpdump` on the uplink and you will see either ``ARP Who has `xx.xx.xx.xx` tell `yy.yy.yy.yy` ``, with you sending responses but them not getting acknowledged, or ICMP packets going in and out successfully, but never being received by the other host.
+この問題を診断する方法は、アップリンク上で`tcpdump`を実行することで、``ARP Who has `xx.xx.xx.xx` tell `yy.yy.yy.yy` ``が表示され、レスポンスを送信しているにもかかわらず確認されていない、または ICMP パケットが成功裏に送受信されているにもかかわらず、他のホストには受け取られていないことを確認することです。
 
 (faq-monitor)=
-## How can I monitor what Incus is doing?
+## Incusが何をしているかモニターするには？
 
-To see detailed information about what Incus is doing and what processes it is running, use the [`incus monitor`](incus_monitor.md) command.
+Incus が何をしているかとどんなプロセスが稼働しているかについての詳細な情報を見るには、[`incus monitor`](incus_monitor.md)コマンドを使います。
 
-For example, to show a human-readable output of all types of messages, enter the following command:
+たとえば、すべてのタイプのメッセージの出力を人間が見やすい形式で表示するには、以下のコマンドを使用します:
 
     incus monitor --pretty
 
-See [`incus monitor --help`](incus_monitor.md) for all options, and {doc}`debugging` for more information.
+すべてのオプションについては [`incus monitor --help`](incus_monitor.md) を、より詳しい情報は {doc}`debugging` を参照してください。
 
-## Why does Incus stall when creating an instance?
+## インスタンス作成時に Incus が止まってしまうのはなぜですか？
 
-Check if your storage pool is out of space (by running [`incus storage info <pool_name>`](incus_storage_info.md)).
-In that case, Incus cannot finish unpacking the image, and the instance that you're trying to create shows up as stopped.
+ストレージプールの空きが無くなってないか（`incus storage info <pool_name>`を実行して）確認してください。
+空きが無い場合、 Incus はイメージの展開ができず、作成しようとしているインスタンスは止まったままに見えます。
 
-To get more insight into what is happening, run [`incus monitor`](incus_monitor.md) (see {ref}`faq-monitor`), and check `sudo dmesg` for any I/O errors.
+何が起きているかをより詳しく調べるには [`incus monitor`](incus_monitor.md) を実行し（{ref}`faq-monitor`参照）、`sudo dmesg`で何か I/O エラーが起きていないか確認してください。
 
-## Why does starting containers suddenly fail?
+## コンテナの起動が突然失敗するようになったのはなぜ？
 
-If starting containers suddenly fails with a cgroup-related error message (`Failed to mount "/sys/fs/cgroup"`), this might be due to running a VPN client on the host.
+コンテナの起動が cgroup 関連のエラーメッセージ（`Failed to mount "/sys/fs/cgroup"`）で失敗する場合、ホスト上で VPN クライアントが稼働しているためかもしれません。
 
-This is a known issue for both [Mullvad VPN](https://github.com/mullvad/mullvadvpn-app/issues/3651) and [Private Internet Access VPN](https://github.com/pia-foss/desktop/issues/50), but might occur for other VPN clients as well.
-The problem is that the VPN client mounts the `net_cls` cgroup1 over cgroup2 (which Incus uses).
+これは [Mullvad VPN](https://github.com/mullvad/mullvadvpn-app/issues/3651) と [Private Internet Access VPN](https://github.com/pia-foss/desktop/issues/50) の両方で知られた問題ですが、他の VPN クライアントでも起きるかもしれません。
+問題は VPN クライアントが（Incus が使用する）cgroiup2 上に `net_cls` cgroup1 をマウントすることです。
 
-The easiest fix for this problem is to stop the VPN client and unmount the `net_cls` cgroup1 with the following command:
+この問題の一番簡単な修正方法は VPN クライアントを停止し、以下のコマンドで `net_cls` cgroup1 をアンマウントすることです:
 
     umount /sys/fs/cgroup/net_cls
 
-If you need to keep the VPN client running, mount the `net_cls` cgroup1 in another location and reconfigure your VPN client accordingly.
-See [this Discourse post](https://discuss.linuxcontainers.org/t/help-help-help-cgroup2-related-issue-on-ubuntu-jammy-with-mullvad-and-privateinternetaccess-vpn/14705/18) for instructions for Mullvad VPN.
+VPN クライアントを稼働したままにする必要がある場合、 `net_cls` cgroup1 を他の場所にマウントし、 VPN クライアントを適宜再設定してください。
+Mullvad VPN 用の手順は [この Discourse の投稿](https://discuss.linuxcontainers.org/t/help-help-help-cgroup2-related-issue-on-ubuntu-jammy-with-mullvad-and-privateinternetaccess-vpn/14705/18) を参照してください。

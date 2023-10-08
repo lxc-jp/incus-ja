@@ -1,10 +1,10 @@
 (server)=
-# Server configuration
+# サーバー設定
 
-The Incus server can be configured through a set of key/value configuration options.
+Incus サーバーは key/value 設定オプションで設定できます。
 
-The key/value configuration is namespaced.
-The following options are available:
+key/value 設定は名前空間が分けられています。
+以下のオプションが利用可能です:
 
 - {ref}`server-options-core`
 - {ref}`server-options-acme`
@@ -13,17 +13,17 @@ The following options are available:
 - {ref}`server-options-loki`
 - {ref}`server-options-misc`
 
-See {ref}`server-configure` for instructions on how to set the configuration options.
+設定オプションをどのように設定するかについての手順は{ref}`server-configure`を参照してください。
 
 ```{note}
-Options marked with a `global` scope are immediately applied to all cluster members.
-Options with a `local` scope must be set on a per-member basis.
+このページの表で`global`スコープと表記されたオプションは即時に全てのクラスタメンバーに適用されます。
+`local`スコープと表記されたオプションはメンバーごとに設定する必要があります。
 ```
 
 (server-options-core)=
-## Core configuration
+## コア設定
 
-The following server options control the core daemon configuration:
+以下のサーバーオプションはコアデーモンの設定を制御します:
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt
@@ -32,9 +32,9 @@ The following server options control the core daemon configuration:
 ```
 
 (server-options-acme)=
-## ACME configuration
+## ACME設定
 
-The following server options control the {ref}`ACME <authentication-server-certificate>` configuration:
+以下のサーバーオプションは{ref}`ACME <authentication-server-certificate>`設定を制御します:
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt
@@ -43,9 +43,9 @@ The following server options control the {ref}`ACME <authentication-server-certi
 ```
 
 (server-options-oidc)=
-## OpenID Connect configuration
+## OpenID Connect 設定
 
-The following server options configure external user authentication through {ref}`authentication-openid`:
+以下のサーバーオプションは{ref}`authentication-openid`による外部ユーザー認証を設定します:
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt
@@ -54,9 +54,9 @@ The following server options configure external user authentication through {ref
 ```
 
 (server-options-cluster)=
-## Cluster configuration
+## クラスタ設定
 
-The following server options control {ref}`clustering`:
+以下のサーバーオプションは{ref}`clustering`を制御します:
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt
@@ -65,9 +65,9 @@ The following server options control {ref}`clustering`:
 ```
 
 (server-options-images)=
-## Images configuration
+## イメージ設定
 
-The following server options configure how to handle {ref}`images`:
+以下のサーバーオプションは{ref}`images`をどう取り扱うかを設定します:
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt
@@ -76,9 +76,9 @@ The following server options configure how to handle {ref}`images`:
 ```
 
 (server-options-loki)=
-## Loki configuration
+## Loki設定
 
-The following server options configure the external log aggregation system:
+以下のサーバーオプションは外部ログ集約システムを設定します:
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt
@@ -87,9 +87,9 @@ The following server options configure the external log aggregation system:
 ```
 
 (server-options-misc)=
-## Miscellaneous options
+## その他設定
 
-The following server options configure server-specific settings for {ref}`instances`, {ref}`OVN <network-ovn>` integration, {ref}`Backups <backups>` and {ref}`storage`:
+以下のサーバーオプションは{ref}`instances`のサーバー固有設定、MAAS 統合、{ref}`OVN <network-ovn>`統合、{ref}`バックアップ <backups>`、{ref}`storage`を設定します:
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt

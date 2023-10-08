@@ -1,77 +1,77 @@
 (images-remote)=
-# How to use remote images
+# リモートイメージを使用するには
 
-The [`incus`](incus.md) CLI command is pre-configured with several remote image servers.
-See {ref}`remote-image-servers` for an overview.
+[`incus`](incus.md) CLI コマンドはいくつかのリモートイメージサーバーを初期設定されています。
+概要は{ref}`remote-image-servers`を参照してください。
 
-## List configured remotes
+## 設定されたリモートを一覧表示する
 
 <!-- Include start list remotes -->
-To see all configured remote servers, enter the following command:
+設定されたすべてのリモートサーバーを見るには、以下のコマンドを入力します:
 
     incus remote list
 
-Remote servers that use the [simple streams format](https://git.launchpad.net/simplestreams/tree/) are pure image servers.
-Servers that use the `incus` format are Incus servers, which either serve solely as image servers or might provide some images in addition to serving as regular Incus servers.
-See {ref}`remote-image-server-types` for more information.
+[simple streams形式](https://git.launchpad.net/simplestreams/tree/)を使用するリモートサーバーは純粋なイメージサーバーです。
+`incus`形式を使用するサーバーは Incus サーバーであり、イメージサーバーだけとして稼働しているか、通常の Incus サーバーとして稼働するのに加えて追加のイメージを提供しているかのどちらかです。
+詳細は{ref}`remote-image-server-types`を参照してください。
 <!-- Include end list remotes -->
 
-## List available images on a remote
+## リモート上の利用可能なイメージを一覧表示する
 
-To list all remote images on a server, enter the following command:
+サーバー上のすべてのリモートイメージを一覧表示するには、以下のコマンドを入力します:
 
     incus image list <remote>:
 
-You can filter the results.
-See {ref}`images-manage-filter` for instructions.
+結果をフィルタできます。
+手順は{ref}`images-manage-filter`を参照してください。
 
-## Add a remote server
+## リモートサーバーを追加する
 
-How to add a remote depends on the protocol that the server uses.
+どのようにリモートを追加するかはサーバーが使用しているプロトコルに依存します。
 
-### Add a simple streams server
+### simple streamsサーバーを追加する
 
-To add a simple streams server as a remote, enter the following command:
+simple streams サーバーをリモートとして追加するには、以下のコマンドを入力します:
 
     incus remote add <remote_name> <URL> --protocol=simplestreams
 
-The URL must use HTTPS.
+URL は HTTPS でなければなりません。
 
-### Add a remote Incus server
+### リモートのIncusサーバーを追加する
 
 <!-- Include start add remotes -->
-To add a Incus server as a remote, enter the following command:
+Incus サーバーをリモートして追加するには、以下のコマンドを入力します:
 
     incus remote add <remote_name> <IP|FQDN|URL> [flags]
 
-Some authentication methods require specific flags (for example, use [`incus remote add <remote_name> <IP|FQDN|URL> --auth-type=oidc`](incus_remote_add.md) for OIDC authentication).
-See {ref}`server-authenticate` and {ref}`authentication` for more information.
+認証方法によっては固有のフラグが必要です（例えば、OIDC 認証では[`incus remote add <remote_name> <IP|FQDN|URL> --auth-type=oidc`](incus_remote_add.md)を使います）。
+詳細は{ref}`server-authenticate`と{ref}`authentication`を参照してください。
 
-For example, enter the following command to add a remote through an IP address:
+例えば、IP アドレスを指定してリモートを追加するには以下のコマンドを入力します:
 
     incus remote add my-remote 192.0.2.10
 
-You are prompted to confirm the remote server fingerprint and then asked for the password or token, depending on the authentication method used by the remote.
+リモートサーバーのフィンガープリントを確認するプロンプトが表示され、リモートで使用している認証方法によってパスワードまたはトークンの入力を求められます。
 <!-- Include end add remotes -->
 
-## Reference an image
+## イメージを参照する
 
-To reference an image, specify its remote and its alias or fingerprint, separated with a colon.
-For example:
+イメージを参照するには、リモートとイメージのエイリアスまたはフィンガープリントをコロンで区切って指定します。
+例:
 
     images:ubuntu/22.04
     images:ubuntu/22.04
     local:ed7509d7e83f
 
 (images-remote-default)=
-## Select a default remote
+## デフォルトのリモートを選択する
 
-If you specify an image name without the name of the remote, the default image server is used.
+リモート名前を指定せずにイメージ名だけ指定すると、デフォルトのイメージサーバーが使用されます。
 
-To see which server is configured as the default image server, enter the following command:
+どのサーバーがデフォルトのイメージサーバーと設定されているか表示するには、以下のコマンドを入力します:
 
     incus remote get-default
 
-To select a different remote as the default image server, enter the following command:
+別のリモートをデフォルトのイメージサーバーに選択するには、以下のコマンドを入力します:
 
     incus remote switch <remote_name>

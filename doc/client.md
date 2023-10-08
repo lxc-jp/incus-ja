@@ -1,10 +1,10 @@
 (incus-client)=
-# Incus client
+# Incus クライアント
 
 ```{toctree}
 :maxdepth: 1
 
-Add remote servers <remotes>
-Add command aliases <howto/incus_alias>
+リモートサーバーの追加 <remotes>
+コマンドエイリアスを追加 <howto/incus_alias>
 /reference/manpages
 ```
