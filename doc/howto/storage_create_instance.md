@@ -1,13 +1,13 @@
 (howto-storage-create-instance)=
-# How to create an instance in a specific storage pool
+# 特定のストレージプール内にインスタンスを作成するには
 
-Instance storage volumes are created in the storage pool that is specified by the instance's root disk device.
-This configuration is normally provided by the profile or profiles applied to the instance.
-See {ref}`storage-default-pool` for detailed information.
+インスタンスストレージボリュームはインスタンスのルートディスクデバイスにより指定されたストレージプール内に作成されます。
+通常この設定はインスタンスに適用されるプロファイルで提供されます。
+詳細な情報は {ref}`storage-default-pool` を参照してください。
 
-To use a different storage pool when creating or launching an instance, add the `--storage` flag.
-This flag overrides the root disk device from the profile.
-For example:
+インスタンスを作成または起動する際に別のストレージプールを使用するには `--storage` フラグを追加します。
+このフラグはプロファイルからのルートディスクデバイスをオーバーライドします。
+たとえば:
 
     incus launch <image> <instance_name> --storage <storage_pool>
 
