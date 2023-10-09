@@ -66,6 +66,8 @@ rules:
   # ひらがなに開く単語
   - expected: すべて
     pattern: 全て
+  - expected: たとえば
+    pattern: 例えば
 
   # LXDからの移行
   - expected: Incus
