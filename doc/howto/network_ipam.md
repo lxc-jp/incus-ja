@@ -1,36 +1,37 @@
 (network-ipam)=
-# How to display IPAM information of a Incus deployment
+# Incus 環境の IPAM 情報を表示するには
 
-{abbr}`IPAM (IP Address Management)` is a method used to plan, track, and manage the information associated with a computer network's IP address space. In essence, it's a way of organizing, monitoring, and manipulating the IP space in a network.
+{abbr}`IPAM (IP Address Management)` はコンピューターネットワークの IP アドレス空間に関連付ける情報を計画、追跡、管理するために使用される方法です。本質的には、ネットワーク内の IP 空間を管理、監視、操作する方法です。
 
-Checking the IPAM information for your Incus setup can help you debug networking issues. You can see which IP addresses are used for instances, network interfaces, forwards, and load balancers and use this information to track down where traffic is lost.
+あなたの Incus 環境の IPAM 情報をチェックすることはネットワークの問題をデバッグするのに役立つかもしれません。インスタンス、ネットワークインターフェース、フォワード、ロードバランサーでどんな IP アドレスが使用されているかを確認し、この情報をどこでトラフィックが失われているかを突き止めるのに使用できます。
 
-To display IPAM information, enter the following command:
+IPAM 情報を表示するには、以下のコマンドを入力します:
 
 ```bash
 incus network list-allocations
 ```
 
-By default, this command shows the IPAM information for the `default` project. You can select a different project with the `--project` flag, or specify `--all-projects` to display the information for all projects.
+デフォルトでは、このコマンドは `default` プロジェクトの IPAM 情報を表示します。
+`--project` フラグを指定して他のプロジェクトを選択したり、 `--all-projects` を指定してすべてのプロジェクトの情報を表示できます。
 
-The resulting output will look something like this:
+出力は以下のようになります:
 
 ```
-+----------------------+-----------------+----------+------+-------------------+
-|       USED BY        |      ADDRESS    |   TYPE   | NAT  | HARDWARE ADDRESS  |
-+----------------------+-----------------+----------+------+-------------------+
++------------------------+-----------------+----------+------+-------------------+
+| USED BY                | ADDRESS         | TYPE     | NAT  | HARDWARE ADDRESS  |
++------------------------+-----------------+----------+------+-------------------+
 | /1.0/networks/incusbr0 | 192.0.2.0/24    | network  | true |                   |
-+----------------------+-----------------+----------+------+-------------------+
++------------------------+-----------------+----------+------+-------------------+
 | /1.0/networks/incusbr0 | 2001:db8::/32   | network  | true |                   |
-+----------------------+-----------------+----------+------+-------------------+
-| /1.0/instances/u1    | 2001:db8::1/128 | instance | true | 00:16:3e:04:f0:95 |
-+----------------------+-----------------+----------+------+-------------------+
-| /1.0/instances/u1    | 192.0.2.2/32    | instance | true | 00:16:3e:04:f0:95 |
-+----------------------+-----------------+----------+------+-------------------+
++------------------------+-----------------+----------+------+-------------------+
+| /1.0/instances/u1      | 2001:db8::1/128 | instance | true | 00:16:3e:04:f0:95 |
++------------------------+-----------------+----------+------+-------------------+
+| /1.0/instances/u1      | 192.0.2.2/32    | instance | true | 00:16:3e:04:f0:95 |
++------------------------+-----------------+----------+------+-------------------+
 
 ...
 ```
 
-Each listed entry lists the IP address (in CIDR notation) of one of the following Incus entities: `network`, `network-forward`, `network-load-balancer`, and `instance`.
-An entry contains an IP address using the CIDR notation.
-It also contains a Incus resource URI, the type of the entity, whether it is in NAT mode, and the hardware address (only for the `instance` entity).
+一覧の各エントリは次の Incus のエンティティの（CIDR 表記の） IP アドレスを表示します: `network`、`network-forward`、`network-load-balancer`、`instance`。
+エントリは CIDR 表記の IP アドレスを含みます。
+またエントリは Incus リソース URI、エンティティのタイプ、NAT モードかどうか、ハードウェアアドレス（`instance`エンティティのみ）も含みます。
