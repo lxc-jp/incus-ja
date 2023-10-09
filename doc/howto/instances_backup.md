@@ -5,9 +5,9 @@ myst:
 ---
 
 (instances-backup)=
-# How to back up instances
+# インスタンスをバックアップするには
 
-There are different ways of backing up your instances:
+インスタンスをバックアップするにはいくつかの方法があります:
 
 - {ref}`instances-snapshots`
 - {ref}`instances-backup-export`
@@ -20,18 +20,18 @@ There are different ways of backing up your instances:
 ```
 
 ```{note}
-Custom storage volumes might be attached to an instance, but they are not part of the instance.
-Therefore, the content of a custom storage volume is not stored when you back up your instance.
-You must back up the data of your storage volume separately.
-See {ref}`howto-storage-backup-volume` for instructions.
+カスタムストレージボリュームがインスタンスにアタッチされているかもしれませんが、それらはインスタンスの一部ではありません。
+ですので、インスタンスをバックアップする際カスタムストレージボリュームは保存されません。
+ストレージボリュームのデータは別途バックアップする必要があります。
+手順は {ref}`howto-storage-backup-volume` を参照してください。
 ```
 
 (instances-snapshots)=
-## Use snapshots for instance backup
+## インスタンスのバックアップにスナップショットを使用する
 
-You can save your instance at a point in time by creating an instance snapshot, which makes it easy to restore the instance to a previous state.
+特定の日時のインスタンスをスナップショットを作成することで保存できます。スナップショットを使えばインスタンスを以前の状態に簡単に復元できます。
 
-Instance snapshots are stored in the same storage pool as the instance volume itself.
+インスタンススナップショットはインスタンスのボリューム自身と同じストレージプールに保存されます。
 
 % Include content from [storage_backup_volume.md](storage_backup_volume.md)
 ```{include} storage_backup_volume.md
@@ -39,9 +39,9 @@ Instance snapshots are stored in the same storage pool as the instance volume it
     :end-before: <!-- Include end optimized snapshots -->
 ```
 
-### Create a snapshot
+### スナップショットを作成する
 
-Use the following command to create a snapshot of an instance:
+インスタンスのスナップショットを作成するには以下のコマンドを使います:
 
     incus snapshot create <instance_name> [<snapshot name>]
 
@@ -51,77 +51,77 @@ Use the following command to create a snapshot of an instance:
     :end-before: <!-- Include end create snapshot options -->
 ```
 
-For virtual machines, you can add the `--stateful` flag to capture not only the data included in the instance volume but also the running state of the instance.
-Note that this feature is not fully supported for containers because of CRIU limitations.
+仮想マシンでは、 `--stateful` フラグを指定するとインスタンスボリュームに含まれるデータだけでなく、インスタンスの稼働状態も含めることができます。
+CRIU の制限のためコンテナではこの機能は完全にはサポートされていないことに注意してください。
 
-### View, edit or delete snapshots
+### スナップショットを表示、編集、削除する
 
-Use the following command to display the snapshots for an instance:
+インスタンスのスナップショットを表示するには以下のコマンドを使います:
 
     incus info <instance_name>
 
-You can view or modify snapshots in a similar way to instances, by referring to the snapshot with `<instance_name>/<snapshot_name>`.
+スナップショットを `<instance_name>/<snapshot_name>` で参照することで、インスタンスの場合と同様にスナップショットを表示や変更できます。
 
-To show configuration information about a snapshot, use the following command:
+スナップショットの設定を表示するには、以下のコマンドを使います:
 
     incus config show <instance_name>/<snapshot_name>
 
-To change the expiry date of a snapshot, use the following command:
+スナップショットの有効期限を変更するには、以下のコマンドを使います:
 
     incus config edit <instance_name>/<snapshot_name>
 
 ```{note}
-In general, snapshots cannot be edited, because they preserve the state of the instance.
-The only exception is the expiry date.
-Other changes to the configuration are silently ignored.
+一般に、スナップショットはインスタンスの状態を保存しているため、編集できません。
+唯一の例外が有効期限です。
+他の設定の変更は黙って無視されます。
 ```
 
-To delete a snapshot, use the following command:
+スナップショットを削除するには、以下のコマンドを使います:
 
     incus delete <instance_name>/<snapshot_name>
 
-### Schedule instance snapshots
+### インスタンスのスナップショット作成をスケジュールする
 
-You can configure an instance to automatically create snapshots at specific times (at most once every minute).
-To do so, set the {config:option}`instance-snapshots:snapshots.schedule` instance option.
+指定した時刻（最大で 1 分ごと）に自動的にスナップショットを作成するようにインスタンスを設定できます。
+そのためには、 {config:option}`instance-snapshots:snapshots.schedule` インスタンスオプションを設定してください。
 
-For example, to configure daily snapshots, use the following command:
+たとえば、日次のスナップショットを設定するには、以下のコマンドを使います:
 
     incus config set <instance_name> snapshots.schedule @daily
 
-To configure taking a snapshot every day at 6 am, use the following command:
+毎日 AM 6 時にスナップショットを作成するよう設定するには、以下のコマンドを使います:
 
     incus config set <instance_name> snapshots.schedule "0 6 * * *"
 
-When scheduling regular snapshots, consider setting an automatic expiry ({config:option}`instance-snapshots:snapshots.expiry`) and a naming pattern for snapshots ({config:option}`instance-snapshots:snapshots.pattern`).
-You should also configure whether you want to take snapshots of instances that are not running ({config:option}`instance-snapshots:snapshots.schedule.stopped`).
+定期的にスナップショットをスケジュールする際、自動破棄（{config:option}`instance-snapshots:snapshots.expiry`）とスナップショットの命名規則（{config:option}`instance-snapshots:snapshots.pattern`）の設定も検討してください。
+また、稼働していないインスタンスのスナップショットを作成するかどうかの設定（{config:option}`instance-snapshots:snapshots.schedule.stopped`）もすると良いでしょう。
 
-### Restore an instance snapshot
+### インスタンスのスナップショットをリストアする
 
-You can restore an instance to any of its snapshots.
+インスタンスを任意のスナップショットに復元できます。
 
-To do so, use the following command:
+そのためには、以下のコマンドを使います:
 
     incus snapshot restore <instance_name> <snapshot_name>
 
-If the snapshot is stateful (which means that it contains information about the running state of the instance), you can add the `--stateful` flag to restore the state.
+スナップショットがステートフル（インスタンスの稼働状態の情報を含むことを意味します）の場合、状態をリストアするために `--stateful` を追加できます。
 
 (instances-backup-export)=
-## Use export files for instance backup
+## インスタンスのバックアップにエクスポートファイルを使用する
 
-You can export the full content of your instance to a standalone file that can be stored at any location.
-For highest reliability, store the backup file on a different file system to ensure that it does not get lost or corrupted.
+インスタンスの完全な内容をスタンドアロンのファイルにエクスポートし、任意の場所に保存できます。
+信頼度を最大化するため、失われたり壊れたりしないように、バックアップファイルは別のファイルシステムに保存してください。
 
-### Export an instance
+### インスタンスをエクスポートする
 
-Use the following command to export an instance to a compressed file (for example, `/path/to/my-instance.tgz`):
+以下のコマンドを使ってインスタンスを圧縮ファイル（たとえば、`/path/to/my-instance.tgz`）にエクスポートします:
 
     incus export <instance_name> [<file_path>]
 
-If you do not specify a file path, the export file is saved as `<instance_name>.<extension>` in the working directory (for example, `my-container.tar.gz`).
+ファイルパスを指定しない場合、エクスポートファイルは作業ディレクトリーに `<instance_name>.<extension>` （たとえば、`my-container.tar.gz`）という名前で保存されます。
 
 ```{warning}
-If the output file (`<instance_name>.<extension>` or the specified file path) already exists, the command overwrites the existing file without warning.
+出力ファイル（`<instance_name>.<extension>` または指定した名前）がすでに存在する場合、コマンドは警告なしで既存のファイルを上書きします。
 ```
 
 % Include content from [storage_backup_volume.md](storage_backup_volume.md)
@@ -131,23 +131,23 @@ If the output file (`<instance_name>.<extension>` or the specified file path) al
 ```
 
 `--instance-only`
-: By default, the export file contains all snapshots of the instance.
-  Add this flag to export the instance without its snapshots.
+: デフォルトでは、エクスポートファイルはインスタンスのすべてのスナップショットを含みます。
+  このフラグを追加すると、スナップショットを除いたインスタンスのみをエクスポートします。
 
-### Restore an instance from an export file
+### エクスポートファイルからインスタンスをリストアする
 
-You can import an export file (for example, `/path/to/my-backup.tgz`) as a new instance.
-To do so, use the following command:
+エクスポートファイル（たとえば、 `/path/to/my-backup.tgz`）を新しいインスタンスとしてインポートできます。
+そのためには、以下のコマンドを使用します:
 
     incus import <file_path> [<instance_name>]
 
-If you do not specify an instance name, the original name of the exported instance is used for the new instance.
-If an instance with that name already (or still) exists in the specified storage pool, the command returns an error.
-In that case, either delete the existing instance before importing the backup or specify a different instance name for the import.
+インスタンスを指定しない場合、エクスポートされたインスタンスの元の名前が使われます。
+その名前のインスタンスが指定したストレージブールにすでに（あるいはまだ）存在する場合、コマンドはエラーを返します。
+その場合、バックアップをインポートする前に既存のインスタンスを削除するか、あるいはインポートの際に別のインスタンス名を指定ください。
 
 (instances-backup-copy)=
-## Copy an instance to a backup server
+## インスタンスをバックアップサーバーにコピーする
 
-You can copy an instance to a secondary backup server to back it up.
+インスタンスをバックアップするためにセカンダリバックアップサーバーにコピーできます。
 
-See {ref}`move-instances` for instructions.
+手順は {ref}`move-instances` を参照してください。
