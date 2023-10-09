@@ -5,15 +5,15 @@
 :maxdepth: 1
 
 /explanation/networks
-Create and configure a network </howto/network_create>
-Configure a network </howto/network_configure>
-Configure network ACLs </howto/network_acls>
-Configure network forwards </howto/network_forwards>
-Configure network zones </howto/network_zones>
-Configure Incus as BGP server </howto/network_bgp>
-Display Incus IPAM information </howto/network_ipam>
+ネットワークの作成 </howto/network_create>
+ネットワークの設定 </howto/network_configure>
+ネットワーク ACL の設定 </howto/network_acls>
+ネットワークフォワードの設定 </howto/network_forwards>
+ネットワークゾーンの設定 </howto/network_zones>
+Incus を BGP サーバーとして設定 </howto/network_bgp>
+Incus IPAM 情報を表示 </howto/network_ipam>
 /reference/network_bridge
 /reference/network_ovn
 /reference/network_external
-Increase bandwidth <howto/network_increase_bandwidth>
+帯域幅の拡大 <howto/network_increase_bandwidth>
 ```
