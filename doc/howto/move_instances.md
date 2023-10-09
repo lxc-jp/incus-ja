@@ -1,67 +1,67 @@
 (move-instances)=
-# How to move existing Incus instances between servers
+# サーバー間で既存の Incus インスタンスを移動するには
 
-To move an instance from one Incus server to another, use the [`incus move`](incus_move.md) command:
+ある Incus サーバーから別のサーバーへインスタンスを移動するには [`incus move`](incus_move.md) コマンドを使います:
 
     incus move [<source_remote>:]<source_instance_name> <target_remote>:[<target_instance_name>]
 
 ```{note}
-When moving a container, you must stop it first.
-See {ref}`live-migration-containers` for more information.
+コンテナを移動する際にはまず停止する必要があります。
+詳細は {ref}`live-migration-containers` を参照してください。
 
-When moving a virtual machine, you must either enable {ref}`live-migration-vms` or stop it first.
+仮想マシンを移動する際は、{ref}`live-migration-vms` を有効にするか、まず仮想マシンを停止する必要があります。
 ```
 
-Alternatively, you can use the [`incus copy`](incus_copy.md) command if you want to duplicate the instance:
+あるいは、インスタンスを複製したい場合は [`incus copy`](incus_copy.md) コマンドを使えます:
 
     incus copy [<source_remote>:]<source_instance_name> <target_remote>:[<target_instance_name>]
 
-In both cases, you don't need to specify the source remote if it is your default remote, and you can leave out the target instance name if you want to use the same instance name.
-If you want to move the instance to a specific cluster member, specify it with the `--target` flag.
-In this case, do not specify the source and target remote.
+どちらの場合も、移動元のリモートがデフォルトのリモートの場合は省略可能で、移動先でも同じインスタンス名を使用する場合は移動先インスタンス名は省略できます。
+インスタンスを特定のクラスタメンバーに移動したい場合は、`--target` フラグを指定してください。
+この場合、移動元と移動先のリモートは指定を省略してください。
 
-You can add the `--mode` flag to choose a transfer mode, depending on your network setup:
+ネットワークのセットアップに応じて、`--mode` フラグを追加して転送モードを選択できます:
 
-`pull` (default)
-: Instruct the target server to connect to the source server and pull the respective instance.
+`pull`（デフォルト）
+: 移動先のサーバーに、移動元のサーバーへ接続させ該当のインスタンスをプルするように指示します。
 
 `push`
-: Instruct the source server to connect to the target server and push the instance.
+: 移動元のサーバーに、移動先のサーバーへ接続させインスタンスをプッシュするように指示します。
 
 `relay`
-: Instruct the client to connect to both the source and the target server and transfer the data through the client.
+: クライアントに移動元と移動先の両方に接続させデータをクライアント経由で転送するよう指示します。
 
-If you need to adapt the configuration for the instance to run on the target server, you can either specify the new configuration directly (using `--config`, `--device`, `--storage` or `--target-project`) or through profiles (using `--no-profiles` or `--profile`). See [`incus move --help`](incus_move.md) for all available flags.
+移動先のサーバー上でインスタンスを動かすように設定を調整する必要がある場合、（`--config`, `--device`, `--storage`, `--target-project` を使用して）設定を直接指定するか、（`--no-profiles` か `--profile` を使って）プロファイルを経由して指定できます。すべての利用可能なフラグについては [`incus move --help`](incus_move.md)  を参照してください。
 
 (live-migration)=
-## Live migration
+## ライブマイグレーション
 
-Live migration means migrating an instance while it is running.
-This method is supported for virtual machines.
-For containers, there is limited support.
+ライブマイグレーションとはインスタンスの稼働中にマイグレートするという意味です。
+仮想マシンではフルにサポートされています。
+コンテナでは限定的にサポートされています。
 
 (live-migration-vms)=
-### Live migration for virtual machines
+### 仮想マシンのライブマイグレーション
 
-Virtual machines can be moved to another server while they are running, thus without any downtime.
+仮想マシンは稼働したまま、つまり一切のダウンタイムなしで、別のサーバーに移動できます。
 
-To allow for live migration, you must enable support for stateful migration.
-To do so, ensure the following configuration:
+ライブマイグレーションを可能にするには、ステートフルマイグレーションのサポートを有効にする必要があります。
+そのためには、以下の設定を確認してください。
 
-* Set {config:option}`instance-migration:migration.stateful` to `true` on the instance.
-* Set [`size.state`](devices-disk) of the virtual machine's root disk device to at least the size of the virtual machine's {config:option}`instance-resource-limits:limits.memory` setting.
+* インスタンスの {config:option}`instance-migration:migration.stateful` を `true` に設定する。
+* 仮想マシンのルートディスクデバイスの [`size.state`](devices-disk) を少なくとも仮想マシンの {config:option}`instance-resource-limits:limits.memory` 設定のサイズに設定する。
 
 (live-migration-containers)=
-### Live migration for containers
+### コンテナのライブマイグレーション
 
-For containers, there is limited support for live migration using [{abbr}`CRIU (Checkpoint/Restore in Userspace)`](https://criu.org/).
-However, because of extensive kernel dependencies, only very basic containers (non-`systemd` containers without a network device) can be migrated reliably.
-In most real-world scenarios, you should stop the container, move it over and then start it again.
+コンテナについては [{abbr}`CRIU (Checkpoint/Restore in Userspace)`](https://criu.org/) を使用したライブマイグレーションが限定的にサポートされています。
+しかし、広範囲に及ぶカーネルへの依存のため、非常にベーシックなコンテナ（ネットワークデバイスなしの非 `systemd` コンテナ）のみが安定してマイグレートできます。
+ほとんどの実世界でのシナリオでは、コンテナを停止、移動してその後起動するのが良いです。
 
-If you want to use live migration for containers, you must first make sure that CRIU is installed on both systems.
+コンテナのライブマイグレーションを使用したい場合、マイグレーション元と先の両方のサーバーで CRIU を有効にする必要があります。
 
-To optimize the memory transfer for a container, set the {config:option}`instance-migration:migration.incremental.memory` property to `true` to make use of the pre-copy features in CRIU.
-With this configuration, Incus instructs CRIU to perform a series of memory dumps for the container.
-After each dump, Incus sends the memory dump to the specified remote.
-In an ideal scenario, each memory dump will decrease the delta to the previous memory dump, thereby increasing the percentage of memory that is already synced.
-When the percentage of synced memory is equal to or greater than the threshold specified via {config:option}`instance-migration:migration.incremental.memory.goal`, or the maximum number of allowed iterations specified via {config:option}`instance-migration:migration.incremental.memory.iterations` is reached, Incus instructs CRIU to perform a final memory dump and transfers it.
+コンテナのメモリー転送を最適化するには {config:option}`instance-migration:migration.incremental.memory` プロパティを `true` に設定して CRIU の事前コピー機能を使用してください。
+この設定では Incus はコンテナの一連のメモリーダーンプを実行するよう CRIU に指示します。
+それぞれのダンプの後、 Incus はメモリーダーンプを指定されたリモートに送信します。
+理想的なシナリオでは、各メモリーダーンプを前のメモリーダーンプとの差分にまで減らし、それによりすでに同期されたメモリーの割合を増やします。
+同期されたメモリーの割合が {config:option}`instance-migration:migration.incremental.memory.goal` で設定した閾値と等しいか超えた場合、あるいは {config:option}`instance-migration:migration.incremental.memory.iterations` で指定された許容される繰り返し回数の最大値に達した場合、 Incus は CRIU に最終的なメモリーダーンプを実行し、転送するように要求します。
