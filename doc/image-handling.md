@@ -1,60 +1,60 @@
 (about-images)=
-# About images
+# イメージについて
 
-Incus uses an image-based workflow.
-Each instance is based on an image, which contains a basic operating system (for example, a Linux distribution) and some Incus-related information.
+Incus はイメージをベースとしたワークフローを使用します。
+各インスタンスはイメージをベースとしています。イメージは基礎となるオペレーティングシステム（たとえば、Linux ディストリビューション）と Incus に関連するいくつかの情報を含みます。
 
-Images are available from remote image stores (see {ref}`remote-image-servers` for an overview), but you can also create your own images, either based on an existing instances or a rootfs image.
+イメージはリモートのイメージストア（概要は{ref}`remote-image-servers`参照）から利用可能ですが、既存のインスタンスや rootfs イメージをベースにして、独自のイメージを作成できます。
 
-You can copy images from remote servers to your local image store, or copy local images to remote servers.
-You can also use a local image to create a remote instance.
+リモートサーバーからローカルのイメージストアにイメージをコピーしたり、ローカルのイメージをリモートサーバーにコピーできます。
+ローカルのイメージをリモートのインスタンスを作るのに使うこともできます。
 
-Each image is identified by a fingerprint (SHA256).
-To make it easier to manage images, Incus allows defining one or more aliases for each image.
+各イメージはフィンガープリント（SHA256）で識別されます。
+イメージを管理しやすくするために、Incus では各イメージに 1 つ以上のエイリアスを定義できます。
 
-## Caching
+## キャッシュ
 
-When you create an instance using a remote image, Incus downloads the image and caches it locally.
-It is stored in the local image store with the cached flag set.
-The image is kept locally as a private image until either:
+リモートのイメージからインスタンスを作成する際、Incus はイメージをダウンロードしローカルにキャッシュします。
+イメージはローカルのイメージストアに cached フラグをセットして保管されます。
+イメージは以下のいずれかが発生するまでは非公開のイメージとしてローカルに保持されます:
 
-- The image has not been used to create a new instance for the number of days set in {config:option}`server-images:images.remote_cache_expiry`.
-- The image's expiry date (one of the image properties; see {ref}`images-manage-edit` for information on how to change it) is reached.
+- {config:option}`server-images:images.remote_cache_expiry` で指定された日数の間新しいインスタンスを作成するのにイメージが使われなかった。
+- イメージの有効期限（イメージのプロパティの 1 つ。どのように変更するかの情報は{ref}`images-manage-edit`参照）に達した。
 
-Incus keeps track of the image usage by updating the `last_used_at` image property every time a new instance is spawned from the image.
+Incus はイメージから新しいインスタンスが起動される度にイメージの `last_used_at` プロパティを更新することで、イメージの利用状況を記録しています。
 
-## Auto-update
+## 自動更新
 
-Incus can automatically keep images that come from a remote server up to date.
+Incus はリモートサーバーからのイメージを自動的に最新に更新します。
 
 ```{note}
-Only images that are requested through an alias can be updated.
-If you request an image through a fingerprint, you request an exact image version.
+エイリアスを指定して取得したイメージだけが更新されます。
+フィンガープリントを指定してイメージを取得した場合は、その特定のイメージバージョンを要求したことになります。
 ```
 
-Whether auto-update is enabled for an image depends on how the image was downloaded:
+自動更新が有効になるかどうかはイメージをどのようにダウンロードしたかに依存します:
 
-- If the image was downloaded and cached when creating an instance, it is automatically updated if {config:option}`server-images:images.auto_update_cached` was set to `true` (the default) at download time.
-- If the image was copied from a remote server using the [`incus image copy`](incus_image_copy.md) command, it is automatically updated only if the `--auto-update` flag was specified.
+- インスタンス作成時にイメージがダウンロードとキャッシュされた場合は、ダウンロード時に {config:option}`server-images:images.auto_update_cached` が `true` に設定されていれば、自動的に更新されます。
+- イメージがリモートサーバーから [`incus image copy`](incus_image_copy.md) コマンドでコピーされた場合は、`--auto-update`フラグが指定されていた場合のみ自動的に更新されます。
 
-You can change this behavior for an image by [editing the `auto_update` property](images-manage-edit).
+イメージのこの挙動は [`auto_update` プロパティを編集](images-manage-edit) することで変更できます。
 
-On startup and after every {config:option}`server-images:images.auto_update_interval` (by default, every six hours), the Incus daemon checks for more recent versions of all the images in the store that are marked to be auto-updated and have a recorded source server.
+起動時と [`images.auto_update_interval`](server-options-images) の間隔（デフォルトでは 6 時間ごと）を過ぎるたびに、Incus デーモンは自動更新とマークされコピー元のサーバーが記録されたストア内のすべてのイメージについてより新しいバージョンがあるかをチェックします。
 
-When a new version of an image is found, it is downloaded into the image store.
-Then any aliases pointing to the old image are moved to the new one, and the old image is removed from the store.
+新しいイメージが見つかったら、イメージ・ストアにダウンロードされます。
+その後古いイメージを指していたエイリアスは新しいイメージを指すように変更され、古いイメージはストアから削除されます。
 
-To not delay instance creation, Incus does not check if a new version is available when creating an instance from a cached image.
-This means that the instance might use an older version of an image for the new instance until the image is updated at the next update interval.
+インスタンスの生成が遅くならないようにするため、Incus はキャッシュされたイメージからインスタンスを作成する際に新しいバージョンが利用可能かをチェックしません。
+これはイメージが次の更新期間で更新されるまでの間は、新しく作成するインスタンスにイメージの古いバージョンが使われるかもしれないことを意味します。
 
-## Special image properties
+## 特別なイメージプロパティ
 
-Image properties that begin with the prefix `requirements` (for example, `requirements.XYZ`) are used by Incus to determine the compatibility of the host system and the instance that is created based on the image.
-If these are incompatible, Incus does not start the instance.
+プレフィックス`requirements`で始まるイメージプロパティ（たとえば、`requirements.XYZ`）は Incus がホストシステムと当該イメージで生成されるインスタンスの互換性を判断するために使用されます。
+これらの互換性がない場合には、Incus はそのインスタンスを起動しません。
 
-The following requirements are supported:
+以下の要件がサポートされています:
 
-Key                                         | Type      | Default      | Description
-:--                                         | :---      | :------      | :----------
-`requirements.secureboot`                   | string    | -            | If set to `false`, indicates that the image cannot boot under secure boot.
-`requirements.cgroup`                       | string    | -            | If set to `v1`, indicates that the image requires the host to run cgroup v1.
+キー                      | タイプ | 既定値  | 説明
+:--                       | :---   | :------ | :----------
+`requirements.secureboot` | string | -       | `false` に設定すると、イメージがセキュアブートで起動しないことを示します。
+`requirements.cgroup`     | string | -       | `v1` に設定されている場合、ホストで`CGroupV1`が実行されている必要があることを示します。
