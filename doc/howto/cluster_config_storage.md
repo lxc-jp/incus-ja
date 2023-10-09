@@ -1,69 +1,69 @@
 (cluster-config-storage)=
-# How to configure storage for a cluster
+# クラスタのストレージを設定するには
 
-All members of a cluster must have identical storage pools.
-The only configuration keys that may differ between pools on different members are [`source`](storage-drivers), [`size`](storage-drivers), [`zfs.pool_name`](storage-zfs-pool-config), [`lvm.thinpool_name`](storage-lvm-pool-config) and [`lvm.vg_name`](storage-lvm-pool-config).
-See {ref}`clustering-member-config` for more information.
+クラスタのすべてのメンバーは同一のストレージプール設定を持つ必要があります。
+メンバーごとに異なる設定が可能なのは [`source`](storage-drivers)、[`size`](storage-drivers)、[`zfs.pool_name`](storage-zfs-pool-config)、[`lvm.thinpool_name`](storage-lvm-pool-config) と [`lvm.vg_name`](storage-lvm-pool-config) だけです。
+詳細は {ref}`clustering-member-config` を参照してください。
 
-Incus creates a default `local` storage pool for each cluster member during initialization.
+Incus は初期化時にデフォルトの `local` ストレージプールを各クラスタメンバーに作成します。
 
-Creating additional storage pools is a two-step process:
+追加のストレージプールを作成するのは以下の 2 ステップで行います:
 
-1. Define and configure the new storage pool across all cluster members.
-   For example, for a cluster that has three members:
+1. すべてのクラスタメンバーで新しいストレージプールを定義し設定します。
+   たとえば、 3 つのメンバーを持つクラスタでは以下のようにします:
 
        incus storage create --target server1 data zfs source=/dev/vdb1
        incus storage create --target server2 data zfs source=/dev/vdc1
        incus storage create --target server3 data zfs source=/dev/vdb1 size=10GiB
 
    ```{note}
-   You can pass only the member-specific configuration keys `source`, `size`, `zfs.pool_name`, `lvm.thinpool_name` and `lvm.vg_name`.
-   Passing other configuration keys results in an error.
+   メンバー固有の設定キーは `source`、`size`、`zfs.pool_name`、`lvm.thinpool_name` と `lvm.vg_name` だけを渡せます。
+   他の設定キーを渡すとエラーになります。
    ```
 
-   These commands define the storage pool, but they don't create it.
-   If you run [`incus storage list`](incus_storage_list.md), you can see that the pool is marked as "pending".
-1. Run the following command to instantiate the storage pool on all cluster members:
+   これらのコマンドはストレージプールを定義しますが作成はしません。
+   [`incus storage list`](incus_storage_list.md) を実行するとこのストレージプールは "pending" と表示されます。
+1. すべてのクラスタメンバーでストレージプールを実在化させるには以下のコマンドを実行します:
 
        incus storage create data zfs
 
    ```{note}
-   You can add configuration keys that are not member-specific to this command.
+   このコマンドにメンバー固有ではない設定キーを追加できます。
    ```
 
-   If you missed a cluster member when defining the storage pool, or if a cluster member is down, you get an error.
+   ストレージプールを定義した際のクラスタメンバーがいない、あるいはクラスタメンバーがダウンしている場合はエラーになります。
 
-Also see {ref}`storage-pools-cluster`.
+{ref}`storage-pools-cluster` も参照してください。
 
-## View member-specific pool configuration
+## メンバー固有のプール設定を参照する
 
-Running [`incus storage show <pool_name>`](incus_storage_show.md) shows the cluster-wide configuration of the storage pool.
+ストレージプールのクラスタ全体の設定を表示するには [`incus storage show <pool_name>`](incus_storage_show.md) を実行します。
 
-To view the member-specific configuration, use the `--target` flag.
-For example:
+メンバー固有の設定を参照するには `--target` フラグを使用してください。
+たとえば:
 
     incus storage show data --target server2
 
-## Create storage volumes
+## ストレージボリュームを作成する
 
-For most storage drivers (all except for Ceph-based storage drivers), storage volumes are not replicated across the cluster and exist only on the member for which they were created.
-Run [`incus storage volume list <pool_name>`](incus_storage_volume_list.md) to see on which member a certain volume is located.
+ほとんどのストレージドライバー（Ceph ベースのストレージドライバーを除いて）、ストレージボリュームはクラスタ内で複製されず、ストレージを作成したメンバー上にのみ存在します。
+特定のボリュームがどのメンバー上にあるのかを見るには [`incus storage volume list <pool_name>`](incus_storage_volume_list.md) を実行してください。
 
-When creating a storage volume, use the `--target` flag to create a storage volume on a specific cluster member.
-Without the flag, the volume is created on the cluster member on which you run the command.
-For example, to create a volume on the current cluster member `server1`:
+ストレージボリュームを作成する際に `--target` フラグを使用すると特定のクラスタメンバー上にストレージボリュームを作成できます。
+フラグを指定しない場合、ボリュームはコマンドを実行したクラスタメンバー上に作成されます。
+たとえば、 `server1` というクラスタメンバー上でボリュームを作成するには以下のようにします:
 
     incus storage volume create local vol1
 
-To create a volume with the same name on another cluster member:
+他のクラスタメンバー上で同じ名前のボリュームを作成するには以下のようにします:
 
     incus storage volume create local vol1 --target server2
 
-Different volumes can have the same name as long as they live on different cluster members.
-Typical examples for this are image volumes.
+別のボリュームも別のクラスタメンバー上にある限り同じ名前を持つことができます。
+典型的な例はイメージボリュームです。
 
-You can manage storage volumes in a cluster in the same way as you do in non-clustered deployments, except that you must pass the `--target` flag to your commands if more than one cluster member has a volume with the given name.
-For example, to show information about the storage volumes:
+クラスタ内のストレージボリュームは、指定した名前のボリュームを複数のクラスタメンバーが持つ場合は `--target` フラグを指定する必要があるという点を除けば、クラスタではない Incus 環境と同じように管理できます。
+たとえば、ストレージボリュームの情報を表示するには以下のようにします:
 
     incus storage volume show local vol1 --target server1
     incus storage volume show local vol1 --target server2
