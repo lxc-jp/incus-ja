@@ -1,48 +1,48 @@
 (network-increase-bandwidth)=
-# How to increase the network bandwidth
+# ネットワーク帯域幅を拡大するには
 
-You can increase the network bandwidth of your Incus setup by configuring the transmit queue length (`txqueuelen`).
-This change makes sense in the following scenarios:
+あなたの Incus 環境のネットワーク帯域幅を送信キューの長さ（`txqueuelen`）を調整することで拡大できます。
+以下のようなシナリオでは適しているでしょう。
 
-- You have a NIC with 1 GbE or higher on a Incus host with a lot of local activity (instance-instance connections or host-instance connections).
-- You have an internet connection with 1 GbE or higher on your Incus host.
+- 大量のローカルアクティビティ（インスタンス間接続あるいはホストあるいはインスタンス間の接続）がある Incus ホスト上に 1 GbE あるいはそれ以上の NIC 1 GbE あるいはそれ以上の NIC がある場合。
+- Incus ホストで 1 GbE あるいはそれ以上のインターネット接続がある場合。
 
-The more instances you use, the more you can benefit from this tweak.
+使用するインスタンス数が多いほど、この設定変更の利益があります。
 
 ```{note}
-The following instructions use a `txqueuelen` value of 10000, which is commonly used with 10GbE NICs, and a `net.core.netdev_max_backlog` value of 182757.
-Depending on your network, you might need to use different values.
+以下の手順では `txqueuelen` の値として 10000（10GbE NIC でよく使用されます）を、`net.core.netdev_max_backlog` の値として 182757 を使用しています。
+ネットワークによっては、異なる値を使用する必要があるかもしれません。
 
-In general, you should use small `txqueuelen` values with slow devices with a high latency, and high `txqueuelen` values with devices with a low latency.
-For the `net.core.netdev_max_backlog` value, a good guideline is to use the minimum value of the `net.ipv4.tcp_mem` configuration.
+一般的に、低速なデバイスでレイテンシが高い場合は小さい `txqueuelen` の値を、レイテンシが低いデバイスでは大きな `txqueuelen` の値を使用するのが良いです。
+`net.core.netdev_max_backlog` の値について、良い指標は `net.ipv4.tcp_mem` 設定の最小値を使用することです。
 ```
 
-## Increase the network bandwidth on the Incus host
+## Incus ホスト上のネットワーク帯域幅を拡大する
 
-Complete the following steps to increase the network bandwidth on the Incus host:
+Incus ホスト上のネットワーク帯域幅を拡大するには以下の手順を実行してください:
 
-1. Increase the transmit queue length (`txqueuelen`) of both the real NIC and the Incus NIC (for example, `incusbr0`).
-   You can do this temporarily for testing with the following command:
+1. 実 NIC と Incus NIC（たとえば、`incusbr0`）の両方で送信キューの長さ（`txqueuelen`）を拡大します。
+   テストのために一時的にこれを行うには以下のコマンドが使用できます:
 
        ifconfig <interface> txqueuelen 10000
 
-   To make the change permanent, add the following command to your interface configuration in `/etc/network/interfaces`:
+   変更を永続的にするには `/etc/network/interfaces` 内のインターフェース設定に以下のコマンドを追加します:
 
        up ip link set eth0 txqueuelen 10000
 
-1. Increase the receive queue length (`net.core.netdev_max_backlog`).
-   You can do this temporarily for testing with the following command:
+1. 受信キューの長さ（`net.core.netdev_max_backlog`）を拡大します。
+   テストのために一時的にこれを行うには以下のコマンドが使用できます:
 
        echo 182757 > /proc/sys/net/core/netdev_max_backlog
 
-   To make the change permanent, add the following configuration to `/etc/sysctl.conf`:
+   変更を永続的にするには `/etc/sysctl.conf` に以下の設定を追加します:
 
        net.core.netdev_max_backlog = 182757
 
-## Increase the transmit queue length on the instances
+## インスタンス上の送信キューの長さを拡大する
 
-You must also change the `txqueuelen` value for all Ethernet interfaces in your instances.
-To do this, use one of the following methods:
+インスタンス上のすべての Ethernet インターフェースの `txqueulen` の値も変更する必要があります。
+このためには、以下の方法のいずれかを使います:
 
-- Apply the same changes as described above for the Incus host.
-- Set the `queue.tx.length` device option on the instance profile or configuration.
+- 上述の Incus ホストへの変更と同じ変更を適用する。
+- インスタンスのプロファイルあるいは設定で `queue.tx.length` デバイスオプションを設定する。
