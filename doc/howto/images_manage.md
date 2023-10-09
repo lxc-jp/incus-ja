@@ -1,110 +1,110 @@
 (images-manage)=
-# How to manage images
+# イメージを管理するには
 
-When working with images, you can inspect various information about the available images, view and edit their properties and configure aliases to refer to specific images.
-You can also export an image to a file, which can be useful to {ref}`copy or import it <images-copy>` on another machine.
+イメージを扱う際は、利用可能なイメージについての情報を調べたりプロパティを表示・編集したり、特定のイメージを参照するエイリアスを設定したりできます。
+またイメージをファイルにエクスポートすることもできます。これは他のマシンに{ref}`イメージをコピーしたりインポート <images-copy>`するのに便利です。
 
-## List available images
+## 利用可能なイメージを一覧表示する
 
-To list all images on a server, enter the following command:
+サーバー上のすべてのイメージを一覧表示するには、以下のコマンドを入力します:
 
     incus image list [<remote>:]
 
-If you do not specify a remote, the {ref}`default remote <images-remote-default>` is used.
+リモートを指定しない場合は、{ref}`デフォルトリモート <images-remote-default>`が使用されます。
 
 (images-manage-filter)=
-### Filter available images
+### 利用可能なイメージをフィルタする
 
-To filter the results that are displayed, specify a part of the alias or fingerprint after the command.
-For example, to show all Ubuntu 22.04 images, enter the following command:
+表示される結果をフィルタするには、コマンドの後にエイリアスかフィンガープリントの一部を指定します。
+たとえば、すべての Ubuntu 22.04 のイメージを表示するには、以下のコマンドを入力します:
 
     incus image list images: 22.04
 
-You can specify several filters as well.
-For example, to show all Arm 64-bit Ubuntu 22.04 images, enter the following command:
+複数のフィルタも指定可能です。
+たとえば、すべての Arm 64-bit の Ubuntu 22.04 のイメージを表示するには、以下のコマンドを入力します:
 
     incus image list images: 22.04 arm64
 
-To filter for properties other than alias or fingerprint, specify the filter in `<key>=<value>` format.
-For example:
+エイリアスとフィンガープリント以外のプロパティをフィルタするには、`<key>=<value>`形式でフィルタを指定します。
+たとえば:
 
     incus image list images: 22.04 architecture=x86_64
 
-## View image information
+## イメージの情報を表示する
 
-To view information about an image, enter the following command:
+イメージの情報を表示するには、以下のコマンドを入力します:
 
     incus image info <image_ID>
 
-As the image ID, you can specify either the image's alias or its fingerprint.
-For a remote image, remember to include the remote server (for example, `images:ubuntu/22.04`).
+イメージの ID としては、イメージのエイリアスかフィンガープリントを指定できます。
+リモートのイメージでは、リモートサーバーを忘れずに含めてください（たとえば、`images:ubuntu/22.04`）。
 
-To display only the image properties, enter the following command:
+イメージのプロパティだけを表示するには、以下のコマンドを入力します:
 
     incus image show <image_ID>
 
-You can also display a specific image property (located under the `properties` key) with the following command:
+また、イメージの（`properties`キー配下にある）特定のプロパティは以下のコマンドで表示できます:
 
     incus image get-property <image_ID> <key>
 
-For example, to show the release name of the official Ubuntu 22.04 image, enter the following command:
+たとえば、公式の Ubuntu 22.04 イメージのリリース名を表示するには、以下のコマンドを入力します:
 
     incus image get-property images:ubuntu/22.04 release
 
 (images-manage-edit)=
-## Edit image properties
+## イメージのプロパティを編集する
 
-To set a specific image property that is located under the `properties` key, enter the following command:
+`properties` キー配下にあるイメージの特定のプロパティを設定するには、以下のコマンドを入力します:
 
     incus image set-property <image_ID> <key>
 
 ```{note}
-These properties can be used to convey information about the image.
-They do not configure Incus' behavior in any way.
+これらのプロパティはイメージについての情報を伝えるために使用できます。
+これらはいかなる方法によっても Incus の挙動を変更はしません。
 ```
 
-To edit the full image properties, including the top-level properties, enter the following command:
+トップレベルのプロパティを含むイメージのプロパティ全体を編集するには、以下のコマンドを入力します:
 
     incus image edit <image_ID>
 
-## Configure image aliases
+## イメージのエイリアスを設定する
 
-Configuring an alias for an image can be useful to make it easier to refer to an image, since remembering an alias is usually easier than remembering a fingerprint.
-Most importantly, however, you can change an alias to point to a different image, which allows creating an alias that always provides a current image (for example, the latest version of a release).
+イメージのエイリアスを設定すると、イメージを参照するのがより容易になり便利かもしれません。というのはエイリアスを覚えるほうがフィンガープリントを覚えるより通常容易だからです。
+しかし、もっとも重要なのは、エイリアスは別のイメージを指すように変更できるので、常に最新のイメージ（たとえば最新のリリースバージョン）を提供するエイリアスを作れることです。
 
-You can see some of the existing aliases in the image list.
-To see the full list, enter the following command:
+イメージ一覧の中に既存のエイリアスの例を見ることができます。
+完全なリストを見るには、以下のコマンドを入力します:
 
     incus image alias list
 
-You can directly assign an alias to an image when you {ref}`copy or import <images-copy>` or {ref}`publish <images-create-publish>` it.
-Alternatively, enter the following command:
+イメージを{ref}`コピーやインポート <images-copy>`または{ref}`発行 <images-create-publish>`する際には、直接イメージにエイリアスを割り当てることができます。
+代わりに、以下のコマンドを入力してエイリアスを作成することもできます:
 
     incus image alias create <alias_name> <image_fingerprint>
 
-You can also delete an alias:
+エイリアスは削除することもできます:
 
     incus image alias delete <alias_name>
 
-To rename an alias, enter the following command:
+エイリアスをリネームするには、以下のコマンドを入力します:
 
     incus image alias rename <alias_name> <new_alias_name>
 
-If you want to keep the alias name, but point the alias to a different image (for example, a newer version), you must delete the existing alias and then create a new one.
+エイリアスの名前を維持したまま、別の（たとえば、より新しいバージョンの）イメージにエイリアスを向けたい場合は、既存のエイリアスを削除して新しいエイリアスを作成する必要があります。
 
 (images-manage-export)=
-## Export an image to a file
+## イメージをファイルにエクスポートする
 
-Images are located in the image store of your local server or a remote Incus server.
-You can export them to a file though.
-This method can be useful to back up image files or to transfer them to an air-gapped environment.
+イメージはローカルサーバーかリモートの Incus サーバーのイメージストアに保管されます。
+ですが、イメージをファイルにエクスポートすることができます。
+この方法はイメージファイルをバックアップしたり、エアギャップされた（訳注：セキュリティーを高めるために外部ネットワークから遮断された）環境にイメージを持っていくのに便利です。
 
-To export a container image to a file, enter the following command:
+コンテナイメージをファイルにエクスポートするには、以下のコマンドを入力します:
 
     incus image export [<remote>:]<image> [<output_directory_path>]
 
-To export a virtual machine image to a file, add the `--vm` flag:
+仮想マシンイメージをファイルにエクスポートするには、`--vm`フラグを追加します:
 
     incus image export [<remote>:]<image> [<output_directory_path>] --vm
 
-See {ref}`image-format` for a description of the file structure used for the image.
+イメージに使用されるファイル構造の説明については{ref}`image-format`を参照してください。
