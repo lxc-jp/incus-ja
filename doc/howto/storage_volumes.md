@@ -1,192 +1,192 @@
 (howto-storage-volumes)=
-# How to manage storage volumes
+# ストレージボリュームを管理するには
 
-See the following sections for instructions on how to create, configure, view and resize {ref}`storage-volumes`.
+{ref}`storage-volumes` を作成、設定、表示、リサイズするための手順については以下のセクションを参照してください。
 
-## Create a custom storage volume
+## カスタムストレージボリュームを作成する
 
-When you create an instance, Incus automatically creates a storage volume that is used as the root disk for the instance.
+インスタンスを作成する際に、 Incus はインスタンスのルートディスクとして使用するストレージボリュームを自動的に作成します。
 
-You can add custom storage volumes to your instances.
-Such custom storage volumes are independent of the instance, which means that they can be backed up separately and are retained until you delete them.
-Custom storage volumes with content type `filesystem` can also be shared between different instances.
+インスタンスにカスタムストレージボリュームを追加できます。
+このカスタムストレージボリュームはインスタンスから独立しています。これは別にバックアップできたり、カスタムストレージボリュームを削除するまで残っていることを意味します。
+コンテントタイプが `filesystem` のカスタムストレージボリュームは異なるインスタンス間で共有もできます。
 
-See {ref}`storage-volumes` for detailed information.
+詳細な情報は {ref}`storage-volumes` を参照してください。
 
-### Create the volume
+### ボリュームを作成する
 
-Use the following command to create a custom storage volume of type `block` or `filesystem` in a storage pool:
+ストレージプール内に `block` または `filesystem` のタイプのカスタムストレージボリュームを作成するには以下のコマンドを使用します:
 
     incus storage volume create <pool_name> <volume_name> [configuration_options...]
 
-See the {ref}`storage-drivers` documentation for a list of available storage volume configuration options for each driver.
+各ドライバーで利用可能なストレージボリューム設定オプションについては {ref}`storage-drivers` ドキュメントを参照してください。
 
-By default, custom storage volumes use the `filesystem` {ref}`content type <storage-content-types>`.
-To create a custom storage volume with the content type `block`, add the `--type` flag:
+デフォルトではカスタムストレージボリュームは `filesystem` {ref}`コンテントタイプ <storage-content-types>` を使用します。
+`block` コンテントタイプのカスタムストレージボリュームを作成するには `--type` フラグを追加してください:
 
     incus storage volume create <pool_name> <volume_name> --type=block [configuration_options...]
 
-To add a custom storage volume on a cluster member, add the `--target` flag:
+クラスタメンバー上にカスタムストレージボリュームを追加するには `--target` フラグを追加してください:
 
     incus storage volume create <pool_name> <volume_name> --target=<cluster_member> [configuration_options...]
 
 ```{note}
-For most storage drivers, custom storage volumes are not replicated across the cluster and exist only on the member for which they were created.
-This behavior is different for Ceph-based storage pools (`ceph` and `cephfs`), where volumes are available from any cluster member.
+ほとんどのストレージドライバではカスタムストレージボリュームはクラスタ間で同期されず作成されたメンバー上にのみ存在します。
+この挙動は Ceph ベースのストレージプール（`ceph` と `cephfs`）では異なり、ボリュームはどのクラスタメンバーでも利用可能です。
 ```
 
-To create a custom storage volume of type `iso`, use the `import` command instead of the `create` command:
+タイプが `iso` のカスタムストレージボリュームを作るには、  `create` コマンドではなく `import` コマンドを使います:
 
     incus storage volume import <pool_name> <iso_path> <volume_name> --type=iso
 
 (storage-attach-volume)=
-### Attach the volume to an instance
+### インスタンスにカスタムストレージボリュームをアタッチする
 
-After creating a custom storage volume, you can add it to one or more instances as a {ref}`disk device <devices-disk>`.
+カスタムストレージボリュームを作成したら、それを 1 つあるいは複数のインスタンスに {ref}`ディスクデバイス <devices-disk>` として追加できます。
 
-The following restrictions apply:
+以下の制限があります:
 
-- Custom storage volumes of {ref}`content type <storage-content-types>` `block` or `iso` cannot be attached to containers, but only to virtual machines.
-- To avoid data corruption, storage volumes of {ref}`content type <storage-content-types>` `block` should never be attached to more than one virtual machine at a time.
-- Storage volumes of {ref}`content type <storage-content-types>` `iso` are always read-only, and can therefore be attached to more than one virtual machine at a time without corrupting data.
-- File system storage volumes can't be attached to virtual machines while they're running.
+- {ref}`コンテントタイプ <storage-content-types>` が `block` または `iso` のカスタムストレージボリュームはコンテナにはアタッチできず、仮想マシンのみにアタッチできます。
+- データ破壊を防ぐため、 {ref}`コンテントタイプ <storage-content-types>` が `block` のカスタムストレージボリュームは同時に複数の仮想マシンには決してアタッチするべきではありません。
+- {ref}`コンテントタイプ <storage-content-types>` が `iso` のカスタムストレージボリュームは読み取り専用であり、データを破壊することなく同時に複数の仮想マシンにアタッチできます。
+- ファイルシステムのストレージボリュームは仮想マシンの稼働中にアタッチはできません。
 
-For custom storage volumes with the content type `filesystem`, use the following command, where `<location>` is the path for accessing the storage volume inside the instance (for example, `/data`):
+コンテントタイプ `filesystem` のカスタムストレージボリュームは以下のコマンドを使用します。ここで `<location>` はインスタンス内でストレージボリュームにアクセスするためのパス（例: `/data`）です:
 
     incus storage volume attach <pool_name> <filesystem_volume_name> <instance_name> <location>
 
-Custom storage volumes with the content type `block` do not take a location:
+コンテントタイプ `block` のカスタムストレージボリュームは `<location>` を指定しません:
 
     incus storage volume attach <pool_name> <block_volume_name> <instance_name>
 
-By default, the custom storage volume is added to the instance with the volume name as the {ref}`device <devices>` name.
-If you want to use a different device name, you can add it to the command:
+デフォルトでは、カスタムストレージボリュームはインスタンスに {ref}`デバイス <devices>` の名前でボリュームが追加されます。
+異なるデバイス名を使用したい場合は、コマンドにデバイス名を追加できます:
 
     incus storage volume attach <pool_name> <filesystem_volume_name> <instance_name> <device_name> <location>
     incus storage volume attach <pool_name> <block_volume_name> <instance_name> <device_name>
 
-#### Attach the volume as a device
+#### ボリュームをデバイスとしてアタッチする
 
-The [`incus storage volume attach`](incus_storage_volume_attach.md) command is a shortcut for adding a disk device to an instance.
-Alternatively, you can add a disk device for the storage volume in the usual way:
+[`incus storage volume attach`](incus_storage_volume_attach.md)  コマンドは、インスタンスにディスクデバイスを追加するためのショートカットです。
+もしくは、通常の方法でストレージボリュームのディスクデバイスを追加することもできます:
 
     incus config device add <instance_name> <device_name> disk pool=<pool_name> source=<volume_name> [path=<location>]
 
-When using this way, you can add further configuration to the command if needed.
-See {ref}`disk device <devices-disk>` for all available device options.
+この方法を使用すると、必要に応じてコマンドに更なる設定を追加することができます。
+利用可能なすべてのデバイスオプションについては {ref}`ディスクデバイス <devices-disk>` を参照してください。
 
 (storage-configure-IO)=
-#### Configure I/O limits
+#### I/O 制限値の設定
 
-When you attach a storage volume to an instance as a {ref}`disk device <devices-disk>`, you can configure I/O limits for it.
-To do so, set the `limits.read`, `limits.write` or `limits.max` properties to the corresponding limits.
-See the {ref}`devices-disk` reference for more information.
+ストレージボリュームをインスタンスに {ref}`ディスクデバイス <devices-disk>` としてアタッチする際に、 I/O 制限値を設定できます。
+そのためには `limits.read`, `limits.write`, `limits.max` に対応する制限値を設定します。
+詳細な情報は {ref}`devices-disk` レファレンスを参照してください。
 
-The limits are applied through the Linux `blkio` cgroup controller, which makes it possible to restrict I/O at the disk level (but nothing finer grained than that).
+制限値は Linux の `blkio` cgroup コントローラー経由で適用されます。これによりディスクのレベルで I/O を制限することができます（しかしそれより細かい単位では制限できません）。
 
 ```{note}
-Because the limits apply to a whole physical disk rather than a partition or path, the following restrictions apply:
+制限値はパーティションやパスではなく物理ディスク全体に適用されるため、以下の制約があります:
 
-- Limits will not apply to file systems that are backed by virtual devices (for example, device mapper).
-- If a file system is backed by multiple block devices, each device will get the same limit.
-- If two disk devices that are backed by the same disk are attached to the same instance, the limits of the two devices will be averaged.
+- 仮想デバイス（例えば device mapper）上に存在するファイルシステムには制限値は適用されません
+- ファイルシステムが複数のブロックデバイス上に存在する場合、各デバイスは同じ制限を受けます。
+- 同じディスク上に存在する 2 つのディスクデバイスが同じインスタンスにアタッチされた場合は、 2 つのデバイスの制限値は平均されます
 ```
 
-All I/O limits only apply to actual block device access.
-Therefore, consider the file system's own overhead when setting limits.
-Access to cached data is not affected by the limit.
+すべての I/O 制限値は実際のブロックデバイスアクセスにのみ適用されます。
+そのため、制限値を設定する際はファイルシステム自体のオーバーヘッドを考慮してください。
+キャッシュされたデータへのアクセスはこの制限値に影響されません。
 
 (storage-volume-special)=
-### Use the volume for backups or images
+### バックアップやイメージにボリュームを使用する
 
-Instead of attaching a custom volume to an instance as a disk device, you can also use it as a special kind of volume to store {ref}`backups <backups>` or {ref}`images <about-images>`.
+カスタムボリュームをディスクデバイスとしてインスタンスにアタッチする代わりに、{ref}`バックアップ <backups>` あるいは {ref}`イメージ <about-images>` を格納する特別な種類のボリュームとして使うこともできます。
 
-To do so, you must set the corresponding {ref}`server configuration <server-options-misc>`:
+このためには、対応する{ref}`サーバー設定 <server-options-misc>`を設定する必要があります:
 
-- To use a custom volume to store the backup tarballs:
+- バックアップ tarball を保管するためにカスタムボリュームを使用する:
 
       incus config set storage.backups_volume <pool_name>/<volume_name>
 
-- To use a custom volume to store the image tarballs:
+- イメージ tarball を保管するためにカスタムボリュームを使用する:
 
       incus config set storage.images_volume <pool_name>/<volume_name>
 
 (storage-configure-volume)=
-## Configure storage volume settings
+## ストレージボリュームを設定する
 
-See the {ref}`storage-drivers` documentation for the available configuration options for each storage driver.
+各ストレージドライバーで利用可能な設定オプションについては {ref}`storage-drivers` ドキュメントを参照してください。
 
-Use the following command to set configuration options for a storage volume:
+ストレージボリュームの設定オプションを設定するには以下のコマンドを使用します:
 
     incus storage volume set <pool_name> [<volume_type>/]<volume_name> <key> <value>
 
-The default {ref}`storage volume type <storage-volume-types>` is `custom`, so you can leave out the `<volume_type>/` when configuring a custom storage volume.
+{ref}`ストレージボリュームタイプ <storage-volume-types>` のデフォルトは `custom` ですので、カスタムストレージボリュームを設定する際は `<volume_type>/` は省略できます。
 
-For example, to set the size of your custom storage volume `my-volume` to 1 GiB, use the following command:
+たとえば、カスタムストレージボリューム `my-volume` のサイズを 1 GiB に設定するには、以下のコマンドを使います:
 
     incus storage volume set my-pool my-volume size=1GiB
 
-To set the snapshot expiry time for your virtual machine `my-vm` to one month, use the following command:
+たとえば、仮想マシン `my-vm` のスナップショットの破棄期限を 1 ヶ月に設定するには以下のコマンドを使います:
 
     incus storage volume set my-pool virtual-machine/my-vm snapshots.expiry 1M
 
-You can also edit the storage volume configuration by using the following command:
+以下のコマンドでストレージボリューム設定を編集することもできます:
 
     incus storage volume edit <pool_name> [<volume_type>/]<volume_name>
 
 (storage-configure-vol-default)=
-### Configure default values for storage volumes
+### ストレージボリュームのデフォルト値を変更する
 
-You can define default volume configurations for a storage pool.
-To do so, set a storage pool configuration with a `volume` prefix, thus `volume.<VOLUME_CONFIGURATION>=<VALUE>`.
+ストレージプールのデフォルトのボリューム設定を定義できます。
+そのためには、 `volume` 接頭辞をつけたストレージプール設定`volume.<VOLUME_CONFIGURATION>=<VALUE>` をセットします。
 
-This value is then used for all new storage volumes in the pool, unless it is set explicitly for a volume or an instance.
-In general, the defaults set on a storage pool level (before the volume was created) can be overridden through the volume configuration, and the volume configuration can be overridden through the instance configuration (for storage volumes of {ref}`type <storage-volume-types>` `container` or `virtual-machine`).
+新しいストレージボリュームまたはインスタンスに明示的に設定されない限り、この値はプール内のすべての新しいストレージボリュームに使用されます。
+一般的に、ストレージプールのレベルに設定されたデフォルト値は（ボリュームが作成される前であれば）ボリューム設定でオーバーライドでき、ボリューム設定はインスタンス設定（{ref}`タイプ <storage-volume-types>` が `container` か `virtual-machine` のストレージボリュームについて）でオーバーライドできます。
 
-For example, to set a default volume size for a storage pool, use the following command:
+たとえば、ストレージプールにデフォルトのボリュームサイズを設定するには以下のコマンドを使用します:
 
     incus storage set [<remote>:]<pool_name> volume.size <value>
 
-## View storage volumes
+## ストレージボリュームを表示する
 
-You can display a list of all available storage volumes in a storage pool and check their configuration.
+ストレージブール内のすべての利用可能なストレージボリュームを一覧表示しそれらの設定を確認できます。
 
-To list all available storage volumes in a storage pool, use the following command:
+あるストレージプール内のすべての利用可能なストレージボリュームを一覧表示するには以下のコマンドを使用します:
 
     incus storage volume list <pool_name>
 
-To display the storage volumes for all projects (not only the default project), add the `--all-projects` flag.
+すべてのプロジェクト（デフォルトのプロジェクトだけでなく）ストレージボリュームを表示するには、 `--all-projects` フラグを追加してください。
 
-The resulting table contains the {ref}`storage volume type <storage-volume-types>` and the {ref}`content type <storage-content-types>` for each storage volume in the pool.
+結果の表にはそのプール内の各ストレージボリュームについて {ref}`ストレージボリュームタイプ <storage-volume-types>` と {ref}`コンテントタイプ <storage-content-types>` が含まれます。
 
 ```{note}
-Custom storage volumes might use the same name as instance volumes (for example, you might have a container named `c1` with a container storage volume named `c1` and a custom storage volume named `c1`).
-Therefore, to distinguish between instance storage volumes and custom storage volumes, all instance storage volumes must be referred to as `<volume_type>/<volume_name>` (for example, `container/c1` or `virtual-machine/vm`) in commands.
+カスタムストレージボリュームはインスタンスボリュームと同じ名前を使うこともできます (例えば `c1` という名前のコンテナストレージボリュームと `c1` という名前のカスタムストレージボリュームを持つ `c1` という名前のコンテナを作成することもできます)。
+このため、インスタンスストレージボリュームとカスタムストレージボリュームを区別するには、全てのインタンスストレージボリュームは `<volume_type>/<volume_name>`  (例えば `container/c1` または `virtual-machine/vm`) のようにコマンド内で指定する必要があります。
 ```
 
-To show detailed configuration information about a specific volume, use the following command:
+特定のカスタムボリュームについて詳細な情報を表示するには以下のコマンドを使用します:
 
     incus storage volume show <pool_name> [<volume_type>/]<volume_name>
 
-To show state information about a specific volume, use the following command:
+特定のインスタンスボリュームについて詳細な情報を表示するには以下のコマンドを使用します:
 
     incus storage volume info <pool_name> [<volume_type>/]<volume_name>
 
-In both commands, the default {ref}`storage volume type <storage-volume-types>` is `custom`, so you can leave out the `<volume_type>/` when displaying information about a custom storage volume.
+どちらのコマンドも、{ref}`ストレージボリュームタイプ <storage-volume-types>` のデフォルトは `custom` ですので、カスタムストレージボリュームの情報を表示する際は `<volume_type>/` は省略できます。
 
-## Resize a storage volume
+## ストレージボリュームをリサイズする
 
-If you need more storage in a volume, you can increase the size of your storage volume.
-In some cases, it is also possible to reduce the size of a storage volume.
+ボリュームにもっとストレージが必要な場合、ストレージボリュームのサイズを拡大できます。
+場合によっては、ストレージボリュームのサイズを縮小することもできます。
 
-To resize a storage volume, set its size configuration:
+ストレージボリュームをリサイズするにはサイズ設定を設定します:
 
     incus storage volume set <pool_name> <volume_name> size <new_size>
 
 ```{important}
-- Growing a storage volume usually works (if the storage pool has sufficient storage).
-- Shrinking a storage volume is only possible for storage volumes with content type `filesystem`.
-  It is not guaranteed to work though, because you cannot shrink storage below its current used size.
-- Shrinking a storage volume with content type `block` is not possible.
+- ストレージボリュームの拡大は通常は正常に動作します（ストレージプールが十分なストレージを持つ場合）。
+- ストレージボリュームの縮小はコンテントタイプ `filesystem` のストレージボリュームでのみ可能です。
+  ただし現在使用しているサイズより小さく縮小はできないので、縮小が保証されているわけではありません。
+- コンテントタイプ `block` のストレージボリュームの縮小は不可能です。
 
 ```
