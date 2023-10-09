@@ -1,22 +1,22 @@
 (images-profiles)=
-# How to associate profiles with an image
+# イメージにプロファイルを関連付けるには
 
-You can associate one or more profiles with a specific image.
-Instances that are created from the image will then automatically use the associated profiles in the order they were specified.
+特定のイメージに 1 つ以上のプロファイルを関連付けできます。
+イメージから作成されたインスタンスは関連付けられたプロファイルが指定された順に自動的に適用されます。
 
-To associate a list of profiles with an image, use the [`incus image edit`](incus_image_edit.md) command and edit the `profiles:` section:
+イメージにプロファイルのリストを関連付けるには、 [`incus image edit`](incus_image_edit.md) コマンドを使って`profiles:`セクションを編集します:
 
 ```yaml
 profiles:
 - default
 ```
 
-Most provided images come with a profile list that includes only the `default` profile.
-To prevent any profile (including the `default` profile) from being associated with an image, pass an empty list.
+提供されているほとんどのイメージは`default`プロファイルだけを含むプロファイルリストが設定されています。
+（`default`プロファイルを含む）すべてのプロファイルがイメージに関連付けられないようにするには、空のリストを渡します。
 
 ```{note}
-Passing an empty list is different than passing `nil`.
-If you pass `nil` as the profile list, only the `default` profile is associated with the image.
+空のリストを渡すのは`nil`を渡すのとは異なります。
+プロファイルリストに`nil`を渡すとイメージに`default`プロファイルだけが関連付けられます。
 ```
 
-You can override the associated profiles for an image when creating an instance by adding the `--profile` or the `--no-profiles` flag to the launch or init command.
+launch または init コマンドに`--profile`または`--no-profiles`フラグを追加することで、イメージに関連付けられたプロファイルをインスタンス作成時にオーバーライドできます。
