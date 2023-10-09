@@ -1,41 +1,41 @@
 (cluster-form)=
-# How to form a cluster
+# クラスタを形成するには
 
-When forming a Incus cluster, you start with a bootstrap server.
-This bootstrap server can be an existing Incus server or a newly installed one.
+Incus クラスタを形成するときはブートストラップサーバーから始めます。
+このブートストラップサーバーは既存の Incus サーバーでもよいですし新しくインストールしたものでもよいです。
 
-After initializing the bootstrap server, you can join additional servers to the cluster.
-See {ref}`clustering-members` for more information.
+ブートストラップサーバーを初期化した後、クラスタに追加のサーバーをジョインできます。
+詳細は {ref}`clustering-members` を参照してください。
 
-You can form the Incus cluster interactively by providing configuration information during the initialization process or by using preseed files that contain the full configuration.
+Incus クラスタを形成するために初期化プロセス中に設定をインタラクティブに指定することもできますし、完全な設定を含むプリシードファイルを使うこともできます。
 
-To quickly and automatically set up a basic Incus cluster, you can use MicroCloud.
-Note, however, that this project is still in an early phase.
+素早く自動的にベーシックな Incus クラスタをセットアップするには MicroCloud が使えます。
+ただし、このプロジェクトはまだ初期段階なことに注意してください。
 
-## Configure the cluster interactively
+## クラスタをインタラクティブに設定する
 
-To form your cluster, you must first run `incus admin init` on the bootstrap server. After that, run it on the other servers that you want to join to the cluster.
+クラスタを形成するには、まずブートストラップサーバー上で `incus admin init` を実行する必要があります。その後クラスタにジョインさせたい他のサーバー上でもそのコマンドを実行します。
 
-When forming a cluster interactively, you answer the questions that `incus admin init` prompts you with to configure the cluster.
+クラスタをインタラクティブに形成する際、クラスタを設定するために `incus admin init` のプロンプトの質問に回答します。
 
-### Initialize the bootstrap server
+### ブートストラップサーバーを初期化する
 
-To initialize the bootstrap server, run `incus admin init` and answer the questions according to your desired configuration.
+ブートストラップサーバーを初期化するには、 `incus admin init` を実行して希望の設定に応じて質問に回答します。
 
-You can accept the default values for most questions, but make sure to answer the following questions accordingly:
+ほとんどの質問はデフォルト値を受け入れることができますが、以下の質問には適切に答えるようにしてください:
 
 - `Would you like to use Incus clustering?`
 
-  Select **yes**.
+  **yes** を選択。
 - `What IP address or DNS name should be used to reach this server?`
 
-  Make sure to use an IP or DNS address that other servers can reach.
+  他のサーバーがアクセスできる IP または DNS のアドレスを確実に使用してください。
 - `Are you joining an existing cluster?`
 
-  Select **no**.
+  **no** を選択。
 
 <details>
-<summary>Expand to see a full example for <code>incus admin init</code> on the bootstrap server</summary>
+<summary>ブートストラップ上での <code>incus admin init</code> の完全な例を見るには展開してください</summary>
 
 ```{terminal}
 :input: incus admin init
@@ -58,69 +58,69 @@ Would you like a YAML "incus admin init" preseed to be printed? (yes/no) [defaul
 
 </details>
 
-After the initialization process finishes, your first cluster member should be up and available on your network.
-You can check this with [`incus cluster list`](incus_cluster_list.md).
+初期化プロセスが終了したら、最初のクラスタメンバーが起動してネットワーク上で利用可能になるはずです。
+これは [`incus cluster list`](incus_cluster_list.md) で確認できます。
 
-### Join additional servers
+### 追加のサーバーをジョインさせる
 
-You can now join further servers to the cluster.
+これでクラスタに追加のサーバーをジョインできるようになりました。
 
 ```{note}
-The servers that you add should be newly installed Incus servers.
-If you are using existing servers, make sure to clear their contents before joining them, because any existing data on them will be lost.
+追加するサーバーは新規にインストールした Incus サーバーにするほうがよいです。
+既存のサーバーを使う場合、既存のデータは消失するので、ジョインする前にデータを確実にクリアしてください。
 ```
 
-To join a server to the cluster, run `incus admin init` on the cluster.
-Joining an existing cluster requires root privileges, so make sure to run the command as root or with `sudo`.
+クラスタにサーバーをジョインさせるには、クラスタ上で `incus admin init` を実行します。
+既存のクラスタにジョインするには root 権限が必要ですので、コマンドを root で実行するか `sudo` をつけて実行するのを忘れないでください。
 
-Basically, the initialization process consists of the following steps:
+基本的に、初期化プロセスは以下のステップからなります:
 
-1. Request to join an existing cluster.
+1. 既存のクラスタにジョインをリクエストする。
 
-   Answer the first questions that `incus admin init` asks accordingly:
+   `incus admin init` の最初の質問に適切に回答します:
 
    - `Would you like to use Incus clustering?`
 
-     Select **yes**.
+     **yes** を選択。
    - `What IP address or DNS name should be used to reach this server?`
 
-     Make sure to use an IP or DNS address that other servers can reach.
+     他のサーバーがアクセスできる IP または DNS のアドレスを確実に使用してください。
    - `Are you joining an existing cluster?`
 
-     Select **yes**.
+     **yes** を選択。
 
-1. Authenticate with the cluster.
+1. クラスタで認証する。
 
-   There are two alternative methods, depending on which authentication method you choose when configuring the bootstrap server.
+   ブートスラップサーバーを設定する際に選んだ認証方法に応じて 2 つの方法があります。
 
    `````{tabs}
 
-   ````{group-tab} Authentication tokens (recommended)
-   If you configured your cluster to use {ref}`authentication tokens <authentication-token>`, you must generate a join token for each new member.
-   To do so, run the following command on an existing cluster member (for example, the bootstrap server):
+   ````{group-tab} 認証トークン（推奨）
+   {ref}`認証トークン <authentication-token>` を使うようにクラスタを設定した場合、新メンバーごとにジョイントークンを生成する必要があります。
+   そのためには、既存のクラスタメンバー（たとえば、ブートストラップサーバー）で以下のコマンドを実行します:
 
        incus cluster add <new_member_name>
 
-   This command returns a single-use join token that is valid for a configurable time (see {config:option}`server-cluster:cluster.join_token_expiry`).
-   Enter this token when `incus admin init` prompts you for the join token.
+   このコマンドは設定（{config:option}`server-cluster:cluster.join_token_expiry`参照）時に有効な一回限りのジョイントークンを返します。
+   `incus admin init` のプロンプトでジョイントークンを求められたときにこのトークンを入力してください。
 
-   The join token contains the addresses of the existing online members, as well as a single-use secret and the fingerprint of the cluster certificate.
-   This reduces the amount of questions that you must answer during `incus admin init`, because the join token can be used to answer these questions automatically.
+   ジョイントークンは既存のオンラインメンバーのアドレス、一回限りのシークレットとクラスタ証明書のフィンガープリントを含みます。
+   ジョイントークンがこれらの質問に自動で回答できるので、 `incus admin init` 中に回答が必要な質問の量を減らすことができます。
    ````
 
    `````
 
-1. Confirm that all local data for the server is lost when joining a cluster.
-1. Configure server-specific settings (see {ref}`clustering-member-config` for more information).
+1. クラスタにジョインする際サーバーのすべてのローカルデータが消失することを確認します。
+1. サーバー固有の設定を行います（詳細は {ref}`clustering-member-config` を参照）。
 
-   You can accept the default values or specify custom values for each server.
+   デフォルト値を受け入れることもできますし、各サーバーにカスタム値を指定することもできます。
 
 <details>
-<summary>Expand to see full examples for <code>incus admin init</code> on additional servers</summary>
+<summary>追加のサーバー上で <code>incus admin init</code> を実行する完全な例を見るには展開してください</summary>
 
 `````{tabs}
 
-````{group-tab} Authentication tokens (recommended)
+````{group-tab} 認証トークン（推奨）
 
 ```{terminal}
 :input: sudo incus admin init
@@ -138,7 +138,7 @@ Would you like a YAML "incus admin init" preseed to be printed? (yes/no) [defaul
 ```
 
 ````
-````{group-tab} Trust password
+````{group-tab} トラストパスワード
 
 ```{terminal}
 :input: sudo incus admin init
@@ -165,27 +165,27 @@ Would you like a YAML "incus admin init" preseed to be printed? (yes/no) [defaul
 
 </details>
 
-After the initialization process finishes, your server is added as a new cluster member.
-You can check this with [`incus cluster list`](incus_cluster_list.md).
+初期化プロセスが終わった後、サーバーが新しいクラスタメンバーとして追加されます。
+これは [`incus cluster list`](incus_cluster_list.md) で確認できます。
 
-## Configure the cluster through preseed files
+## クラスタをプリシードファイルで設定する
 
-To form your cluster, you must first run `incus admin init` on the bootstrap server.
-After that, run it on the other servers that you want to join to the cluster.
+クラスタを形成するには、まずブートストラップサーバー上で `incus admin init` を実行します。
+その後、クラスタにジョインさせたい他のサーバーでもこのコマンドを実行します。
 
-Instead of answering the `incus admin init` questions interactively, you can provide the required information through preseed files.
-You can feed a file to `incus admin init` with the following command:
+`incus admin init` の質問にインタラクティブに回答する代わりに、プリシードファイルを使って必要な情報を提供できます。
+以下のコマンドを使って `incus admin init` にファイルをフィードできます:
 
     cat <preseed-file> | incus admin init --preseed
 
-You need a different preseed file for every server.
+サーバーごとに異なるプリシードファイルが必要です。
 
-### Initialize the bootstrap server
+### ブートストラップサーバーを初期化する
 
 `````{tabs}
 
-````{group-tab} Authentication tokens (recommended)
-To enable clustering, the preseed file for the bootstrap server must contain the following fields:
+````{group-tab} 認証トークン（推奨）
+クラスタリングを有効にするには、ブートストラップサーバー用のプリシードファイルは以下のフィールドを含む必要があります:
 
 ```yaml
 config:
@@ -195,7 +195,7 @@ cluster:
   enabled: true
 ```
 
-Here is an example preseed file for the bootstrap server:
+ブートストラップサーバー用のプリシードファイルの例を以下に示します:
 
 ```yaml
 config:
@@ -230,14 +230,14 @@ cluster:
 
 `````
 
-### Join additional servers
+### 追加のサーバーをジョインさせる
 
-The preseed files for new cluster members require only a `cluster` section with data and configuration values that are specific to the joining server.
+新しいクラスタメンバー用のプリシードファイルは参加するサーバーに固有のデータと設定値を含む `cluster` セクションのみが必要です。
 
 `````{tabs}
 
-````{group-tab} Authentication tokens (recommended)
-The preseed file for additional servers must include the following fields:
+````{group-tab} 認証トークン（推奨）
+追加のサーバーのプリシードファイルは以下の項目を含む必要があります:
 
 ```yaml
 cluster:
@@ -246,7 +246,7 @@ cluster:
   cluster_token: <join_token>
 ```
 
-Here is an example preseed file for a new cluster member:
+新しいクラスタメンバー用のプリシードファイルの例を以下に示します:
 
 ```yaml
 cluster:
