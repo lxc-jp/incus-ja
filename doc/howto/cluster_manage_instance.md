@@ -1,44 +1,44 @@
 (cluster-manage-instance)=
-# How to manage instances in a cluster
+# クラスタ内のインスタンスを管理するには
 
-In a cluster setup, each instance lives on one of the cluster members.
-You can operate each instance from any cluster member, so you do not need to log on to the cluster member on which the instance is located.
+クラスタのセットアップでは、各インスタンスはどれかのクラスタメンバー上で稼働します。
+どのクラスタメンバーからでも各インスタンスを操作できるので、インスタンスが配置されているクラスタメンバーにログオンする必要はありません。
 
 (cluster-target-instance)=
-## Launch an instance on a specific cluster member
+##  特定のクラスタメンバー上でインスタンスを起動する
 
-When you launch an instance, you can target it to run on a specific cluster member.
-You can do this from any cluster member.
+インスタンスを起動する際、特定のクラスタメンバー上で稼働するようにターゲットできます。
+これはどのクラスタメンバーからでも実行できます。
 
-For example, to launch an instance named `c1` on the cluster member `server2`, use the following command:
+たとえば、`c1` という名前のインスタンスを `server2` クラスタメンバー上で起動するには、以下のコマンドを使用します:
 
     incus launch images:ubuntu/22.04 c1 --target server2
 
-You can launch instances on specific cluster members or on specific {ref}`cluster groups <howto-cluster-groups>`.
+インスタンスを特定のクラスタメンバーあるいは特定の {ref}`クラスタグループ <howto-cluster-groups>` 上で実行できます。
 
-If you do not specify a target, the instance is assigned to a cluster member automatically.
-See {ref}`clustering-instance-placement` for more information.
+ターゲットを指定しなかった場合、インスタンスはクラスタメンバーに自動的に割り当てられます。
+詳細は{ref}`clustering-instance-placement`を参照してください。
 
-## Check where an instance is located
+## インスタンスの配置を確認する
 
-To check on which member an instance is located, list all instances in the cluster:
+インスタンスがどのメンバーに配置されているかを確認するには、クラスタ内のすべてのインスタンス一覧を表示します:
 
     incus list
 
-The location column indicates the member on which each instance is running.
+location カラムに各インスタンスが稼働しているメンバーが表示されます。
 
-## Move an instance
+## インスタンスを移動する
 
-You can move an existing instance to another cluster member.
-For example, to move the instance `c1` to the cluster member `server1`, use the following commands:
+既存のインスタンスを他のクラスタメンバーに移動できます。
+たとえば、 `c1` インスタンスを `server1` クラスタメンバーに移動するには以下のコマンドを使用します:
 
     incus stop c1
     incus move c1 --target server1
     incus start c1
 
-See {ref}`move-instances` for more information.
+詳細は {ref}`move-instances` を参照してください。
 
-To move an instance to a member of a cluster group, use the group name prefixed with `@` for the `--target` flag.
-For example:
+インスタンスをクラスターグループのメンバーに移動するには、`--target` フラグで `@` で始まるグループ名を使用してください。
+たとえば:
 
     incus move c1 --target @group1
