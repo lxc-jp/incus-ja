@@ -1,19 +1,19 @@
-# How to create and configure a network
+# ネットワークを作成し設定するには
 
-To create a managed network, use the [`incus network`](incus_network.md) command and its subcommands.
-Append `--help` to any command to see more information about its usage and available flags.
+マネージドネットワークを作成し設定するには、[`incus network`](incus_network.md) コマンドとそのサブコマンドを使用します。
+どのコマンドでも `--help` を追加すると使用方法と利用可能なフラグについてより詳細な情報を表示できます。
 
 (network-types)=
-## Network types
+## ネットワークタイプ
 
-The following network types are available:
+以下のネットワークタイプが利用できます:
 
 ```{list-table}
    :header-rows: 1
 
-* - Network type
-  - Documentation
-  - Configuration options
+* - ネットワークタイプ
+  - ドキュメント
+  - 設定オプション
 * - `bridge`
   - {ref}`network-bridge`
   - {ref}`network-bridge-options`
@@ -32,29 +32,29 @@ The following network types are available:
 
 ```
 
-## Create a network
+## ネットワークを作成する
 
-Use the following command to create a network:
+ネットワークを作成するには以下のコマンドを実行します:
 
 ```bash
 incus network create <name> --type=<network_type> [configuration_options...]
 ```
 
-See {ref}`network-types` for a list of available network types and links to their configuration options.
+利用可能なネットワークタイプ一覧と設定オプションへのリンクは {ref}`network-types` を参照してください。
 
-If you do not specify a `--type` argument, the default type of `bridge` is used.
+`--type` 引数を指定しない場合、デフォルトのタイプ `bridge` が使用されます。
 
 (network-create-cluster)=
-### Create a network in a cluster
+### クラスタ内にネットワークを作成する
 
-If you are running a Incus cluster and want to create a network, you must create the network for each cluster member separately.
-The reason for this is that the network configuration, for example, the name of the parent network interface, might be different between cluster members.
+Incus クラスタを実行していてネットワークを作成したい場合、各クラスタメンバーに別々にネットワークを作成する必要があります。
+この理由はネットワーク設定は、たとえば親ネットワークインターフェースの名前のように、クラスタメンバー間で異なるかもしれないからです。
 
-Therefore, you must first create a pending network on each member with the `--target=<cluster_member>` flag and the appropriate configuration for the member.
-Make sure to use the same network name for all members.
-Then create the network without specifying the `--target` flag to actually set it up.
+このため、まず `--target=<cluster_member>` フラグとメンバー用の適切な設定を指定して保留中のネットワークを作成する必要があります。
+すべてのメンバーで同じネットワーク名を使うようにしてください。
+次に実際にセットアップするために `--target` フラグなしでネットワークを作成してください。
 
-For example, the following series of commands sets up a physical network with the name `UPLINK` on three cluster members:
+たとえば、以下の一連のコマンドで 3 つのクラスタメンバー上に `UPLINK` という名前の物理ネットワークをセットアップします:
 
 ```{terminal}
 :input: incus network create UPLINK --type=physical parent=br0 --target=vm01
@@ -68,54 +68,54 @@ Network UPLINK pending on member vm03
 Network UPLINK created
 ```
 
-Also see {ref}`cluster-config-networks`.
+{ref}`cluster-config-networks`も参照してください。
 
 (network-attach)=
-## Attach a network to an instance
+## インスタンスにネットワークをアタッチする
 
-After creating a managed network, you can attach it to an instance as a {ref}`NIC device <devices-nic>`.
+マネージドネットワークを作成後、それをインスタンスに{ref}`NIC デバイス <devices-nic>`としてアタッチできます。
 
-To do so, use the following command:
+そのためには、以下のコマンドを使います:
 
     incus network attach <network_name> <instance_name> [<device_name>] [<interface_name>]
 
-The device name and the interface name are optional, but we recommend specifying at least the device name.
-If not specified, Incus uses the network name as the device name, which might be confusing and cause problems.
-For example, Incus images perform IP auto-configuration on the `eth0` interface, which does not work if the interface is called differently.
+デバイス名とインターフェース名は省略可能ですが、少なくともデバイス名は指定することをお勧めします。
+指定しない場合、Incus はネットワーク名をデバイス名として使用しますが、紛らわしく問題を起こすかもしれません。
+たとえば、Incus イメージは`eth0`インターフェースに IP 自動設定を行いますが、インターフェースの名前が違うと機能しません。
 
-For example, to attach the network `my-network` to the instance `my-instance` as `eth0` device, enter the following command:
+たとえば、`my-network`というネットワークを`my-instance`というインタンスに`eth0`デバイスとしてアタッチするには、以下のコマンドを入力します:
 
     incus network attach my-network my-instance eth0
 
-### Attach the network as a device
+### NICデバイスを追加する
 
-The [`incus network attach`](incus_network_attach.md) command is a shortcut for adding a NIC device to an instance.
-Alternatively, you can add a NIC device based on the network configuration in the usual way:
+[`incus network attach`](incus_network_attach.md) コマンドはインスタンスに NIC デバイスを追加するショートカットです。
+別の方法として、通常通りネットワーク設定で NIC デバイスを追加できます:
 
     incus config device add <instance_name> <device_name> nic network=<network_name>
 
-When using this way, you can add further configuration to the command to override the default settings for the network if needed.
-See {ref}`NIC device <devices-nic>` for all available device options.
+この方法を使う場合、必要に応じてネットワークのデフォルト設定をオーバーライドするように追加の設定をコマンドに追加できます。
+すべての利用可能なデバイスオプションについては{ref}`NIC デバイス <devices-nic>`を参照してください。
 
-## Configure a network
+## ネットワークを設定する
 
-To configure an existing network, use either the `incus network set` and `incus network unset` commands (to configure single settings) or the `incus network edit` command (to edit the full configuration).
-To configure settings for specific cluster members, add the `--target` flag.
+既存のネットワークを設定するには、 `incus network set` と `incus network unset` コマンド（単一の設定項目を設定する場合）または `incus network edit` コマンド（設定全体を編集する場合）のどちらかを使います。
+特定のクラスタメンバーの設定を変更するには、 `--target` フラグを追加してください。
 
-For example, the following command configures a DNS server for a physical network:
+たとえば、以下のコマンドは物理ネットワークの DNS サーバーを設定します:
 
 ```bash
 incus network set UPLINK dns.nameservers=8.8.8.8
 ```
 
-The available configuration options differ depending on the network type.
-See {ref}`network-types` for links to the configuration options for each network type.
+利用可能な設定オプションはネットワークタイプによって異なります。
+各ネットワークタイプの設定オプションへのリンクは {ref}`network-types` を参照してください。
 
-There are separate commands to configure advanced networking features.
-See the following documentation:
+高度なネットワーク機能を設定するためには別のコマンドがあります。
+以下のドキュメントを参照してください:
 
 - {doc}`/howto/network_acls`
 - {doc}`/howto/network_forwards`
 - {doc}`/howto/network_load_balancers`
 - {doc}`/howto/network_zones`
-- {doc}`/howto/network_ovn_peers` (OVN only)
+- {doc}`/howto/network_ovn_peers`（OVN のみ）
