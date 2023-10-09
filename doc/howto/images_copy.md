@@ -1,88 +1,88 @@
 (images-copy)=
-# How to copy and import images
+# イメージをコピーやインポートするには
 
-To add images to an image store, you can either copy them from another server or import them from files (either local files or files on a web server).
+イメージをイメージストアに追加するには、他のサーバーからコピーすることもできますし、ファイル（ローカルのファイルまたはウェブサーバー上のファイル）からインポートすることもできます。
 
-## Copy an image from a remote
+## リモートからイメージをコピーする
 
-To copy an image from one server to another, enter the following command:
+あるサーバーから別のサーバーにイメージをコピーするには、以下のコマンドを入力します:
 
     incus image copy [<source_remote>:]<image> <target_remote>:
 
 ```{note}
-To copy the image to your local image store, specify `local:` as the target remote.
+イメージをローカルのイメージストアにコピーするには、コピー先のリモートに `local:` と指定します。
 ```
 
-See [`incus image copy --help`](incus_image_copy.md) for a list of all available flags.
-The most relevant ones are:
+すべての利用可能なフラグの一覧は [`incus image copy --help`](incus_image_copy.md) を参照してください。
+最も重要なものは以下のとおりです:
 
 `--alias`
-: Assign an alias to the copy of the image.
+: イメージのコピーにエイリアスを割り当てる。
 
 `--copy-aliases`
-: Copy the aliases that the source image has.
+: コピー元のイメージが持つエイリアスをコピーする。
 
 `--auto-update`
-: Keep the copy up-to-date with the original image.
+: 元のイメージが更新されたらコピーも更新する。
 
 `--vm`
-: When copying from an alias, copy the image that can be used to create virtual machines.
+: エイリアスからコピーする際、仮想マシンを作成するのに使えるイメージをコピーする。
 
-## Import an image from files
+## ファイルからイメージをインポートする
 
-If you have image files that use the required {ref}`image-format`, you can import them into your image store.
+要求される {ref}`image-format` を使用するイメージファイルを持っていれば、イメージストアにインポートできます。
 
-There are several ways of obtaining such image files:
+そのようなイメージファイルを取得する方法はいくつかあります:
 
-- Exporting an existing image (see {ref}`images-manage-export`)
-- Building your own image using `distrobuilder` (see {ref}`images-create-build`)
-- Downloading image files from a {ref}`remote image server <remote-image-servers>` (note that it is usually easier to {ref}`use the remote image <images-remote>` directly instead of downloading it to a file and importing it)
+- 既存のイメージをエクスポートする（{ref}`images-manage-export`参照）
+- `distrobuilder`でイメージを生成する（{ref}`images-create-build`参照）
+- {ref}`remote image server <remote-image-servers>`からイメージファイルをダウンロードする（イメージをファイルにダウンロードしてインポートするより、{ref}`リモートのイメージを使用する <images-remote>`ほうが通常は簡単なことに注意してください）
 
-### Import from the local file system
+### ローカルファイルシステムからインポートする
 
-To import an image from the local file system, use the [`incus image import`](incus_image_import.md) command.
-This command supports both {ref}`unified images <image-format-unified>` (compressed file or directory) and {ref}`split images <image-format-split>` (two files).
+ローカルファイルシステムからイメージをインポートするには、[`incus image import`](incus_image_import.md) コマンドを使用します。
+このコマンドは{ref}`統合イメージ <image-format-unified>`（圧縮されたファイルまたはディレクトリー）と{ref}`分離イメージ <image-format-split>`（2 つのファイル）の両方をサポートします。
 
-To import a unified image from one file or directory, enter the following command:
+1 つのファイルまたはディレクトリーから統合イメージをインポートするには、以下のコマンドを入力します:
 
     incus image import <image_file_or_directory_path> [<target_remote>:]
 
-To import a split image, enter the following command:
+分離イメージをインポートするには、以下のコマンドを入力します:
 
     incus image import <metadata_tarball_path> <rootfs_tarball_path> [<target_remote>:]
 
-In both cases, you can assign an alias with the `--alias` flag.
-See [`incus image import --help`](incus_image_import.md) for all available flags.
+どちらの場合も、`--alias`フラグでエイリアスを割り当てられます。
+利用可能なすべてのフラグは [`incus image import --help`](incus_image_import.md) を参照してください。
 
-### Import from a file on a remote web server
+### リモートウェブサーバーからファイルをインポートする
 
-You can import image files from a remote web server by URL.
-This method is an alternative to running a Incus server for the sole purpose of distributing an image to users.
-It only requires a basic web server with support for custom headers (see {ref}`images-copy-http-headers`).
+URL を指定してリモートウェブサーバーからイメージファイルをインポートできます。
+この方法はイメージをユーザーに配布するためだけに Incus サーバーを稼働させる代わりに使用できます。
+必要なのはカスタムヘッダ（{ref}`images-copy-http-headers`参照）をサポートする基本的なウェブサーバーだけです。
 
-The image files must be provided as unified images (see {ref}`image-format-unified`).
+イメージファイルは統合イメージ（{ref}`image-format-unified`参照）として提供される必要があります。
 
-To import an image file from a remote web server, enter the following command:
+リモートウェブサーバーからイメージをインポートするには、以下のコマンドを入力します:
 
     incus image import <URL>
 
-You can assign an alias to the local image with the `--alias` flag.
+`--alias`フラグでローカルのイメージにエイリアスを割り当てられます。
 
 (images-copy-http-headers)=
-#### Custom HTTP headers
+#### カスタムHTTPヘッダ
 
-Incus requires the following custom HTTP headers to be set by the web server:
+Incus では以下のカスタム HTTP ヘッダをウェブサーバーで設定する必要があります:
 
 `Incus-Image-Hash`
-: The SHA256 of the image that is being downloaded.
+: ダウンロードされるイメージの SHA256 ハッシュ値。
 
 `Incus-Image-URL`
-: The URL from which to download the image.
+: イメージをダウンロードする URL。
 
-Incus sets the following headers when querying the server:
+Incus はサーバーに問い合わせる際に以下のヘッダを設定します:
 
 `Incus-Server-Architectures`
-: A comma-separated list of architectures that the client supports.
+: クライアントがサポートするアーキテクチャのカンマ区切りリスト。
 
 `Incus-Server-Version`
-: The version of Incus in use.
+: 使用している Incus のバージョン

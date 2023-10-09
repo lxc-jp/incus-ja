@@ -68,6 +68,8 @@ rules:
     pattern: 全て
   - expected: たとえば
     pattern: 例えば
+  - expected: とおり
+    pattern: 通り
 
   # LXDからの移行
   - expected: Incus
