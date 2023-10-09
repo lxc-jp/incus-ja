@@ -1,7 +1,7 @@
 (storage-drivers)=
-# Storage drivers
+# ストレージドライバー
 
-Incus supports the following storage drivers for storing images, instances and custom volumes:
+Incus はイメージ、インスタンスとカスタムボリュームを保管するのに以下のストレージドライバーをサポートします:
 
 ```{toctree}
 :maxdepth: 1
@@ -15,30 +15,31 @@ storage_cephfs
 storage_cephobject
 ```
 
-See the corresponding pages for driver-specific information and configuration options.
+
+ドライバー固有の情報と設定オプションについては対応するページを参照してください。
 
 (storage-drivers-features)=
-## Feature comparison
+## 機能比較
 
-Where possible, Incus uses the advanced features of each storage system to optimize operations.
+可能であれば、各システムの高度な機能を使って、Incus は操作を最適化しようとします。
 
-Feature                                     | Directory | Btrfs | LVM   | ZFS     | Ceph RBD | CephFS | Ceph Object
-:---                                        | :---      | :---  | :---  | :---    | :---     | :---   | :---
-{ref}`storage-optimized-image-storage`      | no        | yes   | yes   | yes     | yes      | n/a    | n/a
-Optimized instance creation                 | no        | yes   | yes   | yes     | yes      | n/a    | n/a
-Optimized snapshot creation                 | no        | yes   | yes   | yes     | yes      | yes    | n/a
-Optimized image transfer                    | no        | yes   | no    | yes     | yes      | n/a    | n/a
-{ref}`storage-optimized-volume-transfer`    | no        | yes   | no    | yes     | yes      | n/a    | n/a
-Copy on write                               | no        | yes   | yes   | yes     | yes      | yes    | n/a
-Block based                                 | no        | no    | yes   | no      | yes      | no     | n/a
-Instant cloning                             | no        | yes   | yes   | yes     | yes      | yes    | n/a
-Storage driver usable inside a container    | yes       | yes   | no    | yes[^1] | no       | n/a    | n/a
-Restore from older snapshots (not latest)   | yes       | yes   | yes   | no      | yes      | yes    | n/a
-Storage quotas                              | yes[^2]   | yes   | yes   | yes     | yes      | yes    | yes
-Available on `incus admin init`                     | yes       | yes   | yes   | yes     | yes      | no     | no
-Object storage                              | yes       | yes   | yes   | yes     | no       | no     | yes
+機能                                               | ディレクトリー | Btrfs | LVM  | ZFS     | Ceph RBD | CephFS | Ceph Object
+:---                                               | :---           | :---  | :--- | :---    | :---     | :---   | :---
+{ref}`storage-optimized-image-storage`             | no             | yes   | yes  | yes     | yes      | n/a    | n/a
+最適化されたインスタンスの作成                     | no             | yes   | yes  | yes     | yes      | n/a    | n/a
+最適化されたスナップショットの作成                 | no             | yes   | yes  | yes     | yes      | yes    | n/a
+最適化されたイメージの転送                         | no             | yes   | no   | yes     | yes      | n/a    | n/a
+{ref}`storage-optimized-volume-transfer`           | no             | yes   | no   | yes     | yes      | n/a    | n/a
+コピーオンライト                                   | no             | yes   | yes  | yes     | yes      | yes    | n/a
+ブロックデバイスベース                             | no             | no    | yes  | no      | yes      | no     | n/a
+インスタントクローン                               | no             | yes   | yes  | yes     | yes      | yes    | n/a
+コンテナ内でストレージドライバーの使用             | yes            | yes   | no   | yes[^1] | no       | n/a    | n/a
+古い（最新ではない）スナップショットからのリストア | yes            | yes   | yes  | no      | yes      | yes    | n/a
+ストレージクオータ                                 | yes[^2]        | yes   | yes  | yes     | yes      | yes    | yes
+`incus admin init` で利用可能                      | yes            | yes   | yes  | yes     | yes      | no     | no
+オブジェクトストレージ                             | yes            | yes   | yes  | yes     | no       | no     | yes
 
-[^1]: Requires [`zfs.delegate`](storage-zfs-vol-config) to be enabled.
+[^1]: [`zfs.delegate`](storage-zfs-vol-config)を有効にする必要があります。
 [^2]: % Include content from [storage_dir.md](storage_dir.md)
 
       ```{include} storage_dir.md
@@ -47,54 +48,52 @@ Object storage                              | yes       | yes   | yes   | yes   
       ```
 
 (storage-optimized-image-storage)=
-### Optimized image storage
+### 最適化されたイメージストレージ
 
-All storage drivers except for the directory driver have some kind of optimized image storage format.
-To make instance creation near instantaneous, Incus clones a pre-made image volume when creating an instance rather than unpacking the image tarball from scratch.
+ディレクトリードライバーを除くすべてのストレージドライバーはなんらかの種類の最適化されたイメージ保管フォーマットがあります。
+インスタンスの作成をほぼ瞬時に行うため、 Incus はインスタンスの作成時にイメージの tarball を一から展開するのではなく事前に作成したイメージボリュームを複製します。
 
-To prevent preparing such a volume on a storage pool that might never be used with that image, the volume is generated on demand.
-Therefore, the first instance takes longer to create than subsequent ones.
+全く使われないかもしれないイメージのためにストレージプール上にそのようなボリュームを準備するのを避けるため、ボリュームはオンデマンドで生成されます。
+このため、最初のインスタンスの作成は後続のインスタンスより時間がかかります。
 
 (storage-optimized-volume-transfer)=
-### Optimized volume transfer
+### 最適化されたボリュームの転送
 
-Btrfs, ZFS and Ceph RBD have an internal send/receive mechanism that allows for optimized volume transfer.
+Btrfs, ZFS と Ceph RBD は内部で送信/受信の機構を持ち最適化されたボリューム転送を行えます。
 
-Incus uses this optimized transfer when transferring instances and snapshots between storage pools that use the same storage driver, if the storage driver supports optimized transfer and the optimized transfer is actually quicker.
-Otherwise, Incus uses `rsync` to transfer container and file system volumes, or raw block transfer to transfer virtual machine and custom block volumes.
+同じストレージドライバーを使うストレージプール間でボリュームを転送する場合、ストレージドライバーが最適化された転送をサポートしている場合は、Incus はこの最適化された転送を使用し、最適化された転送のほうが速いです。
+そうでない場合は、Incus はコンテナとファイルシステムボリュームを転送するのに`rsync`を使用するか、仮想マシンとカスタムボリュームブロックを転送するのに raw ブロック転送を使います。
 
-The optimized transfer uses the underlying storage driver's native functionality for transferring data, which is usually faster than using `rsync`.
-However, the full potential of the optimized transfer becomes apparent when refreshing a copy of an instance or custom volume that uses periodic snapshots.
-With optimized transfer, Incus bases the refresh on the latest snapshot, which means:
+最適化された転送は下層のストレージドライバーのデータ転送のネイティブの機能を使い、`rsync`を使うより通常は速いです。
+しかし、最適化された転送のフルのポテンシャルが明らかになるのは、インスタンスや定期的なスナップショットを使用するカスタムボリュームのコピーを更新するときです。つまり:
 
-- When you take a first snapshot and refresh the copy, the transfer will take roughly the same time as a full copy.
-  Incus transfers the new snapshot and the difference between the snapshot and the main volume.
-- For subsequent snapshots, the transfer is considerably faster.
-  Incus does not transfer the full new snapshot, but only the difference between the new snapshot and the latest snapshot that already exists on the target.
-- When refreshing without a new snapshot, Incus transfers only the differences between the main volume and the latest snapshot on the target.
-  This transfer is usually faster than using `rsync` (as long as the latest snapshot is not too outdated).
+- 初回のスナップショットを作成しコピーを更新する際、転送はほぼフルコピーと同じ時間がかかります。
+  Incus は新しいスナップショットとスナップショットとメインボリュームの差分を転送します。
+- 後続のスナップショットでは、転送は大幅に速くなります。
+  Incus はフルの新規のスナップショットは転送せず、新規のスナップショットとターゲット上に存在する最新のスナップショットとの差分のみを転送します。
+- 新規のスナップショット無しで更新する場合、Incus はメインボリュームとターゲット上に存在する最新のスナップショットとの差分のみを転送します。
+  この転送は`rsync`を使うより通常は速いです（最新のスナップショットがあまりにも古すぎない限りは）。
 
-On the other hand, refreshing copies of instances without snapshots (either because the instance doesn't have any snapshots or because the refresh uses the `--instance-only` flag) would actually be slower than using `rsync`.
-In such cases, the optimized transfer would transfer the difference between the (non-existent) latest snapshot and the main volume, thus the full volume.
-Therefore, Incus uses `rsync` instead of the optimized transfer for refreshes without snapshots.
+一方で、スナップショットなしのインスタンスのコピーを更新する際は`rsync`を使うよりも（インスタンスがスナップショットを 1 つも持っていないか、リフレッシュが`--instance-only`フラグを使うことのために）遅くなるでしょう。そのような場合には最適化された転送であれば（存在しない）最新のスナップショットとメインボリュームの差分、つまりフルのボリュームを転送したでしょう。
+ですので、Incus はスナップショットがないリフレッシュには最適化された転送ではなく`rsync`を使用します。
 
-## Recommended setup
+## おすすめのセットアップ
 
-The two best options for use with Incus are ZFS and Btrfs.
-They have similar functionalities, but ZFS is more reliable.
+Incus で使う場合のベストな 2 つのオプションは ZFS と Btrfs です。
+このふたつは同様の機能を持ちますが、ZFS のほうがより信頼性が上です。
 
-Whenever possible, you should dedicate a full disk or partition to your Incus storage pool.
-Incus allows to create loop-based storage, but this isn't recommended for production use.
-See {ref}`storage-location` for more information.
+可能であれば、Incus のストレージプールにディスク全体かパーティションを専用で使用させるべきです。
+Incus で loop ベースのストレージを作れますが、プロダクション環境ではおすすめしません。
+詳細は {ref}`storage-location` を参照してください。
 
-The directory backend should be considered as a last resort option.
-It supports all main Incus features, but is slow and inefficient because it cannot perform instant copies or snapshots.
-Therefore, it constantly copies the instance's full storage.
+ディレクトリーバックエンドは最後の手段の選択肢と捉えるべきです。
+Incus のすべてのメインの機能をサポートしますが、インスタントコピーやスナップショットを実行できないため遅く非効率です。
+そのため、絶えずインスタンスのストレージ全体をコピーすることになります。
 
-## Security considerations
+## セキュリティーの考慮
 
-Currently, the Linux kernel might silently ignore mount options and not apply them when a block-based file system (for example, `ext4`) is already mounted with different mount options.
-This means when dedicated disk devices are shared between different storage pools with different mount options set, the second mount might not have the expected mount options.
-This becomes security relevant when, for example, one storage pool is supposed to provide `acl` support and the second one is supposed to not provide `acl` support.
+現在、 Linux Kernel はブロックベースのファイルシステム（例: `ext4`）が別のオプションでマウント済みの場合マウントオプションは黙って無視し適用しません。
+これは専用ディスクデバイスが異なるストレージプール間で異なるマウントオプションで共有されている時、2 つめのマウントは期待しているマウントオプションにならないかもしれないことを意味します。
+これはたとえば 1 つめのストレージプールが `acl` サポートを提供する想定で、2 つめのストレージプールが `acl` サポートを提供しない想定であるようなときにセキュリティー上の問題になります。
 
-For this reason, it is currently recommended to either have dedicated disk devices per storage pool or to ensure that all storage pools that share the same dedicated disk device use the same mount options.
+この理由により、現状はストレージプールごとに専用のディスクデバイスを持つか、同じ専用ディスクを共有するすべてのストレージプールで確実に同じマウントオプションを使うことを推奨します。
