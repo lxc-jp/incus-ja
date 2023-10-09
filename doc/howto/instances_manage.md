@@ -1,149 +1,149 @@
 (instances-manage)=
-# How to manage instances
+# インスタンスを管理するには
 
-When listing the existing instances, you can see their type, status, and location (if applicable).
-You can filter the instances and display only the ones that you are interested in.
+既存のインスタンスを一覧表示する際、インスタンスタイプ、状態、場所（場所を持つ場合）を表示できます。
+またインスタンスをフィルターして興味があるインスタンスだけを表示できます。
 
 ````{tabs}
 ```{group-tab} CLI
-Enter the following command to list all instances:
+全てのインスタンスを一覧表示するには以下のコマンドを入力します:
 
     incus list
 
-You can filter the instances that are displayed, for example, by type, status or the cluster member where the instance is located:
+表示するインスタンスをフィルターできます。例えば、インスタンスタイプ、状態、またはインスタンスが配置されているクラスタメンバーでフィルターできます:
 
     incus list type=container
     incus list status=running
     incus list location=server1
 
-You can also filter by name.
-To list several instances, use a regular expression for the name.
-For example:
+インスタンス名でフィルターもできます。
+複数のインスタンスを一覧表示するには、名前の正規表現を使います。
+例えば以下のようにします:
 
     incus list ubuntu.*
 
-Enter [`incus list --help`](incus_list.md) to see all filter options.
+全てのフィルターオプションを見るには [`incus list --help`](incus_list.md) と入力します。
 ```
 
 ```{group-tab} API
-Query the `/1.0/instances` endpoint to list all instances.
-You can use {ref}`rest-api-recursion` to display more information about the instances:
+すべてのインスタンスを一覧表示するには `/1.0/instances` エンドポイントに問い合わせます。
+インスタンスのより詳細な情報を表示するには {ref}`rest-api-recursion` を使えます:
 
     incus query /1.0/instances?recursion=2
 
-You can {ref}`filter <rest-api-filtering>` the instances that are displayed, by name, type, status or the cluster member where the instance is located:
+表示するインスタンスを名前、インスタンスタイプ、状態またはインスタンスが配置されているクラスタメンバで {ref}`フィルタ <rest-api-filtering>` できます:
 
     incus query /1.0/instances?filter=name+eq+ubuntu
     incus query /1.0/instances?filter=type+eq+container
     incus query /1.0/instances?filter=status+eq+running
     incus query /1.0/instances?filter=location+eq+server1
 
-To list several instances, use a regular expression for the name.
-For example:
+複数のインスタンスを一覧表示するには、名前の正規表現を使います。
+たとえば:
 
     incus query /1.0/instances?filter=name+eq+ubuntu.*
 
-See [`GET /1.0/instances`](swagger:/instances/instances_get) for more information.
+詳細は [`GET /1.0/instances`](swagger:/instances/instances_get) を参照してください。
 ```
 
 ```{group-tab} UI
-Go to {guilabel}`Instances` to see a list of all instances.
+全てのインスタンスを一覧表示するには {guilabel}`Instances` へ移動します。
 
-You can filter the instances that are displayed by status, instance type, or the profile they use by selecting the corresponding filter.
+表示するインスタンスを、ステータス、インスタンスタイプ、使用しているプロファイルでフィルタできます。
 
-In addition, you can search for instances by entering a search text.
-The text you enter is matched against the name, the description, and the name of the base image.
+さらに、検索テキストを入力してインスタンスを検索できます。
+入力したテキストは名前、説明、ベースイメージの名前にマッチされます。
 ```
 ````
 
-## Show information about an instance
+## インスタンスの詳細情報を表示する
 
 ````{tabs}
 ```{group-tab} CLI
-Enter the following command to show detailed information about an instance:
+インスタンスの詳細情報を表示するには以下のコマンドを入力します:
 
     incus info <instance_name>
 
-Add `--show-log` to the command to show the latest log lines for the instance:
+インスタンスの最新のログを表示するにはコマンドに `--show-log` を追加します:
 
     incus info <instance_name> --show-log
 ```
 
 ```{group-tab} API
-Query the following endpoint to show detailed information about an instance:
+インスタンスの詳細情報を表示するには以下のエンドポイントに問い合わせます:
 
     incus query /1.0/instances/<instance_name>
 
-See [`GET /1.0/instances/{name}`](swagger:/instances/instance_get) for more information.
+詳細は [`GET /1.0/instances/{name}`](swagger:/instances/instance_get) を参照してください。
 ```
 
 ```{group-tab} UI
-Clicking an instance line in the overview will show a summary of the instance information right next to the instance list.
+overview でインスタンスの行をクリックするとインスタンス一覧の右にインスタンスの情報のサマリが表示されます。
 
-Click the instance name to go to the instance detail page, which contains detailed information about the instance.
+インスタンス名をクリックするとインスタンス詳細のページに遷移し、インスタンスについての詳細情報が表示されます。
 ```
 ````
 
-## Start an instance
+## インスタンスを起動する
 
 ````{tabs}
 ```{group-tab} CLI
-Enter the following command to start an instance:
+インスタンスを起動するには以下のコマンドを入力します:
 
     incus start <instance_name>
 
-You will get an error if the instance does not exist or if it is running already.
+インスタンスが存在しないか既に稼働中の場合はエラーになります。
 
-To immediately attach to the console when starting, pass the `--console` flag.
-For example:
+起動する際にコンソールにすぐにアタッチするには `--console` フラグを渡します。
+例えば以下のようにします:
 
     incus start <instance_name> --console
 
-See {ref}`instances-console` for more information.
+詳細は {ref}`instances-console` を参照してください。
 ```
 
 ```{group-tab} API
-To start an instance, send a PUT request to change the instance state:
+インスタンスを起動するには、PUT リクエストを送ってインスタンス状態を変更してください:
 
     incus query --request PUT /1.0/instances/<instance_name>/state --data '{"action":"start"}'
 
 <!-- Include start monitor status -->
-The return value of this query contains an operation ID, which you can use to query the status of the operation:
+API 呼び出しの戻り値には操作 ID が含まれます。これを使って操作の状態を問い合わせできます:
 
     incus query /1.0/operations/<operation_ID>
 
-Use the following query to monitor the state of the instance:
+インスタンスの状態をモニターするには以下のクエリを使います:
 
     incus query /1.0/instances/<instance_name>/state
 
-See [`GET /1.0/instances/{name}/state`](swagger:/instances/instance_state_get) and [`PUT /1.0/instances/{name}/state`](swagger:/instances/instance_state_put)for more information.
+詳細は [`GET /1.0/instances/{name}/state`](swagger:/instances/instance_state_get) と [`PUT /1.0/instances/{name}/state`](swagger:/instances/instance_state_put) を参照してください。
 <!-- Include end monitor status -->
 ```
 
 ```{group-tab} UI
-To start an instance, go to the instance list or the respective instance and click the {guilabel}`Start` button (▷).
+インスタンスを起動するには、インスタンス一覧か対応するインスタンスのページに移動し、{guilabel}`Start`ボタン(▷)をクリックします。
 
-You can also start several instances at the same time by selecting them in the instance list and clicking the {guilabel}`Start` button at the top.
+インスタンス一覧で同時に選択し画面上部の{guilabel}`Start`ボタンをクリックすることで複数のインスタンスを起動することもできます。
 
-On the instance detail page, select the {guilabel}`Console` tab to see the boot log with information about the instance starting up.
-Once it is running, you can select the {guilabel}`Terminal` tab to access the instance.
+インスタンス詳細ページで、{guilabel}`Console`タブを選択するとブートログがインスタンスが起動したときの情報とともに表示されます。
+インスタンスが起動したら、{guilabel}`Terminal`タブを選択するとインスタンスにアクセスできます。
 ```
 ````
 
 (instances-manage-stop)=
-## Stop an instance
+## インスタンスを停止する
 
 `````{tabs}
 ````{group-tab} CLI
-Enter the following command to stop an instance:
+インスタンスを停止するには以下のコマンドを入力します:
 
     incus stop <instance_name>
 
-You will get an error if the instance does not exist or if it is not running.
+インスタンスが存在しないか稼働中ではない場合はエラーになります。
 ````
 
 ````{group-tab} API
-To stop an instance, send a PUT request to change the instance state:
+インスタンスを停止するには、PUT リクエストを送ってインスタンス状態を変更します:
 
     incus query --request PUT /1.0/instances/<instance_name>/state --data '{"action":"stop"}'
 
@@ -155,46 +155,46 @@ To stop an instance, send a PUT request to change the instance state:
 ````
 
 ````{group-tab} UI
-To stop an instance, go to the instance list or the respective instance and click the {guilabel}`Stop` button (□).
-You are then prompted to confirm.
+インスタンスを停止するには、インスタンス一覧か対応するインスタンスのページに遷移し、 {guilabel}`Stop` ボタン (□)をクリックします。
+確認のプロンプトが表示されます。
 
 <!-- Include start skip confirmation -->
 ```{tip}
-To skip the confirmation prompt, hold the {kbd}`Shift` key while clicking.
+確認のプロンプトをスキップするには、{kbd}`Shift`キーを押しながらクリックします。
 ```
 <!-- Include end skip confirmation -->
 
-You can choose to force-stop the instance.
-If stopping the instance takes a long time or the instance is not responding to the stop request, click the spinning stop button to go back to the confirmation prompt, where you can select to force-stop the instance.
+インスタンスを強制停止することもできます。
+インスタンスの停止が長い時間かかったり、インスタンスが停止要求に応答しない場合、回転している停止ボタンをクリックし、確認プロンプトに戻ると、そこでインスタンスの強制停止を選択できます。
 
-You can also stop several instances at the same time by selecting them in the instance list and clicking the {guilabel}`Stop` button at the top.
+またインスタンス一覧で複数のインスタンスを選択し、画面上部の {guilabel}`Stop` ボタンを押すことで複数のインスタンスを停止することもできます。
 ````
 
 `````
 
-## Delete an instance
+## インスタンスを削除する
 
-If you don't need an instance anymore, you can remove it.
-The instance must be stopped before you can delete it.
+インスタンスがもう不要な場合、削除できます。
+削除する前にインスタンスを停止する必要があります。
 
 `````{tabs}
 ```{group-tab} CLI
-Enter the following command to delete an instance:
+インスタンスを削除するには以下のコマンドを入力します:
 
     incus delete <instance_name>
 ```
 
 ```{group-tab} API
-To delete an instance, send a DELETE request to the instance:
+インスタンスを削除するには、インスタンスに DELETE リクエストを送ります:
 
     incus query --request DELETE /1.0/instances/<instance_name>
 
-See [`DELETE /1.0/instances/{name}`](swagger:/instances/instance_delete) for more information.
+詳細は [`DELETE /1.0/instances/{name}`](swagger:/instances/instance_delete) を参照してください。
 ```
 
 ````{group-tab} UI
-To delete an instance, go to its instance detail page and click {guilabel}`Delete instance`.
-You are then prompted to confirm.
+インスタンスを削除するには、インスタンスの詳細ページに遷移し {guilabel}`Delete instance` をクリックします。
+確認のプロンプトが表示されます。
 
 % Include content from above
 ```{include} ./instances_manage.md
@@ -202,59 +202,59 @@ You are then prompted to confirm.
     :end-before: <!-- Include end skip confirmation -->
 ```
 
-You can also delete several instances at the same time by selecting them in the instance list and clicking the {guilabel}`Delete` button at the top.
+またインスタンス一覧で複数のインスタンスを選択し、画面上部の {guilabel}`Delete` ボタンを押すことで複数のインスタンスを削除することもできます。
 ````
 `````
 
 ```{caution}
-This command permanently deletes the instance and all its snapshots.
+このコマンドはインスタンスとそのスナップショットを永久的に削除します。
 ```
 
-### Prevent accidental deletion of instances
+### 間違ってインスタンスを削除するのを防ぐ
 
-There are different ways to prevent accidental deletion of instances:
+間違ってインスタンスを削除するのを防ぐにはいくつかの異なる方法があります:
 
-- To protect a specific instance from being deleted, set {config:option}`instance-security:security.protection.delete` to `true` for the instance.
-  See {ref}`instances-configure` for instructions.
-- In the CLI client, you can create an alias to be prompted for approval every time you use the [`incus delete`](incus_delete.md) command:
+- 特定のインスタンスが削除されることを防ぐためには、そのインスタンスの {config:option}`instance-security:security.protection.delete` を `true` に設定します。
+  手順は {ref}`instances-configure` を参照してください。
+- CLI クライアントでは、[`incus delete`](incus_delete.md) コマンドを使うたびに確認のプロンプトを表示するようなエイリアスを作成します:
 
        incus alias add delete "delete -i"
 
-## Rebuild an instance
+## インスタンスを再構築する
 
-If you want to wipe and re-initialize the root disk of your instance but keep the instance configuration, you can rebuild the instance.
+インスタンスの root ディスクを一掃して再初期化したいがインスタンスの設定は維持したい場合、インスタンスを再構築できます。
 
-Rebuilding is only possible for instances that do not have any snapshots.
+再構築はスナップショットが 1 つも存在しないインスタンスでのみ可能です。
 
-Stop your instance before rebuilding it.
+再構築の前にインスタンスを停止します。
 
 ````{tabs}
 ```{group-tab} CLI
-Enter the following command to rebuild the instance with a different image:
+別のイメージでインスタンスを再構築するには以下のコマンドを入力します:
 
     incus rebuild <image_name> <instance_name>
 
-Enter the following command to rebuild the instance with an empty root disk:
+空のルートディスクでインスタンスを再構築するには以下のコマンドを入力します:
 
     incus rebuild <instance_name> --empty
 
-For more information about the `rebuild` command, see [`incus rebuild --help`](incus_rebuild.md).
+`rebuild` コマンドについての詳細は、 [`incus rebuild --help`](incus_rebuild.md) を参照してください。
 ```
 
 ```{group-tab} API
-To rebuild the instance with a different image, send a POST request to the instance's `rebuild` endpoint.
-For example:
+インスタンスを別のイメージで再構築するには、インスタンスの `rebuild` エンドポイントに POST リクエストを送ります。
+たとえば:
 
     incus query --request POST /1.0/instances/<instance_name>/rebuild --data '{"source": {"alias":"<image_alias>","server":"<server_URL>", protocol:"simplestreams"}}'
 
-To rebuild the instance with an empty root disk, specify the source type as `none`:
+空のルートディスクでインスタンスを再構築するには、 source の type を `none` にします:
 
     incus query --request POST /1.0/instances/<instance_name>/rebuild --data '{"source": {"type":"none"}}'
 
-See [`POST /1.0/instances/{name}/rebuild`](swagger:/instances/instance_rebuild_post) for more information.
+詳細は [`POST /1.0/instances/{name}/rebuild`](swagger:/instances/instance_rebuild_post) を参照してください。
 ```
 
 ```{group-tab} UI
-Rebuilding an instance is not yet supported in the UI.
+インスタンスの再構築は UI では現状ではサポートされていません。
 ```
 ````
