@@ -1,49 +1,49 @@
 (projects-create)=
-# How to create and configure projects
+# プロジェクトを作成し設定するには
 
-You can configure projects at creation time or later.
-However, note that it is not possible to modify the features that are enabled for a project when the project contains instances.
+プロジェクトは作成時または後で設定することができます。
+ただし、プロジェクトにインスタンスが含まれている場合、有効になっている機能を変更することはできません。
 
-## Create a project
+## プロジェクトを作成する
 
-To create a project, use the [`incus project create`](incus_project_create.md) command.
+プロジェクトを作成するには、[`incus project create`](incus_project_create.md) コマンドを使用します。
 
-You can specify configuration options by using the `--config` flag.
-See {ref}`ref-projects` for the available configuration options.
+`--config`フラグを使用して設定オプションを指定できます。
+利用可能な設定オプションについては、{ref}`ref-projects`を参照してください。
 
-For example, to create a project called `my-project` that isolates instances, but allows access to the default project's images and profiles, enter the following command:
+たとえば、インスタンスを分離し、デフォルトプロジェクトのイメージとプロファイルにアクセスを許可する`my-project`というプロジェクトを作成するには、次のコマンドを入力します:
 
     incus project create my-project --config features.images=false --config features.profiles=false
 
-To create a project called `my-restricted-project` that blocks access to security-sensitive features (for example, container nesting) but allows backups, enter the following command:
+セキュリティーに関する機能（たとえば、コンテナのネスト）へのアクセスをブロックし、バックアップを許可する`my-restricted-project`というプロジェクトを作成するには、次のコマンドを入力します:
 
     incus project create my-restricted-project --config restricted=true --config restricted.backups=allow
 
 (projects-configure)=
-## Configure a project
+## プロジェクトの設定
+プロジェクトを設定するには、特定の設定オプションを設定するか、プロジェクト全体を編集できます。
 
-To configure a project, you can either set a specific configuration option or edit the full project.
+いくつかの設定オプションは、インスタンスが含まれていないプロジェクトに対してのみ設定できます。
 
-Some configuration options can only be set for projects that do not contain any instances.
+### 特定の設定オプションを設定する
 
-### Set specific configuration options
+特定の設定オプションを設定するには、[`incus project set`](incus_project_set.md) コマンドを使用します。
 
-To set a specific configuration option, use the [`incus project set`](incus_project_set.md) command.
-
-For example, to limit the number of containers that can be created in `my-project` to five, enter the following command:
+たとえば、`my-project`で作成できるコンテナの数を 5 つに制限するには、次のコマンドを入力します:
 
     incus project set my-project limits.containers=5
 
-To unset a specific configuration option, use the [`incus project unset`](incus_project_unset.md) command.
+特定の設定オプションを解除するには、[`incus project unset`](incus_project_unset.md) コマンドを使用します。
 
 ```{note}
-If you unset a configuration option, it is set to its default value.
-This default value might differ from the initial value that is set when the project is created.
+設定オプションを解除すると、デフォルト値に設定されます。
+このデフォルト値は、プロジェクトが作成されたときに設定される初期値と異なる場合があります。
 ```
 
-### Edit the project
+### プロジェクトを編集する
 
-To edit the full project configuration, use the [`incus project edit`](incus_project_edit.md) command.
-For example:
+プロジェクトの設定全体を編集するには、[`incus project edit`](incus_project_edit.md) コマンドを使用します。
+
+たとえば:
 
     incus project edit my-project
