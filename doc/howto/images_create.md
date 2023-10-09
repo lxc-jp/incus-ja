@@ -1,41 +1,40 @@
 (images-create)=
-# How to create images
+# イメージを作成するには
 
-If you want to create and share your own images, you can do this either based on an existing instance or snapshot or by building your own image from scratch.
+独自のイメージを作成し共有したい場合、既存のインスタンスやスナップショットをベースにすることもできますし、一から独自のイメージを作ることもできます。
 
 (images-create-publish)=
-## Publish an image from an instance or snapshot
+## インスタンスやスナップショットからイメージを発行する
 
-If you want to be able to use an instance or an instance snapshot as the base for new instances, you should create and publish an image from it.
+インスタンスやインスタンススナップショットを新しいインスタンスのベースとして使いたい場合、それらからイメージを作成し発行するのが良いです。
 
-To publish an image from an instance, make sure that the instance is stopped.
-Then enter the following command:
+インスタンスからイメージを発行するには、インスタンスが停止されていることを確認してください。
+次に以下のコマンドを入力します:
 
     incus publish <instance_name> [<remote>:]
 
-To publish an image from a snapshot, enter the following command:
+スナップショットからイメージを発行するには、以下のコマンドを入力します:
 
     incus publish <instance_name>/<snapshot_name> [<remote>:]
 
-In both cases, you can specify an alias for the new image with the `--alias` flag, set an expiration date with `--expire` and make the image publicly available with `--public`.
-If an image with the same name already exists, add the `--reuse` flag to overwrite it.
-See [`incus publish --help`](incus_publish.md) for a full list of available flags.
+どちらの場合も`--alias`フラグで新しいイメージにエイリアスを設定し、`--expire`で有効期限を設定し、`--public`でイメージを公開状態にすることができます。
+同じ名前のイメージがすでに存在する場合は、`--reuse`フラグを追加して上書きします。
+利用可能なすべてのフラグ一覧は [`incus publish --help`](incus_publish.md) を参照してください。
 
-The publishing process can take quite a while because it generates a tarball from the instance or snapshot and then compresses it.
-As this can be particularly I/O and CPU intensive, publish operations are serialized by Incus.
+発行のプロセスはインスタンスやスナップショットから tarball を生成した後圧縮するため、かなりの時間がかかるかもしれません。特に I/O と CPU の負荷が高いため、発行の操作は Incus で直列化（訳注：1 つずつ順に実行）されます。
 
-### Prepare the instance for publishing
+### 発行用にインスタンスを準備する
 
-Before you publish an image from an instance, clean up all data that should not be included in the image.
-Usually, this includes the following data:
+インスタンスからイメージを発行する前に、イメージに含めるべきでないすべてのデータをクリーンアップしてください。
+通常、これは以下のデータを含みます:
 
-- Instance metadata (use [`incus config metadata`](incus_config_metadata.md) to edit)
-- File templates (use [`incus config template`](incus_config_template.md) to edit)
-- Instance-specific data inside the instance itself (for example, host SSH keys and `dbus/systemd machine-id`)
+- インスタンスメタデータ（編集には [`incus config metadata`](incus_config_metadata.md) を使ってください）
+- ファイルテンプレート（編集には [`incus config template`](incus_config_template.md) を使ってください）
+- インスタンス自身の内部のインスタンスに特有なデータ（たとえば、ホストの SSH 鍵と`dbus/systemd machine-id`）
 
 (images-create-build)=
-## Build an image
+## イメージをビルドする
 
-For building your own images, you can use [`distrobuilder`](https://github.com/lxc/distrobuilder).
+独自イメージをビルドするには、[`distrobuilder`](https://github.com/lxc/distrobuilder)が使用できます。
 
-See the [`distrobuilder` documentation](https://linuxcontainers.org/distrobuilder/docs/latest/) for instructions for installing and using the tool.
+インストール手順とツールの使い方は[`distrobuilder`のドキュメント](https://distrobuilder.readthedocs.io/en/latest/)を参照してください。
