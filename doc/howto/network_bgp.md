@@ -1,46 +1,45 @@
 (network-bgp)=
-# How to configure Incus as a BGP server
-
+# Incus を BGP サーバーとして設定するには
 ```{note}
-The BGP server feature is available for the {ref}`network-bridge` and the {ref}`network-physical`.
+BGP サーバー機能は　{ref}`network-bridge` と {ref}`network-physical` で利用できます。
 ```
 
-{abbr}`BGP (Border Gateway Protocol)` is a protocol that allows exchanging routing information between autonomous systems.
+{abbr}`BGP (Border Gateway Protocol)` は自律システム間でルーティング情報を交換できるプロトコルです。
 
-If you want to directly route external addresses to specific Incus servers or instances, you can configure Incus as a BGP server.
-Incus will then act as a BGP peer and advertise relevant routes and next hops to external routers, for example, your network router.
-It automatically establishes sessions with upstream BGP routers and announces the addresses and subnets that it's using.
+外部アドレスを特定の Incus サーバーやインスタンスに直接ルーティングしたい場合は、 Incus を BGP サーバーとして設定できます。
+すると Incus は BGP ピアとして振る舞い、関連するルートとネクストホップを外部のルータ、たとえば、あなたのネットワークルータに広告します。
+アップストリームの BGP ルータとセッションを自動的に確立し、使用中のアドレスとサブネットを広告します。
 
-The BGP server feature can be used to allow a Incus server or cluster to directly use internal/external address space by getting the specific subnets or addresses routed to the correct host.
-This way, traffic can be forwarded to the target instance.
+BGP サーバー機能は Incus サーバーやクラスタが正しいホストへルーティングされる特定のサブネットやアドレスを取得することで内部／外部アドレス空間を直接使用できるようにします。
+こうすることで、トラフィックを対象のインスタンスにフォワードできます。
 
-For bridge networks, the following addresses and networks are being advertised:
+ブリッジネットワークについては、以下のアドレスとネットワークが広告されます:
 
-- Network `ipv4.address` or `ipv6.address` subnets (if the matching `nat` property isn't set to `true`)
-- Network `ipv4.nat.address` or `ipv6.nat.address` subnets (if the matching `nat` property is set to `true`)
-- Network forward addresses
-- Addresses or subnets specified in `ipv4.routes.external` or `ipv6.routes.external` on an instance NIC that is connected to the bridge network
+- `ipv4.address` または `ipv6.address` サブネットのネットワーク（対応する `nat` プロパティが `true` に設定されていない場合）
+- `ipv4.nat.address` または `ipv6.nat.address` サブネットのネットワーク（対応する `nat` プロパティが `true` に設定されていない場合）
+- ネットワークフォワードアドレス
+- ブリッジネットワークに接続されているインスタンス NIC 上の `ipv4.routes.external` または `ipv6.routes.external` で指定されているアドレスまたはサブネット
 
-Make sure to add your subnets to the respective configuration options.
-Otherwise, they won't be advertised.
+サブネットを対応する設定オプションに確実に追加してください。
+さもなければ、広告されません。
 
-For physical networks, no addresses are advertised directly at the level of the physical network.
-Instead, the networks, forwards and routes of all downstream networks (the networks that specify the physical network as their uplink network through the `network` option) are advertised in the same way as for bridge networks.
+物理ネットワークについては、物理ネットワークのレベルに直接広告されるアドレスはありません。
+代わりに、すべてのダウンストリームネットワーク（`network` オプションで物理ネットワークをアップリンクネットワークとして指定するネットワーク）のネットワーク、フォワードとルートがブリッジネットワークに対するのと同じように広告されます。
 
 ```{note}
-At this time, it is not possible to announce only some specific routes/addresses to particular peers.
-If you need this, filter prefixes on the upstream routers.
+現時点では、特定のピアに一部の特定のルート／アドレスのみを広告することはできません。
+これが必要な場合はアップストリームルータでプリフィクスをフィルタしてください。
 ```
 
-## Configure the BGP server
+## BGP サーバーを設定する
 
-To configure Incus as a BGP server, set the following server configuration options on all cluster members:
+Incus を BGP サーバーとして設定するには、以下のサーバー設定オプションをすべてのクラスタメンバーで設定してください:
 
-- {config:option}`server-core:core.bgp_address` - the IP address for the BGP server
-- {config:option}`server-core:core.bgp_asn` - the {abbr}`ASN (Autonomous System Number)` for the local server
-- {config:option}`server-core:core.bgp_routerid` - the unique identifier for the BGP server
+- {config:option}`server-core:core.bgp_address` - BGP サーバーの IP アドレス
+- {config:option}`server-core:core.bgp_asn` - ローカルサーバーの {abbr}`ASN (Autonomous System Number)`
+- {config:option}`server-core:core.bgp_routerid` - BGP サーバーのユニークな識別子
 
-For example, set the following values:
+たとえば、以下のような値を設定します:
 
 ```bash
 incus config set core.bgp_address=192.0.2.50:179
@@ -48,26 +47,26 @@ incus config set core.bgp_asn=65536
 incus config set core.bgp_routerid=192.0.2.50
 ```
 
-Once these configuration options are set, Incus starts listening for BGP sessions.
+これらの設定オプションが一旦設定されると、 Incus は BGP セッションのリッスンを始めます。
 
-### Configure next-hop (`bridge` only)
+### ネクストホップを設定する（`bridge` のみ）
 
-For bridge networks, you can override the next-hop configuration.
-By default, the next-hop is set to the address used for the BGP session.
+ブリッジネットワークについては、ネクストホップ設定をオーバーライドできます。
+デフォルトでは、ネクストホップは BGP セッションに使用されるアドレスに設定されます。
 
-To configure a different address, set `bgp.ipv4.nexthop` or `bgp.ipv6.nexthop`.
+別のアドレスに設定するには、 `bgp.ipv4.nexthop` または `bgp.ipv6.nexthop` を設定してください。
 
-### Configure BGP peers for OVN networks
+### OVN ネットワークに BGP ピアを設定する
 
-If you run an OVN network with an uplink network (`physical` or `bridge`), the uplink network is the one that holds the list of allowed subnets and the BGP configuration.
-Therefore, you must configure BGP peers on the uplink network that contain the information that is required to connect to the BGP server.
+OVN ネットワークをアップリンクネットワーク（`physical` または `bridge`）と使用する場合、アップリンクネットワークは許可されるサブネット一覧と BGP 設定を持つネットワークです。
+このため、 BGP サーバーに接続するのに必要な情報を含むアップリンクネットワーク上に BGP ピアを設定する必要があります。
 
-Set the following configuration options on the uplink network:
+アップリンクネットワークに対して以下の設定オプションを設定してください:
 
-- `bgp.peers.<name>.address` - the peer address to be used by the downstream networks
-- `bgp.peers.<name>.asn` - the {abbr}`ASN (Autonomous System Number)` for the local server
-- `bgp.peers.<name>.password` - an optional password for the peer session
-- `bgp.peers.<name>.holdtime` - an optional hold time for the peer session (in seconds)
+- `bgp.peers.<name>.address` - ダウンストリームネットワークで使用されるピアアドレス
+- `bgp.peers.<name>.asn` - ローカルサーバーの {abbr}`ASN (Autonomous System Number)`
+- `bgp.peers.<name>.password` - ピアセッションに対するオプショナルなパスワード
+- `bgp.peers.<name>.holdtime` - ピアセッションに対する省略可能なホールドタイム (秒で指定)
 
-Once the uplink network is configured, downstream OVN networks will get their external subnets and addresses announced over BGP.
-The next-hop is set to the address of the OVN router on the uplink network.
+アップリンクネットワークが一旦設定されると、ダウンストリームの OVN ネットワークは BGP で広告される外部のサブネットとアドレスを取得します。
+ネクストホップはアップリンクネットワークの OVN ルータのアドレスに設定されます。
