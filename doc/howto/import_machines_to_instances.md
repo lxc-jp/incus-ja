@@ -1,101 +1,102 @@
 (import-machines-to-instances)=
-# How to import physical or virtual machines to Incus instances
+# 物理または仮想マシンを Incus インスタンスにインポートするには
 
-Incus provides a tool (`incus-migrate`) to create a Incus instance based on an existing disk or image.
 
-You can run the tool on any Linux machine.
-It connects to a Incus server and creates a blank instance, which you can configure during or after the migration.
-The tool then copies the data from the disk or image that you provide to the instance.
+Incus は既存のディスクやイメージに基づく Incus インスタンスを作成するツール（`incus-migrate`）を提供しています。
+
+このツールは Linux マシン上で実行できます。
+まず Incus サーバーに接続して空のインスタンスを作成します。このインスタンスはマイグレーション中またはマイグレーション後に設定を変更できます。
+次にこのツールはあなたが用意したディスクまたはイメージからインスタンスにデータをコピーします。
 
 ```{note}
-If you want to configure your new instance during the migration process, set up the entities that you want your instance to use before starting the migration process.
+マイグレーションプロセスの最中に新しいインスタンスを設定したい場合は、マイグレーションプロセスを開始する前にあなたのインスタンスで使用したいエンティティをセットアップしてください。
 
-By default, the new instance will use the entities specified in the `default` profile.
-You can specify a different profile (or a profile list) to customize the configuration.
-See {ref}`profiles` for more information.
-You can also override {ref}`instance-options`, the {ref}`storage pool <storage-pools>` to be used and the size for the {ref}`storage volume <storage-volumes>`, and the {ref}`network <networking>` to be used.
+デフォルトでは、新しいインスタンスは `default` プロファイルで指定されたエンティティを使用します。
+設定をカスタマイズするために異なるプロファイル（あるいはプロファイルのリスト）を設定できます。
+詳細は {ref}`profiles` を参照してください。
+また、使用される {ref}`instance-options`、{ref}`storage pool <storage-pools>`、{ref}`ストレージボリューム <storage-volumes>`のサイズ、{ref}`network <networking>` をオーバーライドできます。
 
-Alternatively, you can update the instance configuration after the migration is complete.
+あるいは、マイグレーションの完了後にインスタンス設定を変更することもできます。
 ```
 
-The tool can create both containers and virtual machines:
+このツールはコンテナと仮想マシンの両方を作成できます:
 
-* When creating a container, you must provide a disk or partition that contains the root file system for the container.
-  For example, this could be the `/` root disk of the machine or container where you are running the tool.
-* When creating a virtual machine, you must provide a bootable disk, partition or image.
-  This means that just providing a file system is not sufficient, and you cannot create a virtual machine from a container that you are running.
-  It is also not possible to create a virtual machine from the physical machine that you are using to do the migration, because the migration tool would be using the disk that it is copying.
-  Instead, you could provide a bootable image, or a bootable partition or disk that is currently not in use.
+* コンテナを作成する際は、コンテナのルートファイルシステムを含むディスクまたはパーティションを用意する必要があります。
+  たとえば、これはあなたがツールを実行しているマシンまたはコンテナの `/` ルートディスクかもしれません。
+* 仮想マシンを作成する際は、起動可能なディスク、パーティション、またはイメージを用意する必要があります。
+  これは単にファイルシステムを用意するだけでは不十分であり、実行中のコンテナから仮想マシンを作成することはできないことを意味します。
+  また使用中の物理マシンから仮想マシンを作成することもできません。これはマイグレーションツールがコピーしようとするディスクを使用するからです。
+  代わりに、起動可能なディスク、起動可能なパーティション、または現在使用中でないディスクを用意してください。
 
    ````{tip}
-   If you want to convert a Windows VM from a foreign hypervisor (not from QEMU/KVM with Q35/`virtio-scsi`),
-   you must install the `virtio-win` drivers to your Windows. Otherwise, your VM won't boot.
+   （Q35/`virtio-scsi` ありの QEMU/KVM 以外の）外部のハイパーバイザーから Windows VM を変換したい場合、 Windows に `virtio-win` ドライバーをインストールする必要があります。さもないと VM は起動しません。
+
    <details>
-   <summary>Expand to see how to integrate the required drivers to your Windows VM</summary>
-   Install the required tools on the host:
+   <summary>Windows VM にどのようにひすようなドライバーを統合するかを見るには展開</summary>
+   ホスト上で必要なツールをインストール:
 
-   1. Install `virt-v2v` version >= 2.3.4 (this is the minimal version that supports the `--block-driver` option).
-   1. Install the `virtio-win` package, or download the [`virtio-win.iso`](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso) image and put it into the `/usr/share/virtio-win` folder.
-   1. You might also need to install [`rhsrvany`](https://github.com/rwmjones/rhsrvany).
+   1. `virt-v2v` バージョン 2.3.4 以上（これが `--block-driver` オプションに対応する最小バージョン）をインストール。
+   1. `virtio-win` パッケージをインストール、あるいは [`virtio-win.iso`](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso) イメージをダウンロードして `/usr/share/virtio-win` フォルダーに配置。
+   1. さらに [`rhsrvany`](https://github.com/rwmjones/rhsrvany) にインストールする必要がある場合もある。
 
-   Now you can use `virt-v2v` to convert images from a foreign hypervisor to `raw` images for Incus and include the required drivers:
+   これで `virt-v2v` を使って外部のハイパーバイザーのイメージを Incus の `raw` イメージに変換して必要なドライバーを含められます:
 
    ```
-   # Example 1. Convert a vmdk disk image to a raw image suitable for incus-migrate
+   # 例 1。vmdk ディスクイメージを incus-migrate に適した raw イメージに変換する
    sudo virt-v2v --block-driver virtio-scsi -o local -of raw -os ./os -i vmx ./test-vm.vmx
-   # Example 2. Convert a QEMU/KVM qcow2 image and integrate virtio-scsi driver
+   # 例 2。QEMU/KVM qcow2 イメージを変換し virtio-scsi ドライバーを統合する
    sudo virt-v2v --block-driver virtio-scsi -o local -of raw -os ./os -if qcow2 -i disk test-vm-disk.qcow2
    ```
 
-   You can find the resulting image in the `os` directory and use it with `incus-migrate` on the next steps.
+   結果のイメージは `os` ディレクトリー内に生成され、次のステップで `incus-migrate` で使えます。
    </details>
    ````
 
-Complete the following steps to migrate an existing machine to a Incus instance:
+既存のマシンを Incus インスタンスにマイグレートするには以下の手順を実行してください:
 
-1. Download the `bin.linux.incus-migrate` tool from the **Assets** section of the latest [Incus release](https://github.com/lxc/incus/releases).
-1. Place the tool on the machine that you want to use to create the instance.
-   Make it executable (usually by running `chmod u+x bin.linux.incus-migrate`).
-1. Make sure that the machine has `rsync` installed.
-   If it is missing, install it (for example, with `sudo apt install rsync`).
-1. Run the tool:
+1. 最新の [Incus release](https://github.com/lxc/incus/releases) の **Assets** セクションから `bin.linux.incus-migrate` ツールをダウンロードしてください。
+1. ツールをインスタンスを作成したいマシン上に配置して
+   （通常 `chmod u+x bin.linux.incus-migrate` を実行して）実行可能にしてください。
+1. マシンに `rsync` がインストールされているか確認してください。
+   インストールされていない場合は（たとえば、`sudo apt install rsync` で）インストールしてください。
+1. ツールを実行します:
 
        sudo ./bin.linux.incus-migrate
 
-   The tool then asks you to provide the information required for the migration.
+   ツールはマイグレーションに必要な情報を入力するようプロンプトを出します。
 
    ```{tip}
-   As an alternative to running the tool interactively, you can provide the configuration as parameters to the command.
-   See `./bin.linux.incus-migrate --help` for more information.
+   ツールをインタラクティブに実行する代わりの方法として、設定をパラメータでコマンドに指定することもできます。
+   詳細は `./bin.linux.incus-migrate --help` を参照してください。
    ```
 
-   1. Specify the Incus server URL, either as an IP address or as a DNS name.
+   1. Incus サーバーの URL を、 IP アドレスまたは DNS 名で指定してください。
 
       ```{note}
-      The Incus server must be {ref}`exposed to the network <server-expose>`.
-      If you want to import to a local Incus server, you must still expose it to the network.
-      You can then specify `127.0.0.1` as the IP address to access the local server.
+      Incus サーバーは {ref}`ネットワークに公開 <server-expose>` する必要があります。
+      ローカルの Incus サーバーにインポートしたい場合も、それをネットワークに公開する必要があります。
+      その後、ローカルサーバーにアクセスするには IP アドレスとして `127.0.0.1` を指定できます。
       ```
 
-   1. Check and confirm the certificate fingerprint.
-   1. Choose a method for authentication (see {ref}`authentication`).
+   1. 証明書のフィンガープリントを確認してください。
+   1. 認証の方法を選択してください（{ref}`authentication` 参照）。
 
-      For example, if you choose using a certificate token, log on to the Incus server and create a token for the machine on which you are running the migration tool with [`incus config trust add`](incus_config_trust_add.md).
-      Then use the generated token to authenticate the tool.
-   1. Choose whether to create a container or a virtual machine.
-      See {ref}`containers-and-vms`.
-   1. Specify a name for the instance that you are creating.
-   1. Provide the path to a root file system (for containers) or a bootable disk, partition or image file (for virtual machines).
-   1. For containers, optionally add additional file system mounts.
-   1. For virtual machines, specify whether secure boot is supported.
-   1. Optionally, configure the new instance.
-      You can do so by specifying {ref}`profiles <profiles>`, directly setting {ref}`configuration options <instance-options>` or changing {ref}`storage <storage>` or {ref}`network <networking>` settings.
+      たとえば、証明書トークンを選ぶ場合、 Incus サーバーにログオンしてマイグレーションツールを実行中のマシン用のトークンを [`incus config trust add`](incus_config_trust_add.md) で作成してください。
+      次に生成されたトークンを、ツールを認証するのに使用してください。
+   1. コンテナと仮想マシンのどちらを作成するか選択してください。
+      {ref}`containers-and-vms` を参照してください。
+   1. 作成するインスタンスの名前を指定してください。
+   1. ルートファイルシステム（コンテナの場合）、起動可能なディスク、パーティションまたはイメージファイル（仮想マシンの場合）のパスを指定します。
+   1. コンテナの場合、必要に応じてファイルシステムのマウントを追加します。
+   1. 仮想マシンの場合、セキュアブートがサポートされているかを指定します。
+   1. 任意で、新しいインスタンスを設定します。
+      {ref}`プロファイル <profiles>`を指定するか、{ref}`設定オプション <instance-options>`や{ref}`ストレージ <storage>`を変更したり{ref}`ネットワーク <networking>`を設定する設定オプションを直接指定できます。
 
-      Alternatively, you can configure the new instance after the migration.
-   1. When you are done with the configuration, start the migration process.
+      あるいは、マイグレーション後に新しいインスタンスを設定することもできます。
+   1. マイグレーションの設定が完了したら、マイグレーションプロセスを開始します。
 
    <details>
-   <summary>Expand to see an example output for importing to a container</summary>
+   <summary>コンテナにインポートする出力例を見るには展開</summary>
 
    ```{terminal}
    :input: sudo ./bin.linux.incus-migrate
@@ -199,7 +200,7 @@ Complete the following steps to migrate an existing machine to a Incus instance:
 
    </details>
    <details>
-   <summary>Expand to see an example output for importing to a VM</summary>
+   <summary>仮想マシンにインポートする出力例を見るには展開</summary>
 
    ```{terminal}
    :input: sudo ./bin.linux.incus-migrate
@@ -307,5 +308,5 @@ Complete the following steps to migrate an existing machine to a Incus instance:
    ```
 
    </details>
-1. When the migration is complete, check the new instance and update its configuration to the new environment.
-   Typically, you must update at least the storage configuration (`/etc/fstab`) and the network configuration.
+1. マイグレーションが完了したら、新しいインスタンスをチェックし、設定を新しい環境にあわせて更新してください。
+   通常は、少なくともストレージ設定（`/etc/fstab`）とネットワーク設定を更新する必要があります。
