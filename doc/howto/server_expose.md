@@ -1,17 +1,16 @@
 (server-expose)=
-# How to expose Incus to the network
+# Incusをネットワークに公開するには
 
-By default, Incus can be used only by local users through a Unix socket and is not accessible over the network.
+デフォルトでは、Incus は Unix ソケットを介してローカルユーザーからのみ使用でき、ネットワーク経由でアクセスすることはできません。
 
-To expose Incus to the network, you must configure it to listen to addresses other than the local Unix socket.
-To do so, set the {config:option}`server-core:core.https_address` server configuration option.
+Incus をネットワークに公開するには、ローカル Unix ソケット以外のアドレスをリッスンするように設定する必要があります。これを行うには、{config:option}`server-core:core.https_address` サーバー設定オプションを設定します。
 
-For example, to allow access to the Incus server on port `8443`, enter the following command:
+たとえば、Incus サーバーをポート`8443`でアクセスできるようにするには、以下のコマンドを入力します:
 
     incus config set core.https_address :8443
 
-To allow access through a specific IP address, use `ip addr` to find an available address and then set it.
-For example:
+特定の IP アドレスからのアクセスを許可するには、`ip addr`を使用して利用可能なアドレスを見つけ、それを設定します。
+たとえば:
 
 ```{terminal}
 :input: ip addr
@@ -39,24 +38,24 @@ For example:
 :input: incus config set core.https_address 10.68.216.12
 ```
 
-All remote clients can then connect to Incus and access any image that is marked for public use.
+すべてのリモートクライアントは Incus に接続して公開利用とマークされた任意のイメージにアクセスできます。
 
 (server-authenticate)=
-## Authenticate with the Incus server
+## Incusサーバーでの認証
 
-To be able to access the remote API, clients must authenticate with the Incus server.
-There are several authentication methods; see {ref}`authentication` for detailed information.
+リモート API にアクセスできるようにするには、クライアントは Incus サーバーに認証しなければなりません。
+いくつかの認証方法があります。詳細は{ref}`authentication`を参照してください。
 
-The recommended method is to add the client's TLS certificate to the server's trust store through a trust token.
-To authenticate a client using a trust token, complete the following steps:
+お勧めの方法はクライアントの TLS 証明書をトラストトークンを使ってサーバーのトラストストアに追加することです。
+トラストトークンを使ってクライアントを認証するには、以下の手順を実行します:
 
-1. On the server, enter the following command:
+1. サーバーで、以下のコマンドを入力します:
 
        incus config trust add
 
-   Enter the name of the client that you want to add.
-   The command generates and prints a token that can be used to add the client certificate.
-1. On the client, add the server with the following command:
+   追加したいクライアントの名前を入力します。
+   クライアント証明書を追加するのに使用できるトークンをコマンドが生成し表示します。
+1. クライアントで、以下のコマンドでサーバーを追加します:
 
        incus remote add <remote_name> <token>
 
@@ -66,4 +65,4 @@ To authenticate a client using a trust token, complete the following steps:
     :end-before: <!-- Include end NAT authentication -->
 ```
 
-See {ref}`authentication` for detailed information and other authentication methods.
+詳細や他の認証方法については{ref}`authentication`を参照してください。
