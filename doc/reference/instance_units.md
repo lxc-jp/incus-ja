@@ -1,11 +1,11 @@
 (instances-limit-units)=
-# Units for storage and network limits
+# ストレージとネットワーク制限の単位
 
-Any value that represents bytes or bits can make use of a number of suffixes to make it easier to understand what a particular limit is.
+バイト数とビット数を表す値はすべていくつかの単位を使用し特定の制限がどういう値かをより理解しやすいようにできます。
 
-Both decimal and binary (kibi) units are supported, with the latter mostly making sense for storage limits.
+10 進と 2 進（kibi）の単位の両方がサポートされており、後者は主にストレージの制限に有用です。
 
-The full list of bit suffixes currently supported is:
+現在サポートされているビットの単位の完全なリストは以下の通りです:
 
 - bit (1)
 - kbit (1000)
@@ -21,7 +21,7 @@ The full list of bit suffixes currently supported is:
 - Pibit (1024^5)
 - Eibit (1024^6)
 
-The full list of byte suffixes currently supported is:
+現在サポートされているバイトの単位の完全なリストは以下の通りです:
 
 - B or bytes (1)
 - kB (1000)
