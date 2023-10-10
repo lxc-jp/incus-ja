@@ -1,31 +1,32 @@
 (remote-image-servers)=
-# Remote image servers
+# リモートイメージサーバー
 
-The [`incus`](incus.md) CLI command comes pre-configured with the following default remote image servers:
+
+[`incus`](incus.md) CLI コマンドは下記のデフォルトリモートイメージサーバーが初期設定されています:
 
 `images:`
-: This server provides unofficial images for a variety of Linux distributions.
-  The images are maintained by the [Linux Containers](https://linuxcontainers.org/) team and are built to be compact and minimal.
+: このサーバーはさまざまな Linux ディストリビューションの非公式イメージを提供します。
+  イメージは[Linux Containers](https://linuxcontainers.org/)チームによりメンテナンスされ、コンパクトで最小限にビルドされています。
 
-  See [`images.linuxcontainers.org`](https://images.linuxcontainers.org) for an overview of available images.
+  利用可能なイメージの概要については[`images.linuxcontainers.org`](https://images.linuxcontainers.org)を参照してください。
 
 (remote-image-server-types)=
-## Remote server types
+## リモートサーバータイプ
 
-Incus supports the following types of remote image servers:
+Incus は下記のタイプのリモートイメージサーバーをサポートします:
 
-Simple streams servers
-: Pure image servers that use the [simple streams format](https://git.launchpad.net/simplestreams/tree/).
-  The default image servers are simple streams servers.
+simple streams サーバー
+: [simple streams形式](https://git.launchpad.net/simplestreams/tree/)を使う純粋なイメージサーバー。
+  デフォルトのイメージサーバーは simple streams サーバーです。
 
-Public Incus servers
-: Incus servers that are used solely to serve images and do not run instances themselves.
+公開 Incus サーバー
+: イメージを配布するためだけに稼働し、このサーバー自身ではインスタンスを稼働しない Incus サーバー。
 
-  To make a Incus server publicly available over the network on port 8443, set the {config:option}`server-core:core.https_address` configuration option to `:8443` and do not configure any authentication methods (see {ref}`server-expose` for more information).
-  Then set the images that you want to share to `public`.
+  Incus サーバーをポート 8443 で公開で利用可能にするには、{config:option}`server-core:core.https_address`設定オプションを`:8443`に設定し、認証方法をなにも設定しないようにします（詳細は{ref}`server-expose`参照）。
+  そして共有したいイメージを`public`にセットします。
 
-Incus servers
-: Regular Incus servers that you can manage over a network, and that can also be used as image servers.
+Incus サーバー
+: ネットワーク越しに管理できる通常の Incus サーバー、イメージサーバーとしても利用可能。
 
-  For security reasons, you should restrict the access to the remote API and configure an authentication method to control access.
-  See {ref}`server-expose` and {ref}`authentication` for more information.
+  セキュリティー上の理由により、リモート API へのアクセスを制限し、アクセス制御のための認証方法を設定するほうが良いです。
+  詳細な情報は{ref}`server-expose`と{ref}`authentication`を参照してください。
