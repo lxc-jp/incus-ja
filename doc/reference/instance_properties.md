@@ -1,36 +1,36 @@
 (instance-properties)=
-# Instance properties
+# ンスタンスプロパティ
 
-Instance properties are set when the instance is created.
-They cannot be part of a {ref}`profile <profiles>`.
+インスタンスプロパティはインスタンスが作成されたときに設定されます。
+これらは{ref}`プロファイル <profiles>`の一部にはできません。
 
-The following instance properties are available:
+以下のインスタンスプロパティが利用可能です:
 
 ```{list-table}
    :header-rows: 1
    :widths: 2 1 4
 
-* - Property
-  - Read-only
-  - Description
+* - プロパティ
+  - 読み取り専用
+  - 説明
 * - `name`
   - yes
-  - Instance name (see {ref}`instance-name-requirements`)
+  - インスタンス名 (see {ref}`instance-name-requirements`)
 * - `architecture`
   - no
-  - Instance architecture
+  - インスタンスアーキテクチャ
 ```
 
 (instance-name-requirements)=
-## Instance name requirements
+## インスタンス名の要件
 
-The instance name can be changed only by renaming the instance with the [`incus rename`](incus_rename.md) command.
+インスタンス名は [`incus rename`](incus_rename.md) コマンドでインスタンスをリネームすることでのみ変更できます。
 
-Valid instance names must fulfill the following requirements:
+有効なインスタンス名は次の要件を満たさなければなりません。
 
-- The name must be between 1 and 63 characters long.
-- The name must contain only letters, numbers and dashes from the ASCII table.
-- The name must not start with a digit or a dash.
-- The name must not end with a dash.
+- 名前は 1～63 文字である必要があります。
+- 名前は ASCII テーブルの文字、数字、ダッシュのみを含む必要があります。
+- 名前は数字またはダッシュで始まってはいけません。
+- 名前はダッシュで終わってはいけません。
 
-The purpose of these requirements is to ensure that the instance name can be used in DNS records, on the file system, in various security profiles and as the host name of the instance itself.
+これらの要件は、インスタンス名が DNS レコードとして、ファイルシステム上で、色々なセキュリティープロファイル、そしてインスタンス自身のホスト名として使えるように定められています。
