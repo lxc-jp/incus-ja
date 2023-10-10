@@ -1,14 +1,14 @@
 (image-format)=
-# Image format
+# イメージ形式
 
-Images contain a root file system and a metadata file that describes the image.
-They can also contain templates for creating files inside an instance that uses the image.
+イメージはルートファイルシステムとイメージを記述するメタデータファイルを含みます。
+またイメージを使用するインスタンス内部でファイルを生成するためのテンプレートも含められます。
 
-Images can be packaged as either a unified image (single file) or a split image (two files).
+イメージは統合イメージ（単一ファイル）か分離イメージ（2 つのファイル）としてパッケージできます。
 
-## Content
+## 中身
 
-Images for containers have the following directory structure:
+コンテナのイメージは以下のディレクトリー構造を持ちます:
 
 ```
 metadata.yaml
@@ -16,7 +16,7 @@ rootfs/
 templates/
 ```
 
-Images for VMs have the following directory structure:
+仮想マシンのイメージは以下のディレクトリー構造を持ちます:
 
 ```
 metadata.yaml
@@ -24,12 +24,12 @@ rootfs.img
 templates/
 ```
 
-For both instance types, the `templates/` directory is optional.
+どちらのインスタンスタイプでも、`templates/`ディレクトリーは省略可能です。
 
-### Metadata
+### メタデータ
 
-The `metadata.yaml` file contains information that is relevant to running the image in Incus.
-It includes the following information:
+`metadata.yaml`ファイルはイメージが Incus 内で稼働するために関連する情報を含みます。
+以下の情報を含んでいます:
 
 ```yaml
 architecture: x86_64
@@ -42,32 +42,32 @@ templates:
   ...
 ```
 
-The `architecture` and `creation_date` fields are mandatory.
-The `properties` field contains a set of default properties for the image.
-The `os`, `release`, `name` and `description` fields are commonly used, but are not mandatory.
+`architecture`と`creation_date`フィールドは必須です。
+`properties`フィールドはイメージのデフォルトプロパティのセットを含みます。
+`os`, `release`, `name`, `description`フィールドはよく使われますが、必須ではありません。
 
-The `templates` field is optional.
-See {ref}`image_format_templates` for information on how to configure templates.
+`templates`フィールドは省略可能です。
+テンプレートをどのように設定するかの情報は{ref}`image_format_templates`を参照してください。
 
-### Root file system
+### ルートファイルシステム
 
-For containers, the `rootfs/` directory contains a full file system tree of the root directory (`/`) in the container.
+コンテナでは、`rootfs/`ディレクトリーがコンテナ内のルートディレクトリー（`/`）の完全なファイルシステムツリーを含みます。
 
-Virtual machines use a `rootfs.img` `qcow2` file instead of a `rootfs/` directory.
-This file becomes the main disk device.
+仮想マシンは`rootfs/`ディレクトリーの代わりに`rootfs.img` `qcow2`ファイルを使います。
+このファイルはメインのディスクデバイスになります。
 
 (image_format_templates)=
-### Templates (optional)
+### テンプレート（省略可能＿
 
-You can use templates to dynamically create files inside an instance.
-To do so, configure template rules in the `metadata.yaml` file and place the template files in a `templates/` directory.
+インスタンス内部でファイルを動的に作成するのにテンプレートを使用できます。
+そのためには、`metadata.yaml`ファイル内でテンプレートルールを設定し、`templates/`ディレクトリー内にテンプレートファイルを配置します。
 
-As a general rule, you should never template a file that is owned by a package or is otherwise expected to be overwritten by normal operation of an instance.
+一般的なルールとして、パッケージに所有されるファイルはテンプレート化は決してするべきではないです。そうでないとインスタンスの通常のオペレーションで上書きされてしまうでしょう。
 
-#### Template rules
+#### テンプレートルール
 
-For each file that should be generated, create a rule in the `metadata.yaml` file.
-For example:
+生成すべき各ファイルに対して、`metadata.yaml`ファイル内でルールを作成します。
+たとえば:
 
 ```yaml
 templates:
@@ -89,66 +89,66 @@ templates:
     create_only: true
 ```
 
-The `when` key can be one or more of:
+`when`キーは以下の 1 つ以上を指定できます:
 
-- `create` - run at the time a new instance is created from the image
-- `copy` - run when an instance is created from an existing one
-- `start` - run every time the instance is started
+- `create` - 新規インスタンスがイメージから作成された時に実行
+- `copy` - 既存インスタンスからインスタンスが作成されたときに実行
+- `start` - インスタンスが開始する度に毎回実行
 
-The `template` key points to the template file in the `templates/` directory.
+`template`キーは`templates/`ディレクトリー内のテンプレートファイルを指します。
 
-You can pass user-defined template properties to the template file through the `properties` key.
+`properties`キーでユーザー定義のテンプレートプロパティをテンプレートファイルに渡せます。
 
-Set the `create_only` key if you want Incus to create the file if it doesn't exist, but not overwrite an existing file.
+ファイルが存在しない場合にのみ Incus にファイルを作らせ、ファイルが存在する場合は上書きしてほしくない場合は、`create_only`キーをセットします。
 
-#### Template files
+#### テンプレートファイル
 
-Template files use the [Pongo2](https://www.schlachter.tech/solutions/pongo2-template-engine/) format.
+テンプレートファイルは[Pongo2](https://www.schlachter.tech/solutions/pongo2-template-engine/)形式を使います。
 
-They always receive the following context:
+テンプレートファイルは常に以下のコンテキストを受け取ります。
 
-| Variable     | Type                           | Description                                                                         |
-|--------------|--------------------------------|-------------------------------------------------------------------------------------|
-| `trigger`    | `string`                       | Name of the event that triggered the template                                       |
-| `path`       | `string`                       | Path of the file that uses the template                                             |
-| `instance`   | `map[string]string`            | Key/value map of instance properties (name, architecture, privileged and ephemeral) |
-| `config`     | `map[string]string`            | Key/value map of the instance's configuration                                       |
-| `devices`    | `map[string]map[string]string` | Key/value map of the devices assigned to the instance                               |
-| `properties` | `map[string]string`            | Key/value map of the template properties specified in `metadata.yaml`               |
+| 変数           | 型                               | 説明
+| -------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
+| `trigger`      | `string`                         | テンプレートをトリガーしたイベント名                                                  |
+| `path`         | `string`                         | テンプレートを使用するファイルのパス                                                  |
+| `instance`     | `map[string]string`              | インスタンスプロパティのキー/値マップ（名前、アーキテクチャ、特権、一時的）           |
+| `config`       | `map[string]string`              | インスタンス設定のキー/値マップ                                                       |
+| `devices`      | `map[string]map[string]string`   | インスタンスに割り当てられたデバイスのキー/値マップ                                   |
+| `properties`   | `map[string]string`              | `metadata.yaml`で指定されたテンプレートプロパティのキー/値マップ                      |
 
-For convenience, the following functions are exported to the Pongo2 templates:
+利便性のため、以下の関数が Pongo2 テンプレートにエクスポートされます。
 
-- `config_get("user.foo", "bar")` - Returns the value of `user.foo`, or `"bar"` if not set.
+- `config_get("user.foo", "bar")` - `user.foo`の値か、未設定の場合は`"bar"`を返します。
 
-## Image tarballs
+## イメージのtarball
 
-Incus supports two Incus-specific image formats: a unified tarball and split tarballs.
+Incus は 2 種類の Incus 固有のイメージ形式、統合 tarball と分離 tarball をサポートします。
 
-These tarballs can be compressed.
-Incus supports a wide variety of compression algorithms for tarballs.
-However, for compatibility purposes, you should use `gzip` or `xz`.
+これらの tarball は圧縮されていても構いません。
+Incus は tarball の広範囲の圧縮アルゴリズムをサポートします。
+しかし、互換性のためには`gzip`または`xz`を使うのが良いです。
 
 (image-format-unified)=
-### Unified tarball
+### 統合tarball
 
-A unified tarball is a single tarball (usually `*.tar.xz`) that contains the full content of the image, including the metadata, the root file system and optionally the template files.
+統合 tarball は単一の tarball（通常`*.tar.xz`）で、イメージの完全な中身を含みます。それにはメタデータ、ルートファイルシステムと省略可能なテンプレートファイルが含まれます。
 
-This is the format that Incus itself uses internally when publishing images.
-It is usually easier to work with; therefore, you should use the unified format when creating Incus-specific images.
+これが Incus 自身がイメージを公開する際に内部的に使用している形式です。
+通常こちらのほうが扱いやすいので、Incus 固有のイメージを作る際は統合形式を使うのが良いです。
 
-The image identifier for such images is the SHA-256 of the tarball.
+この形式のイメージの識別子は tarball の SHA-256 ハッシュ値です。
 
 (image-format-split)=
-### Split tarballs
+### 分離tarball
 
-A split image consists of two separate tarballs.
-One tarball contains the metadata and optionally the template files (usually `*.tar.xz`), and the other contains the root file system (usually `*.squashfs` for containers or `*.qcow2` for virtual machines).
+分離イメージは 2 つの分離した tarball から構成されます。
+1 つの tarball（通常`*.tar.xz`）はメタデータと省略可能なテンプレートファイルを含み、もう 1 つ（通常、コンテナでは`*.squashfs`で仮想マシンでは`*.qcow2`）はルートファイルシステムを含みます。
 
-For containers, the root file system tarball can be SquashFS-formatted.
-For virtual machines, the `rootfs.img` file always uses the `qcow2` format.
-It can optionally be compressed using `qcow2`'s native compression.
+コンテナでは、ルートファイルシステムの tarball は SquashFS でフォーマットされていても構いません。
+仮想マシンでは、`rootfs.img`ファイルは常に`qcow2`形式を使用します。
+任意で`qcow2`のネイティブ圧縮を使って圧縮しても構いません。
 
-This format is designed to allow for easy image building from existing non-Incus rootfs tarballs that are already available.
-You should also use this format if you want to create images that can be consumed by both Incus and other tools.
+この形式は既に利用可能である既存の Incus 以外の rootfs tarball から簡単にイメージをビルドできるように設計されています。
+Incus と他のツールの両方で使用するイメージを作りたい場合もこの形式を使うのが良いです。
 
-The image identifier for such images is the SHA-256 of the concatenation of the metadata and root file system tarball (in that order).
+この形式のイメージの識別子はメタデータとルートファイルシステム tarball を（この順で）結合したものの SHA-256 ハッシュ値です。
