@@ -1,16 +1,16 @@
 (instance-options)=
-# Instance options
+# インスタンスオプション
 
-Instance options are configuration options that are directly related to the instance.
+インスタンスオプションはインスタンスに直接関係する設定オプションです。
 
-See {ref}`instances-configure-options` for instructions on how to set the instance options.
+インスタンスオプションをどのように設定するかの手順は{ref}`instances-configure-options`を参照してください。
 
-The key/value configuration is namespaced.
-The following options are available:
+key/value 形式の設定は、名前空間で分けられています。
+以下のオプションが利用できます:
 
 - {ref}`instance-options-misc`
 - {ref}`instance-options-boot`
-- [`cloud-init` configuration](instance-options-cloud-init)
+- [`cloud-init` 設定](instance-options-cloud-init)
 - {ref}`instance-options-limits`
 - {ref}`instance-options-migration`
 - {ref}`instance-options-nvidia`
@@ -19,12 +19,13 @@ The following options are available:
 - {ref}`instance-options-snapshots`
 - {ref}`instance-options-volatile`
 
-Note that while a type is defined for each option, all values are stored as strings and should be exported over the REST API as strings (which makes it possible to support any extra values without breaking backward compatibility).
+
+各オプションに型が定義されていますが、すべての値は文字列として保管され、REST API で文字列としてエクスポートされる（こうすることで後方互換性を壊すことなく任意の追加の値をサポートできます）ことに注意してください。
 
 (instance-options-misc)=
-## Miscellaneous options
+## その他のオプション
 
-In addition to the configuration options listed in the following sections, these instance options are supported:
+以下のセクションに一覧表示される設定オプションに加えて、以下のインスタンスオプションがサポートされます:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -35,16 +36,16 @@ In addition to the configuration options listed in the following sections, these
 ```{config:option} environment.* instance-miscellaneous
 :type: "string"
 :liveupdate: "yes (exec)"
-:shortdesc: "Environment variables for the instance"
+:shortdesc: "インスタンスのための環境変数"
 
-You can export key/value environment variables to the instance.
-These are then set for [`incus exec`](incus_exec.md).
+key/value の環境変数をインスタンスにエクスポートできます。
+これらはその後 [`incus exec`](incus_exec.md) に設定されます。
 ```
 
 (instance-options-boot)=
-## Boot-related options
+## ブート関連のオプション
 
-The following instance options control the boot-related behavior of the instance:
+以下のインスタンスオプションはインスタンスのブート関連の挙動を制御します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -53,9 +54,9 @@ The following instance options control the boot-related behavior of the instance
 ```
 
 (instance-options-cloud-init)=
-## `cloud-init` configuration
+## `cloud-init` 設定
 
-The following instance options control the [`cloud-init`](cloud-init) configuration of the instance:
+以下のインスタンスオプションはインスタンスの[`cloud-init`](cloud-init)設定を制御します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -63,15 +64,15 @@ The following instance options control the [`cloud-init`](cloud-init) configurat
     :end-before: <!-- config group instance-cloud-init end -->
 ```
 
-Support for these options depends on the image that is used and is not guaranteed.
+これらのオプションのサポートは使用するイメージに依存し、保証はされません。
 
-If you specify both `cloud-init.user-data` and `cloud-init.vendor-data`, the content of both options is merged.
-Therefore, make sure that the `cloud-init` configuration you specify in those options does not contain the same keys.
+`cloud-init.user-data`と`cloud-init.vendor-data`の両方を指定すると、両方のオプションの設定がマージされます。
+このため、これらのオプションに設定する`cloud-init`設定が同じキーを含まないようにしてください。
 
 (instance-options-limits)=
-## Resource limits
+## リソース制限
 
-The following instance options specify resource limits for the instance:
+以下のインスタンスオプションはインスタンスのリソース制限を指定します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -83,139 +84,140 @@ The following instance options specify resource limits for the instance:
 :type: "string"
 :liveupdate: "no"
 :condition: "container"
-:shortdesc: "Kernel resources per instance"
+:shortdesc: "インスタンスごとのカーネルリソース"
 
-You can set kernel limits on an instance, for example, you can limit the number of open files.
-See {ref}`instance-options-limits-kernel` for more information.
+インスタンスにカーネルの制限を設定できます、たとえば、オープンできるファイル数を制限できます。
+詳細は {ref}`instance-options-limits-kernel` を参照してください。
 ```
 
-### CPU limits
+### PU制限
 
-You have different options to limit CPU usage:
+CPU 使用率を制限するための異なるオプションがあります:
 
-- Set `limits.cpu` to restrict which CPUs the instance can see and use.
-  See {ref}`instance-options-limits-cpu` for how to set this option.
-- Set `limits.cpu.allowance` to restrict the load an instance can put on the available CPUs.
-  This option is available only for containers.
-  See {ref}`instance-options-limits-cpu-container` for how to set this option.
+- `limits.cpu`を設定して、インスタンスが見ることができ、使用することができる CPU を制限します。
+  このオプションの設定方法は、{ref}`instance-options-limits-cpu`を参照してください。
+- `limits.cpu.allowance`を設定して、インスタンスが利用可能な CPU にかける負荷を制限します。
+  このオプションはコンテナのみで利用可能です。
+  このオプションの設定方法は、{ref}`instance-options-limits-cpu-container`を参照してください。
 
-It is possible to set both options at the same time to restrict both which CPUs are visible to the instance and the allowed usage of those instances.
-However, if you use `limits.cpu.allowance` with a time limit, you should avoid using `limits.cpu` in addition, because that puts a lot of constraints on the scheduler and might lead to less efficient allocations.
+これらのオプションは同時に設定して、インスタンスが見ることができる CPU とそれらのインスタンスの許可される使用量の両方を制限することが可能です。
+しかし、`limits.cpu.allowance`を時間制限と共に使用する場合、スケジューラーに多くの制約をかけ、効率的な割り当てが難しくなる可能性があるため、`limits.cpu`の追加使用は避けるべきです。
 
-The CPU limits are implemented through a mix of the `cpuset` and `cpu` cgroup controllers.
+CPU 制限は cgroup コントローラーの`cpuset`と`cpu`を組み合わせて実装しています。
 
 (instance-options-limits-cpu)=
-#### CPU pinning
+#### CPUピンニング
 
-`limits.cpu` results in CPU pinning through the `cpuset` controller.
-You can specify either which CPUs or how many CPUs are visible and available to the instance:
+`limits.cpu`は`cpuset`コントローラーを使って、CPU を固定（ピンニング）します。
+どの CPU を、またはどれぐらいの数の CPU を、インスタンスから見えるようにし、使えるようにするかを指定できます:
 
-- To specify which CPUs to use, set `limits.cpu` to either a set of CPUs (for example, `1,2,3`) or a CPU range (for example, `0-3`).
+- どの CPU を使うかを指定するには、`limits.cpu`を CPU の組み合わせ（例:`1,2,3`）あるいは CPU の範囲（例:`0-3`）で指定できます。
 
-  To pin to a single CPU, use the range syntax (for example, `1-1`) to differentiate it from a number of CPUs.
-- If you specify a number (for example, `4`) of CPUs, Incus will do dynamic load-balancing of all instances that aren't pinned to specific CPUs, trying to spread the load on the machine.
-  Instances are re-balanced every time an instance starts or stops, as well as whenever a CPU is added to the system.
+  単一の CPU にピンニングするためには、CPU の個数との区別をつけるために、範囲を指定する文法（例:`1-1`）を使う必要があります。
+- CPU の個数を指定した場合（例:`4`）、Incus は特定の CPU にピンニングされていないすべてのインスタンスをダイナミックに負荷分散し、マシン上の負荷を分散しようとします。
+  インスタンスが起動したり停止するたびに、またシステムに CPU が追加されるたびに、インスタンスはリバランスされます。
 
-##### CPU limits for virtual machines
+##### 仮想マシンのCPUリミット
 
 ```{note}
-Incus supports live-updating the `limits.cpu` option.
-However, for virtual machines, this only means that the respective CPUs are hotplugged.
-Depending on the guest operating system, you might need to either restart the instance or complete some manual actions to bring the new CPUs online.
+Incus は`limits.cpu`オプションのライブアップデートをサポートします。
+しかし、仮想マシンの場合は、対応する CPU がホットプラグされるだけです。
+ゲストのオペレーティングシステムによって、新しい CPU をオンラインにするためには、インスタンスを再起動するか、なんらかの手動の操作を実行する必要があります。
 ```
 
-Incus virtual machines default to having just one vCPU allocated, which shows up as matching the host CPU vendor and type, but has a single core and no threads.
+Incus の仮想マシンはデフォルトでは 1 つの vCPU だけを割り当てられ、ホストの CPU のベンダーとタイプとマッチした CPU として現れますが、シングルコアでスレッドなしになります。
 
-When `limits.cpu` is set to a single integer, Incus allocates multiple vCPUs and exposes them to the guest as full cores.
-Those vCPUs are not pinned to specific physical cores on the host.
-The number of vCPUs can be updated while the VM is running.
+`limits.cpu`を単一の整数に設定する場合、Incus は複数の vCPU を割り当ててゲストにはフルなコアとして公開します。
+これらの vCPU はホスト上の特定の物理コアにはピンニングされません。
+vCPU の個数は VM の稼働中に変更できます。
 
-When `limits.cpu` is set to a range or comma-separated list of CPU IDs (as provided by [`incus info --resources`](incus_info.md)), the vCPUs are pinned to those physical cores.
-In this scenario, Incus checks whether the CPU configuration lines up with a realistic hardware topology and if it does, it replicates that topology in the guest.
-When doing CPU pinning, it is not possible to change the configuration while the VM is running.
+`limits.cpu`を CPU ID（[`incus info --resources`](incus_info.md) で表示されます）の範囲またはカンマ区切りリストの組に設定する場合、vCPU は物理コアにピンニングされます。
+このシナリオでは、Incus は CPU 設定が現実のハードウェアトポロジーとぴったり合うかチェックし、合う場合はそのトポロジーをゲスト内に複製します。
+CPU ピンニングを行う場合、VM の稼働中に設定を変更することはできません。
 
-For example, if the pinning configuration includes eight threads, with each pair of thread coming from the same core and an even number of cores spread across two CPUs, the guest will show two CPUs, each with two cores and each core with two threads.
-The NUMA layout is similarly replicated and in this scenario, the guest would most likely end up with two NUMA nodes, one for each CPU socket.
+たとえば、ピンニング設定が 8 個のスレッド、同じコアのスレッドの各ペアと 2 個の CPU に散在する偶数のコアを持つ場合、ゲストは 2 個の CPU、各 CPU に 2 個のコア、各コアに 2 個のスレッドを持ちます。
+NUMA レイアウトは同様に複製され、このシナリオでは、ゲストではほとんどの場合、2 個の NUMA ノード、各 CPU ソケットに 1 個のノードを持つことになるでしょう。
 
-In such an environment with multiple NUMA nodes, the memory is similarly divided across NUMA nodes and be pinned accordingly on the host and then exposed to the guest.
+複数の NUMA ノードを持つような環境では、メモリーは同様に NUMA ノードで分割され、ホスト上で適切にピンニングされ、その後ゲストに公開されます。
 
-All this allows for very high performance operations in the guest as the guest scheduler can properly reason about sockets, cores and threads as well as consider NUMA topology when sharing memory or moving processes across NUMA nodes.
+これらすべてにより、ゲストスケジューラはソケット、コア、スレッドを適切に判断し、メモリーを共有したり NUMA ノード間でプロセスを移動する際に NUMA トポロジーを考慮できるので、ゲスト内で非常に高パフォーマンスな操作を可能にします。
 
 (instance-options-limits-cpu-container)=
-#### Allowance and priority (container only)
+#### 割り当てと優先度（コンテナのみ）
 
-`limits.cpu.allowance` drives either the CFS scheduler quotas when passed a time constraint, or the generic CPU shares mechanism when passed a percentage value:
+`limits.cpu.allowance`は、時間の制限を与えたときは CFS スケジューラのクォータを、パーセント指定をした場合は全体的な CPU シェアの仕組みを使います:
 
-- The time constraint (for example, `20ms/50ms`) is a hard limit.
-  For example, if you want to allow the container to use a maximum of one CPU, set `limits.cpu.allowance` to a value like `100ms/100ms`.
-  The value is relative to one CPU worth of time, so to restrict to two CPUs worth of time, use something like `100ms/50ms` or `200ms/100ms`.
-- When using a percentage value, the limit is a soft limit that is applied only when under load.
-  It is used to calculate the scheduler priority for the instance, relative to any other instance that is using the same CPU or CPUs.
-  For example, to limit the CPU usage of the container to one CPU when under load, set `limits.cpu.allowance` to `100%`.
+- 時間制限（たとえば、`20ms/50ms`）はハードリミットです。
+  たとえば、コンテナが最大で 1 つの CPU を使用することを許可する場合は、`limits.cpu.allowance`を`100ms/100ms`のような値に設定します。この値は 1 つの CPU に相当する時間に対する相対値なので、2 つの CPU の時間を制限するには、`100ms/50ms`あるいは`200ms/100ms`のような値を使用します。
+- パーセント指定を使う場合は、制限は負荷状態にある場合のみに適用されるソフトリミットです。
+  設定は、同じ CPU(もしくは CPU の組)を使う他のインスタンスとの比較で、インスタンスに対するスケジューラの優先度を計算するのに使われます。
+  たとえば、負荷時のコンテナの CPU 使用率を 1 つの CPU に制限するためには、`limits.cpu.allowance`を`100%`に設定します。
 
-`limits.cpu.nodes` can be used to restrict the CPUs that the instance can use to a specific set of NUMA nodes.
-To specify which NUMA nodes to use, set `limits.cpu.nodes` to either a set of NUMA node IDs (for example, `0,1`) or a set of NUMA node ranges (for example, `0-1,2-4`).
 
-`limits.cpu.priority` is another factor that is used to compute the scheduler priority score when a number of instances sharing a set of CPUs have the same percentage of CPU assigned to them.
+`limits.cpu.nodes`はインスタンスが使用する CPU を特定の NUMA ノードに限定するのに使えます。
+どの NUMA ノードを使用するか指定するには、`limits.cpu.nodes`に NUMA ノード ID の組（たとえば、`0,1`）または NUMA ノードの範囲（たとえば、`0-1,2-4`）のどちらかを設定します。
+
+`limits.cpu.priority` は、CPU の組を共有する複数のインスタンスに割り当てられた CPU の割合が同じ場合に、スケジューラの優先度スコアを計算するために使われる別の因子です。
 
 (instance-options-limits-hugepages)=
-### Huge page limits
+### huge page の制限
 
-Incus allows to limit the number of huge pages available to a container through the `limits.hugepage.[size]` key.
+Incus では `limits.hugepage.[size]` キーを使ってコンテナが利用できる huge page の数を制限できます。
 
-Architectures often expose multiple huge-page sizes.
-The available huge-page sizes depend on the architecture.
+アーキテクチャはしばしば huge page のサイズを公開しています。
+利用可能な huge page サイズはアーキテクチャによって異なります。
 
-Setting limits for huge pages is especially useful when Incus is configured to intercept the `mount` syscall for the `hugetlbfs` file system in unprivileged containers.
-When Incus intercepts a `hugetlbfs` `mount` syscall, it mounts the `hugetlbfs` file system for a container with correct `uid` and `gid` values as mount options.
-This makes it possible to use huge pages from unprivileged containers.
-However, it is recommended to limit the number of huge pages available to the container through `limits.hugepages.[size]` to stop the container from being able to exhaust the huge pages available to the host.
+huge page の制限は非特権コンテナ内で`hugetlbfs`ファイルシステムの`mount`システムコールをインターセプトするように Incus を設定しているときには特に有用です。
+Incus が`hugetlbfs` `mount`システムコールをインターセプトすると Incus は正しい`uid`と`gid`の値を`mount`オプションに指定して`hugetblfs`ファイルシステムをコンテナにマウントします。
+これにより非特権コンテナからも huge page が利用可能となります。
+しかし、ホストで利用可能な huge page をコンテナが使い切ってしまうのを防ぐため、`limits.hugepages.[size]`を使ってコンテナが利用可能な huge page の数を制限することを推奨します。
 
-Limiting huge pages is done through the `hugetlb` cgroup controller, which means that the host system must expose the `hugetlb` controller in the legacy or unified cgroup hierarchy for these limits to apply.
+huge page の制限は`hugetlb` cgroup コントローラーによって実行されます。これはこれらの制限を適用するために、ホストシステムが`hugetlb`コントローラーをレガシーあるいは cgroup の単一階層構造(訳注:cgroup v2)に公開する必要があることを意味します。
 
 (instance-options-limits-kernel)=
-### Kernel resource limits
+### カーネルリソース制限
 
-Incus exposes a generic namespaced key `limits.kernel.*` that can be used to set resource limits for an instance.
+Incus は、インスタンスのリソース制限を設定するのに使用できる一般の名前空間キー`limits.kernel.*`を公開しています。
 
-It is generic in the sense that Incus does not perform any validation on the resource that is specified following the `limits.kernel.*` prefix.
-Incus cannot know about all the possible resources that a given kernel supports.
-Instead, Incus simply passes down the corresponding resource key after the `limits.kernel.*` prefix and its value to the kernel.
-The kernel does the appropriate validation.
-This allows users to specify any supported limit on their system.
+`limits.kernel.*`接頭辞に続いて指定されるリソースについて Incus が全く検証を行わないという意味でこれは汎用です。
+Incus は対象のカーネルがサポートするすべての利用可能なリソースについて知ることはできません。
+代わりに、Incus は`limits.kernel.*`接頭辞の後の対応するリソースキーとその値をカーネルに単に渡します。
+カーネルが適切な検証を行います。
+これによりユーザーはシステム上でサポートされる任意の制限を指定できます。
 
-Some common limits are:
+よくある制限のいくつかは以下のとおりです:
 
-Key                       | Resource          | Description
+キー                       | リソース            | 説明
 :--                       | :---              | :----------
-`limits.kernel.as`        | `RLIMIT_AS`       | Maximum size of the process's virtual memory
-`limits.kernel.core`      | `RLIMIT_CORE`     | Maximum size of the process's core dump file
-`limits.kernel.cpu`       | `RLIMIT_CPU`      | Limit in seconds on the amount of CPU time the process can consume
-`limits.kernel.data`      | `RLIMIT_DATA`     | Maximum size of the process's data segment
-`limits.kernel.fsize`     | `RLIMIT_FSIZE`    | Maximum size of files the process may create
-`limits.kernel.locks`     | `RLIMIT_LOCKS`    | Limit on the number of file locks that this process may establish
-`limits.kernel.memlock`   | `RLIMIT_MEMLOCK`  | Limit on the number of bytes of memory that the process may lock in RAM
-`limits.kernel.nice`      | `RLIMIT_NICE`     | Maximum value to which the process's nice value can be raised
-`limits.kernel.nofile`    | `RLIMIT_NOFILE`   | Maximum number of open files for the process
-`limits.kernel.nproc`     | `RLIMIT_NPROC`    | Maximum number of processes that can be created for the user of the calling process
-`limits.kernel.rtprio`    | `RLIMIT_RTPRIO`   | Maximum value on the real-time-priority that may be set for this process
-`limits.kernel.sigpending`| `RLIMIT_SIGPENDING` | Maximum number of signals that may be queued for the user of the calling process
+`limits.kernel.as`        | `RLIMIT_AS`       | プロセスの仮想メモリーの最大サイズ
+`limits.kernel.core`      | `RLIMIT_CORE`     | プロセスのコアダンプファイルの最大サイズ
+`limits.kernel.cpu`       | `RLIMIT_CPU`      | プロセスが使えるCPU時間の秒単位の制限
+`limits.kernel.data`      | `RLIMIT_DATA`     | プロセスのデータセグメントの最大サイズ
+`limits.kernel.fsize`     | `RLIMIT_FSIZE`    | プロセスが作成できるファイルの最大サイズ
+`limits.kernel.locks`     | `RLIMIT_LOCKS`    | プロセスが確立できるファイルロック数の制限
+`limits.kernel.memlock`   | `RLIMIT_MEMLOCK`  | プロセスがRAM上でロックできるメモリーのバイト数の制限
+`limits.kernel.nice`      | `RLIMIT_NICE`     | 引き上げることができるプロセスのnice値の最大値
+`limits.kernel.nofile`    | `RLIMIT_NOFILE`   | プロセスがオープンできるファイルの最大値
+`limits.kernel.nproc`     | `RLIMIT_NPROC`    | 呼び出し元プロセスのユーザーが作れるプロセスの最大数
+`limits.kernel.rtprio`    | `RLIMIT_RTPRIO`   | プロセスに対して設定できるリアルタイム優先度の最大値
+`limits.kernel.sigpending`| `RLIMIT_SIGPENDING` | 呼び出し元プロセスのユーザーがキューに入れられるシグナルの最大数
 
-A full list of all available limits can be found in the manpages for the `getrlimit(2)`/`setrlimit(2)` system calls.
 
-To specify a limit within the `limits.kernel.*` namespace, use the resource name in lowercase without the `RLIMIT_` prefix.
-For example, `RLIMIT_NOFILE` should be specified as `nofile`.
+指定できる制限の完全なリストは `getrlimit(2)`/`setrlimit(2)`システムコールの man ページで確認できます。
 
-A limit is specified as two colon-separated values that are either numeric or the word `unlimited` (for example, `limits.kernel.nofile=1000:2000`).
-A single value can be used as a shortcut to set both soft and hard limit to the same value (for example, `limits.kernel.nofile=3000`).
+`limits.kernel.*`名前空間内で制限を指定するには、`RLIMIT_`を付けずに、リソース名を小文字で指定します。
+たとえば、`RLIMIT_NOFILE`は`nofile`と指定します。
 
-A resource with no explicitly configured limit will inherit its limit from the process that starts up the instance.
-Note that this inheritance is not enforced by Incus but by the kernel.
+制限は、コロン区切りのふたつの数字もしくは`unlimited`という文字列で指定します（たとえば、`limits.kernel.nofile=1000:2000`）。
+単一の値を使って、ソフトリミットとハードリミットを同じ値に設定できます（たとえば、`limits.kernel.nofile=3000`）。
+
+明示的に設定されないリソースは、インスタンスを起動したプロセスから継承されます。
+この継承は Incus でなく、カーネルによって強制されることに注意してください。
 
 (instance-options-migration)=
-## Migration options
+## マイグレーションオプション
 
-The following instance options control the behavior if the instance is {ref}`moved from one Incus server to another <move-instances>`:
+以下のインスタンスオプションはインスタンスが{ref}`あるLXDサーバーから別のサーバーに移動される <move-instances>`場合の挙動を制御します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -224,9 +226,9 @@ The following instance options control the behavior if the instance is {ref}`mov
 ```
 
 (instance-options-nvidia)=
-## NVIDIA and CUDA configuration
+## NVIDIAとCUDAの設定
 
-The following instance options specify the NVIDIA and CUDA configuration of the instance:
+以下のインスタンスオプションはインスタンスの NVIDIA と CUDA の設定を指定します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -235,9 +237,9 @@ The following instance options specify the NVIDIA and CUDA configuration of the 
 ```
 
 (instance-options-raw)=
-## Raw instance configuration overrides
+## rawインスタンス設定のオーバーライド
 
-The following instance options allow direct interaction with the backend features that Incus itself uses:
+以下のインスタンスオプションは Incus 自身が使用するバックエンド機能に直接制御できるようにします:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -246,33 +248,33 @@ The following instance options allow direct interaction with the backend feature
 ```
 
 ```{important}
-Setting these `raw.*` keys might break Incus in non-obvious ways.
-Therefore, you should avoid setting any of these keys.
+これらの`raw.*`キーを設定すると Incus を予期せぬ形で壊してしまうかもしれません。
+このため、これらのキーを設定するのは避けるほうが良いです。
 ```
 
 (instance-options-qemu)=
-### Override QEMU configuration
+### QEMU設定のオーバーライド
 
-For VM instances, Incus configures QEMU through a configuration file that is passed to QEMU with the `-readconfig` command-line option.
-This configuration file is generated for each instance before boot.
-It can be found at `/var/log/incus/<instance_name>/qemu.conf`.
+VM インスタンスに対しては、Incus は`-readconfig`コマンドラインオプションで QEMU に渡す設定ファイルを使って QEMU を設定します。
+この設定ファイルは各インスタンスの起動前に生成されます。
+設定ファイルは`/var/log/lxd/<instance_name>/qemu.conf`に作られます。
 
-The default configuration works fine for Incus' most common use case: modern UEFI guests with VirtIO devices.
-In some situations, however, you might need to override the generated configuration.
-For example:
+デフォルトの設定はほとんどの典型的な利用ケース、VirtIO デバイスを持つモダンな UEFI ゲスト、では正常に動作します。
+しかし、いくつかの状況では、生成された設定をオーバーライドする必要があります。
+たとえば以下のような場合です。
 
-- To run an old guest OS that doesn't support UEFI.
-- To specify custom virtual devices when VirtIO is not supported by the guest OS.
-- To add devices that are not supported by Incus before the machines boots.
-- To remove devices that conflict with the guest OS.
+- UEFI をサポートしない古いゲスト OS を実行する。
+- VirtIO がゲスト OS でサポートされない場合にカスタムな仮想デバイスを指定する。
+- マシンの起動前に Incus でサポートされないデバイスを追加する。
+- ゲスト OS と衝突するデバイスを削除する。
 
-To override the configuration, set the `raw.qemu.conf` option.
-It supports a format similar to `qemu.conf`, with some additions.
-Since it is a multi-line configuration option, you can use it to modify multiple sections or keys.
+設定をオーバーライドするには、`raw.qemu.conf`オプションを設定します。
+これは`qemu.conf`と似たような形式ですが、いくつか拡張した形式をサポートします。
+これは複数行の設定オプションですので、複数のセクションやキーを変更するのに使えます。
 
-- To replace a section or key in the generated configuration file, add a section with a different value.
+- 生成された設定ファイルのセクションやキーを置き換えるには、別の値を持つセクションを追加します。
 
-  For example, use the following section to override the default `virtio-gpu-pci` GPU driver:
+  たとえば、デフォルトの`virtio-gpu-pci` GPU ドライバーをオーバーライドするには以下のセクションを使います:
 
   ```
   raw.qemu.conf: |-
@@ -280,16 +282,16 @@ Since it is a multi-line configuration option, you can use it to modify multiple
       driver = "qxl-vga"
   ```
 
-- To remove a section, specify a section without any keys.
-  For example:
+- セクションを削除するには、キー無しのセクションを指定します。
+  たとえば:
 
   ```
   raw.qemu.conf: |-
       [device "qemu_gpu"]
   ```
 
-- To remove a key, specify an empty string as the value.
-  For example:
+- キーを削除するには、空の文字列を値として指定します。
+  たとえば:
 
   ```
   raw.qemu.conf: |-
@@ -297,10 +299,10 @@ Since it is a multi-line configuration option, you can use it to modify multiple
       driver = ""
   ```
 
-- To add a new section, specify a section name that is not present in the configuration file.
+- 新規のセクションを追加するには、設定ファイル内に存在しないセクション名を指定します。
 
-The configuration file format used by QEMU allows multiple sections with the same name.
-Here's a piece of the configuration generated by Incus:
+QEMU で使用される設定ファイル形式は同じ名前の複数のセクションを許可します。
+以下は Incus で生成される設定の抜粋です。
 
 ```
 [global]
@@ -314,8 +316,8 @@ property = "disable_s4"
 value = "1"
 ```
 
-To specify which section to override, specify an index.
-For example:
+オーバーライドするセクションを指定するには、インデクスを指定します。
+たとえば:
 
 ```
 raw.qemu.conf: |-
@@ -323,7 +325,7 @@ raw.qemu.conf: |-
     value = "0"
 ```
 
-Section indexes start at 0 (which is the default value when not specified), so the above example would generate the following configuration:
+セクションのインデクスは 0（指定しない場合のデフォルト値）から始まりますので、上の例は以下の設定を生成します:
 
 ```
 [global]
@@ -338,9 +340,9 @@ value = "0"
 ```
 
 (instance-options-security)=
-## Security policies
+## セキュリティーポリシー
 
-The following instance options control the {ref}`security` policies of the instance:
+以下のインスタンスオプションはインスタンスの{ref}`security`ポリシーを制御します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -349,9 +351,9 @@ The following instance options control the {ref}`security` policies of the insta
 ```
 
 (instance-options-snapshots)=
-## Snapshot scheduling and configuration
+## スナップショットのスケジュールと設定
 
-The following instance options control the creation and expiry of {ref}`instance snapshots <instances-snapshots>`:
+以下のインスタンスオプションは{ref}`インスタンススナップショット <instances-snapshots>`の作成と削除を制御します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -360,14 +362,14 @@ The following instance options control the creation and expiry of {ref}`instance
 ```
 
 (instance-options-snapshots-names)=
-### Automatic snapshot names
+### スナップショットの自動命名
 
 {{snapshot_pattern_detail}}
 
 (instance-options-volatile)=
-## Volatile internal data
+## 揮発性の内部データ
 
-The following volatile keys are currently used internally by Incus to store internal data specific to an instance:
+以下の揮発性のキーはインスタンスに固有な内部データを保管するため Incus で現在内部的に使用されています:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -376,5 +378,5 @@ The following volatile keys are currently used internally by Incus to store inte
 ```
 
 ```{note}
-Volatile keys cannot be set by the user.
+揮発性のキーはユーザは設定できません。
 ```
