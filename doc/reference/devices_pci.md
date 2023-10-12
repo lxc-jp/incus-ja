@@ -1,20 +1,20 @@
 (devices-pci)=
-# Type: `pci`
+# タイプ: `pci`
 
 ```{note}
-The `pci` device type is supported for VMs.
-It does not support hotplugging.
+`pci`デバイスタイプは VM でサポートされます。
+ホットプラグはサポートされません。
 ```
 
-PCI devices are used to pass raw PCI devices from the host into a virtual machine.
+PCI デバイスは生の PCI デバイスをホストから仮想マシンにパススルーするために使用されます。
 
-They are mainly intended to be used for specialized single-function PCI cards like sound cards or video capture cards.
-In theory, you can also use them for more advanced PCI devices like GPUs or network cards, but it's usually more convenient to use the specific device types that Incus provides for these devices ([`gpu` device](devices-gpu) or [`nic` device](devices-nic)).
+これらや主にサウンドカードやビデオキャプチャーカードのような特別な単一機能の PCI カードに使われることを意図しています。
+理論上は、GPU やネットワークカードなどより高度な PCI デバイスも使用できますが、通常はそれらのデバイスのために Incus が提供する個別のデバイスタイプ（[`gpu`デバイス](devices-gpu)や[`nic` デバイス](devices-nic)）を使うほうがより便利です。
 
-## Device options
+## デバイスオプション
 
-`pci` devices have the following device options:
+`pci` デバイスには以下のデバイスオプションがあります:
 
-Key                 | Type      | Default   | Required  | Description
-:--                 | :--       | :--       | :--       | :--
-`address`           | string    | -         | yes       | PCI address of the device
+キー      | 型     | デフォルト値 | 必須 | 説明
+:--       | :--    | :--          | :--  | :--
+`address` | string | -            | yes  | デバイスのPCIアドレス
