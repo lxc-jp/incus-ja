@@ -1,30 +1,30 @@
 (devices-usb)=
-# Type: `usb`
+# タイプ: `usb`
 
 ```{note}
-The `usb` device type is supported for both containers and VMs.
-It supports hotplugging for both containers and VMs.
+`usb`デバイスタイプはコンテナと VM の両方でサポートされます。
+コンテナと VM の両方でホットプラグをサポートします。
 ```
 
-USB devices make the specified USB device appear in the instance.
-For performance issues, avoid using devices that require high throughput or low latency.
+USB デバイスは、指定された USB デバイスをインスタンスに出現させます。
+パフォーマンスの問題のため、高スループットまたは低レイテンシを要求するデバイスの使用は避けてください。
 
-For containers, only `libusb` devices (at `/dev/bus/usb`) are passed to the instance.
-This method works for devices that have user-space drivers.
-For devices that require dedicated kernel drivers, use a [`unix-char` device](devices-unix-char) or a [`unix-hotplug` device](devices-unix-hotplug) instead.
+コンテナでは、（`/dev/bus/usb`にある）`libusb`デバイスのみがインスタンスに渡されます。
+この方法はユーザースペースのドライバーを持つデバイスで機能します。
+専用のカーネルドライバーを必要とするデバイスは、代わりに[`unix-char`デバイス](devices-unix-char)か[`unix-hotplug`デバイス](devices-unix-hotplug)を使用してください。
 
-For virtual machines, the entire USB device is passed through, so any USB device is supported.
-When a device is passed to the instance, it vanishes from the host.
+仮想マシンでは、USB デバイス全体がパススルーされますので、あらゆる USB デバイスがサポートされます。
+デバイスがインスタンスに渡されると、ホストからは消失します。
 
-## Device options
+## デバイスオプション
 
-`usb` devices have the following device options:
+`usb`デバイスには以下のデバイスオプションがあります:
 
-Key         | Type      | Default           | Description
-:--         | :--       | :--               | :--
-`gid`       | int       | `0`               | Only for containers: GID of the device owner in the instance
-`mode`      | int       | `0660`            | Only for containers: Mode of the device in the instance
-`productid` | string    | -                 | The product ID of the USB device
-`required`  | bool      | `false`           | Whether this device is required to start the instance (the default is `false`, and all devices can be hotplugged)
-`uid`       | int       | `0`               | Only for containers: UID of the device owner in the instance
-`vendorid`  | string    | -                 | The vendor ID of the USB device
+キー        | 型     | デフォルト値 | 説明
+:--         | :--    | :--          | :--
+`gid`       | int    | `0`          | コンテナのみ: インスタンス内のデバイス所有者のGID
+`mode`      | int    | `0660`       | コンテナのみ: インスタンス内のデバイスのモード
+`productid` | string | -            | USBデバイスのプロダクトID
+`required`  | bool   | `false`      | このデバイスがインスタンスの起動に必要かどうか（デフォルトは`false`で、すべてのデバイスがホットプラグ可能です）
+`uid`       | int    | `0`          | コンテナのみ: インスタンス内のデバイス所有者のUID
+`vendorid`  | string | -            | USBデバイスのベンダーID
