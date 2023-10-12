@@ -2,113 +2,113 @@
 # Ceph RBD - `ceph`
 
 <!-- Include start Ceph intro -->
-[Ceph](https://ceph.io/en/) is an open-source storage platform that stores its data in a storage cluster based on {abbr}`RADOS (Reliable Autonomic Distributed Object Store)`.
-It is highly scalable and, as a distributed system without a single point of failure, very reliable.
+[Ceph](https://ceph.io/en/) はオープンソースのストレージプラットフォームで、データを {abbr}`RADOS (Reliable Autonomic Distributed Object Store)` に基づいたストレージクラスタ内に保管します。
+非常にスケーラブルで、単一障害点がない分散システムであり非常に信頼性が高いです。
 
 ```{tip}
-If you want to quickly set up a basic Ceph cluster, check out [MicroCeph](https://microcloud.is).
+ベーシックなCephクラスタを素早く構築したい場合、[MicroCeph](https://microcloud.is)をチェックしてみてください。
 ```
 
-Ceph provides different components for block storage and for file systems.
+Ceph はブロックストレージ用とファイルシステム用に異なるコンポーネントを提供します。
 <!-- Include end Ceph intro -->
 
-Ceph {abbr}`RBD (RADOS Block Device)` is Ceph's block storage component that distributes data and workload across the Ceph cluster.
-It uses thin provisioning, which means that it is possible to over-commit resources.
+Ceph {abbr}`RBD (RADOS Block Device)` はデータとワークロードを Ceph クラスタに分散する Ceph のブロックストレージコンポーネントです。
+これは薄いプロビジョニングを使用し、リソースをオーバーコミットできることを意味します。
 
-## Terminology
+## 用語
 
 <!-- Include start Ceph terminology -->
-Ceph uses the term *object* for the data that it stores.
-The daemon that is responsible for storing and managing data is the *Ceph {abbr}`OSD (Object Storage Daemon)`*.
-Ceph's storage is divided into *pools*, which are logical partitions for storing objects.
-They are also referred to as *data pools*, *storage pools* or *OSD pools*.
+Ceph は保管するデータに *オブジェクト* という用語を使用します。
+データを保存と管理する責任を持つデーモンは *Ceph {abbr}`OSD (Object Storage Daemon)`* です。
+Ceph のストレージは *プール* に分割されます。これはオブジェクトを保管する論理的なパーティションです。
+これらは *データプール*, *ストレージプール*, *OSD プール* とも呼ばれます。
 <!-- Include end Ceph terminology -->
 
-Ceph block devices are also called *RBD images*, and you can create *snapshots* and *clones* of these RBD images.
+Ceph ブロックデバイスは *RBD イメージ* とも呼ばれ、これらの RBD イメージの *スナップショット* と *クローン* を作成できます。
 
-## `ceph` driver in Incus
+## Incus の `ceph` ドライバー
 
 ```{note}
-To use the Ceph RBD driver, you must specify it as `ceph`.
-This is slightly misleading, because it uses only Ceph RBD (block storage) functionality, not full Ceph functionality.
-For storage volumes with content type `filesystem` (images, containers and custom file-system volumes), the `ceph` driver uses Ceph RBD images with a file system on top (see [`block.filesystem`](storage-ceph-vol-config)).
+Ceph RBD ドライバを使用するには `ceph` と指定する必要があります。
+これは少し誤解を招く恐れがあります。 Ceph の全ての機能ではなく Ceph RBD（ブロックストレージ）の機能しか使わないからです。
+コンテントタイプ `filesystem`（イメージ、コンテナとカスタムファイルシステムボリューム）のストレージボリュームには `ceph` ドライバは Ceph RDB イメージをその上にファイルシステムがある状態で使用します（[`block.filesystem`](storage-ceph-vol-config) 参照）。
 
-Alternatively, you can use the {ref}`CephFS <storage-cephfs>` driver to create storage volumes with content type `filesystem`.
+別の方法として、コンテントタイプ `filesystem` でストレージボリュームを作成するのに {ref}`CephFS <storage-cephfs>` を使用することもできます。
 ```
 
 <!-- Include start Ceph driver cluster -->
-Unlike other storage drivers, this driver does not set up the storage system but assumes that you already have a Ceph cluster installed.
+他のストレージドライバーとは異なり、このドライバーはストレージシステムをセットアップはせず、既に Ceph クラスタをインストール済みであると想定します。
 <!-- Include end Ceph driver cluster -->
 
 <!-- Include start Ceph driver remote -->
-This driver also behaves differently than other drivers in that it provides remote storage.
-As a result and depending on the internal network, storage access might be a bit slower than for local storage.
-On the other hand, using remote storage has big advantages in a cluster setup, because all cluster members have access to the same storage pools with the exact same contents, without the need to synchronize storage pools.
+このドライバーはリモートのストレージを提供するという意味でも他のドライバーとは異なる振る舞いをします。
+結果として、内部ネットワークに依存し、ストレージへのアクセスはローカルのストレージより少し遅くなるかもしれません。
+一方で、リモートのストレージを使うことはクラスタ構成では大きな利点があります。これはストレージプールを同期する必要なしに、すべてのクラスタメンバーが同じ内容を持つ同じストレージプールにアクセスできるからです。
 <!-- Include end Ceph driver remote -->
 
-The `ceph` driver in Incus uses RBD images for images, and snapshots and clones to create instances and snapshots.
+Incus 内の `ceph` ドライバーはイメージ、スナップショットに RBD イメージを使用し、インスタンスとスナップショットを作成するのにクローンを使用します。
 
 <!-- Include start Ceph driver control -->
-Incus assumes that it has full control over the OSD storage pool.
-Therefore, you should never maintain any file system entities that are not owned by Incus in a Incus OSD storage pool, because Incus might delete them.
+Incus は OSD ストレージプールに対して完全制御できることを想定します。
+このため、 Incus OSD ストレージプール内に Incus が所有しないファイルシステムエンティティは Incus が消してしまうかもしれないので決して置くべきではありません。
 <!-- Include end Ceph driver control -->
 
-Due to the way copy-on-write works in Ceph RBD, parent RBD images can't be removed until all children are gone.
-As a result, Incus automatically renames any objects that are removed but still referenced.
-Such objects are kept with a  `zombie_` prefix until all references are gone and the object can safely be removed.
+Ceph RBD 内で copy-on-write が動作する方法のため、親の RBD イメージはすべての子がいなくなるまで削除できません。
+結果として Incus は削除されたがまだ参照されているオブジェクトを自動的にリネームします。
+そのようなオブジェクトはすべての参照がいなくなりオブジェクトが安全に削除できるようになるまで `zombie_` 接頭辞をつけて維持されます。
 
-### Limitations
+### 制限
 
-The `ceph` driver has the following limitations:
+`ceph` ドライバーには以下の制限があります。
 
-Sharing custom volumes between instances
-: Custom storage volumes with {ref}`content type <storage-content-types>` `filesystem` can usually be shared between multiple instances different cluster members.
-  However, because the Ceph RBD driver "simulates" volumes with content type `filesystem` by putting a file system on top of an RBD image, custom storage volumes can only be assigned to a single instance at a time.
-  If you need to share a custom volume with content type `filesystem`, use the {ref}`CephFS <storage-cephfs>` driver instead.
+インスタンス間でのカスタムボリュームの共有
+: {ref}`コンテントタイプ <storage-content-types>` `filesystem` のカスタムストレージボリュームは異なるクラスタメンバーの複数のインスタンス間で通常は共有できます。
+  しかし、 Ceph RBD ドライバーは RBD イメージ上にファイルシステムを置くことでコンテントタイプ `filesystem` のボリュームを「シミュレート」しているため、カスタムストレージボリュームは一度に 1 つのインスタンスにしか割り当てできません。
+  コンテントタイプ `filesystem` のカスタムボリュームを共有する必要がある場合は代わりに {ref}`storage-cephfs` ドライバーを使用してください。
 
-Sharing the OSD storage pool between installations
-: Sharing the same OSD storage pool between multiple Incus installations is not supported.
+複数インストールされた Incus 間で OSD ストレージプールの共有
+: 複数インストールされた Incus 間で同じ OSD ストレージプールを共有することはサポートされていません。
 
-Using an OSD pool of type "erasure"
-: To use a Ceph OSD pool of type "erasure", you must create the OSD pool beforehand.
-  You must also create a separate OSD pool of type "replicated" that will be used for storing metadata.
-  This is required because Ceph RBD does not support `omap`.
-  To specify which pool is "erasure coded", set the [`ceph.osd.data_pool_name`](storage-ceph-pool-config) configuration option to the erasure coded pool name and the [`source`](storage-ceph-pool-config) configuration option to the replicated pool name.
+タイプ "erasure" の OSD プールの使用
+: タイプ "erasure" の OSD プールを使用するには事前に OSD プールを作成する必要があります。
+  さらにタイプ "replicated" の別の OSD プールを作成する必要もあります。これはメタデータを保管するのに使用されます。
+  これは Ceph RBD が `omap` をサポートしないために必要となります。
+  どのプールが "erasure coded" であるかを指定するために [`ceph.osd.data_pool_name`](storage-ceph-pool-config) 設定オプションをイレージャーコーディングされたプールの名前に設定し [`source`](storage-ceph-pool-config) 設定オプションをリプリケートされたプールの名前に設定します。
 
-## Configuration options
+## 設定オプション
 
-The following configuration options are available for storage pools that use the `ceph` driver and for storage volumes in these pools.
+`ceph` ドライバーを使うストレージプールとこれらのプール内のストレージボリュームには以下の設定オプションが利用できます。
 
 (storage-ceph-pool-config)=
-### Storage pool configuration
+### ストレージプール設定
 
-Key                           | Type                          | Default                                 | Description
-:--                           | :---                          | :------                                 | :----------
-`ceph.cluster_name`           | string                        | `ceph`                                  | Name of the Ceph cluster in which to create new storage pools
-`ceph.osd.data_pool_name`     | string                        | -                                       | Name of the OSD data pool
-`ceph.osd.pg_num`             | string                        | `32`                                    | Number of placement groups for the OSD storage pool
-`ceph.osd.pool_name`          | string                        | name of the pool                        | Name of the OSD storage pool
-`ceph.rbd.clone_copy`         | bool                          | `true`                                  | Whether to use RBD lightweight clones rather than full dataset copies
-`ceph.rbd.du`                 | bool                          | `true`                                  | Whether to use RBD `du` to obtain disk usage data for stopped instances
-`ceph.rbd.features`           | string                        | `layering`                              | Comma-separated list of RBD features to enable on the volumes
-`ceph.user.name`              | string                        | `admin`                                 | The Ceph user to use when creating storage pools and volumes
-`source`                      | string                        | -                                       | Existing OSD storage pool to use
-`volatile.pool.pristine`      | string                        | `true`                                  | Whether the pool was empty on creation time
+キー                      | 型     | デフォルト値 | 説明
+:--                       | :---   | :------      | :----------
+`ceph.cluster_name`       | string | `ceph`       | 新しいストレージプールを作成する Ceph クラスタの名前
+`ceph.osd.data_pool_name` | string | -            | OSD data pool の名前
+`ceph.osd.pg_num`         | string | `32`         | OSD ストレージプール用の placement グループの数
+`ceph.osd.pool_name`      | string | プールの名前 | OSD ストレージプールの名前
+`ceph.rbd.clone_copy`     | bool   | `true`       | フルのデータセットコピーではなく RBD のライトウェイトクローンを使うかどうか
+`ceph.rbd.du`             | bool   | `true`       | 停止したインスタンスのディスク使用データを取得するのに RBD `du` を使用するかどうか
+`ceph.rbd.features`       | string | `layering`   | ボリュームで有効にする RBD の機能のカンマ区切りリスト
+`ceph.user.name`          | string | `admin`      | ストレージプールとボリュームの作成に使用する Ceph ユーザー
+`source`                  | string | -            | 使用する既存の OSD ストレージプール
+`volatile.pool.pristine`  | string | `true`       | プールが作成時に空かどうか
 
 {{volume_configuration}}
 
 (storage-ceph-vol-config)=
-### Storage volume configuration
+### ストレージボリューム設定
 
-Key                     | Type      | Condition                 | Default                                        | Description
-:--                     | :---      | :--------                 | :------                                        | :----------
-`block.filesystem`      | string    | block-based volume with content type `filesystem` | same as `volume.block.filesystem`              | {{block_filesystem}}
-`block.mount_options`   | string    | block-based volume with content type `filesystem` | same as `volume.block.mount_options`           | Mount options for block-backed file system volumes
-`security.shifted`      | bool      | custom volume             | same as `volume.security.shifted` or `false`   | {{enable_ID_shifting}}
-`security.unmapped`     | bool      | custom volume             | same as `volume.security.unmapped` or `false`  | Disable ID mapping for the volume
-`size`                  | string    |                           | same as `volume.size`                          | Size/quota of the storage volume
-`snapshots.expiry`      | string    | custom volume             | same as `volume.snapshots.expiry`              | {{snapshot_expiry_format}}
-`snapshots.pattern`     | string    | custom volume             | same as `volume.snapshots.pattern` or `snap%d` | {{snapshot_pattern_format}} [^*]
-`snapshots.schedule`    | string    | custom volume             | same as `volume.snapshots.schedule`            | {{snapshot_schedule_format}}
+キー                  | 型     | 条件               | デフォルト値                                 | 説明
+:--                   | :---   | :--------          | :------                                      | :----------
+`block.filesystem`    | string |                    | `volume.block.filesystem` と同じ             | {{block_filesystem}}
+`block.mount_options` | string |                    | `volume.block.mount_options` と同じ          | block-backedなファイルシステムボリュームのマウントオプション
+`security.shifted`    | bool   | カスタムボリューム | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
+`security.unmapped`   | bool   | カスタムボリューム | `volume.security.unmapped` と同じか `false`  | ボリュームの ID マッピングを無効にする
+`size`                | string |                    | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
+`snapshots.expiry`    | string | カスタムボリューム | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
+`snapshots.pattern`   | string | カスタムボリューム | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
+`snapshots.schedule`  | string | カスタムボリューム | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
 
 [^*]: {{snapshot_pattern_detail}}
