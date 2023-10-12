@@ -3,10 +3,10 @@
 ```{toctree}
 :maxdepth: 1
 
-Main API documentation <rest-api>
+メイン API ドキュメント <rest-api>
 rest-api-spec
-Main API extensions <api-extensions>
-Instance API documentation <dev-incus>
-Events API documentation <events>
-Metrics API documentation <reference/provided_metrics>
+メイン API 拡張 <api-extensions>
+Instance API ドキュメント <dev-incus>
+Events API ドキュメント <events>
+Metrics API ドキュメント <reference/provided_metrics>
 ```
