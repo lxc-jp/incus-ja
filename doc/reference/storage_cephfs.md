@@ -7,10 +7,10 @@
     :end-before: <!-- Include end Ceph intro -->
 ```
 
-{abbr}`CephFS (Ceph File System)` is Ceph's file system component that provides a robust, fully-featured POSIX-compliant distributed file system.
-Internally, it maps files to Ceph objects and stores file metadata (for example, file ownership, directory paths, access permissions) in a separate data pool.
+{abbr}`CephFS (Ceph File System)` は堅牢でフル機能の POSIX 互換の分散ファイルシステムを提供する Ceph のファイルシステムコンポーネントです。
+内部的には ファイルを Ceph オブジェクトにマップし、ファイルのメタデータ（たとえば、ファイルの所有権、ディレクトリーパス、アクセス権限）を別のデータプールに保管します。
 
-## Terminology
+## 用語
 
 % Include content from [storage_ceph.md](storage_ceph.md)
 ```{include} storage_ceph.md
@@ -18,15 +18,15 @@ Internally, it maps files to Ceph objects and stores file metadata (for example,
     :end-before: <!-- Include end Ceph terminology -->
 ```
 
-A *CephFS file system* consists of two OSD storage pools, one for the actual data and one for the file metadata.
+*CephFS ファイルシステム* は 2 つの OSD ストレージプールから構成され、ひとつは実際のデータ、もうひとつはファイルメタデータに使用されます。
 
-## `cephfs` driver in Incus
+## Incus の `cephfs` ドライバー
 
 ```{note}
-The `cephfs` driver can only be used for custom storage volumes with content type `filesystem`.
+`cephfs` ドライバはコンテントタイプ `filesystem` のカスタムストレージボリュームにのみ使用できます。
 
-For other storage volumes, use the {ref}`Ceph <storage-ceph>` driver.
-That driver can also be used for custom storage volumes with content type `filesystem`, but it implements them through Ceph RBD images.
+他のストレージボリュームには {ref}`Ceph <storage-ceph>` ドライバを使用してください。
+そのドライバはコンテントタイプ `filesystem` のカスタムストレージボリュームにも使用できますが、 Ceph RBD イメージを使って実装しています。
 ```
 
 % Include content from [storage_ceph.md](storage_ceph.md)
@@ -35,7 +35,7 @@ That driver can also be used for custom storage volumes with content type `files
     :end-before: <!-- Include end Ceph driver cluster -->
 ```
 
-You must create the CephFS file system that you want to use beforehand and specify it through the [`source`](storage-cephfs-pool-config) option.
+使用したい CephFS ファイルシステムは事前に作成する必要があり [`source`](storage-cephfs-pool-config) オプションで指定する必要があります。
 
 % Include content from [storage_ceph.md](storage_ceph.md)
 ```{include} storage_ceph.md
@@ -49,35 +49,33 @@ You must create the CephFS file system that you want to use beforehand and speci
     :end-before: <!-- Include end Ceph driver control -->
 ```
 
-The `cephfs` driver in Incus supports snapshots if snapshots are enabled on the server side.
+Incus の `cephfs` ドライバーはサーバー側でスナップショットが有効な場合はスナップショットをサポートします。
 
-## Configuration options
+## 設定オプション
 
-The following configuration options are available for storage pools that use the `cephfs` driver and for storage volumes in these pools.
+`cephfs` ドライバーを使うストレージプールとこれらのプール内のストレージボリュームには以下の設定オプションが利用できます。
 
 (storage-cephfs-pool-config)=
-### Storage pool configuration
+## ストレージプール設定
 
-Key                           | Type                          | Default                                 | Description
-:--                           | :---                          | :------                                 | :----------
-`cephfs.cluster_name`         | string                        | `ceph`                                  | Name of the Ceph cluster that contains the CephFS file system
-`cephfs.fscache`              | bool                          | `false`                                 | Enable use of kernel `fscache` and `cachefilesd`
-`cephfs.path`                 | string                        | `/`                                     | The base path for the CephFS mount
-`cephfs.user.name`            | string                        | `admin`                                 | The Ceph user to use
-`source`                      | string                        | -                                       | Existing CephFS file system or file system path to use
-`volatile.pool.pristine`      | string                        | `true`                                  | Whether the CephFS file system was empty on creation time
+キー                     | 型     | デフォルト値 | 説明
+:--                      | :---   | :------      | :----------
+`cephfs.cluster_name`    | string | `ceph`       | CephFS ファイルシステムを含む Ceph クラスタの名前
+`cephfs.fscache`         | bool   | `false`      | カーネルの `fscache` と `cachefilesd` を使用するか
+`cephfs.path`            | string | `/`          | CephFS をマウントするベースのパス
+`cephfs.user.name`       | string | `admin`      | 使用する Ceph のユーザー
+`source`                 | string | -            | 使用する既存の CephFS ファイルシステムかファイルシステムパス
+`volatile.pool.pristine` | string | `true`       | 作成時に CephFS ファイルシステムが空だったか
 
 {{volume_configuration}}
 
-### Storage volume configuration
-
-Key                     | Type      | Condition                 | Default                                        | Description
-:--                     | :---      | :--------                 | :------                                        | :----------
-`security.shifted`      | bool      | custom volume             | same as `volume.security.shifted` or `false`   | {{enable_ID_shifting}}
-`security.unmapped`     | bool      | custom volume             | same as `volume.security.unmapped` or `false`  | Disable ID mapping for the volume
-`size`                  | string    | appropriate driver        | same as `volume.size`                          | Size/quota of the storage volume
-`snapshots.expiry`      | string    | custom volume             | same as `volume.snapshots.expiry`              | {{snapshot_expiry_format}}
-`snapshots.pattern`     | string    | custom volume             | same as `volume.snapshots.pattern` or `snap%d` | {{snapshot_pattern_format}} [^*]
-`snapshots.schedule`    | string    | custom volume             | same as `volume.snapshots.schedule`            | {{snapshot_schedule_format}}
+キー                 | 型     | 条件               | デフォルト値                                 | 説明
+:--                  | :---   | :--------          | :------                                      | :----------
+`security.shifted`   | bool   | カスタムボリューム | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
+`security.unmapped`  | bool   | カスタムボリューム | `volume.security.unmapped` と同じか `false`  | ボリュームの ID マッピングを無効にする
+`size`               | string | 適切なドライバー   | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
+`snapshots.expiry`   | string | カスタムボリューム | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
+`snapshots.pattern`  | string | カスタムボリューム | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
+`snapshots.schedule` | string | カスタムボリューム | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
 
 [^*]: {{snapshot_pattern_detail}}
