@@ -1,38 +1,38 @@
 (devices-infiniband)=
-# Type: `infiniband`
+# タイプ: `infiniband`
 
 ```{note}
-The `infiniband` device type is supported for both containers and VMs.
-It supports hotplugging only for containers, not for VMs.
+`infiniband`デバイスタイプはコンテナと VM の両方でサポートされます。
+ホットプラグはコンテナのみでサポートし、VM ではサポートしません。
 ```
 
-Incus supports two different kinds of network types for InfiniBand devices:
+Incus では、InfiniBand デバイスに対する 2 種類の異なったネットワークタイプが使えます:
 
-- `physical`: Passes a physical device from the host through to the instance.
-  The targeted device will vanish from the host and appear in the instance.
-- `sriov`: Passes a virtual function of an SR-IOV-enabled physical network device into the instance.
+- `physical`: ホストの物理デバイスをインスタンスにパススルーします。
+  対象のデバイスはホスト上では見えなくなり、インスタンス内に出現します。
+- `sriov`: SR-IOV が有効な物理ネットワークデバイスの仮想ファンクション（virtual function）をインスタンスにパススルーします。
 
   ```{note}
-  InfiniBand devices support SR-IOV, but in contrast to other SR-IOV-enabled devices, InfiniBand does not support dynamic device creation in SR-IOV mode.
-  Therefore, you must pre-configure the number of virtual functions by configuring the corresponding kernel module.
+  InfiniBandデバイスはSR-IOVをサポートしますが、他のSR-IOVが有効なデバイスと異なり、InfiniBandはSR-IOVモードの動的なデバイスの作成をサポートしません。
+  このため、対応するカーネルモジュールを設定することで仮想ファンクションの数を事前に設定する必要があります。
   ```
 
-To create a `physical` `infiniband` device, use the following command:
+`physical`な`infiniband`デバイスを作成するには、以下のコマンドを使用します:
 
     incus config device add <instance_name> <device_name> infiniband nictype=physical parent=<device>
 
-To create an `sriov` `infiniband` device, use the following command:
+`sriov`の`infiniband`デバイスを作成するには、以下のコマンドを使用します:
 
     incus config device add <instance_name> <device_name> infiniband nictype=sriov parent=<sriov_enabled_device>
 
-## Device options
+## デバイスオプション
 
-`infiniband` devices have the following device options:
+`infiniband`デバイスには以下のデバイスオプションがあります:
 
-Key                     | Type      | Default           | Required  | Description
-:--                     | :--       | :--               | :--       | :--
-`hwaddr`                | string    | randomly assigned | no        | The MAC address of the new interface (can be either the full 20-byte variant or the short 8-byte variant, which will only modify the last 8 bytes of the parent device)
-`mtu`                   | integer   | parent MTU        | no        | The MTU of the new interface
-`name`                  | string    | kernel assigned   | no        | The name of the interface inside the instance
-`nictype`               | string    | -                 | yes       | The device type (one of `physical` or `sriov`)
-`parent`                | string    | -                 | yes       | The name of the host device or bridge
+キー      | 型      | デフォルト値       | 必須 | 説明
+:--       | :--     | :--                | :--  | :--
+`hwaddr`  | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス。20バイトすべてを指定するか短い8バイト（この場合親デバイスの最後の8バイトだけを変更）のどちらかを設定可能
+`mtu`     | integer | 親の MTU           | no   | 新しいインターフェースのMTU
+`name`    | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
+`nictype` | string  | -                  | yes  | デバイスタイプ（`physical`か`sriov`のいずれか）
+`parent`  | string  | -                  | yes  | ホスト上のデバイスまたはブリッジの名前
