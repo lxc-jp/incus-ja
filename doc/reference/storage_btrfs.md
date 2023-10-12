@@ -1,90 +1,90 @@
 (storage-btrfs)=
 # Btrfs - `btrfs`
 
-{abbr}`Btrfs (B-tree file system)` is a local file system based on the {abbr}`COW (copy-on-write)` principle.
-COW means that data is stored to a different block after it has been modified instead of overwriting the existing data, reducing the risk of data corruption.
-Unlike other file systems, Btrfs is extent-based, which means that it stores data in contiguous areas of memory.
+{abbr}`Btrfs (B-tree file system)` は {abbr}`COW (copy-on-write)` 原則に基づいたローカルファイルシステムです。
+COW はデータが修正された後に既存のデータを上書きするのではなく別のブロックに保管され、データ破壊のリスクが低くなることを意味します。
+他のファイルシステムと異なり、Btrfs はエクステントベースです。これはデータを連続したメモリー領域に保管することを意味します。
 
-In addition to basic file system features, Btrfs offers RAID and volume management, pooling, snapshots, checksums, compression and other features.
+基本的なファイルシステムの機能に加えて、Btrfs は RAID、ボリューム管理、プーリング、スナップショット、チェックサム、圧縮、その他の機能を提供します。
 
-To use Btrfs, make sure you have `btrfs-progs` installed on your machine.
+Btrfs を使うにはマシンに `btrfs-progs` がインストールされているか確認してください。
 
-## Terminology
+## 用語
 
-A Btrfs file system can have *subvolumes*, which are named binary subtrees of the main tree of the file system with their own independent file and directory hierarchy.
-A *Btrfs snapshot* is a special type of subvolume that captures a specific state of another subvolume.
-Snapshots can be read-write or read-only.
+Btrfs ファイルシステムは*サブボリューム*を持つことができます。これはファイルシステムのメインツリーの名前をつけられたバイナリサブツリーでそれ自身の独立したファイルとディレクトリー階層を持ちます。
+*Btrfs スナップショット*は特殊なタイプのサブボリュームで別のサブボリュームの特定の状態をキャプチャーします。
+スナップショットは読み書き可または読み取り専用にできます。
 
-## `btrfs` driver in Incus
+## Incus の `btrfs` ドライバー
 
-The `btrfs` driver in Incus uses a subvolume per instance, image and snapshot.
-When creating a new entity (for example, launching a new instance), it creates a Btrfs snapshot.
+Incus の `btrfs` ドライバーはインスタンス、イメージ、スナップショットごとにサブボリュームを使用します。
+新しいエンティティを作成する際（たとえば、新しいインスタンスを起動する）、 Btrfs スナップショットを作成します。
 
-Btrfs doesn't natively support storing block devices.
-Therefore, when using Btrfs for VMs, Incus creates a big file on disk to store the VM.
-This approach is not very efficient and might cause issues when creating snapshots.
+Btrfs はブロックデバイスの保管をネイティブにはサポートしていません。
+このため、仮想マシンに Btrfs を使用する場合、 Incus は仮想マシンを格納するディスク上に巨大なファイルを作成します。
+このアプローチはあまり効率的ではなく、スナップショット作成時に問題を引き起こすかもしれません。
 
-Btrfs can be used as a storage backend inside a container in a nested Incus environment.
-In this case, the parent container itself must use Btrfs.
-Note, however, that the nested Incus setup does not inherit the Btrfs quotas from the parent (see {ref}`storage-btrfs-quotas` below).
+Btrfs はネストした Incus 環境内のコンテナ内部でストレージバックエンドとして使用できます。
+この場合、親のコンテナ自体は Btrfs を使う必要があります。
+しかし、ネストした Incus のセットアップは親から Btrfs のクォータは引き継がないことに注意してください（以下の {ref}`storage-btrfs-quotas` 参照）。
 
 (storage-btrfs-quotas)=
-### Quotas
+### クォータ
 
-Btrfs supports storage quotas via qgroups.
-Btrfs qgroups are hierarchical, but new subvolumes will not automatically be added to the qgroups of their parent subvolumes.
-This means that users can trivially escape any quotas that are set.
-Therefore, if strict quotas are needed, you should consider using a different storage driver (for example, ZFS with `refquota` or LVM with Btrfs on top).
+Btrfs は qgroups 経由でストレージクォータをサポートします。
+Btrfs qgroups は階層的ですが、新しいサブボリュームは親のサブボリュームの qgroups に自動的に追加されるわけではありません。
+これはユーザーが設定されたクォータから逃れることができることは自明であることを意味します。
+このため、厳密なクォータが必要な場合は、別のストレージドライバーを検討すべきです（たとえば、`refquotas` ありの ZFS や LVM 上の Btrfs）。
 
-When using quotas, you must take into account that Btrfs extents are immutable.
-When blocks are written, they end up in new extents.
-The old extents remain until all their data is dereferenced or rewritten.
-This means that a quota can be reached even if the total amount of space used by the current files in the subvolume is smaller than the quota.
+クォータを使用する際は、 Btrfs のエクステントはイミュータブルであることを考慮に入れる必要があります。
+ブロックが書かれると、それらは新しいエクステントに現れます。
+古いエクステントはその上のすべてのデータが参照されなくなるか上書きされるまで残ります。
+これはサブボリューム内で現在存在するファイルで使用されている合計容量がクォータより小さい場合でもクォータに達することがあり得ることを意味します。
 
 ```{note}
-This issue is seen most often when using VMs on Btrfs, due to the random I/O nature of using raw disk image files on top of a Btrfs subvolume.
+この問題は Btrfs 上で仮想マシンを使用する際にもっともよく発生します。これは Btrfs サブボリューム上に生のディスクイメージを使用する際のランダムな I/O の性質のためです。
 
-Therefore, you should never use VMs with Btrfs storage pools.
+このため、仮想マシンには Btrfs ストレージプールは決して使うべきではありません。
 
-If you really need to use VMs with Btrfs storage pools, set the instance root disk's [`size.state`](devices-disk) property to twice the size of the root disk's size.
-This configuration allows all blocks in the disk image file to be rewritten without reaching the qgroup quota.
-The [`btrfs.mount_options=compress-force`](storage-btrfs-pool-config) storage pool option can also avoid this scenario, because a side effect of enabling compression is to reduce the maximum extent size such that block rewrites don't cause as much storage to be double-tracked.
-However, this is a storage pool option, and it therefore affects all volumes on the pool.
+どうしても仮想マシンに Btrfs ストレージプールを使う必要がある場合、インスタンスのルートディスクの [`size.state`](devices-disk) をルートディスクのサイズの2倍に設定してください。
+この設定により、ディスクイメージファイルの全てのブロックが qgroup クォータに達すること無しに上書きできるようになります。
+[`btrfs.mount_options=compress-force`](storage-btrfs-pool-config) ストレージプールオプションでもこのシナリオを回避できます。圧縮を有効にすることの副作用で最大のエクステントサイズを縮小しブロックの再書き込みが2倍のストレージを消費しないようになるからです。
+しかし、これはストレージプールのオプションなので、プール上の全てのボリュームに影響します。
 ```
 
-## Configuration options
+## 設定オプション
 
-The following configuration options are available for storage pools that use the `btrfs` driver and for storage volumes in these pools.
+`btrfs` ドライバーを使うストレージプールとこれらのプール内のストレージボリュームには以下の設定オプションが利用できます。
 
 (storage-btrfs-pool-config)=
-### Storage pool configuration
+## ストレージプール設定
 
-Key                             | Type      | Default                    | Description
-:--                             | :---      | :------                    | :----------
-`btrfs.mount_options`           | string    | `user_subvol_rm_allowed`   | Mount options for block devices
-`size`                          | string    | auto (20% of free disk space, >= 5 GiB and <= 30 GiB) | Size of the storage pool when creating loop-based pools (in bytes, suffixes supported, can be increased to grow storage pool)
-`source`                        | string    | -                          | Path to an existing block device, loop file or Btrfs subvolume
-`source.wipe`                   | bool      | `false`                    | Wipe the block device specified in `source` prior to creating the storage pool
+キー                  | 型     | デフォルト値                                               | 説明
+:--                   | :---   | :--------                                                  | :----------
+`btrfs.mount_options` | string | `user_subvol_rm_allowed`                                   | ブロックデバイスのマウントオプション
+`size`                | string | 自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB） | ループベースのプールを作成する際のストレージプールのサイズ（バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大）
+`source`              | string | -                                                          | 既存のブロックデバイス、ループファイル、あるいはBtrfsサブボリュームのパス
+`source.wipe`         | bool   | `false`                                                    | ストレージプールを作成する前に`source`で指定されたブロックデバイスの中身を消去する
 
 {{volume_configuration}}
 
-### Storage volume configuration
+### ストレージボリューム設定
 
-Key                     | Type      | Condition                 | Default                                       | Description
-:--                     | :---      | :--------                 | :------                                       | :----------
-`security.shifted`      | bool      | custom volume             | same as `volume.security.shifted` or `false`  | {{enable_ID_shifting}}
-`security.unmapped`     | bool      | custom volume             | same as `volume.security.unmapped` or `false` | Disable ID mapping for the volume
-`size`                  | string    | appropriate driver        | same as `volume.size`                         | Size/quota of the storage volume
-`snapshots.expiry`      | string    | custom volume             | same as `volume.snapshots.expiry`             | {{snapshot_expiry_format}}
-`snapshots.pattern`     | string    | custom volume             | same as `volume.snapshots.pattern` or `snap%d`| {{snapshot_pattern_format}} [^*]
-`snapshots.schedule`    | string    | custom volume             | same as `volume.snapshots.schedule`           | {{snapshot_schedule_format}}
+キー                 | 型     | 条件               | デフォルト値                                 | 説明
+:--                  | :---   | :--------          | :------                                      | :----------
+`security.shifted`   | bool   | カスタムボリューム | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
+`security.unmapped`  | bool   | カスタムボリューム | `volume.security.unmapped` と同じか `false`  | ボリュームへの id マッピングを無効にする
+`size`               | string | 適切なドライバー   | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
+`snapshots.expiry`   | string | カスタムボリューム | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
+`snapshots.pattern`  | string | カスタムボリューム | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
+`snapshots.schedule` | string | カスタムボリューム | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
 
 [^*]: {{snapshot_pattern_detail}}
 
-### Storage bucket configuration
+### ストレージバケット設定
 
-To enable storage buckets for local storage pool drivers and allow applications to access the buckets via the S3 protocol, you must configure the {config:option}`server-core:core.storage_buckets_address` server setting.
+ローカルのストレージプールドライバーでストレージバケットを有効にし、 S3 プロトコル経由でアプリケーションがバケットにアクセスできるようにするには{config:option}`server-core:core.storage_buckets_address`サーバー設定を調整する必要があります。
 
-Key                     | Type      | Condition                 | Default                                        | Description
-:--                     | :---      | :--------                 | :------                                        | :----------
-`size`                  | string    | appropriate driver        | same as `volume.size`                          | Size/quota of the storage bucket
+キー   | 型     | 条件             | デフォルト値         | 説明
+:--    | :---   | :--------        | :------              | :----------
+`size` | string | 適切なドライバー | `volume.size` と同じ | ストレージバケットのサイズ/クォータ
