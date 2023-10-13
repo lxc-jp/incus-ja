@@ -70,7 +70,7 @@ Linux で Incus をインストールする最も簡単な方法は{ref}`install
 
 ```{group-tab} macOS
 
-IncusはmacOSのIncusクライアントのビルドを[Homebrew](https://brew.sh/)で公開しています（訳注：2023-10-07時点で公開されていないようです）。
+IncusはmacOSのIncusクライアントのビルドを[Homebrew](https://brew.sh/)で公開しています。
 
 機能リリースのIncusをインストールするには、以下のようにします。
 
@@ -79,7 +79,7 @@ IncusはmacOSのIncusクライアントのビルドを[Homebrew](https://brew.sh
 
 ```{group-tab} Windows
 
-Windows版のIncusクライアントは[Chocolatey](https://community.chocolatey.org/packages/incus)パッケージとして提供されています（訳注：2023-10-07時点では提供されていないようです）。
+Windows版のIncusクライアントは[Chocolatey](https://community.chocolatey.org/packages/incus)パッケージとして提供されています。
 インストールするためには以下のようにします。
 
 1. [インストール手順](https://docs.chocolatey.org/en-us/choco/setup)に従ってChocolateyをインストールします。
