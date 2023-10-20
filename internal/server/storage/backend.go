@@ -2519,7 +2519,7 @@ func (b *backend) BackupInstance(inst instance.Instance, tarWriter *instancewrit
 	}
 
 	// Ensure the backup file reflects current config.
-	err = b.UpdateInstanceBackupFile(inst, op)
+	err = b.UpdateInstanceBackupFile(inst, snapshots, op)
 	if err != nil {
 		return err
 	}
@@ -2862,7 +2862,11 @@ func (b *backend) CreateInstanceSnapshot(inst instance.Instance, src instance.In
 
 	// Lock this operation to ensure that the only one snapshot is made at the time.
 	// Other operations will wait for this one to finish.
-	unlock := locking.Lock(context.TODO(), drivers.OperationLockName("CreateInstanceSnapshot", b.name, vol.Type(), contentType, src.Name()))
+	unlock, err := locking.Lock(context.TODO(), drivers.OperationLockName("CreateInstanceSnapshot", b.name, vol.Type(), contentType, src.Name()))
+	if err != nil {
+		return err
+	}
+
 	defer unlock()
 
 	err = b.driver.CreateVolumeSnapshot(vol, op)
@@ -2942,7 +2946,7 @@ func (b *backend) RenameInstanceSnapshot(inst instance.Instance, newName string,
 	})
 
 	// Ensure the backup file reflects current config.
-	err = b.UpdateInstanceBackupFile(inst, op)
+	err = b.UpdateInstanceBackupFile(inst, true, op)
 	if err != nil {
 		return err
 	}
@@ -3233,7 +3237,11 @@ func (b *backend) EnsureImage(fingerprint string, op *operations.Operation) erro
 	// We need to lock this operation to ensure that the image is not being created multiple times.
 	// Uses a lock name of "EnsureImage_<fingerprint>" to avoid deadlocking with CreateVolume below that also
 	// establishes a lock on the volume type & name if it needs to mount the volume before filling.
-	unlock := locking.Lock(context.TODO(), drivers.OperationLockName("EnsureImage", b.name, drivers.VolumeTypeImage, "", fingerprint))
+	unlock, err := locking.Lock(context.TODO(), drivers.OperationLockName("EnsureImage", b.name, drivers.VolumeTypeImage, "", fingerprint))
+	if err != nil {
+		return err
+	}
+
 	defer unlock()
 
 	// Load image info from database.
@@ -3466,7 +3474,11 @@ func (b *backend) DeleteImage(fingerprint string, op *operations.Operation) erro
 	defer l.Debug("DeleteImage finished")
 
 	// We need to lock this operation to ensure that the image is not being deleted multiple times.
-	unlock := locking.Lock(context.TODO(), drivers.OperationLockName("DeleteImage", b.name, drivers.VolumeTypeImage, "", fingerprint))
+	unlock, err := locking.Lock(context.TODO(), drivers.OperationLockName("DeleteImage", b.name, drivers.VolumeTypeImage, "", fingerprint))
+	if err != nil {
+		return err
+	}
+
 	defer unlock()
 
 	// Load the storage volume in order to get the volume config which is needed for some drivers.
@@ -3723,7 +3735,11 @@ func (b *backend) UpdateBucket(projectName string, bucketName string, bucket api
 	if len(changedConfig) > 0 && !userOnly {
 		if memberSpecific {
 			// Stop MinIO process if running so volume can be resized if needed.
-			minioProc := miniod.Get(curBucketVol.Name())
+			minioProc, err := miniod.Get(curBucketVol.Name())
+			if err != nil {
+				return err
+			}
+
 			if minioProc != nil {
 				err = minioProc.Stop(context.Background())
 				if err != nil {
@@ -3786,7 +3802,11 @@ func (b *backend) DeleteBucket(projectName string, bucketName string, op *operat
 		// Handle common MinIO implementation for local storage drivers.
 
 		// Stop MinIO process if running.
-		minioProc := miniod.Get(bucketVolName)
+		minioProc, err := miniod.Get(bucketVolName)
+		if err != nil {
+			return err
+		}
+
 		if minioProc != nil {
 			err = minioProc.Stop(context.Background())
 			if err != nil {
@@ -3795,7 +3815,7 @@ func (b *backend) DeleteBucket(projectName string, bucketName string, op *operat
 		}
 
 		vol := b.GetVolume(drivers.VolumeTypeBucket, drivers.ContentTypeFS, bucketVolName, nil)
-		err := b.driver.DeleteVolume(vol, op)
+		err = b.driver.DeleteVolume(vol, op)
 		if err != nil {
 			return err
 		}
@@ -5561,7 +5581,11 @@ func (b *backend) CreateCustomVolumeSnapshot(projectName, volName string, newSna
 
 	// Lock this operation to ensure that the only one snapshot is made at the time.
 	// Other operations will wait for this one to finish.
-	unlock := locking.Lock(context.TODO(), drivers.OperationLockName("CreateCustomVolumeSnapshot", b.name, vol.Type(), contentType, volName))
+	unlock, err := locking.Lock(context.TODO(), drivers.OperationLockName("CreateCustomVolumeSnapshot", b.name, vol.Type(), contentType, volName))
+	if err != nil {
+		return err
+	}
+
 	defer unlock()
 
 	// Create the snapshot on the storage device.
@@ -5913,7 +5937,7 @@ func (b *backend) GenerateInstanceBackupConfig(inst instance.Instance, snapshots
 }
 
 // UpdateInstanceBackupFile writes the instance's config to the backup.yaml file on the storage device.
-func (b *backend) UpdateInstanceBackupFile(inst instance.Instance, op *operations.Operation) error {
+func (b *backend) UpdateInstanceBackupFile(inst instance.Instance, snapshots bool, op *operations.Operation) error {
 	l := b.logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
 	l.Debug("UpdateInstanceBackupFile started")
 	defer l.Debug("UpdateInstanceBackupFile finished")
@@ -5923,7 +5947,7 @@ func (b *backend) UpdateInstanceBackupFile(inst instance.Instance, op *operation
 		return nil
 	}
 
-	config, err := b.GenerateInstanceBackupConfig(inst, true, op)
+	config, err := b.GenerateInstanceBackupConfig(inst, snapshots, op)
 	if err != nil {
 		return err
 	}

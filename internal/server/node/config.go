@@ -179,7 +179,7 @@ var ConfigSchema = config.Schema{
 	// ---
 	//  type: string
 	//  scope: local
-	//  shortdesc: BGPサーバーをバインドさせるアドレス
+	//  shortdesc: Address to bind the BGP server to
 	"core.bgp_address": {Validator: validate.Optional(validate.IsListenAddress(true, true, false))},
 
 	// Unique router ID for the BGP server
