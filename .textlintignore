@@ -1,0 +1,10 @@
+client/**
+cmd/**
+doc/html/**
+internal/**
+grafana/**
+node_modules/**
+po/**
+scripts/**
+shared/**
+test/**
