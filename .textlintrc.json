@@ -16,7 +16,6 @@
     "textlint-rule-ja-unnatural-alphabet": true,
     "textlint-rule-no-dropping-the-ra": true,
     "textlint-rule-no-hankaku-kana": true,
-    "textlint-rule-no-mix-dearu-desumasu": true,
     "textlint-rule-no-mixed-zenkaku-and-hankaku-alphabet": true,
     "textlint-rule-prh": {
       "rulePaths": [
