@@ -45,15 +45,6 @@
 
 詳細は [`GET /1.0/instances`](swagger:/instances/instances_get) を参照してください。
 ```
-
-```{group-tab} UI
-全てのインスタンスを一覧表示するには {guilabel}`Instances` へ移動します。
-
-表示するインスタンスを、ステータス、インスタンスタイプ、使用しているプロファイルでフィルタできます。
-
-さらに、検索テキストを入力してインスタンスを検索できます。
-入力したテキストは名前、説明、ベースイメージの名前にマッチされます。
-```
 ````
 
 ## インスタンスの詳細情報を表示する
@@ -75,12 +66,6 @@
     incus query /1.0/instances/<instance_name>
 
 詳細は [`GET /1.0/instances/{name}`](swagger:/instances/instance_get) を参照してください。
-```
-
-```{group-tab} UI
-overview でインスタンスの行をクリックするとインスタンス一覧の右にインスタンスの情報のサマリが表示されます。
-
-インスタンス名をクリックするとインスタンス詳細のページに遷移し、インスタンスについての詳細情報が表示されます。
 ```
 ````
 
@@ -119,15 +104,6 @@ API 呼び出しの戻り値には操作 ID が含まれます。これを使っ
 詳細は [`GET /1.0/instances/{name}/state`](swagger:/instances/instance_state_get) と [`PUT /1.0/instances/{name}/state`](swagger:/instances/instance_state_put) を参照してください。
 <!-- Include end monitor status -->
 ```
-
-```{group-tab} UI
-インスタンスを起動するには、インスタンス一覧か対応するインスタンスのページに移動し、{guilabel}`Start`ボタン(▷)をクリックします。
-
-インスタンス一覧で同時に選択し画面上部の{guilabel}`Start`ボタンをクリックすることで複数のインスタンスを起動することもできます。
-
-インスタンス詳細ページで、{guilabel}`Console`タブを選択するとブートログがインスタンスが起動したときの情報とともに表示されます。
-インスタンスが起動したら、{guilabel}`Terminal`タブを選択するとインスタンスにアクセスできます。
-```
 ````
 
 (instances-manage-stop)=
@@ -153,23 +129,6 @@ API 呼び出しの戻り値には操作 ID が含まれます。これを使っ
     :end-before: <!-- Include end monitor status -->
 ```
 ````
-
-````{group-tab} UI
-インスタンスを停止するには、インスタンス一覧か対応するインスタンスのページに遷移し、 {guilabel}`Stop` ボタン (□)をクリックします。
-確認のプロンプトが表示されます。
-
-<!-- Include start skip confirmation -->
-```{tip}
-確認のプロンプトをスキップするには、{kbd}`Shift`キーを押しながらクリックします。
-```
-<!-- Include end skip confirmation -->
-
-インスタンスを強制停止することもできます。
-インスタンスの停止が長い時間かかったり、インスタンスが停止要求に応答しない場合、回転している停止ボタンをクリックし、確認プロンプトに戻ると、そこでインスタンスの強制停止を選択できます。
-
-またインスタンス一覧で複数のインスタンスを選択し、画面上部の {guilabel}`Stop` ボタンを押すことで複数のインスタンスを停止することもできます。
-````
-
 `````
 
 ## インスタンスを削除する
@@ -191,19 +150,6 @@ API 呼び出しの戻り値には操作 ID が含まれます。これを使っ
 
 詳細は [`DELETE /1.0/instances/{name}`](swagger:/instances/instance_delete) を参照してください。
 ```
-
-````{group-tab} UI
-インスタンスを削除するには、インスタンスの詳細ページに遷移し {guilabel}`Delete instance` をクリックします。
-確認のプロンプトが表示されます。
-
-% Include content from above
-```{include} ./instances_manage.md
-    :start-after: <!-- Include start skip confirmation -->
-    :end-before: <!-- Include end skip confirmation -->
-```
-
-またインスタンス一覧で複数のインスタンスを選択し、画面上部の {guilabel}`Delete` ボタンを押すことで複数のインスタンスを削除することもできます。
-````
 `````
 
 ```{caution}
@@ -252,9 +198,5 @@ API 呼び出しの戻り値には操作 ID が含まれます。これを使っ
     incus query --request POST /1.0/instances/<instance_name>/rebuild --data '{"source": {"type":"none"}}'
 
 詳細は [`POST /1.0/instances/{name}/rebuild`](swagger:/instances/instance_rebuild_post) を参照してください。
-```
-
-```{group-tab} UI
-インスタンスの再構築は UI では現状ではサポートされていません。
 ```
 ````

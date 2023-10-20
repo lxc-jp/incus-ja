@@ -19,6 +19,13 @@
 
     incus project create my-restricted-project --config restricted=true --config restricted.backups=allow
 
+```{tip}
+設定オプションを指定せずにプロジェクトを作成する場合、{config:option}`project-features:features.profiles`は`true`に設定されます。これはプロジェクト内でプロファイルは隔離されることを意味します。
+
+その結果、新しいプロジェクトは`default`プロジェクトの`default`プロファイルへのアクセスは持たず、そのため（ルートディスクのような）インスタンス作成に必要な設定が不足します。
+これを修正するためには、[`incus profile device add`](incus_profile_device_add.md)コマンドを使用してプロジェクトの`default`プロファイルにルートディスクデバイスを追加してください。
+```
+
 (projects-configure)=
 ## プロジェクトの設定
 プロジェクトを設定するには、特定の設定オプションを設定するか、プロジェクト全体を編集できます。

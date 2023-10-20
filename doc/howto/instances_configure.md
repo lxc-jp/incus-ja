@@ -31,15 +31,6 @@
 
 詳細は [`PATCH /1.0/instances/{name}`](swagger:/instances/instance_patch) を参照してください。
 ```
-
-```{group-tab} UI
-インスタンスオプションを変更するには、インスタンス詳細ページの {guilabel}`Configuration` タブに遷移して {guilabel}`Edit instance` をクリックします。
-
-変更したい設定オプションを探して値を変更します。
-{guilabel}`Save changes` をクリックして変更した設定を保存してください。
-
-UI に表示されていないインスタンスオプションを変更するには、 {ref}`instances-configure-edit` の手順に従ってください。
-```
 ````
 
 利用可能なオプションの一覧とどのオプションがどのインスタンスタイプで利用可能かの情報は {ref}`instance-options` を参照してください。
@@ -57,15 +48,6 @@ UI に表示されていないインスタンスオプションを変更する�
 メモリーリミットを 8 GiB に設定するには、以下のリクエストを送ります:
 
     incus query --request PATCH /1.0/instances/my-container --data '{"config": {"limits.memory":"8GiB"}}'
-```
-
-```{group-tab} UI
-メモリーリミットを 8 GiB に設定するには、インスタンス詳細ページの {guilabel}`Configuration` タブに遷移して {guilabel}`Advanced > Resource limits` を選択します。
-そして {guilabel}`Edit instance` をクリックします。
-
-**Memory limit** の {guilabel}`Override` を選んで、absolute の値として 8 GiB を入力します。
-
-![Setting the memory limit for an instance to 8 GiB](/images/UI/limits_memory_example.png)
 ```
 ````
 
@@ -106,11 +88,6 @@ API でインスタンスプロパティを変更するには、インスタン�
 インスタンスプロパティを設定解除するには、設定解除したいプロパティを除いた完全なインスタンス設定を含む PUT リクエストをくります。
 
 詳細は [`PATCH /1.0/instances/{name}`](swagger:/instances/instance_patch) と [`PUT /1.0/instances/{name}`](swagger:/instances/instance_put) を参照してください。
-```
-
-```{group-tab} UI
-Incus UI はインスタンスオプションとインスタンスプロパティを区別しません。
-ですので、 {ref}`インスタンスオプションを設定する <instances-configure-options>` と同じようにインスタンスプロパティを設定できます。
 ```
 ````
 
@@ -172,21 +149,6 @@ Incus UI はインスタンスオプションとインスタンスプロパテ�
 
 詳細は [`PATCH /1.0/instances/{name}`](swagger:/instances/instance_patch) を参照してください。
 ````
-
-````{group-tab} UI
-現時点では UI はデバイスは限定的にサポートしています。
-
-インスタンスにデバイスをアタッチするには、まず作成する必要があります。
-次に（{ref}`インスタンスオプションを設定する <instances-configure-options>` と同じ方法で）インスタンス設定を変更し、インスタンスにデバイスをアタッチします。
-
-```{note}
-インスタンス設定に表示されるデバイスの一部は {ref}`プロファイル <profiles>` から継承されているか {ref}`プロジェクト <projects>` で定義されたものです。
-これらのデバイスはインスタンスごとには編集できません。
-```
-
-デバイスの追加と変更は現時点では UI ではサポートされていません。 {ref}`instances-configure-edit` の手順に従ってください。
-````
-
 `````
 
 ## インスタンス設定を表示する
@@ -204,13 +166,6 @@ Incus UI はインスタンスオプションとインスタンスプロパテ�
     incus query /1.0/instances/<instance_name>
 
 詳細は [`GET /1.0/instances/{name}`](swagger:/instances/instance_get) を参照してください。
-```
-
-```{group-tab} UI
-インスタンスの現在の設定を表示するには、 {guilabel}`Instances` に遷移し、インスタンスを選択して、 {guilabel}`Configuration` タブに切り替えます。
-
-インスタンスプロパティ、インスタンスオプション、デバイス、デバイスオプション（または現時点では UI でサポートされていない情報）を含む完全な設定を見るには、 {guilabel}`YAML configuration` を選択します。
-この画面はインスタンス設定の完全な YAML を表示します。
 ```
 ````
 
@@ -239,28 +194,6 @@ Incus UI はインスタンスオプションとインスタンスプロパテ�
 
 ```{note}
 提供する設定内に読み取り専用のインスタンスプロパティの変更を含めた場合、それらは無視されます。
-```
-````
-
-````{group-tab} UI
-インスタンスを設定する UI フォームを使う代わりに、インスタンスの YAML 設定を編集することもできます。
-UI で編集できない設定を変更する場合はこの方法が必要です。
-
-```{important}
-更新の際、変更を保存せずに YAML 設定画面から遷移しないでください。
-遷移すると、変更は失われます。
-```
-
-インスタンスの YAML 設定を編集するには、インスタンス詳細ページに遷移し、 {guilabel}`Configuration` タブに切り替えて {guilabel}`YAML configuration` を選択します。
-そして {guilabel}`Edit instance` をクリックします。
-
-YAML 設定を必要に応じて編集します。
-そして {guilabel}`Save changes` をクリックして変更した設定を保存します。
-
-```{note}
-利便性のため、 YAML は読み取り専用のインスタンスプロパティを含む設定全体を含みます。
-しかし、これらのプロパティは変更できません。
-変更しても無視されます。
 ```
 ````
 `````

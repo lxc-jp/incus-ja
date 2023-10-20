@@ -56,5 +56,6 @@ Incus はリモートサーバーからのイメージを自動的に最新に�
 
 キー                      | タイプ | 既定値  | 説明
 :--                       | :---   | :------ | :----------
-`requirements.secureboot` | string | -       | `false` に設定すると、イメージがセキュアブートで起動しないことを示します。
 `requirements.cgroup`     | string | -       | `v1` に設定されている場合、ホストで`CGroupV1`が実行されている必要があることを示します。
+`requirements.privileged` | bool   | -       | `false` に設定すると、イメージが特権コンテナで使えないことを示します。
+`requirements.secureboot` | bool   | -       | `false` に設定すると、イメージがセキュアブートで起動しないことを示します。

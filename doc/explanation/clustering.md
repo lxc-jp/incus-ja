@@ -5,8 +5,6 @@
 このシナリオでは、クラスタメンバーとそのインスタンスの設定を保持する同じ分散データベースを任意の台数の Incus サーバーで共有します。
 Incus クラスタは [`incus`](incus.md) クライアントまたは REST API を使って管理できます。
 
-この機能は [`clustering`](../api-extensions.md#clustering) API 拡張の一部として導入され、Incus 3.0 <!-- TODO: バージョン調整 -->以降で利用可能です。
-
 ```{tip}
 ベーシックな Incus クラスタを素早くセットアップしたい場合、[MicroCloud](https://microcloud.is)をチェックしてみてください。
 ```

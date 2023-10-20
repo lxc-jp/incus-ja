@@ -6,6 +6,7 @@
 daemon-behavior
 Incus のデバッグ <debugging>
 動作環境 </requirements>
+パッケージ作成の推奨 </packaging>
 environment
 syscall-interception
 User Namespace の設定 <userns-idmap>
