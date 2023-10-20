@@ -56,7 +56,7 @@ incus_disk_read_bytes_total{device="loop3",name="vm",project="default",type="vir
 `core.metrics_address`オプションはメトリクスのみを公開し、`core.https_address`は完全な API を公開します。
 ですので、完全な API とメトリクスの API で別のアドレスを使いたい場合、あるいはメトリクスの API のみ公開し完全な API は公開したくない場合は`core.metrics_address`オプションを設定するのが良いです。
 
-例えば、完全な API を`8443`ポートで公開するには、次のコマンドを入力します:
+たとえば、完全な API を`8443`ポートで公開するには、次のコマンドを入力します:
 
     incus config set core.https_address ":8443"
 
@@ -100,7 +100,7 @@ Prometheus を Incus サーバーと別のマシンで稼働させる場合、�
 - 作成したメトリクス用証明書（`metrics.crt`）と鍵（`metrics.key`）
 - `/var/lib/incus/`に置かれている Incus サーバー証明書（`server.crt`）
 
-これらのファイルを Prometheus からアクセスできる`tls`ディレクトリー、例えば、`/etc/prometheus/tls`にコピーしてください。
+これらのファイルを Prometheus からアクセスできる`tls`ディレクトリー、たとえば、`/etc/prometheus/tls`にコピーしてください。
 次の例のコマンドを参照してください:
 
 ```bash
@@ -225,7 +225,7 @@ scrape_configs:
       server_name: 'saturn'
 ```
 
-設定を編集後、Prometheus を再起動する（例えば、`systemctl restart prometheus`）とデータ収集を開始します。
+設定を編集後、Prometheus を再起動する（たとえば、`systemctl restart prometheus`）とデータ収集を開始します。
 
 ## Grafanaダッシュボードをセットアップする
 

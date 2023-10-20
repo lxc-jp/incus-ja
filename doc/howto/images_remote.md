@@ -44,10 +44,10 @@ Incus サーバーをリモートして追加するには、以下のコマン�
 
     incus remote add <remote_name> <IP|FQDN|URL> [flags]
 
-認証方法によっては固有のフラグが必要です（例えば、OIDC 認証では[`incus remote add <remote_name> <IP|FQDN|URL> --auth-type=oidc`](incus_remote_add.md)を使います）。
+認証方法によっては固有のフラグが必要です（たとえば、OIDC 認証では[`incus remote add <remote_name> <IP|FQDN|URL> --auth-type=oidc`](incus_remote_add.md)を使います）。
 詳細は{ref}`server-authenticate`と{ref}`authentication`を参照してください。
 
-例えば、IP アドレスを指定してリモートを追加するには以下のコマンドを入力します:
+たとえば、IP アドレスを指定してリモートを追加するには以下のコマンドを入力します:
 
     incus remote add my-remote 192.0.2.10
 

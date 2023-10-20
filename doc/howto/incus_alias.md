@@ -6,7 +6,7 @@ Incus コマンドラインクライアントでは良く使うコマンドの�
 
 コマンドエイリアスを管理するには、[`incus alias`](incus_alias.md)コマンドを使用します。
 
-例えば、インスタンスを削除する際に必ず確認を求めるようにするには`incus delete`に常に`incus delete -i`を実行するようにエイリアスを作成します:
+たとえば、インスタンスを削除する際に必ず確認を求めるようにするには`incus delete`に常に`incus delete -i`を実行するようにエイリアスを作成します:
 
     lxc alias add delete "delete -i"
 

@@ -61,7 +61,7 @@
 個々の設定オプションを別々に設定する代わりに、YAML 形式で一度にすべてのオプションを提供できます。
 
 既存のプロファイルまたはインスタンス設定の中身で必要なマークアップをチェックします。
-例えば、`default`プロファイルは以下のようになっているかもしれません:
+たとえば、`default`プロファイルは以下のようになっているかもしれません:
 
     config: {}
     description: Default Incus profile
@@ -84,7 +84,7 @@
 
     incus profile edit <profile_name>
 
-別の方法として、設定を含む YAML ファイル（例えば、`profile.yaml`）を作成して、以下のコマンドで設定をプロファイルに書き込めます:
+別の方法として、設定を含む YAML ファイル（たとえば、`profile.yaml`）を作成して、以下のコマンドで設定をプロファイルに書き込めます:
 
     incus profile edit <profile_name> < profile.yaml
 

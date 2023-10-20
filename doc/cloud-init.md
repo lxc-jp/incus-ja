@@ -8,7 +8,7 @@ relatedlinks: https://cloudinit.readthedocs.org/
 [`cloud-init`](https://cloud-init.io/)は Linux ディストリビューションのインスタンスの自動的な初期化とカスタマイズのためのツールです。
 
 インスタンスに`cloud-init`設定を追加することで、インスタンスの最初の起動時に`cloud-init`に特定のアクションを実行させることができます。
-可能なアクションには、例えば以下のようなものがあります:
+可能なアクションには、たとえば以下のようなものがあります:
 
 * パッケージの更新とインストール
 * 特定の設定の適用
@@ -30,7 +30,7 @@ relatedlinks: https://cloudinit.readthedocs.org/
 
 * `ubuntu`および`ubuntu-daily` {ref}`イメージサーバー <remote-image-servers>`からのすべてのイメージは`cloud-init`をサポートしています。
 * [`images`リモート](https://images.linuxcontainers.org/)からのイメージには`cloud-init`が有効化されたバリアントがあり、通常デフォルトバリアントよりもサイズが大きくなります。
-  クラウドバリアントは`/cloud`接尾辞を使用します。例えば、`images:ubuntu/22.04/cloud`。
+  クラウドバリアントは`/cloud`接尾辞を使用します。たとえば、`images:ubuntu/22.04/cloud`。
 
 ## 設定オプション
 
@@ -114,7 +114,7 @@ status: done
 
 ## ユーザーデータやベンダーデータを指定する方法
 
-`user-data`と`vendor-data`の設定は、例えば、パッケージのアップグレードやインストール、ユーザーの追加、コマンドの実行などに使用することができます。
+`user-data`と`vendor-data`の設定は、たとえば、パッケージのアップグレードやインストール、ユーザーの追加、コマンドの実行などに使用することができます。
 
 提供される値は、最初の行で`cloud-init`に渡される{ref}`ユーザーデータ形式 <cloud-init:user_data_formats>`のタイプを示す必要があります。
 パッケージのアップグレードやユーザーの設定などのアクティビティには、`#cloud-config`が使用するデータ形式です。
