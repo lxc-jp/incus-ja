@@ -15,7 +15,9 @@ Incus の `dir` ドライバーは完全に機能し、他のドライバーと�
 (storage-dir-quotas)=
 ### クォータ
 
+<!-- Include start dir quotas -->
 `dir` ドライバーは ext4 か XFS 上で動作しファイルシステムレベルでプロジェクトのクォータが有効な場合にストレージのクォータをサポートします。
+<!-- Include end dir quotas -->
 
 ## 設定オプション
 
