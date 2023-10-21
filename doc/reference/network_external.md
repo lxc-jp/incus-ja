@@ -1,14 +1,14 @@
 (network-external)=
-# External networks
+# 外部ネットワーク
 
 <!-- Include start external intro -->
-External networks use network interfaces that already exist.
-Therefore, Incus has limited possibility to control them, and Incus features like network ACLs, network forwards and network zones are not supported.
+外部ネットワークは既に存在するネットワークを使用します。
+そのため、 Incus がそれらを制御するには限界があるため、ネットワーク ACL、ネットワークフォワードやネットワークゾーンのような Incus の機能はサポートされません。
 
-The main purpose for using external networks is to provide an uplink network through a parent interface.
-This external network specifies the presets to use when connecting instances or other networks to a parent interface.
+外部ネットワークを使用する主な目的は親インターフェースによるアップリンクのネットワークを提供することです。
+この外部ネットワークはインスタンスや他のネットワークを親のインターフェースに接続する際のプリセットを指定します。
 
-Incus supports the following external network types:
+Incus は以下の外部ネットワークタイプをサポートします:
 <!-- Include end external intro -->
 
 ```{toctree}

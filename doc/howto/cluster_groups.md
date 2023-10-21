@@ -1,42 +1,42 @@
 (howto-cluster-groups)=
-# How to set up cluster groups
+# クラスタグループをセットアップするには
 
-Cluster members can be assigned to {ref}`cluster-groups`.
-By default, all cluster members belong to the `default` group.
+ラスタメンバーは {ref}`cluster-groups` にアサインできます。
+デフォルトでは、すべてのクラスタメンバーは `default` グループに属しています。
 
-To create a cluster group, use the [`incus cluster group create`](incus_cluster_group_create.md) command.
-For example:
+クラスタグループを作成するには、[`incus cluster group create`](incus_cluster_group_create.md) コマンドを使用します。
+たとえば:
 
     incus cluster group create gpu
 
-To assign a cluster member to one or more groups, use the [`incus cluster group assign`](incus_cluster_group_assign.md) command.
-This command removes the specified cluster member from all the cluster groups it currently is a member of and then adds it to the specified group or groups.
+クラスタメンバーを 1 つまたは複数のグループに割り当てるには、[`incus cluster group assign`](incus_cluster_group_assign.md) コマンドを使用します。
+このコマンドは、指定したクラスタメンバーを現在所属しているすべてのクラスタグループから削除し、その後、指定したグループまたはグループに追加します。
 
-For example, to assign `server1` to only the `gpu` group, use the following command:
+たとえば、`server1`を`gpu`グループのみに割り当てるには、次のコマンドを使用します:
 
     incus cluster group assign server1 gpu
 
-To assign `server1` to the `gpu` group and also keep it in the `default` group, use the following command:
+`server1`を`gpu`グループに割り当てるとともに、`default`グループにも保持させるためには、以下のコマンドを使用します:
 
     incus cluster group assign server1 default,gpu
 
-To add a cluster member to a specific group without removing it from other groups, use the [`incus cluster group add`](incus_cluster_group_add.md) command.
+他のグループからメンバーを削除せずに特定のグループにクラスタメンバーを追加するには [`incus cluster group add`](incus_cluster_group_add.md) コマンドを使います。
 
-For example, to add `server1` to the `gpu` group and also keep it in the `default` group, use the following command:
+たとえば、`server1` を `default` グループに残したまま `gpu` に追加するには、以下のコマンドを使います:
 
     incus cluster group add server1 gpu
 
-## Launch an instance on a cluster group member
+## クラスタグループメンバー上でインスタンスを起動する
 
-With cluster groups, you can target an instance to run on one of the members of the cluster group, instead of targeting it to run on a specific member.
+クラスタグループがある場合、インスタンスを特定のメンバー上で動かすようにターゲットする代わりに、クラスタグループのいずれかのメンバー上で動かすようにターゲットできます。
 
 ```{note}
-{config:option}`cluster-cluster:scheduler.instance` must be set to either `all` (the default) or `group` to allow instances to be targeted to a cluster group.
+クラスタグループにインスタンスをターゲットできるようにするには {config:option}`cluster-cluster:scheduler.instance` は `all`（デフォルト）または `group` に設定する必要があります。
 
-See {ref}`clustering-instance-placement` for more information.
+詳細は{ref}`clustering-instance-placement`を参照してください。
 ```
 
-To launch an instance on a member of a cluster group, follow the instructions in {ref}`cluster-target-instance`, but use the group name prefixed with `@` for the `--target` flag.
-For example:
+クラスタグループのメンバー上でインスタンスを起動するには、{ref}`cluster-target-instance` の指示に従ってください。ただし `--target` フラグではグループ名の前に `@` をつけて指定してください。
+たとえば:
 
     incus launch images:ubuntu/22.04 c1 --target=@gpu

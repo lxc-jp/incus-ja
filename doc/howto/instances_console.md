@@ -1,31 +1,31 @@
 (instances-console)=
-# How to access the console
+# コンソールにアクセスするには
 
-Use the [`incus console`](incus_console.md) command to attach to instance consoles.
-The console is available at boot time already, so you can use it to see boot messages and, if necessary, debug startup issues of a container or VM.
+インスタンスのコンソールにアタッチするには [`incus console`](incus_console.md) コマンドを使います。
+コンソールは起動時に既に利用可能になり、必要なら、ブートメッセージを見て、コンテナや仮想マシンの起動時の問題をデバッグするのに使えます。
 
-To get an interactive console, enter the following command:
+インタラクティブなコンソールに接続するには、以下のコマンドを入力します:
 
     incus console <instance_name>
 
-To show log output, pass the `--show-log` flag:
+ログ出力を見るには `--show-log` フラグを渡します:
 
     incus console <instance_name> --show-log
 
-You can also immediately attach to the console when you start your instance:
+インスタンスが起動したらすぐにコンソールにアタッチできます:
 
     incus start <instance_name> --console
     incus start <instance_name> --console=vga
 
-## Access the graphical console (for virtual machines)
+## グラフィカルなコンソールにアタッチする（仮想マシンの場合）
 
-On virtual machines, log on to the console to get graphical output.
-Using the console you can, for example, install an operating system using a graphical interface or run a desktop environment.
+仮想マシンでは、コンソールにログオンしてグラフィカルな出力を見ることができます。
+コンソールを使えば、たとえば、グラフィカルなインターフェースを使ってオペレーティングシステムをインストールしたりデスクトップ環境を実行できます。
 
-An additional advantage is that the console is available even if the `incus-agent` process is not running.
-This means that you can access the VM through the console before the `incus-agent` starts up, and also if the `incus-agent` is not available at all.
+さらなる利点は `incus-agent` プロセスが実行していなくても、コンソールは利用可能です。
+これは `incus-agent` が起動する前や `incus-agent` が全く利用可能でない場合にもコンソール経由で仮想マシンにアクセスできることを意味します。
 
-To start the VGA console with graphical output for your VM, you must install a SPICE client (for example, `virt-viewer` or `spice-gtk-client`).
-Then enter the following command:
+仮想マシンにグラフィカルなアウトプットを持つ VGA コンソールを開始するには、 SPICE クライアント (たとえば、`virt-viewer` または `spice-gtk-client`) をインストールする必要があります。
+次に以下のコマンドを入力します:
 
     incus console <vm_name> --type vga

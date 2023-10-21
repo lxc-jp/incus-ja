@@ -1,13 +1,13 @@
 (devices-none)=
-# Type: `none`
+# タイプ: `none`
 
 ```{note}
-The `none` device type is supported for both containers and VMs.
+`none`デバイスタイプはコンテナとVMの両方でサポートされます。
 ```
 
-A `none` device doesn't have any properties and doesn't create anything inside the instance.
+`none`タイプのデバイスはプロパティを一切持たず、インスタンス内に何も作成しません。
 
-Its only purpose is to stop inheriting devices that come from profiles.
-To do so, add a device with the same name as the one that you do not want to inherit, but with the device type `none`.
+これはプロファイルからのデバイスの継承を止めるためだけに存在します。
+そうするには、継承をスキップしたいデバイスと同じ名前の`none`タイプのデバイスを追加してください。
 
-You can add this device either in a profile that is applied after the profile that contains the original device, or directly on the instance.
+デバイスは、元のデバイスを含むプロファイルより後に適用するプロファイルに追加するか、インスタンス上に直接追加できます。

@@ -1,84 +1,84 @@
 (initialize)=
-# How to initialize Incus
+# Incusを初期化するには
 
-Before you can create a Incus instance, you must configure and initialize Incus.
+Incus のインスタンスを作成する前に、Incus の設定と初期化をする必要があります。
 
-## Interactive configuration
+## 対話式の設定
 
-Run the following command to start the interactive configuration process:
+対話式の設定プロセスを開始するには以下のコマンドを実行します。
 
     incus admin init
 
 ```{note}
-For simple configurations, you can run this command as a normal user.
-However, some more advanced operations during the initialization process (for example, joining an existing cluster) require root privileges.
-In this case, run the command with `sudo` or as root.
+シンプルな設定では、このコマンドは通常ユーザで実行できます。
+しかし、初期化プロセス中により高度な操作（例えば、既存のクラスタに参加するなど）を行う際はroot権限が必要な場合があります。
+この場合は、コマンドを`sudo`付きで実行するかrootユーザで実行してください。
 ```
 
-The tool asks a series of questions to determine the required configuration.
-The questions are dynamically adapted to the answers that you give.
-They cover the following areas:
+このツールは必要な設定を決定するために一連の質問をします。
+質問はあなたが入力した回答に応じて動的に調整されます。
+質問は以下の領域をカバーします。
 
-Clustering (see {ref}`exp-clustering` and {ref}`cluster-form`)
-: A cluster combines several Incus servers.
-  The cluster members share the same distributed database and can be managed uniformly using the Incus client ([`incus`](incus.md)) or the REST API.
+クラスタリング({ref}`exp-clustering`と{ref}`cluster-form`参照)
+: クラスタは複数の Incus サーバーを結合します。
+  クラスタメンバーは同じ分散データベースを共有し、Incus クライアント(`incus`)や REST APIT を使って統一的に管理できます。
 
-  The default answer is `no`, which means clustering is not enabled.
-  If you answer `yes`, you can either connect to an existing cluster or create one.
+  デフォルトの回答は`no`で、クラスタリングは有効化されません。
+  `yes`と回答すると、既存のクラスタに接続するか、クラスタを新規作成できます。
 
-Networking (see {ref}`networks` and {ref}`Network devices <devices-nic>`)
-: Provides network access for the instances.
+ネットワーク（{ref}`networks`と{ref}`ネットワークデバイス <devices-nic>`参照）
+: インスタンスにネットワークへのアクセスを提供します。
 
-  You can let Incus create a new bridge (recommended) or use an existing network bridge or interface.
+  Incus に新しいブリッジを作成させる（推奨）こともできますし、既存のネットワークブリッジやインターフェースを使うこともできます。
 
-  You can create additional bridges and assign them to instances later.
+  後から追加のブリッジを作成して、インスタンスに割り当てることもできます。
 
-Storage pools (see {ref}`exp-storage` and  {ref}`storage-drivers`)
-: Instances (and other data) are stored in storage pools.
+ストレージプール（{ref}`exp-storage`と{ref}`storage-drivers`参照）
+: インスタンス（とほかのデータ）はストレージプール内に保管されます。
 
-  For testing purposes, you can create a loop-backed storage pool.
-  For production use, however, you should use an empty partition (or full disk) instead of loop-backed storage (because loop-backed pools are slower and their size can't be reduced).
+  お試し用にはループバックベースのストレージプールを作ることもできます。
+  しかし、本番環境での利用には、ループバックベースのストレージではなく空のパーティション（または完全なディスク）を使うほうが良いです（ループバックベースのストレージのほうが遅くサイズを縮小できないため）。
 
-  The recommended backends are `zfs` and `btrfs`.
+  お勧めのバックエンドは`zfs`と`btrfs`です。
 
-  You can create additional storage pools later.
+  後から追加のストレージブールを作成できます。
 
-Remote access (see {ref}`security_remote_access` and {ref}`authentication`)
-: Allows remote access to the server over the network.
+リモートアクセス（{ref}`security_remote_access`と{ref}`authentication`参照）
+: ネットワーク越しにサーバーへリモートアクセスできるようにします。
 
-  The default answer is `no`, which means remote access is not allowed.
-  If you answer `yes`, you can connect to the server over the network.
+  デフォルトの回答は`no`で、リモートアクセスは有効化されません。
+  `yes`と回答すると、ネットワーク越しにサーバーへ接続できます。
 
-  You can choose to add client certificates to the server (manually or through tokens, the recommended way) or set a trust password.
+  サーバーにクライアント証明書を追加する(手動にてあるいはトークンを使用して)ことを選択できます。
 
-Automatic image update (see {ref}`about-images`)
-: You can download images from image servers.
-  In this case, images can be updated automatically.
+イメージの自動更新（{ref}`about-images`参照）
+: イメージサーバーからイメージをダウンロードできます。
+  この場合、イメージを自動的に更新できます。
 
-  The default answer is `yes`, which means that Incus will update the downloaded images regularly.
+  デフォルトの回答は`yes`で、Incus はダウンロードされたイメージを定期的に更新します。
 
-YAML `incus admin init` preseed (see {ref}`initialize-preseed`)
-: If you answer `yes`, the command displays a summary of your chosen configuration options in the terminal.
+YAML `incus admin init` プリシード（{ref}`initialize-preseed`参照）
+: `yes`と回答すると、このコマンドはあなたが選択した設定オプションのサマリをターミナルに表示します。
 
-### Minimal setup
+### 最小構成のセットアップ
 
-To create a minimal setup with default options, you can skip the configuration steps by adding the `--minimal` flag to the `incus admin init` command:
+デフォルトのオプションで最小構成のセットアップを作成する場合は、`incus admin init`コマンドに`--minimal`フラグを追加することで、設定の行程をスキップできます。
 
     incus admin init --minimal
 
 ```{note}
-The minimal setup provides a basic configuration, but the configuration is not optimized for speed or functionality.
-Especially the [`dir` storage driver](storage-dir), which is used by default, is slower than other drivers and doesn't provide fast snapshots, fast copy/launch, quotas and optimized backups.
+最小構成のセットアップは基本的な設定は提供しますが、設定は速度や機能に最適化されません。
+特に、デフォルトで使用される[`dir`ストレージドライバ](storage-dir)は他のドライバより遅く、高速なスナップショット、インスタンスのコピーや起動、クォータや最適化されたバックアップを提供しません。
 
-If you want to use an optimized setup, go through the interactive configuration process instead.
+最適化された環境を使いたい場合は、代わりに対話式の設定プロセスを行ってください。
 ```
 
 (initialize-preseed)=
-## Non-interactive configuration
+## 非対話式の設定
 
-The `incus admin init` command supports a `--preseed` command line flag that makes it possible to fully configure the Incus daemon settings, storage pools, network devices and profiles, in a non-interactive way through a preseed YAML file.
+`incus admin init`コマンドは`--preseed`コマンドラインオプションをサポートし、Incus デーモンの設定、ストレージプール、ネットワークデバイス、プロファイルを YAML プリシードファイルを使って非対話的に設定できます。
 
-For example, starting from a brand new Incus installation, you could configure Incus with the following command:
+たとえば、完全に新しく Incus をインストールした状態から始める場合、以下のコマンドで Incus を設定できます。
 
 ```bash
     cat <<EOF | incus admin init --preseed
@@ -94,49 +94,49 @@ networks:
 EOF
 ```
 
-This preseed configuration initializes the Incus daemon to listen for HTTPS connections on port 9999 of the 192.0.2.1 address, to automatically update images every 15 hours and to create a network bridge device named `incusbr0`, which gets assigned an IPv4 address automatically.
+このプリシード設定は Incus デーモンを 192.0.2.1 のアドレスの 9999 ポートで HTTPS 接続をリッスンするようにし、15 時間ごとにイメージを自動的に更新し、`incusbr0`という名前のネットワークブリッジを作成して IPv4 アドレスを自動的に割り当てるようにします。
 
-### Re-configuring an existing Incus installation
+### 既存のIncus環境を再構成する
 
-If you are configuring a new Incus installation, the preseed command applies the configuration as specified (as long as the given YAML contains valid keys and values).
-There is no existing state that might conflict with the specified configuration.
+新しく Incus をインストールして設定する場合は、プリシードファイルを使って指定した設定を適用できます(YAML が適切なキーと値を含む限りは)。
+指定した設定と矛盾する既存の状態はありません。
 
-However, if you are re-configuring an existing Incus installation using the preseed command, the provided YAML configuration might conflict with the existing configuration.
-To avoid such conflicts, the following rules are in place:
+しかし、既存の Incus 環境をプリシードファイルで再構成する場合は指定した YAML の設定が既存の設定と矛盾するかもしれません。
+このような矛盾を回避するために、以下のルールが実施されます。
 
-- The provided YAML configuration overwrites existing entities.
-  This means that if you are re-configuring an existing entity, you must provide the full configuration for the entity and not just the different keys.
-- If the provided YAML configuration contains entities that do not exist, they are created.
+- 指定された YAML 設定は既存のエンティティを上書きします。
+  これは既存のエンティティを正構成する場合は、変更するキーだけではなくエンティティの設定全体を指定する必要があることを意味します。
+- 指定した YAML 設定が存在しないエンティティを含む場合、それらは作成されます。
 
-This is the same behavior as for a `PUT` request in the {doc}`../rest-api`.
+これは{doc}`../rest-api`の`PUT`リクエストと同様の挙動です。
 
-#### Rollback
+#### ロールバック
 
-If some parts of the new configuration conflict with the existing state (for example, they try to change the driver of a storage pool from `dir` to `zfs`), the preseed command fails and automatically attempts to roll back any changes that were applied so far.
+新しい設定の一部が既存の状態と矛盾する（たとえば、ストレージプールのドライバーを`dir`から`zfs`に変更しようとするなど）場合、プリシードを指定したコマンドは失敗し、それ以前に適用したすべての変更をロールバックしようと試みます。
 
-For example, it deletes entities that were created by the new configuration and reverts overwritten entities back to their original state.
+たとえば、新しい設定によって作成されたエンティティを削除し、上書きしたエンティティは元の状態に戻します。
 
-Failure modes when overwriting entities are the same as for the `PUT` requests in the {doc}`../rest-api`.
+ロールバックでエンティティを上書きするときに失敗した場合の挙動は{doc}`../rest-api`の`PUT`と同様です。
 
 ```{note}
-The rollback process might potentially fail, although rarely (typically due to backend bugs or limitations).
-You should therefore be careful when trying to reconfigure a Incus daemon via preseed.
+ロールバックの行程は稀ではありますが失敗する可能性があります(たいていはバックエンドのバグか制限によるものです)。
+そのため、Incus デーモンをプリシードで再構成する際は慎重に行うほうが良いです。
 ```
 
-### Default profile
+### デフォルトプロファイル
 
-Unlike the interactive initialization mode, the `incus admin init --preseed` command does not modify the default profile, unless you explicitly express that in the provided YAML payload.
+対話式の初期化モードと異なり、`incus admin init --preseed`コマンドは、指定した YAML ファイルで明示的に指定しない限りは、デフォルトプロファイルを変更しません。
 
-For instance, you will typically want to attach a root disk device and a network interface to your default profile.
-See the following section for an example.
+インスタンスに対して、通常はルートディスクデバイスとネットワークインターフェースをデフォルトプロファイルにアタッチしたいでしょう。
+これの設定例は下記のセクションを参照してください。
 
-### Configuration format
+### 設定形式
 
-The supported keys and values of the various entities are the same as the ones documented in the {doc}`../rest-api`, but converted to YAML for convenience.
-However, you can also use JSON, since YAML is a superset of JSON.
+さまざまなエンティティのサポートされるキーと値は{doc}`../rest-api`のドキュメントに記載されているのと同じですが、利便性のため YAML 形式に変換されています。
+しかし、YAML は JSON のスーパーセットですので、JSON も使えます。
 
-The following snippet gives an example of a preseed payload that contains most of the possible configurations.
-You can use it as a template for your own preseed file and add, change or remove what you need:
+以下のスニペットは設定可能なほとんどの設定を含むプリシードファイルの例です。
+これをあなたのプリシードファイルのテンプレートとして使用し、必要な設定を追加、変更、削除して利用できます。
 
 ```yaml
 

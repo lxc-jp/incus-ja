@@ -1,59 +1,58 @@
 (projects-confine)=
-# How to confine projects to specific users
+# 特定のユーザーにプロジェクトを制限するには
 
-You can use projects to confine the activities of different users or clients.
-See {ref}`projects-confined` for more information.
+プロジェクトを使用して、異なるユーザーまたはクライアントの活動を制限できます。
+詳細については、{ref}`projects-confined`を参照してください。
 
-How to confine a project to a specific user depends on the authentication method you choose.
+特定のユーザーにプロジェクトを制限する方法は、選択した認証方法によって異なります。
 
-## Confine projects to specific TLS clients
+## 特定のTLSクライアントにプロジェクトを制限する
 
-You can confine access to specific projects by restricting the TLS client certificate that is used to connect to the Incus server.
-See {ref}`authentication-tls-certs` for detailed information.
+Incus サーバーへの接続に使用される TLS クライアント証明書を制限することで、特定のプロジェクトへのアクセスを制限できます。
+詳細については、{ref}`authentication-tls-certs`を参照してください。
 
-To confine the access from the time the client certificate is added, you must either use token authentication or add the client certificate to the server directly.
-If you use password authentication, you can restrict the client certificate only after it has been added.
+クライアント証明書が追加された時点からアクセスを制限するには、トークン認証を使用するか、クライアント証明書をサーバーに直接追加する必要があります。
 
-Use the following command to add a restricted client certificate:
+制限されたクライアント証明書を追加するには、次のコマンドを使用します:
 
 ````{tabs}
 
-```{group-tab} Token authentication
+```{group-tab} トークン認証
 
     incus config trust add --projects <project_name> --restricted
 
 ```
 
-```{group-tab} Add client certificate
+```{group-tab} クライアント証明書を追加
 
     incus config trust add <certificate_file> --projects <project_name> --restricted
 ```
 
 ````
 
-The client can then add the server as a remote in the usual way ([`incus remote add <server_name> <token>`](incus_remote_add.md) or [`incus remote add <server_name> <server_address>`](incus_remote_add.md)) and can only access the project or projects that have been specified.
+クライアントは、通常の方法でサーバーをリモートに追加できます（[`incus remote add <server_name> <token>`](incus_remote_add.md) または [`incus remote add <server_name> <server_address>`](incus_remote_add.md)）。そして、指定されたプロジェクトのみにアクセスできます。
 
-To confine access for an existing certificate (either because the access restrictions change or because the certificate was added with a trust password), use the following command:
+既存の証明書のアクセスを制限するには、次のコマンドを使用します:
 
     incus config trust edit <fingerprint>
 
-Make sure that `restricted` is set to `true` and specify the projects that the certificate should give access to under `projects`.
+`restricted`が`true`に設定されていることを確認し、`projects`の下に証明書がアクセスを許可するプロジェクトを指定してください。
 
 ```{note}
-You can specify the `--project` flag when adding a remote.
-This configuration pre-selects the specified project.
-However, it does not confine the client to this project.
+リモートを追加するときに`--project`フラグを指定できます。
+この設定では、指定されたプロジェクトが事前に選択されます。
+ただし、これによってクライアントがこのプロジェクトに制限されるわけではありません。
 ```
 
-## Confine projects to specific Incus users
+## 特定のIncusユーザーにプロジェクトを制限する
 
-Incus can be configured to dynamically create projects for all users in a specific user group.
-This is usually achieved by having some users be a member of the `incus` group but not the `incus-admin` group.
+Incus は特定のユーザーグループ内のすべてのユーザーのために動的にプロジェクトを作成するように設定できます。
+これは通常`incus`グループのメンバーだが`incus-admin`グループのメンバーではないユーザーを作ることで実現されます。
 
-Make sure that all user accounts that you want to be able to use Incus are a member of this group.
+Incus を使うユーザーアカウントはすべてこのグループのメンバーであるようにしてください。
 
-Once a member of the group issues a Incus command, Incus creates a confined project for this user and switches to this project.
-If Incus has not been {ref}`initialized <initialize>` at this point, it is automatically initialized (with the default settings).
+グループのメンバーが Incus コマンドを発行すると、Incus はこのユーザーのために制限されたプロジェクトを作成し、このプロジェクトに切り替えます。
+この時点で Incus が{ref}`初期化 <initialize>`されていない場合、自動的に初期化されます（デフォルト設定で）。
 
-If you want to customize the project settings, for example, to impose limits or restrictions, you can do so after the project has been created.
-To modify the project configuration, you must have full access to Incus, which means you must be part of the `incus-admin` group and not only the group that you configured as the Incus user group.
+プロジェクトの設定をカスタマイズしたい場合（たとえば、制限や制約を課すために）、プロジェクトが作成された後で行うことができます。
+プロジェクト設定を変更するには、Incus への完全なアクセスが必要です。つまり、設定した Incus ユーザーグループの一員であるだけでなく、 `incus-admin`グループの一員である必要があります。

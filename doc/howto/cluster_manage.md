@@ -1,7 +1,7 @@
 (cluster-manage)=
-# How to manage a cluster
+# クラスタを管理するには
 
-After your cluster is formed, use [`incus cluster list`](incus_cluster_list.md) to see a list of its members and their status:
+クラスタを形成した後、メンバーの一覧と状態を見るには [`incus cluster list`](incus_cluster_list.md) を使用します:
 
 ```{terminal}
 :input: incus cluster list
@@ -19,120 +19,120 @@ After your cluster is formed, use [`incus cluster list`](incus_cluster_list.md) 
 +---------+----------------------------+------------------+--------------+----------------+-------------+--------+-------------------+
 ```
 
-To see more detailed information about an individual cluster member, run the following command:
+ここのクラスタメンバーについてより詳細な情報を見るには、以下のコマンドを実行します:
 
     incus cluster show <member_name>
 
-To see state and usage information for a cluster member, run the following command:
+クラスタメンバーの状態と使用状況を見るには、以下のコマンドを実行します:
 
     incus cluster info <member_name>
 
-## Configure your cluster
+## クラスタを設定するには
 
-To configure your cluster, use [`incus config`](incus_config.md).
-For example:
+クラスタを設定するには、[`incus config`](incus_config.md) を使用します。
+たとえば:
 
     incus config set cluster.max_voters 5
 
-Keep in mind that some {ref}`server configuration options <server>` are global and others are local.
-You can configure the global options on any cluster member, and the changes are propagated to the other cluster members through the distributed database.
-The local options are set only on the server where you configure them (or alternatively on the server that you target with `--target`).
+いくつかの {ref}`サーバー設定 <server>` はグローバルで他はローカルであることに注意してください。
+グローバル設定はどのクラスタメンバー上でも実行でき、変更は分散データベースを通して他のクラスタメンバーにも伝搬されます。
+ローカル設定は設定したサーバー上でのみ（あるいは `--target` で指定したサーバー上でのみ）変更されます。
 
-In addition to the server configuration, there are a few cluster configurations that are specific to each cluster member.
-See {ref}`cluster-member-config` for all available configurations.
+サーバー設定に加えて、各クラスタメンバーに固有ないくつかのクラスタ設定があります。
+利用可能な設定のすべてについては {ref}`cluster-member-config` を参照してください。
 
-To set these configuration options, use [`incus cluster set`](incus_cluster_set.md) or [`incus cluster edit`](incus_cluster_edit.md).
-For example:
+これらの設定を変更するには、[`incus cluster set`](incus_cluster_set.md) か [`incus cluster edit`](incus_cluster_edit.md) を使用します。
+たとえば:
 
     incus cluster set server1 scheduler.instance manual
 
-### Assign member roles
+### メンバーロールを割り当てる
 
-To add or remove a {ref}`member role <clustering-member-roles>` for a cluster member, use the [`incus cluster role`](incus_cluster_role.md) command.
-For example:
+クラスタメンバーに {ref}`メンバーロール <clustering-member-roles>` を追加または削除するには [`incus cluster role`](incus_cluster_role.md) コマンドを使用します。
+たとえば:
 
     incus cluster role add server1 event-hub
 
 ```{note}
-You can add or remove only those roles that are not assigned automatically by Incus.
+Incus で自動で割り当てられないロールのみが追加または削除できます。
 ```
 
-### Edit the cluster member configuration
+### クラスタメンバー設定を編集する
 
-To edit all properties of a cluster member, including the member-specific configuration, the member roles, the failure domain and the cluster groups, use the [`incus cluster edit`](incus_cluster_edit.md) command.
+メンバー固有設定、メンバーロール、failure domain とクラスタグループを含むクラスタメンバーのプロパティを編集するには [`incus cluster edit`](incus_cluster_edit.md) コマンドを使用します。
 
 (cluster-evacuate)=
-## Evacuate and restore cluster members
+## クラスタメンバーの退避と復元
 
-There are scenarios where you might need to empty a given cluster member of all its instances (for example, for routine maintenance like applying system updates that require a reboot, or to perform hardware changes).
+既存のクラスタメンバーのすべてのインスタンスを空にしたい（たとえば再起動が必要なシステムのアップデートを適用するような日常のメンテナンスやハードウェアの変更を行う場合など）ようなケースがあります。
 
-To do so, use the [`incus cluster evacuate`](incus_cluster_evacuate.md) command.
-This command migrates all instances on the given server, moving them to other cluster members.
-The evacuated cluster member is then transitioned to an "evacuated" state, which prevents the creation of any instances on it.
+このためには [`incus cluster evacuate`](incus_cluster_evacuate.md) コマンドを使用します。
+このコマンドは指定したサーバー上のすべてのインスタンスを他のクラスタメンバーに移動します。
+退避したクラスタメンバーは "evacuated" 状態になり、このメンバー上でインスタンスの作成はできなくなります。
 
-You can control how each instance is moved through the {config:option}`instance-miscellaneous:cluster.evacuate` instance configuration key.
-Instances are shut down cleanly, respecting the `boot.host_shutdown_timeout` configuration key.
+各インスタンスがどのように移動するかは {config:option}`instance-miscellaneous:cluster.evacuate` インスタンス設定で制御できます。
+インスタンスは `boot.host_shutdown_timeout` 設定にしたがってクリーンにシャットダウンされます。
 
-When the evacuated server is available again, use the [`incus cluster restore`](incus_cluster_restore.md) command to move the server back into a normal running state.
-This command also moves the evacuated instances back from the servers that were temporarily holding them.
+退避したサーバーが再び利用可能になったときに、サーバーを通常の稼働状態に戻すには [`incus cluster restore`](incus_cluster_restore.md) コマンドを使用します。
+このコマンドは退避したインスタンスを一時的に保持していたサーバーから戻します。
 
 (cluster-automatic-evacuation)=
-### Automatic evacuation
+### 自動での退避
 
-If you set the {config:option}`server-cluster:cluster.healing_threshold` configuration to a non-zero value, instances are automatically evacuated if a cluster member goes offline.
+{config:option}`server-cluster:cluster.healing_threshold` 設定をゼロでない値に設定すると、クラスタメンバーがオフラインになったら、インスタンスは自動的に退避されます。
 
-When the evacuated server is available again, you must manually restore it.
+退避されたサーバーが再び利用可能になったら、手動で復元する必要があります。
 
 (cluster-manage-delete-members)=
-## Delete cluster members
+## クラスタメンバーを削除する
 
-To cleanly delete a member from the cluster, use the following command:
+クラスタからメンバーをクリーンに削除するには以下のコマンドを使用します:
 
     incus cluster remove <member_name>
 
-You can only cleanly delete members that are online and that don't have any instances located on them.
+オンラインでインスタンスが 1 つも存在しないメンバーだけがクリーンに削除できます。
 
-### Deal with offline cluster members
+### オフラインのクラスタメンバーの強制削除
 
-If a cluster member goes permanently offline, you can force-remove it from the cluster.
-Make sure to do so as soon as you discover that you cannot recover the member.
-If you keep an offline member in your cluster, you might encounter issues when upgrading your cluster to a newer version.
+クラスタメンバーが恒久的にオフラインになった場合、クラスタメンバーをクラスタから強制削除できます。
+メンバーを復旧できないと気づいたらすぐに削除するようにしてください。
+クラスタにオフラインのメンバーを残しておくと、クラスタを新しいバージョンにアップグレードする際に問題が起きるかもしれません。
 
-To force-remove a cluster member, enter the following command on one of the cluster members that is still online:
+クラスタメンバーを強制削除するには、引き続きオンラインになっているクラスタメンバーの 1 つで以下のコマンドを入力します:
 
     incus cluster remove --force <member_name>
 
 ```{caution}
-Force-removing a cluster member will leave the member's database in an inconsistent state (for example, the storage pool on the member will not be removed).
-As a result, it will not be possible to re-initialize Incus later, and the server must be fully reinstalled.
+クラスタメンバーを強制削除するとメンバーのデータベースが不整合な状態（例えば、メンバー上のストレージプールが削除されないなど）のままになります。
+結果として、後で Incus を再び初期化できなくなり、サーバーを完全に再インストールするしかなくなります。
 ```
 
-## Upgrade cluster members
+## クラスタメンバーをアップグレードする
 
-To upgrade a cluster, you must upgrade all of its members.
-All members must be upgraded to the same version of Incus.
+クラスタをアップグレードするには、すべてのメンバーをアップグレードする必要があります。
+すべてのメンバーを同じ Incus のバージョンにアップグレードしなければなりません。
 
 ```{caution}
-Do not attempt to upgrade your cluster if any of its members are offline.
-Offline members cannot be upgraded, and your cluster will end up in a blocked state.
+オフラインのメンバーがいる場合はクラスタをアップグレードしないでください。
+オフラインのメンバーはアップグレードできず、クラスタがブロックした状態になってしまいます。
 ```
 
-To upgrade a single member, simply upgrade the Incus package on the host and restart the Incus daemon.
-If the new version of the daemon has database schema or API changes, the upgraded member might transition into a "blocked" state.
-In this case, the member does not serve any Incus API requests (which means that `incus` commands don't work on that member anymore), but any running instances will continue to run.
+単一のメンバーをアップグレードするには、単にそのホスト上で Incus パッケージをアップグレードして Incus デーモンを再起動します。
+新しいバージョンのデーモンがデータベーススキーマまたは API に変更がある場合、アップグレードされたメンバーは "blocked" 状態に遷移するかも知れません。
+この場合、メンバーは Incus API リクエストに応答しなくなります（これはこのメンバー上では `incus` コマンドがもはや使用できなくなることを意味します）が、稼働中のインスタンスは引き続き稼働します。
 
-This happens if there are other cluster members that have not been upgraded and are therefore running an older version.
-Run [`incus cluster list`](incus_cluster_list.md) on a cluster member that is not blocked to see if any members are blocked.
+これはアップグレードされておらず古いバージョンを稼働している他のクラスタメンバーがある場合に発生します。
+ブロックされているメンバーがあるかを確認するには、ブロックされていないクラスタメンバー上で [`incus cluster list`](incus_cluster_list.md) を実行します。
 
-As you proceed upgrading the rest of the cluster members, they will all transition to the "blocked" state.
-When you upgrade the last member, the blocked members will notice that all servers are now up-to-date, and the blocked members become operational again.
+残りのクラスタメンバーのアップグレードを進めると、それらすべてのメンバーが "blocked" 状態になります。
+最後のメンバーをアップグレードすると、ブロックされたメンバーはすべてのサーバーが最新になったことを検知し、ブロックされたメンバーが再び使用可能になります。
 
-## Update the cluster certificate
+## クラスタ証明書をアップグレードする
 
-In a Incus cluster, the API on all servers responds with the same shared certificate, which is usually a standard self-signed certificate with an expiry set to ten years.
+Incus クラスタ内ですべてのサーバー上の API は同じ共有された証明書で応答します。これは通常有効期限が 10 年に設定されたごく普通の自己署名証明書です。
 
-The certificate is stored at `/var/lib/incus/cluster.crt` and is the same on all cluster members.
+証明書は `/var/lib/incus/cluster.crt` に保管され、すべてのクラスタメンバー上で同じです。
 
-You can replace the standard certificate with another one, for example, a valid certificate obtained through ACME services (see {ref}`authentication-server-certificate` for more information).
-To do so, use the [`incus cluster update-certificate`](incus_cluster_update-certificate.md) command.
-This command replaces the certificate on all servers in your cluster.
+この自己署名証明書を別の証明書、たとえば、 ACME サービス経由で得られた有効な証明書（詳細は {ref}`authentication-server-certificate` を参照）に置き換えることができます。
+そのためには [`incus cluster update-certificate`](incus_cluster_update-certificate.md) コマンドを使用します。
+このコマンドはクラスタ内のすべてのサーバーの証明書を置き換えます。

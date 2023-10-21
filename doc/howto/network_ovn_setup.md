@@ -1,35 +1,35 @@
 (network-ovn-setup)=
-# How to set up OVN with Incus
+# Incus で OVN をセットアップするには
 
-See the following sections for how to set up a basic OVN network, either as a standalone network or to host a small Incus cluster.
+スタンドアロンのネットワークとしてまたは小さな Incus クラスタとして基本的な OVN ネットワークをセットアップするには以下の項を参照してください。
 
-## Set up a standalone OVN network
+## スタンドアロンの OVN ネットワークをセットアップする
 
-Complete the following steps to create a standalone OVN network that is connected to a managed Incus parent bridge network (for example, `incusbr0`) for outbound connectivity.
+外向きの接続のために Incus が管理する親のブリッジネットワーク（たとえば、 `incusbr0`）に接続するスタンドアロンの OVN ネットワークを作成するには以下の手順を実行してください。
 
-1. Install the OVN tools on the local server:
+1. ローカルサーバーに OVN ツールをインストールします:
 
        sudo apt install ovn-host ovn-central
 
-1. Configure the OVN integration bridge:
+1. OVN の統合ブリッジを設定します:
 
        sudo ovs-vsctl set open_vswitch . \
           external_ids:ovn-remote=unix:/var/run/ovn/ovnsb_db.sock \
           external_ids:ovn-encap-type=geneve \
           external_ids:ovn-encap-ip=127.0.0.1
 
-1. Create an OVN network:
+1. OVN ネットワークを作成します:
 
        incus network set <parent_network> ipv4.dhcp.ranges=<IP_range> ipv4.ovn.ranges=<IP_range>
        incus network create ovntest --type=ovn network=<parent_network>
 
-1. Create an instance that uses the `ovntest` network:
+1. `ovntest` ネットワークを使用するインスタンスを作成します:
 
        incus init images:ubuntu/22.04 c1
        incus config device override c1 eth0 network=ovntest
        incus start c1
 
-1. Run [`incus list`](incus_list.md) to show the instance information:
+1. [`incus list`](incus_list.md) を実行してインスタンスの情報を表示します:
 
    ```{terminal}
    :input: incus list
@@ -42,38 +42,38 @@ Complete the following steps to create a standalone OVN network that is connecte
    +------+---------+---------------------+----------------------------------------------+-----------+-----------+
    ```
 
-## Set up a Incus cluster on OVN
+## OVN 上に Incus クラスタをセットアップする
 
-Complete the following steps to set up a Incus cluster that uses an OVN network.
+OVN ネットワークを使用する Incus クラスタをセットアップするには以下の手順を実行してください。
 
-Just like Incus, the distributed database for OVN must be run on a cluster that consists of an odd number of members.
-The following instructions use the minimum of three servers, which run both the distributed database for OVN and the OVN controller.
-In addition, you can add any number of servers to the Incus cluster that run only the OVN controller.
+Incus と同様に、 OVN の分散データベースは奇数のメンバーで構成されるクラスタ上で動かす必要があります。
+以下の手順は最小構成の 3 台のサーバーを使います。 3 台のサーバーでは OVN の分散データベースと OVN コントローラーの両方を動かします。
+さらに Incus クラスタに OVN コントローラーのみを動かすサーバーを任意の台数追加できます。
 
-1. Complete the following steps on the three machines that you want to run the distributed database for OVN:
+1. OVN の分散データベースを動かしたい 3 台のマシンで次の手順を実行してください:
 
-   1. Install the OVN tools:
+   1. OVN ツールをインストールします:
 
           sudo apt install ovn-central ovn-host
 
-   1. Mark the OVN services as enabled to ensure that they are started when the machine boots:
+   1. マシンの起動時に OVN サービスが起動されるように自動起動を有効にします:
 
            systemctl enable ovn-central
            systemctl enable ovn-host
 
-   1. Stop OVN for now:
+   1. OVN を停止します:
 
           systemctl stop ovn-central
 
-   1. Note down the IP address of the machine:
+   1. マシンの IP アドレスをメモします:
 
           ip -4 a
 
-   1. Open `/etc/default/ovn-central` for editing.
+   1. `/etc/default/ovn-central` を編集します。
 
-   1. Paste in one of the following configurations (replace `<server_1>`, `<server_2>` and `<server_3>` with the IP addresses of the respective machines, and `<local>` with the IP address of the machine that you are on).
+   1. 以下の設定をペーストします（`<server_1>`, `<server_2>` and `<server_3>` をそれぞれのマシンの IP アドレスに、 `<local>` をあなたがいるマシンの IP アドレスに置き換えてください）。
 
-      - For the first machine:
+      - 最初のマシン:
 
         ```
         OVN_CTL_OPTS=" \
@@ -87,7 +87,7 @@ In addition, you can add any number of servers to the Incus cluster that run onl
              --ovn-northd-sb-db=tcp:<server_1>:6642,tcp:<server_2>:6642,tcp:<server_3>:6642"
         ```
 
-      - For the second and third machine:
+      - 2 番目と 3 番目のマシン:
 
         ```
         OVN_CTL_OPTS=" \
@@ -103,26 +103,26 @@ In addition, you can add any number of servers to the Incus cluster that run onl
              --ovn-northd-sb-db=tcp:<server_1>:6642,tcp:<server_2>:6642,tcp:<server_3>:6642"
         ```
 
-   1. Start OVN:
+   1. OVN を起動します:
 
           systemctl start ovn-central
 
-1. On the remaining machines, install only `ovn-host` and make sure it is enabled:
+1. 残りのマシンでは `ovn-host` のみインストールし、自動起動を有効にしてください:
 
        sudo apt install ovn-host
        systemctl enable ovn-host
 
-1. On all machines, configure Open vSwitch (replace the variables as described above):
+1. すべてのマシンで Open vSwitch（変数は上記の通りに置き換えてください）を設定します:
 
        sudo ovs-vsctl set open_vswitch . \
           external_ids:ovn-remote=tcp:<server_1>:6642,tcp:<server_2>:6642,tcp:<server_3>:6642 \
           external_ids:ovn-encap-type=geneve \
           external_ids:ovn-encap-ip=<local>
 
-1. Create a Incus cluster by running `incus admin init` on all machines.
-   On the first machine, create the cluster.
-   Then join the other machines with tokens by running [`incus cluster add <machine_name>`](incus_cluster_add.md) on the first machine and specifying the token when initializing Incus on the other machine.
-1. On the first machine, create and configure the uplink network:
+1. すべてのマシンで `incus admin init` を実行して Incus クラスタを作成してください。
+   最初のマシンでクラスタを作成します。
+   次に最初のマシンで [`incus cluster add <machine_name>`](incus_cluster_add.md) を実行してトークンを出力し、他のマシンで Incus を初期化する際にトークンを指定して他のマシンをクラスタに参加させます。
+1. 最初のマシンでアップリンクネットワークを作成し設定します:
 
        incus network create UPLINK --type=physical parent=<uplink_interface> --target=<machine_name_1>
        incus network create UPLINK --type=physical parent=<uplink_interface> --target=<machine_name_2>
@@ -135,34 +135,34 @@ In addition, you can add any number of servers to the Incus cluster that run onl
           ipv6.gateway=<gateway> \
           dns.nameservers=<name_server>
 
-   To determine the required values:
+   必要な値を決定します。
 
-   Uplink interface
-   : A high availability OVN cluster requires a shared layer 2 network, so that the active OVN chassis can move between cluster members (which effectively allows the OVN router's external IP to be reachable from a different host).
+   アップリンクネットワーク
+   : アクティブな OVN シャーシがクラスタメンバー間で移動できるようにするため、ハイアベイラビリティな OVN クラスタには共有されたレイヤー 2 ネットワークが必須です（これにより OVN のルータの外部 IP が実質的に別のホストから到達可能にできます）。
 
-     Therefore, you must specify either an unmanaged bridge interface or an unused physical interface as the parent for the physical network that is used for OVN uplink.
-     The instructions assume that you are using a manually created unmanaged bridge.
-     See [How to configure network bridges](https://netplan.readthedocs.io/en/stable/examples/#how-to-configure-network-bridges) for instructions on how to set up this bridge.
+     そのため管理されていないブリッジインターフェースまたは使用されていない物理インターフェースを OVN アップリンクで使用される物理ネットワークの親として指定する必要があります。
+     以下の手順は手動で作成した管理されていないブリッジを使用する想定です。
+     このブリッジをセットアップする手順は [ネットワークブリッジの設定](https://netplan.readthedocs.io/en/stable/examples/#how-to-configure-network-bridges) を参照してください。
 
-   Gateway
-   : Run `ip -4 route show default` and `ip -6 route show default`.
+   ゲートウェイ
+   : `ip -4 route show default` と `ip -6 route show default` を実行してください。
 
-   Name server
-   : Run `resolvectl`.
+   ネームサーバー
+   : `resolvectl` を実行してください。
 
-   IP ranges
-   : Use suitable IP ranges based on the assigned IPs.
+   IP の範囲
+   : 割り当てられた IP を元に適切な IP の範囲を使用してください。
 
-1. Still on the first machine, configure Incus to be able to communicate with the OVN DB cluster.
-   To do so, find the value for `ovn-northd-nb-db` in `/etc/default/ovn-central` and provide it to Incus with the following command:
+1. 引き続き最初のマシンで Incus を OVN DB クラスタと通信できるように設定します。
+   そのためには、 `/etc/default/ovn-central` 内の `ovn-northd-nb-db` の値を確認し、以下のコマンドで Incus に指定します:
 
        incus config set network.ovn.northbound_connection <ovn-northd-nb-db>
 
-1. Finally, create the actual OVN network (on the first machine):
+1. 最後に（最初のマシンで）実際の OVN ネットワークを作成します:
 
        incus network create my-ovn --type=ovn
 
-1. To test the OVN network, create some instances and check the network connectivity:
+1. OVN ネットワークをテストするには、インスタンスを作成してネットワークが接続できるか確認します:
 
        incus launch images:ubuntu/22.04 c1 --network my-ovn
        incus launch images:ubuntu/22.04 c2 --network my-ovn
@@ -174,37 +174,37 @@ In addition, you can add any number of servers to the Incus cluster that run onl
        ping <nameserver>
        ping6 -n www.example.com
 
-## Send OVN logs to Incus
+## OVN ログを Incus に送信
 
-Complete the following steps to have the OVN controller send its logs to Incus.
+OVN コントローラーのログを Incus に送るようにするには以下の手順を実行してください。
 
-1. Enable the syslog socket:
+1. syslog ソケットを有効にします:
 
        incus config set core.syslog_socket=true
 
-1. Open `/etc/default/ovn-host` for editing.
+1. `/etc/default/ovn-host` を編集用に開きます:
 
-1. Paste the following configuration:
+1. 以下の設定をペーストします:
 
        OVN_CTL_OPTS=" \
               --ovn-controller-log='-vsyslog:info --syslog-method=unix:/var/lib/incus/syslog.socket'"
 
-1. Restart the OVN controller:
+1. OVN コントローラーを再起動します:
 
        systemctl restart ovn-controller.service
 
-You can now use [`incus monitor`](incus_monitor.md) to see logged network ACL traffic from the OVN controller:
+これで [`incus monitor`](incus_monitor.md) を使って OVN コントローラーからのネットワーク ACL トラフィックのログを見られます:
 
     incus monitor --type=network-acls
 
-You can also send the logs to Loki.
-To do so, add the `network-acl` value to the {config:option}`server-loki:loki.types` configuration key, for example:
+また Loki にログを送ることもできます。
+そのためには、たとえば、{config:option}`server-loki:loki.types`設定キーに`network-acl`の値を追加してください:
 
     incus config set loki.types=network-acl
 
 ```{tip}
-You can include logs for OVN `northd`, OVN north-bound `ovsdb-server`, and OVN south-bound `ovsdb-server` as well.
-To do so, edit `/etc/default/ovn-central`:
+OVN `northd`、OVN north-bound `ovsdb-server`、OVN south-bound `ovsdb-server`のログもインクルードできます。
+そのためには、`/etc/default/ovn-central`を編集します:
 
     OVN_CTL_OPTS=" \
        --ovn-northd-log='-vsyslog:info --syslog-method=unix:/var/lib/incus/syslog.socket' \

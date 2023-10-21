@@ -5,150 +5,150 @@ myst:
 ---
 
 (howto-storage-backup-volume)=
-# How to back up custom storage volumes
+# カスタムストレージボリュームをバックアップするには
 
-There are different ways of backing up your custom storage volumes:
+カスタムストレージボリュームをバックアップするにはいくつかの方法があります:
 
 - {ref}`storage-backup-snapshots`
 - {ref}`storage-backup-export`
 - {ref}`storage-copy-volume`
 
 <!-- Include start backup types -->
-Which method to choose depends both on your use case and on the storage driver you use.
+どの方法を選ぶかはあなたのユースケースとお使いのストレージドライバーによって異なります。
 
-In general, snapshots are quick and space efficient (depending on the storage driver), but they are stored in the same storage pool as the {{type}} and therefore not too reliable.
-Export files can be stored on different disks and are therefore more reliable.
-They can also be used to restore the {{type}} into a different storage pool.
-If you have a separate, network-connected Incus server available, regularly copying {{type}}s to this other server gives high reliability as well, and this method can also be used to back up snapshots of the {{type}}.
+一般に、スナップショットは高速で（ストレージドライバーによりますが）空間効率が良いですが、{{type}}と同じストレージプールに保存されますので信頼性はあまり高くありません。
+エクスポートファイルは別のディスク上に保存できますのでより信頼性が高いです。
+これらは別のストレージプールに{{type}}をリストアするのに使用できます。
+ネットワークで接続された別の Incus サーバーがある場合、定期的に{{type}}をこの別のサーバーにコピーするのも高い信頼性が得られます。そしてこの方法は{{type}}のスナップショットをバックアップするためにも使えます。
 <!-- Include end backup types -->
 
 ```{note}
-Custom storage volumes might be attached to an instance, but they are not part of the instance.
-Therefore, the content of a custom storage volume is not stored when you {ref}`back up your instance <instances-backup>`.
-You must back up the data of your storage volume separately.
+カスタムストレージボリュームがインスタンスにアタッチされているかもしれませんが、それらはインスタンスの一部ではありません。
+ですので、{ref}`インスタンスをバックアップ <instances-backup>`する際カスタムストレージボリュームは保存されません。
+ストレージボリュームのデータは別途バックアップする必要があります。
 ```
 
 (storage-backup-snapshots)=
-## Use snapshots for volume backup
+## ボリュームのバックアップのスナップショットを使用する
 
-A snapshot saves the state of the storage volume at a specific time, which makes it easy to restore the volume to a previous state.
-It is stored in the same storage pool as the volume itself.
+特定の日時のストレージボリュームをスナップショットを作成することで保存できます。スナップショットを使えばストレージボリュームを以前の状態に簡単に復元できます。
+スナップショットはボリューム自身と同じストレージプールに保存されます。
 
 <!-- Include start optimized snapshots -->
-Most storage drivers support optimized snapshot creation (see {ref}`storage-drivers-features`).
-For these drivers, creating snapshots is both quick and space-efficient.
-For the `dir` driver, snapshot functionality is available but not very efficient.
-For the `lvm` driver, snapshot creation is quick, but restoring snapshots is efficient only when using thin-pool mode.
+ほとんどのストレージドライバーはスナップショットの最適化された作成をサポートします（{ref}`storage-drivers-features`参照）。
+これらのドライバーではスナップショットの作成は高速で空間効率も良いです。
+`dir` ドライバーでは、スナップショットの機能は利用できますが、あまり効率がよくありません。
+`lvm` ドライバーでは、スナップショットの作成は高速ですが、スナップショットのリストアが効率的なのは thin-pool モードを使っているときだけです。
 <!-- Include end optimized snapshots -->
 
-### Create a snapshot of a custom storage volume
+### カスタムストレージボリュームのスナップショットを作成する
 
-Use the following command to create a snapshot for a custom storage volume:
+カスタムストレージボリュームのスナップショットを作成するには以下のコマンド使用します:
 
     incus storage volume snapshot <pool_name> <volume_name> [<snapshot_name>]
 
 <!-- Include start create snapshot options -->
-Add the `--reuse` flag in combination with a snapshot name to replace an existing snapshot.
+既存のスナップショットを置き換えるには、スナップショット名とともに `--reuse` フラグを追加します。
 
-By default, snapshots are kept forever, unless the `snapshots.expiry` configuration option is set.
-To retain a specific snapshot even if a general expiry time is set, use the `--no-expiry` flag.
+デフォルトでは、 `snapshots.expiry` 設定オプションが設定されていない限り、スナップショットは永遠に保存されます。
+全般的な期限が設定されていてもスナップショットを維持するには、 `--no-expiry` フラグを使用してください。
 <!-- Include end create snapshot options -->
 
 (storage-edit-snapshots)=
-### View, edit or delete snapshots
+### スナップショットを表示、編集、削除する
 
-Use the following command to display the snapshots for a storage volume:
+ストレージボリュームのスナップショットを表示するには以下のコマンドを使います:
 
     incus storage volume info <pool_name> <volume_name>
 
-You can view or modify snapshots in a similar way to custom storage volumes, by referring to the snapshot with `<volume_name>/<snapshot_name>`.
+スナップショットを `<volume_name>/<snapshot_name>` で参照することで、ストレージボリュームの場合と同様にスナップショットを表示または変更できます。
 
-To show information about a snapshot, use the following command:
+スナップショットの情報を表示するには、以下のコマンドを使います:
 
     incus storage volume show <pool_name> <volume_name>/<snapshot_name>
 
-To edit a snapshot (for example, to add a description or change the expiry date), use the following command:
+スナップショットを編集（たとえば、説明を追加したり有効期限を編集）には以下のコマンドを使います:
 
     incus storage volume edit <pool_name> <volume_name>/<snapshot_name>
 
-To delete a snapshot, use the following command:
+スナップショットを削除するには、以下のコマンドを使います:
 
     incus storage volume delete <pool_name> <volume_name>/<snapshot_name>
 
-### Schedule snapshots of a custom storage volume
+### カスタムストレージボリュームのスナップショット作成をスケジュールする
 
-You can configure a custom storage volume to automatically create snapshots at specific times.
-To do so, set the `snapshots.schedule` configuration option for the storage volume (see {ref}`storage-configure-volume`).
+指定した時刻に自動的にスナップショットを作成するようにカスタムストレージボリュームを設定できます。
+そのためには、ストレージボリュームの `snapshots.schedule` 設定オプションを設定してください（{ref}`storage-configure-volume`参照）。
 
-For example, to configure daily snapshots, use the following command:
+たとえば、日次のスナップショットを設定するには、以下のコマンドを使います:
 
     incus storage volume set <pool_name> <volume_name> snapshots.schedule @daily
 
-To configure taking a snapshot every day at 6 am, use the following command:
+毎日 AM 6 時にスナップショットを作成するよう設定するには、以下のコマンドを使います:
 
     incus storage volume set <pool_name> <volume_name> snapshots.schedule "0 6 * * *"
 
-When scheduling regular snapshots, consider setting an automatic expiry (`snapshots.expiry`) and a naming pattern for snapshots (`snapshots.pattern`).
-See the {ref}`storage-drivers` documentation for more information about those configuration options.
+定期的にスナップショットをスケジュールする際、自動破棄（`snapshots.expiry`）とスナップショットの命名規則（`snapshots.pattern`）の設定も検討してください。
+設定オプションの詳細は{ref}`storage-drivers`のドキュメントを参照してください。
 
-### Restore a snapshot of a custom storage volume
+### カスタムストレージボリュームのスナップショットをリストアする
 
-You can restore a custom storage volume to the state of any of its snapshots.
+カスタムストレージボリュームを任意のスナップショットの状態に復元できます。
 
-To do so, you must first stop all instances that use the storage volume.
-Then use the following command:
+そのためには、まずストレージボリュームを使用しているすべてのインスタンスを停止する必要があります。
+その後以下のコマンドを入力します:
 
     incus storage volume restore <pool_name> <volume_name> <snapshot_name>
 
-You can also restore a snapshot into a new custom storage volume, either in the same storage pool or in a different one (even a remote storage pool).
-To do so, use the following command:
+スナップショットを同じまたは別のストレージプール（リモートのストレージプールでも可）内に新しいカスタムストレージボリュームをリストアもできます。
+そのためには、以下のコマンドを入力します:
 
     incus storage volume copy <source_pool_name>/<source_volume_name>/<source_snapshot_name> <target_pool_name>/<target_volume_name>
 
 (storage-backup-export)=
-## Use export files for volume backup
+## ボリュームのバックアップにエクスポートファイルを使用する
 
-You can export the full content of your custom storage volume to a standalone file that can be stored at any location.
-For highest reliability, store the backup file on a different file system to ensure that it does not get lost or corrupted.
+カスタムストレージボリュームの完全な内容をスタンドアロンのファイルにエクスポートし、任意の場所に保存できます。
+信頼度を最大化するため、失われたり壊れたりしないように、バックアップファイルは別のファイルシステムに保存してください。
 
-### Export a custom storage volume
+### カスタムストレージボリュームをエクスポートする
 
-Use the following command to export a custom storage volume to a compressed file (for example, `/path/to/my-backup.tgz`):
+以下のコマンドを使ってインスタンスを圧縮ファイル（たとえば、`/path/to/my-instance.tgz`）にエクスポートします:
 
     incus storage volume export <pool_name> <volume_name> [<file_path>]
 
-If you do not specify a file path, the export file is saved as `backup.tar.gz` in the working directory.
+ファイルパスを指定しない場合、エクスポートファイルは作業ディレクトリーに `backup.tar.gz` という名前で保存されます。
 
 ```{warning}
-If the output file already exists, the command overwrites the existing file without warning.
+出力ファイルがすでに存在する場合、コマンドは警告なしで既存のファイルを上書きします。
 ```
 
 <!-- Include start export info -->
-You can add any of the following flags to the command:
+コマンドに以下のフラグを追加できます:
 
 `--compression`
-: By default, the output file uses `gzip` compression.
-  You can specify a different compression algorithm (for example, `bzip2`) or turn off compression with `--compression=none`.
+: デフォルトでは、出力ファイルは `gzip` 圧縮を使用します。
+  別の圧縮アルゴリズム（たとえば、`bzip2`）を指定したり、`--compression=none` で圧縮しないようにできます。
 
 `--optimized-storage`
-: If your storage pool uses the `btrfs` or the `zfs` driver, add the `--optimized-storage` flag to store the data as a driver-specific binary blob instead of an archive of individual files.
-  In this case, the export file can only be used with pools that use the same storage driver.
+: ストレージプールが `btrfs` か `zfs` ドライバーを使用している場合、 `--optimized-storage` フラグを指定すると個別のファイルのアーカイブではなくドライバー固有のバイナリ形式でデータを保存します。
+  この場合、エスクポートファイルは同じストレージドライバーを使うプールでのみ使用できます。
 
-  Exporting a volume in optimized mode is usually quicker than exporting the individual files.
-  Snapshots are exported as differences from the main volume, which decreases their size and makes them easily accessible.
+  最適化されたモードでボリュームをエクスポートするほうが個別のファイルをエクスポートするより通常は高速です。
+  スナップショットはメインボリュームからの差分としてエクスポートされるため、サイズが小さくなりアクセスが容易になります。
 <!-- Include end export info -->
 
 `--volume-only`
-: By default, the export file contains all snapshots of the storage volume.
-  Add this flag to export the volume without its snapshots.
+: デフォルトでは、エクスポートファイルはストレージボリュームのすべてのスナップショットを含みます。
+  このフラグを追加すると、スナップショットを除いたストレージボリュームのみをエクスポートします。
 
-### Restore a custom storage volume from an export file
+### エクスポートファイルからカスタムストレージボリュームをリストアする
 
-You can import an export file (for example, `/path/to/my-backup.tgz`) as a new custom storage volume.
-To do so, use the following command:
+エクスポートファイル（たとえば、 `/path/to/my-backup.tgz`）を新しいカスタムストレージボリュームとしてインポートできます。
+そのためには、以下のコマンドを使用します:
 
     incus storage volume import <pool_name> <file_path> [<volume_name>]
 
-If you do not specify a volume name, the original name of the exported storage volume is used for the new volume.
-If a volume with that name already (or still) exists in the specified storage pool, the command returns an error.
-In that case, either delete the existing volume before importing the backup or specify a different volume name for the import.
+ボリューム名を指定しない場合、新しいボリュームの名前はエクスポートされたストレージボリュームの元の名前になります。
+その名前のボリュームが指定したストレージブールにすでに（あるいはまだ）存在する場合、コマンドはエラーを返します。
+その場合、バックアップをインポートする前に既存のボリュームを削除するか、あるいはインポートの際に別のボリューム名を指定してください。

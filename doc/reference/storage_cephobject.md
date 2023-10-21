@@ -7,10 +7,10 @@
     :end-before: <!-- Include end Ceph intro -->
 ```
 
-[Ceph Object Gateway](https://docs.ceph.com/en/latest/radosgw/) is an object storage interface built on top of [`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro/) to provide applications with a RESTful gateway to [Ceph Storage Clusters](https://docs.ceph.com/en/latest/rados/).
-It provides object storage functionality with an interface that is compatible with a large subset of the Amazon S3 RESTful API.
+[Ceph Object Gateway](https://docs.ceph.com/en/latest/radosgw/) は [`librados`](https://docs.ceph.com/en/latest/rados/api/librados-intro/) 上に構築されたオブジェクトストレージインターフェースであり [Ceph Storage Clusters](https://docs.ceph.com/en/latest/rados/) への RESTful ゲートウェイを持つアプリケーションを提供します。
+Amazon S3 RESTful API の大きなサブセットと互換性を持つオブジェクトストレージの機能を提供します。
 
-## Terminology
+## 用語
 
 % Include content from [storage_ceph.md](storage_ceph.md)
 ```{include} storage_ceph.md
@@ -18,14 +18,14 @@ It provides object storage functionality with an interface that is compatible wi
     :end-before: <!-- Include end Ceph terminology -->
 ```
 
-A *Ceph Object Gateway* consists of several OSD pools and one or more *Ceph Object Gateway daemon* (`radosgw`) processes that provide object gateway functionality.
+*Ceph Object Gateway* は複数の OSD プールとゲートウェイの機能を提供する 1 つ以上の *Ceph Object Gateway daemon* (`radosgw`) プロセスから構成されます。
 
-## `cephobject` driver in Incus
+## Incus の `cephobject` ドライバー
 
 ```{note}
-The `cephobject` driver can only be used for buckets.
+`cephobject` ドライバはバケットのみに使用できます。
 
-For storage volumes, use the {ref}`Ceph <storage-ceph>` or {ref}`CephFS <storage-cephfs>` drivers.
+ストレージボリュームには {ref}`Ceph <storage-ceph>` または {ref}`CephFS <storage-cephfs>` ドライバを使用してください。
 ```
 
 % Include content from [storage_ceph.md](storage_ceph.md)
@@ -34,12 +34,11 @@ For storage volumes, use the {ref}`Ceph <storage-ceph>` or {ref}`CephFS <storage
     :end-before: <!-- Include end Ceph driver cluster -->
 ```
 
-You must set up a `radosgw` environment beforehand and ensure that its HTTP/HTTPS endpoint URL is reachable from the Incus server or servers.
-See [Manual Deployment](https://docs.ceph.com/en/latest/install/manual-deployment/) for information on how to set up a Ceph cluster and [Ceph Object Gateway](https://docs.ceph.com/en/latest/radosgw/) on how to set up a `radosgw` environment.
+事前に `radosgw` 環境をセットアップし、 HTTP/HTTPS エンドポイント URL が Incus サーバーからアクセス可能なことを確認してください。
+Ceph クラスタをどのようにセットアップするかの情報については [Manual Deployment](https://docs.ceph.com/en/latest/install/manual-deployment/) を、そして `radosgw` 環境をどのようにセットアップするかについては [Ceph Object Gateway](https://docs.ceph.com/en/latest/radosgw/) を参照してください。
 
-The `radosgw` URL can be specified at pool creation time using the [`cephobject.radosgw.endpoint`](storage-cephobject-pool-config) option.
-
-Incus uses the `radosgw-admin` command to manage buckets. So this command must be available and operational on the Incus servers.
+`radosgw` URL はプールの作成時に [`cephobject.radosgw.endpoint`](storage-cephobject-pool-config) オプションを使って指定できます。
+また Incus はバケットの管理に `radosgw-admin` コマンドを使用しています。ですのでこのコマンドが Incus サーバー上で利用可能で操作可能である必要があります。
 
 % Include content from [storage_ceph.md](storage_ceph.md)
 ```{include} storage_ceph.md
@@ -53,24 +52,24 @@ Incus uses the `radosgw-admin` command to manage buckets. So this command must b
     :end-before: <!-- Include end Ceph driver control -->
 ```
 
-## Configuration options
+## 設定オプション
 
-The following configuration options are available for storage pools that use the `cephobject` driver and for storage buckets in these pools.
+`cephobject` ドライバーを使うストレージプールとこれらのプール内のストレージボリュームには以下の設定オプションが利用できます。
 
 (storage-cephobject-pool-config)=
-### Storage pool configuration
+### ストレージプール設定
 
-Key                                      | Type                          | Default | Description
-:--                                      | :---                          | :------ | :----------
-`cephobject.bucket.name_prefix`          | string                        | -       | Prefix to add to bucket names in Ceph
-`cephobject.cluster_name`                | string                        | `ceph`  | The Ceph cluster to use
-`cephobject.radosgw.endpoint`            | string                        | -       | URL of the `radosgw` gateway process
-`cephobject.radosgw.endpoint_cert_file`  | string                        | -       | Path to the file containing the TLS client certificate to use for endpoint communication
-`cephobject.user.name`                   | string                        | `admin` | The Ceph user to use
-`volatile.pool.pristine`                 | string                        | `true`  | Whether the `radosgw` `incus-admin` user existed at creation time
+キー                                    | 型     | デフォルト値 | 説明
+:--                                     | :---   | :------      | :----------
+`cephobject.bucket.name_prefix`         | string | -            | Ceph 内のバケット名に追加する接頭辞
+`cephobject.cluster_name`               | string | `ceph`       | 使用する Ceph クラスタ
+`cephobject.radosgw.endpoint`           | string | -            | `radosgw` ゲートウェイプロセスのURL
+`cephobject.radosgw.endpoint_cert_file` | string | -            | エンドポイント通信に使用する TLS クライアント証明書を含むファイルへのパス
+`cephobject.user.name`                  | string | `admin`      | 使用する Ceph ユーザー
+`volatile.pool.pristine`                | string | `true`       | 作成時に `radosgw` `lxd-admin` ユーザーが存在したかどうか
 
-### Storage bucket configuration
+### ストレージバケット設定
 
-Key    | Type   | Default                | Description
-:--    | :---   | :------                | :----------
-`size` | string | -                      | Quota of the storage bucket
+キー   | 型     | デフォルト値 | 説明
+:--    | :---   | :------      | :----------
+`size` | string | -            | ストレージバケットのクォータ

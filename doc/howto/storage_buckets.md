@@ -1,134 +1,132 @@
 (howto-storage-buckets)=
-# How to manage storage buckets and keys
+# ストレージバケットとキーを管理するには
 
-See the following sections for instructions on how to create, configure, view and resize {ref}`storage-buckets` and how to manage storage bucket keys.
+{ref}`storage-buckets` を作成、設定、表示、リサイズするための手順およびストレージバケットキーを管理する方法については以下のセクションを参照してください。
 
-## Configure the S3 address
+## S3アドレスを設定する
 
-If you want to use storage buckets on local storage (thus in a `dir`, `btrfs`, `lvm`, or `zfs` pool), you must configure the S3 address for your Incus server.
-This is the address that you can then use to access the buckets through the S3 protocol.
+S3 アドレスを設定することにより、ローカルストレージ（`dir`、`btrfs`、`lvm`、または`zfs`プール）上のストレージバケットを使用することが可能になります。これにより、S3 プロトコルを通じてバケットにアクセスできるようになります。
 
-To configure the S3 address, set the {config:option}`server-core:core.storage_buckets_address` server configuration option.
-For example:
+S3 アドレスを設定するには、{config:option}`server-core:core.storage_buckets_address` サーバー設定オプションを設定します。たとえば:
 
     incus config set core.storage_buckets_address :8555
 
-## Manage storage buckets
+## ストレージバケットを管理する
 
-Storage buckets provide access to object storage exposed using the S3 protocol.
+ストレージバケットは S3 プロトコルを使って公開されるオブジェクトストレージを提供します。
 
-Unlike custom storage volumes, storage buckets are not added to an instance, but applications can instead access them directly via their URL.
+カスタムストレージボリュームとは異なり、ストレージバケットはインスタンスに追加されるのではなく、それらの URL を通してアプリケーションから直接アクセスされます。
 
-See {ref}`storage-buckets` for detailed information.
+詳細は {ref}`storage-buckets` を参照してください。
 
-### Create a storage bucket
+### ストレージバケットを作成する
 
-Use the following command to create a storage bucket in a storage pool:
+ストレージプール内にストレージバケットを作成するには、以下のコマンドを使用します:
 
     incus storage bucket create <pool_name> <bucket_name> [configuration_options...]
 
-See the {ref}`storage-drivers` documentation for a list of available storage bucket configuration options for each driver that supports object storage.
+それぞれのドライバーで利用可能なストレージバケット設定オプションの一覧については {ref}`storage-drivers` を参照してください。
 
-To add a storage bucket on a cluster member, add the `--target` flag:
+クラスタメンバーにストレージバケットを追加するには `--target` フラグを追加してください:
 
     incus storage bucket create <pool_name> <bucket_name> --target=<cluster_member> [configuration_options...]
 
 ```{note}
-For most storage drivers, storage buckets are not replicated across the cluster and exist only on the member for which they were created.
-This behavior is different for `cephobject` storage pools, where buckets are available from any cluster member.
+ほとんどのストレージドライバでは、ストレージバケットはクラスタ間でリプリケートされず、作成されたメンバー上にのみ存在します。
+この挙動は `cephobject` ストレージプールでは異なります。 `cephobject` ではバケットはどのクラスタメンバーからも利用できます。
 ```
 
-### Configure storage bucket settings
+### ストレージバケットを設定するには
 
-See the {ref}`storage-drivers` documentation for the available configuration options for each storage driver that supports object storage.
+各ストレージドライバーで利用可能な設定オプションについては {ref}`storage-drivers` ドキュメントを参照してください。
 
-Use the following command to set configuration options for a storage bucket:
+ストレージバケットの設定オプションを設定するには以下のコマンドを使用します:
 
     incus storage bucket set <pool_name> <bucket_name> <key> <value>
 
-For example, to set the quota size of a bucket, use the following command:
+たとえば、バケットにクォータサイズを設定するには、以下のコマンドを使用します:
 
     incus storage bucket set my-pool my-bucket size 1MiB
 
-You can also edit the storage bucket configuration by using the following command:
+以下のコマンドでストレージバケットの設定を編集することもできます:
 
     incus storage bucket edit <pool_name> <bucket_name>
 
-Use the following command to delete a storage bucket and its keys:
+ストレージバケットとそのキーを削除するには以下のコマンドを使用します:
 
     incus storage bucket delete <pool_name> <bucket_name>
 
-### View storage buckets
+### ストレージバケットを表示するには
 
-You can display a list of all available storage buckets in a storage pool and check their configuration.
+ストレージプール内のすべての利用可能なストレージバケットの一覧を表示し設定を確認できます。
 
-To list all available storage buckets in a storage pool, use the following command:
+ストレージプール内のすべての利用可能なストレージバケットを一覧表示するには、以下のコマンドを使用します:
 
     incus storage bucket list <pool_name>
 
-To show detailed information about a specific bucket, use the following command:
+特定のバケットの詳細情報を表示するには、以下のコマンドを使用します:
 
     incus storage bucket show <pool_name> <bucket_name>
 
-### Resize a storage bucket
+### ストレージバケットをリサイズするには
 
-By default, storage buckets do not have a quota applied.
+デフォルトではストレージバケットにはクォータは適用されません。
 
-To set or change a quota for a storage bucket, set its size configuration:
+ストレージバケットクォータを設定するには、サイズを設定します:
 
     incus storage bucket set <pool_name> <bucket_name> size <new_size>
 
 ```{important}
-- Growing a storage bucket usually works (if the storage pool has sufficient storage).
-- You cannot shrink a storage bucket below its current used size.
+- ストレージバケットの拡大は通常は正常に動作します（ストレージプールが十分なストレージを持つ場合）。
+- ストレージバケットを現在の使用量より縮小することはできません。
 
 ```
 
-## Manage storage bucket keys
+## ストレージバケットキーを管理する
 
-To access a storage bucket, applications must use a set of S3 credentials made up of an *access key* and a *secret key*.
-You can create multiple sets of credentials for a specific bucket.
+アプリケーションがストレージバケットにアクセスするためには *アクセスキー* と *シークレットキー* からなる S3 クレデンシャルを使う必要があります。
+特定のバケットに対して複数のセットのクレデンシャルを作成できます。
 
-Each set of credentials is given a key name.
-The key name is used only for reference and does not need to be provided to the application that uses the credentials.
+それぞれのクレデンシャルのセットにはキー名を設定します。
+キー名は参照のためだけに用いられ、アプリケーションがクレデンシャルを使用する際に提供する必要はありません。
 
-Each set of credentials has a *role* that specifies what operations they can perform on the bucket.
+それぞれのクレデンシャルのセットには *ロール* が設定されます。それはバケットにどの操作を実行できるかを指定します。
 
-The roles available are:
+使用可能なロールは以下のとおりです:
 
-- `admin` - Full access to the bucket
-- `read-only` - Read-only access to the bucket (list and get files only)
+- `admin` - バケットへのフルアクセス。
+- `read-only` - バケットへの読み取り専用アクセス（一覧とファイルの取得のみ）。
 
-If the role is not specified when creating a bucket key, the role used is `read-only`.
+バケットキー作成時にロールが指定されない場合、使用されるロールは `read-only` になります。
 
-### Create storage bucket keys
+### ストレージバケットキーを作成する
 
-Use the following command to create a set of credentials for a storage bucket:
+ストレージバケットにクレデンシャルのセットを作成するには、以下のコマンドを使用します:
 
     incus storage bucket key create <pool_name> <bucket_name> <key_name> [configuration_options...]
 
-Use the following command to create a set of credentials for a storage bucket with a specific role:
+ストレージバケットに特定のロールを持つクレデンシャルのセットを作成するには、以下のコマンドを使用します:
 
     incus storage bucket key create <pool_name> <bucket_name> <key_name> --role=admin [configuration_options...]
 
-These commands will generate and display a random set of credential keys.
+これらのコマンドはランダムなクレデンシャルキーのセットを生成し表示します。
 
-### Edit or delete storage bucket keys
+### ストレージバケットキーを編集または削除するには
 
-Use the following command to edit an existing bucket key:
+既存のバケットキーを編集するには以下のコマンドを使用します:
 
     incus storage bucket key edit <pool_name> <bucket_name> <key_name>
 
-Use the following command to delete an existing bucket key:
+既存のバケットキーを削除するには以下のコマンドを使用します:
 
     incus storage bucket key delete <pool_name> <bucket_name> <key_name>
 
-### View storage bucket keys
+### ストレージバケットのキーを表示するには
 
-Use the following command to see the keys defined for an existing bucket:
+既存のバケットに定義されているキーを表示するには以下のコマンドを使用します:
 
     incus storage bucket key list <pool_name> <bucket_name>
 
-Use the following command to see a specific bucket key:
+特定のバケットキーを表示するには以下のコマンドを使用します:
 
     incus storage bucket key show <pool_name> <bucket_name> <key_name>

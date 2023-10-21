@@ -1,65 +1,59 @@
 (network-zones)=
-# How to configure network zones
+# ネットワークゾーンを設定するには
 
 ```{note}
-Network zones are available for the {ref}`network-ovn` and the {ref}`network-bridge`.
+ネットワークゾーンは {ref}`network-ovn` と  {ref}`network-bridge` で利用できます。
 ```
 
-Network zones can be used to serve DNS records for Incus networks.
+ネットワークゾーンは Incus のネットワークの DNS レコードを保持するのに使用します。
 
-You can use network zones to automatically maintain valid forward and reverse records for all your instances.
-This can be useful if you are operating a Incus cluster with multiple instances across many networks.
+ネットワークゾーンを使うとすべてのインスタンスの有効な正引きと逆引きのレコードを自動的に維持できます。
+多くのネットワークにまたがる複数のインスタンスからなる Incus クラスタを運用する際に有用です。
 
-Having DNS records for each instance makes it easier to access network services running on an instance.
-It is also important when hosting, for example, an outbound SMTP service.
-Without correct forward and reverse DNS entries for the instance, sent mail might be flagged as potential spam.
+各インスタンスに DNS レコードを持つとインスタンス上のネットワークサービスにアクセスするのがより簡単になります。
+またたとえば外部への SMTP サービスをホストする際にも重要です。
+インスタンスに正しい正引きと逆引きの DNS エントリがないと、送信されたメールが潜在的なスパムと判定されてしまうかもしれません。
 
-Each network can be associated to different zones:
+各ネットワークは異なるゾーンに関連します。
 
-- Forward DNS records - multiple comma-separated zones (no more than one per project)
-- IPv4 reverse DNS records - single zone
-- IPv6 reverse DNS records - single zone
+- 正引き DNS レコード - カンマ区切りの複数のゾーン（プロジェクトごとに最大 1 つ）
+- IPv4 逆引き DNS レコード - 単一のゾーン
+- IPv6 逆引き DNS レコード - 単一のゾーン
 
-Incus will then automatically manage forward and reverse records for all instances, network gateways and downstream network ports and serve those zones for zone transfer to the operator’s production DNS servers.
+Incus はすべてのインスタンス、ネットワークゲートウェイ、ダウンストリーム（下流）のネットワークポートのすべてに対して正引きと逆引きのレコードを自動で管理し、オペレータのプロダクションの DNS サーバーへのゾーン転送のためのこれらのゾーンを提供します。
 
-## Project views
+## プロジェクトビュー
 
-Projects have a {config:option}`project-features:features.networks.zones` feature, which is disabled by default.
-This controls which project new networks zones are created in.
-When this feature is enabled new zones are created in the project, otherwise they are created in the default project.
+プロジェクトには  `features.networks.zones` 機能があります。デフォルトでは無効です。
+これは新しいネットワークゾーンがどのプロジェクト内に作成されるかを制御します。
+この機能を有効にすると新しいゾーンはプロジェクト内に作成されますが、無効の場合はデフォルトプロジェクト内に作成されます。
 
-This allows projects that share a network in the default project (i.e those with `features.networks=false`) to have their own project level DNS zones that give a project oriented
-"view" of the addresses on that shared network (which only includes addresses from instances in their project).
+これにより、複数のプロジェクトがデフォルトプロジェクト（すなわち`features.networks=false`と設定されたプロジェクト）内のネットワークを共有できるようになり、共有されたネットワークに対してプロジェクト指向の（プロジェクト内のインスタンスのアドレスのみを含むような）「ビュー」を提供するプロジェクト固有の DNS ゾーンを持てるようになります。
 
-## Generated records
+## 生成されるレコード
 
-### Forward records
+### 正引きレコード
 
-If you configure a zone with forward DNS records for `incus.example.net` for your network, it generates records that resolve the following DNS names:
+たとえば、あなたのネットワークで `incus.example.net` の正引き DNS レコードのゾーンを設定した場合、
+以下の DNS 名を解決するレコードを生成します:
 
-- For all instances in the network: `<instance_name>.incus.example.net`
-- For the network gateway: `<network_name>.gw.incus.example.net`
-- For downstream network ports (for network zones set on an uplink network with a downstream OVN network): `<project_name>-<downstream_network_name>.uplink.incus.example.net`
-- Manual records added to the zone.
+- ネットワーク内のすべてのインスタンスに対して: `<instance_name>.incus.example.net`
+- ネットワークゲートウェイに対して: `<network_name>.gw.incus.example.net`
+- ダウンストリームネットワークポートに対して（ダウンストリーム OVN ネットワークを持つアップリンクのネットワーク上に設定されれうネットワークゾーンに対して）: `<project_name>-<downstream_network_name>.uplink.incus.example.net`
+- ゾーンに手動で追加されたレコード。
 
-You can check the records that are generated with your zone setup with the `dig` command.
+ゾーン設定に対して生成されたレコードは `dig` コマンドで確認できます。
+これは {config:option}`server-core:core.dns_address` が`<DNS_server_IP>:<DNS_server_PORT>`に設定されていることを前提としています（その設定オプションを設定すると、バックエンドはすぐにそのアドレスでサービスを開始します）。
 
-This assumes that {config:option}`server-core:core.dns_address` was set to `<DNS_server_IP>:<DNS_server_PORT>`. (Setting that configuration
-option causes the backend to immediately start serving on that address.)
+特定のゾーンに対して`dig`リクエストが許可されるようにするためには、そのゾーンの`peers.NAME.address`設定オプションを設定する必要があります。`NAME`はランダムなもので構いません。値は、`dig`が呼び出される IP アドレスと一致しなければなりません。同じランダムな`NAME`の`peers.NAME.key`は未設定のままにしておく必要があります。
 
-In order for the `dig` request to be allowed for a given zone, you must set the
-`peers.NAME.address` configuration option for that zone. `NAME` can be anything random. The value must match the
-IP address where your `dig` is calling from. You must leave `peers.NAME.key` for that same random `NAME` unset.
-
-For example: `incus network zone set incus.example.net peers.whatever.address=192.0.2.1`.
+例: `lxc network zone set incus.example.net peers.whatever.address=192.0.2.1`
 
 ```{note}
-It is not enough for the address to be of the same machine that `dig` is calling from; it needs to
-match as a string with what the DNS server in `incus` thinks is the exact remote address. `dig` binds to
-`0.0.0.0`, therefore the address you need is most likely the same that you provided to `core.dns_address`.
+`dig`が呼び出し元の同じマシンのアドレスであるだけでは十分ではありません。それは、`incus`内のDNSサーバーが正確なリモートアドレスと考えるものと文字列で一致する必要があります。`dig`は`0.0.0.0`にバインドするため、必要なアドレスはおそらく、あなたが`core.dns_address`に提供したものと同じです。
 ```
 
-For example, running `dig @<DNS_server_IP> -p <DNS_server_PORT> axfr incus.example.net` might give the following output:
+たとえば、`dig @<DNS_server_IP> -p <DNS_server_PORT> axfr incus.example.net`と実行すると以下のような出力がでるかもしれません:
 
 ```{terminal}
 :input: dig @192.0.2.200 -p 1053 axfr incus.example.net
@@ -76,11 +70,11 @@ manualtest.incus.example.net.             300  IN A    8.8.8.8
 incus.example.net.                        3600 IN SOA  incus.example.net. ns1.incus.example.net. 1669736788 120 60 86400 30
 ```
 
-### Reverse records
+### 逆引きレコード
 
-If you configure a zone for IPv4 reverse DNS records for `2.0.192.in-addr.arpa` for a network using `192.0.2.0/24`, it generates reverse `PTR` DNS records for addresses from all projects that are referencing that network via one of their forward zones.
+`192.0.2.0/24` を使用するネットワークに `2.0.192.in-addr.arpa` の IPv4 逆引き DNS レコードのゾーンを設定すると、正引きゾーンの 1 つを経由してネットワークを参照するすべてのプロジェクトからのアドレスの逆引き `PTR` DNS レコードを生成します。
 
-For example, running `dig @<DNS_server_IP> -p <DNS_server_PORT> axfr 2.0.192.in-addr.arpa` might give the following output:
+たとえば `dig @<DNS_server_IP> -p <DNS_server_PORT> axfr 2.0.192.in-addr.arpa` を実行すると以下のような出力が得られるかもしれません:
 
 ```{terminal}
 :input: dig @192.0.2.200 -p 1053 axfr 2.0.192.in-addr.arpa
@@ -94,32 +88,32 @@ For example, running `dig @<DNS_server_IP> -p <DNS_server_PORT> axfr 2.0.192.in-
 ```
 
 (network-dns-server)=
-## Enable the built-in DNS server
+## 組み込みの DNS サーバーを有効にする
 
-To make use of network zones, you must enable the built-in DNS server.
+ネットワークゾーンを使用するには、組み込みの DNS サーバーを有効にする必要があります。
 
-To do so, set the {config:option}`server-core:core.dns_address` configuration option to a local address on the Incus server.
-To avoid conflicts with an existing DNS we suggest not using the port 53.
-This is the address on which the DNS server will listen.
-Note that in a Incus cluster, the address may be different on each cluster member.
+そのためには、 Incus サーバーのローカルアドレスに {config:option}`server-core:core.dns_address` 設定オプションを設定してください。
+既存の DNS との衝突を避けるためポート 53 を使用しないことをお勧めします。
+これは DNS サーバーがリッスンするアドレスです。
+Incus クラスタの場合、アドレスは各クラスタメンバーによって異なるかもしれないことに注意してください。
 
 ```{note}
-The built-in DNS server supports only zone transfers through AXFR.
-It cannot be directly queried for DNS records.
-Therefore, the built-in DNS server must be used in combination with an external DNS server (`bind9`, `nsd`, ...), which will transfer the entire zone from Incus, refresh it upon expiry and provide authoritative answers to DNS requests.
+組み込みの DNS サーバーは AXFR 経由でのゾーン転送のみをサポートしており、DNS レコードへの直接の問い合わせはできません。
+つまりこの機能は外部の DNS サーバー（`bind9`、`nsd`、…）の使用を前提としています。
+外部の DNS サーバーが Incus からの全体のゾーンを転送し、有効期限を過ぎたら更新し、DNS 問い合わせに対する管理権限を持つ応答（authoritative answers）を提供します。
 
-Authentication for zone transfers is configured on a per-zone basis, with peers defined in the zone configuration and a combination of IP address matching and TSIG-key based authentication.
+ゾーン転送の認証はゾーン毎に設定され、各ゾーンでピアごとに IP アドレスと TSIG キーを設定して、TSIG キーベースの認証を行います。
 ```
 
-## Create and configure a network zone
+## ネットワークゾーンの作成と設定
 
-Use the following command to create a network zone:
+ネットワークゾーンの作成には以下のコマンドを使用します:
 
 ```bash
 incus network zone create <network_zone> [configuration_options...]
 ```
 
-The following examples show how to configure a zone for forward DNS records, one for IPv4 reverse DNS records and one for IPv6 reverse DNS records, respectively:
+以下の例は正引き DNS レコードのゾーン、IPv4 逆引き DNS レコードのゾーン、IPv6 逆引き DNS レコードのゾーンを作成する方法を示しています:
 
 ```bash
 incus network zone create incus.example.net
@@ -128,106 +122,105 @@ incus network zone create 1.0.0.0.1.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa
 ```
 
 ```{note}
-Zones must be globally unique, even across projects.
-If you get a creation error, it might be due to the zone already existing in another project.
+ゾーン名は複数のプロジェクトをまたいでグローバルにユニークでなければなりません。
+そのため、別のプロジェクト内の既存のゾーンのせいでゾーンの作成がエラーになることがありえます。
 ```
 
-You can either specify the configuration options when you create the network or configure them afterwards with the following command:
+ネットワークを作成するときに設定オプションを指定できますし、後から以下のコマンドで設定もできます:
 
 ```bash
 incus network zone set <network_zone> <key>=<value>
 ```
 
-Use the following command to edit a network zone in YAML format:
+YAML 形式でネットワークゾーンを編集するには以下のコマンドを使用します:
 
 ```bash
 incus network zone edit <network_zone>
 ```
 
-### Configuration options
+### 設定オプション
 
-The following configuration options are available for network zones:
+ネットワークゾーンで利用可能な設定オプションは下記のとおりです。
 
-Key                 | Type       | Required | Default | Description
-:--                 | :--        | :--      | -       | :--
-`peers.NAME.address`| string     | no       | -       | IP address of a DNS server
-`peers.NAME.key`    | string     | no       | -       | TSIG key for the server
-`dns.nameservers`   | string set | no       | -       | Comma-separated list of DNS server FQDNs (for NS records)
-`network.nat`       | bool       | no       | `true`  | Whether to generate records for NAT-ed subnets
-`user.*`            | *          | no       | -       | User-provided free-form key/value pairs
+キー                 | 型         | 必須 | デフォルト値 | 説明
+:--                  | :--        | :--  | -            | :--
+`peers.NAME.address` | string     | no   | -            | DNS サーバーの IP アドレス
+`peers.NAME.key`     | string     | no   | -            | サーバーの TSIG キー
+`dns.nameservers`    | string set | no   | -            | （NS レコード用の）DNS サーバーの FQDN のカンマ区切りリスト
+`network.nat`        | bool       | no   | `true`       | NAT されたサブネットのレコードを生成するかどうか
+`user.*`             | *          | no   | -            | ユーザー提供の自由形式のキー・バリューペア
 
 ```{note}
-When generating the TSIG key using `tsig-keygen`, the key name must follow the format `<zone_name>_<peer_name>.`.
-For example, if your zone name is `incus.example.net` and the peer name is `bind9`, then the key name must be `incus.example.net_bind9.`.
-If this format is not followed, zone transfer might fail.
+
+`tsig-keygen`を使用してTSIGキーを生成するとき、キー名は`<zone_name>_<peer_name>.`というフォーマットに従わなければなりません。たとえば、ゾーン名が`incus.example.net`でピア名が`bind9`の場合、キー名は`incus.example.net_bind9.`でなければなりません。この形式に従わない場合、ゾーン転送が失敗する可能性があります。
 ```
 
-## Add a network zone to a network
+## ネットワークにネットワークゾーンを追加する
 
-To add a zone to a network, set the corresponding configuration option in the network configuration:
+ネットワークにゾーンを追加するにはネットワーク設定内に対応する設定オプションを設定します:
 
-- For forward DNS records: `dns.zone.forward`
-- For IPv4 reverse DNS records: `dns.zone.reverse.ipv4`
-- For IPv6 reverse DNS records: `dns.zone.reverse.ipv6`
+- 正引き DNS レコードには: `dns.zone.forward`
+- IPv4 逆引き DNS レコードには: `dns.zone.reverse.ipv4`
+- IPv6 逆引き DNS レコードには: `dns.zone.reverse.ipv6`
 
-For example:
+たとえば:
 
 ```bash
 incus network set <network_name> dns.zone.forward="incus.example.net"
 ```
 
-Zones belong to projects and are tied to the `networks` features of projects.
-You can restrict projects to specific domains and sub-domains through the {config:option}`project-restricted:restricted.networks.zones` project configuration key.
+ゾーンはプロジェクトに属し、プロジェクトの `networks` 機能に紐づきます。
+プロジェクトの {config:option}`project-restricted:restricted.networks.zones` 設定キーを使ってプロジェクトを指定のドメインとサブドメインに制限できます。
 
-## Add custom records
+## カスタムレコードを追加する
 
-A network zone automatically generates forward and reverse records for all instances, network gateways and downstream network ports.
-If required, you can manually add custom records to a zone.
+ネットワークゾーンは、すべてのインスタンス、ネットワークゲートウェイ、ダウンストリームネットワークポートに対して
+正引きと逆引きレコードを自動的に生成します。
 
-To do so, use the [`incus network zone record`](incus_network_zone_record.md) command.
+そのためには [`incus network zone record`](incus_network_zone_record.md) コマンドを使用します。
 
-### Create a record
+### レコードを作成する
 
-Use the following command to create a record:
+レコードを作成するには以下のコマンドを使用します:
 
 ```bash
 incus network zone record create <network_zone> <record_name>
 ```
 
-This command creates an empty record without entries and adds it to a network zone.
+このコマンドはエントリ無しの空のレコードを作成しネットワークゾーンに追加します。
 
-#### Record properties
+#### レコードのプロパティ
 
-Records have the following properties:
+レコードは以下のプロパティを持ちます。
 
-Property          | Type       | Required | Description
-:--               | :--        | :--      | :--
-`name`            | string     | yes      | Unique name of the record
-`description`     | string     | no       | Description of the record
-`entries`         | entry list | no       | A list of DNS entries
-`config`          | string set | no       | Configuration options as key/value pairs (only `user.*` custom keys supported)
+プロパティ    | 型         | 必須 | 説明
+:--           | :--        | :--  | :--
+`name`        | string     | yes  | レコードのユニークな名前
+`description` | string     | no   | レコードの説明
+`entries`     | entry list | no   | DNS エントリのリスト
+`config`      | string set | no   | キー／バリュー形式の設定オプション（`user.*` カスタムキーのみサポート）
 
-### Add or remove entries
+### エントリを追加または削除する
 
-To add an entry to the record, use the following command:
+レコードにエントリを追加するには以下のコマンドを使います:
 
 ```bash
 incus network zone record entry add <network_zone> <record_name> <type> <value> [--ttl <TTL>]
 ```
 
-This command adds a DNS entry with the specified type and value to the record.
+このコマンドはレコードに指定した型と値を持つ DNS エントリを追加します。
 
-For example, to create a dual-stack web server, add a record with two entries similar to the following:
+たとえば、デュアルスタックのウェブサーバーを作成するには以下のような 2 つのエントリを持つレコードを追加します:
 
 ```bash
 incus network zone record entry add <network_zone> <record_name> A 1.2.3.4
 incus network zone record entry add <network_zone> <record_name> AAAA 1234::1234
 ```
 
-You can use the `--ttl` flag to set a custom time-to-live (in seconds) for the entry.
-Otherwise, the default of 300 seconds is used.
+エントリにカスタムの time-to-live（秒で指定）を設定するには `--ttl` フラグが使えます。
+指定しない場合、デフォルトの 300 秒になります。
 
-You cannot edit an entry (except if you edit the full record with [`incus network zone record edit`](incus_network_zone_record_edit.md)), but you can delete entries with the following command:
+（[`incus network zone record edit`](incus_network_zone_record_edit.md) でレコード全体を編集するのを除いて）エントリを編集は出来ませんが、以下のコマンドでエントリを削除できます:
 
 ```bash
 incus network zone record entry remove <network_zone> <record_name> <type> <value>

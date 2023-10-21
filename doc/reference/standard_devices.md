@@ -1,23 +1,23 @@
 (standard-devices)=
-# Standard devices
+# 標準デバイス
 
-Incus provides each instance with the basic devices that are required for a standard POSIX system to work.
-These devices aren't visible in the instance or profile configuration, and they may not be overridden.
+Incus は、標準の POSIX システムが動作するのに必要な基本的なデバイスを常にインスタンスに提供します。
+これらはインスタンスやプロファイルの設定では見えず、上書きもできません。
 
-The standard devices are:
+標準デバイスは次のようなデバイスが含まれます。
 
-| Device         | Type of device    |
-|:---------------|:------------------|
-| `/dev/null`    | Character device  |
-| `/dev/zero`    | Character device  |
-| `/dev/full`    | Character device  |
-| `/dev/console` | Character device  |
-| `/dev/tty`     | Character device  |
-| `/dev/random`  | Character device  |
-| `/dev/urandom` | Character device  |
-| `/dev/net/tun` | Character device  |
-| `/dev/fuse`    | Character device  |
-| `lo`           | Network interface |
+| デバイス         | デバイスのタイプ             |
+| :--------------- | :------------------          |
+| `/dev/null`      | キャラクタデバイス           |
+| `/dev/zero`      | キャラクタデバイス           |
+| `/dev/full`      | キャラクタデバイス           |
+| `/dev/console`   | キャラクタデバイス           |
+| `/dev/tty`       | キャラクタデバイス           |
+| `/dev/random`    | キャラクタデバイス           |
+| `/dev/urandom`   | キャラクタデバイス           |
+| `/dev/net/tun`   | キャラクタデバイス           |
+| `/dev/fuse`      | キャラクタデバイス           |
+| `lo`             | ネットワークインターフェース |
 
-Any other devices must be defined in the instance configuration or in one of the profiles used by the instance.
-The default profile typically contains a network interface that becomes `eth0` in the instance.
+これ以外に関しては、インスタンスの設定もしくはインスタンスで使われるいずれかのプロファイルで定義する必要があります。
+デフォルトのプロファイルには、インスタンス内で`eth0`になるネットワークインターフェースが通常は含まれます。

@@ -1,8 +1,8 @@
-# External resources
+# 外部リソース
 
 ```{toctree}
 :maxdepth: 1
 
-Project repository <https://github.com/lxc/incus>
-Image server <https://images.linuxcontainers.org>
+プロジェクトレポジトリ <https://github.com/lxc/incus>
+イメージサーバー <https://images.linuxcontainers.org>
 ```

@@ -1,70 +1,70 @@
 (migrate-from-lxc)=
-# How to migrate containers from LXC to Incus
+# LXC から Incus にコンテナをマイグレートするには
 
-Incus provides a tool (`lxc-to-incus`) that you can use to import LXC containers into your Incus server.
-The LXC containers must exist on the same machine as the Incus server.
+Incus は LXC のコンテナを Incus サーバーにインポートするためのツール（`lxc-to-incus`）を提供しています。
+LXC コンテナは Incus サーバーと同じマシン上に存在する必要があります。
 
-The tool analyzes the LXC containers and migrates both their data and their configuration into new Incus containers.
+このツールは LXC コンテナを分析し、データと設定の両方を新しい Incus コンテナにマイグレートします。
 
 ```{note}
-Alternatively, you can use the `incus-migrate` tool within a LXC container to migrate it to Incus (see {ref}`import-machines-to-instances`).
-However, this tool does not migrate any of the LXC container configuration.
+あるいは LXC コンテナ内で `incus-migrate` ツールを使用して Incus にマイグレートすることもできます（{ref}`import-machines-to-instances` 参照）。
+しかし、このツールは LXC コンテナの設定は一切マイグレートしません。
 ```
 
-## Get the tool
+## ツールを取得する
 
-If the tool isn't provided alongside your Incus installation, you can build it yourself.
-Make sure that you have `go` (version 1.18 or later) installed and get the tool with the following command:
+あなたの Incus がインストールされた環境でツールが提供されていない場合、自分でビルドできます。
+`go` （バージョン 1.18 以降）がインストールされていることを確認して以下のコマンドでツールを取得してください:
 
     go install github.com/lxc/incus/cmd/lxc-to-incus@latest
 
-## Prepare your LXC containers
+## LXC コンテナを用意する
 
-You can migrate one container at a time or all of your LXC containers at the same time.
+一度に 1 つのコンテナをマイグレートすることもできますし、同時にあなたのすべての LXC コンテナをマイグレートすることもできます。
 
 ```{note}
-Migrated containers use the same name as the original containers.
-You cannot migrate containers with a name that already exists as an instance name in Incus.
+マイグレートされたコンテナは元のコンテナと同じ名前を使用します。
+Incus にインスタンス名としてすでに存在する名前を持つコンテナをマイグレートすることはできません。
 
-Therefore, rename any LXC containers that might cause name conflicts before you start the migration process.
+このため、マイグレーションプロセスを開始する前に名前の衝突を引き起こす可能性のある LXC コンテナはリネームしてください。
 ```
 
-Before you start the migration process, stop the LXC containers that you want to migrate.
+マイグレーションプロセスを開始する前に、マイグレートしたいコンテナを停止してください。
 
-## Start the migration process
+## マイグレーションプロセスを開始する
 
-Run `sudo lxc-to-incus [flags]` to migrate the containers.
+コンテナをマイグレートするには `sudo lxd.lxc-to-incus [flags]` と実行してください。
 
-For example, to migrate all containers:
+たとえば、すべてのコンテナをマイグレートするには:
 
     sudo lxc-to-incus --all
 
-To migrate only the `lxc1` container:
+`lxc1` コンテナだけをマイグレートするには:
 
     sudo lxc-to-incus --containers lxc1
 
-To migrate two containers (`lxc1` and `lxc2`) and use the `my-storage` storage pool in Incus:
+2 つのコンテナ（`lxc1` と `lxc2`）をマイグレートし Incus 内の `my-storage` ストレージプールを使用するには:
 
     sudo lxc-to-incus --containers lxc1,lxc2 --storage my-storage
 
-To test the migration of all containers without actually running it:
+実際に実行せずにすべてのコンテナのマイグレートをテストするには:
 
     sudo lxc-to-incus --all --dry-run
 
-To migrate all containers but limit the `rsync` bandwidth to 5000 KB/s:
+すべてのコンテナをマイグレートするが、`rsync` の帯域幅を 5000 KB/s に限定するには:
 
     sudo lxc-to-incus --all --rsync-args --bwlimit=5000
 
-Run `sudo lxc-to-incus --help` to check all available flags.
+すべての利用可能なフラグを確認するには `sudo lxd.lxc-to-incus --help` と実行してください。
 
 ```{note}
-If you get an error that the `linux64` architecture isn't supported, either update the tool to the latest version or change the architecture in the LXC container configuration from `linux64` to either `amd64` or `x86_64`.
+`linux64` アーキテクチャがサポートされない（`linux64` architecture isn't supported）というエラーが出る場合、ツールを最新版にアップデートするか LXC コンテナ内のアーキテクチャを `linux64` から `amd64` か `x86_64` に変更してください。
 ```
 
-## Check the configuration
+## 設定を確認する
 
-The tool analyzes the LXC configuration and the configuration of the container (or containers) and migrates as much of the configuration as possible.
-You will see output similar to the following:
+このツールは LXC の設定と（1 つまたは複数の）コンテナの設定を分析し、可能な限りの範囲で設定をマイグレートします。
+以下のような実行結果が出力されます:
 
 ```{terminal}
 :input: sudo lxc-to-incus --containers lxc1
@@ -90,4 +90,4 @@ Transferring container: lxc1: ...
 Container 'lxc1' successfully created
 ```
 
-After the migration process is complete, you can check and, if necessary, update the configuration in Incus before you start the migrated Incus container.
+マイグレーションプロセスが完了したら、設定を確認し、必要に応じて、マイグレートした Incus コンテナを起動する前に Incus 内の設定を更新してください。

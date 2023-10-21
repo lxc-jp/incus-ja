@@ -1,73 +1,73 @@
 (run-commands)=
-# How to run commands in an instance
+# インスタンス内でコマンドを実行するには
 
-Incus allows to run commands inside an instance using the Incus client, without needing to access the instance through the network.
+Incus では、ネットワークを経由してインスタンスにアクセスする必要なしに、Incus クライアントを使用してインスタンス内でコマンドを実行できます。
 
-For containers, this always works and is handled directly by Incus.
-For virtual machines, the `incus-agent` process must be running inside of the virtual machine for this to work.
+コンテナでは、これは常に機能し、Incus によって直接処理されます。
+仮想マシンでは、これが機能するには、仮想マシン内で `incus-agent` プロセスが稼働している必要があります。
 
-To run commands inside your instance, use the [`incus exec`](incus_exec.md) command.
-By running a shell command (for example, `/bin/bash`), you can get shell access to your instance.
+インスタンス内部でコマンドを実行するには [`incus exec`](incus_exec.md) コマンドを使います。
+シェルコマンド（たとえば `/bin/bash`）を実行することで、インスタンスにシェルアクセスできます。
 
-## Run commands inside your instance
+## インスタンス内部でコマンドを実行する
 
-To run a single command from the terminal of the host machine, use the [`incus exec`](incus_exec.md) command:
+ホストマシンの端末から単一のコマンドを実行するには、[`incus exec`](incus_exec.md) コマンドを使います:
 
     incus exec <instance_name> -- <command>
 
-For example, enter the following command to update the package list on your container:
+たとえば、コンテナ上のパッケージリストを更新するには以下のコマンドを入力します:
 
     incus exec ubuntu-container -- apt-get update
 
-### Execution mode
+### 実行モード
 
-Incus can execute commands either interactively or non-interactively.
+Incus はコマンドをインタラクティブにも非インタラクティブにも実行できます。
 
-In interactive mode, a pseudo-terminal device (PTS) is used to handle input (stdin) and output (stdout, stderr).
-This mode is automatically selected by the CLI if connected to a terminal emulator (and not run from a script).
-To force interactive mode, add either `--force-interactive` or `--mode interactive` to the command.
+インタラクティブモードでは、入力（stdin）と出力（stdout, stderr）を扱うために疑似端末装置（PTS）が使用されます。
+これは、ターミナル・エミュレータに接続されている場合（スクリプトから実行されていない場合）、CLI によって自動的に選択されます。
+インタラクティブ・モードを強制するには、`--force-interactive`か`--mode interactive`をコマンドに追加します。
 
-In non-interactive mode, pipes are allocated instead (one for each of stdin, stdout and stderr).
-This method allows running a command and properly getting separate stdin, stdout and stderr as required by many scripts.
-To force non-interactive mode, add either `--force-noninteractive` or `--mode non-interactive` to the command.
+非インタラクティブ・モードでは、代わりにパイプが (stdin、stdout、stderr のそれぞれに 1 つずつ) 割り当てられます。
+これにより、多くのスクリプトで必要とされるように、コマンドを実行しながら、stdin、stdout、stderr を別々に適切に取得することができます。
+非インタラクティブ・モードを強制するには、`--force-noninteractive`か`--mode non-interactive`をコマンドに追加します。
 
-### User, groups and working directory
+### ユーザー、グループ、作業ディレクトリー
 
-Incus has a policy not to read data from within the instances or trust anything that can be found in the instance.
-Therefore, Incus does not parse files like `/etc/passwd`, `/etc/group` or `/etc/nsswitch.conf` to handle user and group resolution.
+Incus はインスタンス内のデータを読まない、あるいはその中にあるものを信用しないというポリシーを持っています。
+これは、Incus がユーザーやグループの解決を処理するために、`/etc/passwd`、`/etc/group`や`/etc/nsswitch.conf`のようなものを解析しないことを意味しています。
 
-As a result, Incus doesn't know the home directory for the user or the supplementary groups the user is in.
+結果として、Incus はユーザーのホームディレクトリーがどこにあるか、あるいはどのような補助的なグループがあるかを知りません。
 
-By default, Incus runs commands as `root` (UID 0) with the default group (GID 0) and the working directory set to `/root`.
-You can override the user, group and working directory by specifying absolute values through the following flags:
+デフォルトでは、Incus は root（UID 0）、デフォルトのグループ（GID 0）としてコマンドを実行し、作業ディレクトリーは`/root`に設定されています。
+ユーザー、グループ、作業ディレクトリーは以下のフラグによって上書きできます。
 
-- `--user` - the user ID for running the command
-- `--group` - the group ID for running the command
-- `--cwd` - the directory in which the command should run
+- `--user` - コマンドを実行するユーザー ID
+- `--group` - コマンドを実行するグループ ID
+- `--cwd` - コマンドを実行するディレクトリー
 
-### Environment
+### 環境
 
-You can pass environment variables to an exec session in the following two ways:
+以下の 2 つの方法で exec セッションに環境変数を渡せます。
 
-Set environment variables as instance options
-: To set the `ENVVAR` environment variable to `VALUE` in the instance, set the `environment.ENVVAR` instance option (see {config:option}`instance-miscellaneous:environment.*`):
+インスタンスオプションとして環境変数を渡す
+: インスタンス内で`ENVVAR`環境変数を`VALUE`に設定するには、`environment.ENVVAR`インスタンスオプション を設定します（{config:option}`instance-miscellaneous:environment.*`参照）:
 
-      incus config set <instance_name> environment.ENVVAR=VALUE
+      lxc config set <instance_name> environment.ENVVAR=VALUE
 
-Pass environment variables to the exec command
-: To pass an environment variable to the exec command, use the `--env` flag.
-  For example:
+exec コマンドに環境変数を渡す
+: exec コマンドに環境変数を渡すには、`--env`フラグを使います。
+  たとえば以下のようにします:
 
       incus exec <instance_name> --env ENVVAR=VALUE -- <command>
 
-In addition, Incus sets the following default values (unless they are passed in one of the ways described above):
+さらに、Incus は (上記のいずれかの方法で渡されない限り) 以下のデフォルト値を設定します:
 
 ```{list-table}
    :header-rows: 1
 
-* - Variable name
-  - Condition
-  - Value
+* - 変数名
+  - 条件
+  - 値
 * - `PATH`
   - \-
   - Concatenation of:
@@ -90,20 +90,20 @@ In addition, Incus sets the following default values (unless they are passed in 
   - `root`
 ```
 
-## Get shell access to your instance
+## インスタンスにシェルアクセスする
 
-If you want to run commands directly in your instance, run a shell command inside it.
-For example, enter the following command (assuming that the `/bin/bash` command exists in your instance):
+インスタンス内で直接コマンドを実行したい場合、インスタンス内でシェルコマンドを実行します。
+たとえば、以下のコマンド（インスタンス内に`/bin/bash`コマンドが存在する想定）を入力します。
 
-    incus exec <instance_name> -- /bin/bash
+    lxc exec <instance_name> -- /bin/bash
 
-By default, you are logged in as the `root` user.
-If you want to log in as a different user, enter the following command:
+デフォルトでは`root`ユーザーでログインします。
+別のユーザーでログインしたい場合は、以下のコマンドを入力します:
 
-    incus exec <instance_name> -- su --login <user_name>
+    lxc exec <instance_name> -- su --login <user_name>
 
 ```{note}
-Depending on the operating system that you run in your instance, you might need to create a user first.
+インスタンス内で稼働しているオペレーティングシステムによっては、先にユーザを作成する必要があるかもしれません。
 ```
 
-To exit the instance shell, enter `exit` or press `Ctrl`+`d`.
+インスタンスシェルを終了するには、`exit`を入力するか`Ctrl`+`d`を押します。

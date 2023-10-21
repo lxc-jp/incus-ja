@@ -1,22 +1,22 @@
 (exp-storage)=
-# About storage pools, volumes and buckets
+# ストレージプール、ボリューム、バケットについて
 
-Incus stores its data in storage pools, divided into storage volumes of different content types (like images or instances).
-You could think of a storage pool as the disk that is used to store data, while storage volumes are different partitions on this disk that are used for specific purposes.
+Incus はデータを（イメージやインスタンスのように）コンテントタイプに応じて別のストレージボリュームに分けてストレージプールに保管します。
+ストレージプールはデータを保管するためのディスクであり、ストレージボリュームは特定の目的に使用されるディスク上の別々のパーティションであると考えることも出来るでしょう。
 
-In addition to storage volumes, there are storage buckets, which use the [Amazon {abbr}`S3 (Simple Storage Service)`](https://docs.aws.amazon.com/AmazonS3/latest/API/Welcome.html) protocol.
-Like storage volumes, storage buckets are part of a storage pool.
+ストレージボリュームに加えて、ストレージバケットというものもあります。これは [Amazon {abbr}`S3 (Simple Storage Service)`](https://docs.aws.amazon.com/AmazonS3/latest/API/Welcome.html) プロトコルを使用します。
+ストレージボリュームと同様に、ストレージバケットはストレージプールの一部です。
 
 (storage-pools)=
-## Storage pools
+## ストレージプール
 
-During initialization, Incus prompts you to create a first storage pool.
-If required, you can create additional storage pools later (see {ref}`storage-create-pool`).
+初期化時に、 Incus は最初のストレージプールを作成するためのプロンプトを表示します。
+必要であれば、後からストレージプールを追加できます（{ref}`storage-create-pool` 参照）。
 
-Each storage pool uses a storage driver.
-The following storage drivers are supported:
+それぞれのストレージプールはストレージドライバーを使用します。
+次のストレージドライバーが利用できます。
 
-- [Directory - `dir`](storage-dir)
+- [ディレクトリ - `dir`](storage-dir)
 - [Btrfs - `btrfs`](storage-btrfs)
 - [LVM - `lvm`](storage-lvm)
 - [ZFS - `zfs`](storage-zfs)
@@ -24,68 +24,68 @@ The following storage drivers are supported:
 - [CephFS - `cephfs`](storage-cephfs)
 - [Ceph Object - `cephobject`](storage-cephobject)
 
-See the following how-to guides for additional information:
+さらなる情報については以下の how-to ガイドを参照してください:
 
 - {ref}`howto-storage-pools`
 - {ref}`howto-storage-create-instance`
 
 (storage-location)=
-### Data storage location
+### データストレージのロケーション
 
-Where the Incus data is stored depends on the configuration and the selected storage driver.
-Depending on the storage driver that is used, Incus can either share the file system with its host or keep its data separate.
+Incus のデータをどこに保管するかは設定と選択したストレージドライバーによって異なります。
+使用されるストレージドライバーによって、 Incus はファイルシステムをホストと共有することもできますし、データを別にしておくこともできます。
 
-Storage location         | Directory | Btrfs    | LVM      | ZFS      | Ceph (all) |
-:---                     | :-:       | :-:      | :-:      | :-:      | :-:        |
-Shared with the host     | &#x2713;  | &#x2713; | -        | &#x2713; | -          |
-Dedicated disk/partition | -         | &#x2713; | &#x2713; | &#x2713; | -          |
-Loop disk                | -         | &#x2713; | &#x2713; | &#x2713; | -          |
-Remote storage           | -         | -        | -        | -        | &#x2713;   |
+ストレージロケーション        | Directory | Btrfs    | LVM      | ZFS      | Ceph (すべて) |
+:---                          | :-:       | :-:      | :-:      | :-:      | :-:         |
+ホストと共有                  | &#x2713;  | &#x2713; | -        | &#x2713; | -           |
+専用のディスク/パーティション | -         | &#x2713; | &#x2713; | &#x2713; | -           |
+ループディスク                | -         | &#x2713; | &#x2713; | &#x2713; | -           |
+リモートストレージ            | -         | -        | -        | -        | &#x2713;    |
 
-#### Shared with the host
+#### ホストと共有
 
-Sharing the file system with the host is usually the most space-efficient way to run Incus.
-In most cases, it is also the easiest to manage.
+ファイルシステムをホストと共有するのは Incus を実行する上で通常もっとも空間効率が良い方法です。
+ほとんどの場合、もっとも管理が楽な方法でもあります。
 
-This option is supported for the `dir` driver, the `btrfs` driver (if the host is Btrfs and you point Incus to a dedicated sub-volume) and the `zfs` driver (if the host is ZFS and you point Incus to a dedicated dataset on your zpool).
+この選択肢は `dir` ドライバー、 `btrfs` ドライバー（ホストが Btrfs で Incus に専用のサブボリュームを使用する場合）、 `zfs` ドライバー（ホストが ZFS で zpool 上で Incus に専用のデータセットを使用する場合）でサポートされます。
 
-#### Dedicated disk or partition
+#### 専用のディスクかパーティションか
 
-Having Incus use an empty partition on your main disk or a full dedicated disk keeps its storage completely independent from the host.
+メインのディスク上で Incus に空のパーティションを使用するか、ホストから完全に独立したストレージを保管する完全な専用のディスクを使用します。
 
-This option is supported  for the `btrfs` driver, the `lvm` driver and the `zfs` driver.
+この選択肢は `btrfs` ドライバー、 `lvm` ドライバー、 `zfs` ドライバーでサポートされます。
 
-#### Loop disk
+#### ループディスク
 
-Incus can create a loop file on your main drive and have the selected storage driver use that.
-This method is functionally similar to using a disk or partition, but it uses a large file on your main drive instead.
-This means that every write must go through the storage driver and your main drive's file system, which leads to decreased performance.
+Incus ではメインドライブ上にループファイルを作成して選択したストレージドライバーでそれを使用できます。
+この方法はディスクやパーティションを使用する方法と機能的には似ていますが、大きな 1 つのファイルをメインドライブとして使用する点が異なります。
+これはそれぞれの書き込みがストレージドライバーとメインドライブのファイルシステムを通過することを意味し、パフォーマンスは低くなります。
 
-The loop files reside in `/var/lib/incus/disks/`.
+ループファイルは `/var/lib/incus/disks/` に作られます。
 
-Loop files usually cannot be shrunk.
-They will grow up to the configured limit, but deleting instances or images will not cause the file to shrink.
-You can increase their size though; see {ref}`storage-resize-pool`.
+ループファイルは通常縮小できません。
+最大で指定した限界まで拡大しますが、インスタンスやイメージを削除してもファイルが縮小することはありません。
+しかしサイズを増やすことはできます。 {ref}`storage-resize-pool` を参照してください。
 
-#### Remote storage
+#### リモートストレージ
 
-The `ceph`, `cephfs` and `cephobject` drivers store the data in a completely independent Ceph storage cluster that must be set up separately.
+`ceph`, `cephfs`, `cephobject` ドライバーはデータを完全に独立な Ceph ストレージクラスタに保管します。これは別途セットアップが必要です。
 
 (storage-default-pool)=
-### Default storage pool
+### デフォルトストレージプール
 
-There is no concept of a default storage pool in Incus.
+Incus にはデフォルトストレージプールという概念はありません。
 
-When you create a storage volume, you must specify the storage pool to use.
+ストレージボリュームを作成する時は、使用するストレージプールを指定する必要があります。
 
-When Incus automatically creates a storage volume during instance creation, it uses the storage pool that is configured for the instance.
-This configuration can be set in either of the following ways:
+インスタンスの作成時に Incus が自動的にストレージボリュームを作成する際は、インスタンスに設定されたストレージプールを使用します。
+この設定は以下のいずれかの方法でできます。
 
-- Directly on an instance: [`incus launch <image> <instance_name> --storage <storage_pool>`](incus_launch.md)
-- Through a profile: [`incus profile device add <profile_name> root disk path=/ pool=<storage_pool>`](incus_profile_device_add.md) and [`incus launch <image> <instance_name> --profile <profile_name>`](incus_launch.md)
-- Through the default profile
+- 直接インスタンスに指定: [`incus launch <image> <instance_name> --storage <storage_pool>`](incus_launch.md)
+- プロファイル経由: [`incus profile device add <profile_name> root disk path=/ pool=<storage_pool>`](incus_profile_device_add.md) と [`incus launch <image> <instance_name> --profile <profile_name>`](incus_launch.md)
+- デフォルトプロファイル経由
 
-In a profile, the storage pool to use is defined by the pool for the root disk device:
+プロファイルでは使用するストレージプールはルートディスクデバイスのプールで定義されます:
 
 ```yaml
   root:
@@ -94,87 +94,87 @@ In a profile, the storage pool to use is defined by the pool for the root disk d
     pool: default
 ```
 
-In the default profile, this pool is set to the storage pool that was created during initialization.
+デフォルトプロファイルではこのプールは (訳注: Incus の) 初期化時に作られたストレージプールに設定されています。
 
 (storage-volumes)=
-## Storage volumes
+## ストレージボリューム
 
-When you create an instance, Incus automatically creates the required storage volumes for it.
-You can create additional storage volumes.
+インスタンスを作成する際、 Incus は必要なストレージボリュームを自動的に作成します。
+追加のストレージボリュームを作成することもできます。
 
-See the following how-to guides for additional information:
+さらなる情報については以下の how-to ガイドを参照してください:
 
 - {ref}`howto-storage-volumes`
 - {ref}`howto-storage-move-volume`
 - {ref}`howto-storage-backup-volume`
 
 (storage-volume-types)=
-### Storage volume types
+### ストレージボリュームタイプ
 
-Storage volumes can be of the following types:
+ストレージボリュームは以下の種別があります:
 
 `container`/`virtual-machine`
-: Incus automatically creates one of these storage volumes when you launch an instance.
-  It is used as the root disk for the instance, and it is destroyed when the instance is deleted.
+: Incus はインスタンスを起動する際にこのどちらかのストレージボリュームを自動的に作成します。
+  それはインスタンスのルートディスクとして使用され、インスタンスが削除される際に破棄されます。
 
-  This storage volume is created in the storage pool that is specified in the profile used when launching the instance (or the default profile, if no profile is specified).
-  The storage pool can be explicitly specified by providing the `--storage` flag to the launch command.
+  このストレージボリュームはインスタンス起動時に使用されたプロファイル（あるいはプロファイルが指定されない場合はデフォルトプロファイル）に指定されたストレージプール内に作成されます。
+  起動のコマンドに `--storage` フラグを渡してストレージプールを明示的に指定することもできます。
 
 `image`
-: Incus automatically creates one of these storage volumes when it unpacks an image to launch one or more instances from it.
-  You can delete it after the instance has been created.
-  If you do not delete it manually, it is deleted automatically ten days after it was last used to launch an instance.
+: Incus はイメージから 1 つあるいは複数のインスタンスを起動するためにイメージを解凍する際にこれらのストレージボリュームを自動的に作成します。
+  インスタンスが作成された後は削除できます。
+  手動で削除しない場合、インスタンス起動の 10 日後に自動的に削除されます。
 
-  The image storage volume is created in the same storage pool as the instance storage volume, and only for storage pools that use a {ref}`storage driver <storage-drivers>` that supports optimized image storage.
+  イメージのストレージボリュームはインスタンスのストレージボリュームと同じストレージプール内に作成されます。それは最適化されたイメージのストレージをサポートする {ref}`ストレージドライバー <storage-drivers>` を使用するストレージプールだけです。
 
 `custom`
-: You can add one or more custom storage volumes to hold data that you want to store separately from your instances.
-  Custom storage volumes can be shared between instances, and they are retained until you delete them.
+: インスタンスから分離して保管したいデータを保持する 1 つあるいは複数のカスタムストレージボリュームを追加できます。
+  カスタムストレージボリュームはインスタンス間で共有でき、インスタンスが削除されても残ります。
 
-  You can also use custom storage volumes to hold your backups or images.
+  バックアップやイメージを保管するためにカスタムストレージボリュームを使用することもできます。
 
-  You must specify the storage pool for the custom volume when you create it.
+  カスタムボリュームの作成時は使用するストレージプールを指定する必要があります。
 
 (storage-content-types)=
-### Content types
+### コンテントタイプ
 
-Each storage volume uses one of the following content types:
+それぞれのストレージボリュームは以下のコンテントタイプのどれかを使用します:
 
 `filesystem`
-: This content type is used for containers and container images.
-  It is the default content type for custom storage volumes.
+: このコンテントタイプはコンテナとコンテナイメージに使用されます。
+  これはカスタムストレージボリュームのデフォルトのコンテントタイプです。
 
-  Custom storage volumes of content type `filesystem` can be attached to both containers and virtual machines, and they can be shared between instances.
+  コンテントタイプが `filesystem` のカスタムストレージボリュームはコンテナと仮想マシンの両方にアタッチでき、インスタンス間で共有できます。
 
 `block`
-: This content type is used for virtual machines and virtual machine images.
-  You can create a custom storage volume of type `block` by using the `--type=block` flag.
+: このコンテントタイプは仮想マシンと仮想マシンイメージで使用されます。
+  コンテントタイプ `block` のカスタムストレージボリュームは `--type=block` フラグを使って作成できます。
 
-  Custom storage volumes of content type `block` can only be attached to virtual machines.
-  They should not be shared between instances, because simultaneous access can lead to data corruption.
+  コンテントタイプが `block` のカスタムストレージボリュームは仮想マシンのみにアタッチできます。
+  これらはインスタンス間では共有すべきではありません。同時アクセスはデータ破壊を引き起こすからです。
 
 `iso`
-: This content type is used for custom ISO volumes.
-  A custom storage volume of type `iso` can only be created by importing an ISO file using [`incus import`](incus_import.md).
+: このコンテントタイプはカスタム ISO ボリュームで使用されます。
+  コンテントタイプ `iso` のカスタムストレージボリュームは [`incus import`](incus_import.md) コマンドを使って ISO ファイルをインポートすることでのみ作成できます。
 
-  Custom storage volumes of content type `iso` can only be attached to virtual machines.
-  They can be attached to multiple machines simultaneously as they are always read-only.
+  コンテントタイプ `iso` のカスタムストレージボリュームは仮想マシンにのみアタッチできます。
+  これらは読み取り専用なので同時に複数の仮想マシンにアタッチできます。
 
 (storage-buckets)=
-## Storage buckets
+## ストレージバケット
 
-Storage buckets provide object storage functionality via the S3 protocol.
+ストレージバケットは S3 プロトコルを使用してオブジェクトストレージの機能を提供します。
 
-They can be used in a way that is similar to custom storage volumes.
-However, unlike storage volumes, storage buckets are not attached to an instance.
-Instead, applications can access a storage bucket directly using its URL.
+これはカスタムストレージボリュームと同様の方法で使用されます。
+しかし、ストレージボリュームとは異なり、ストレージバケットはインスタンスに紐付けされません。
+代わりに、アプリケーションはストレージバケットにその URL を使って直接アクセスできます。
 
-Each storage bucket is assigned one or more access keys, which the applications must use to access it.
+それぞれのストレージバケットには 1 つまたは複数のアクセスキーが割り当てられ、アプリケーションはアクセスの際にこれを使う必要があります。
 
-Storage buckets can be located on local storage (with `dir`, `btrfs`, `lvm` or `zfs` pools) or on remote storage (with `cephobject` pools).
+ストレージバケットはローカルのストレージ（`dir`, `btrfs`, `lvm` あるいは `zfs` プールの場合）あるいはリモートストレージ（`cephobject` プールの場合）上に配置できます。
 
-To enable storage buckets for local storage pool drivers and allow applications to access the buckets via the S3 protocol, you must configure the {config:option}`server-core:core.storage_buckets_address` server setting.
+ローカルストレージドライバーでストレージバケットを有効にし、 S3 プロトコル経由でアプリケーションがバケットにアクセスできるようにするには、{config:option}`server-core:core.storage_buckets_address` サーバー設定を調整する必要があります。
 
-See the following how-to guide for additional information:
+さらなる情報については以下の how-to ガイドを参照してください:
 
 - {ref}`howto-storage-buckets`

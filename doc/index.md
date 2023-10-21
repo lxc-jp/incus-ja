@@ -1,8 +1,6 @@
 # Incus
 
-(日本語訳準備中)
-
-Incus is a modern, secure and powerful system container and virtual machine manager.
+Incus は次世代の安全で強力なシステムコンテナおよび仮想マシンマネージャーです。
 
 % Include content from [../README.md](../README.md)
 ```{include} ../README.md
@@ -10,7 +8,7 @@ Incus is a modern, secure and powerful system container and virtual machine mana
     :end-before: <!-- Include end Incus intro -->
 ```
 
-## Security
+## セキュリティー
 
 % Include content from [../README.md](../README.md)
 ```{include} ../README.md
@@ -18,7 +16,7 @@ Incus is a modern, secure and powerful system container and virtual machine mana
     :end-before: <!-- Include end security -->
 ```
 
-See [Security](security.md) for detailed information.
+詳細は[セキュリティ](security.md)をご覧ください。
 
 ````{important}
 % Include content from [../README.md](../README.md)
@@ -28,37 +26,30 @@ See [Security](security.md) for detailed information.
 ```
 ````
 
-## Project and community
+## プロジェクトとコミュニティ
 
-Incus is free software and developed under the [Apache 2 license](https://www.apache.org/licenses/LICENSE-2.0).
-It’s an open source project that warmly welcomes community projects, contributions, suggestions, fixes and constructive feedback.
+Incus はフリーソフトウェアであり [Apache 2 ライセンス](https://www.apache.org/licenses/LICENSE-2.0) で開発されています。
+これはコミュニティのプロジェクト、コントリビューション、提案、修正、建設的なフィードバックを温かく迎えるオープンソースプロジェクトです。
 
-- [Code of Conduct](https://github.com/lxc/incus/blob/main/CODE_OF_CONDUCT.md)
-- [Contribute to the project](contributing.md)
-- [Release announcements](https://discuss.linuxcontainers.org/c/news/13)
-- [Release tarballs](https://github.com/lxc/incus/releases/)
-- [Get support](support.md)
-- [Watch tutorials and announcements on YouTube](https://www.youtube.com/@TheZabbly)
-- [Discuss on IRC](https://web.libera.chat/#lxc) (see [Getting started with IRC](https://discuss.linuxcontainers.org/t/getting-started-with-irc/11920) if needed)
-- [Ask and answer questions on the forum](https://discuss.linuxcontainers.org)
+- [Code of Conduct](https://github.com/lxc-jp/incus-ja/blob/main/CODE_OF_CONDUCT.md)
 
 ```{toctree}
 :hidden:
 :titlesonly:
 
 self
-Getting Started </tutorial/first_steps>
-General </general>
-Client </client>
-Server </server>
-Instances </instances>
-Storage </storage>
-Networks </networks>
-Images </images>
-Projects </projects>
-Clustering </clustering>
+使い始めるには </tutorial/first_steps>
+概要 </general>
+クライアント </client>
+サーバ </server>
+インスタンス </instances>
+ストレージ </storage>
+ネットワーク </networks>
+イメージ </images>
+プロジェクト </projects>
+クラスタリング </clustering>
 API </api>
-Security </security>
-Internals </internals>
-External resources </external_resources>
+セキュリティ </security>
+内部動作 </internals>
+外部リソース </external_resources>
 ```

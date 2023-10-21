@@ -1,24 +1,24 @@
 (expl-instances)=
-# About instances
+# インスタンスについて
 
-Incus supports the following types of instances:
+Incus は以下のインスタンスタイプをサポートします:
 
-Containers
-: Containers are the default type for instances.
-  They are currently the most complete implementation of Incus instances and support more features than virtual machines.
+コンテナ
+: コンテナはデフォルトのインスタンスタイプです。
+  コンテナは現状 Incus インスタンスの最も完全な実装であり、仮想マシンよりも多くの機能をサポートしています。
 
-  Containers are implemented through the use of `liblxc` (LXC).
+  コンテナは `liblxc`（LXC）を使って実装されています。
 
-Virtual machines
-: {abbr}`Virtual machines (VMs)` are natively supported since version 4.0 of Incus.
-  Thanks to a built-in agent, they can be used almost like containers.
+仮想マシン
+: {abbr}`Virtual machines (VMs)` は Incus バージョン 4.0 以降ネイティブにサポートされています。<!-- TODO: バージョン4.0はIncusではない -->
+  ビルトインのエージェントのおかげで、ほぼコンテナと同様に使えます。
 
-  Incus uses `qemu` to provide the VM functionality.
+  Incus は仮想マシンの機能を提供するために `qemu` を使用しています。
 
   ```{note}
-  Currently, virtual machines support fewer features than containers, but the plan is to support the same set of features for both instance types in the future.
+  現状、仮想マシンはコンテナよりサポートする機能が少ないですが、将来には両方のインスタンスタイプで同じ機能セットをサポートする計画です。
 
-  To see which features are available for virtual machines, check the condition column in the {ref}`instance-options` documentation.
+  仮想マシンでどの機能が利用可能かを見るには、{ref}`instance-options` ドキュメントの条件のカラムを確認してください。
   ```
 
-See {ref}`containers-and-vms` for more information about the different instance types.
+インスタンスタイプのより詳細な情報は{ref}`containers-and-vms`を参照してください。

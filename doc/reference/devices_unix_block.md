@@ -1,33 +1,35 @@
 (devices-unix-block)=
-# Type: `unix-block`
+# タイプ: `unix-block`
 
 ```{note}
-The `unix-block` device type is supported for containers.
-It supports hotplugging.
+`unix-block`デバイスタイプはコンテナでサポートされます。
+ホットプラグをサポートします。
 ```
 
-Unix block devices make the specified block device appear as a device in the instance (under `/dev`).
-You can read from the device and write to it.
+Unix ブロックデバイスは、指定したブロックデバイスをインスタンス内の（`/dev`以下の）デバイスとして出現させます。
+そのデバイスから読み取りやデバイスへ書き込みができます。
 
-## Device options
+## デバイスオプション
 
-`unix-block` devices have the following device options:
+`unix-block`デバイスには以下のデバイスオプションがあります:
 
-Key         | Type      | Default           | Description
-:--         | :--       | :--               | :--
-`gid`       | int       | `0`               | GID of the device owner in the instance
-`major`     | int       | device on host    | Device major number
-`minor`     | int       | device on host    | Device minor number
-`mode`      | int       | `0660`            | Mode of the device in the instance
-`path`      | string    | -                 | Path inside the instance (one of `source` and `path` must be set)
-`required`  | bool      | `true`            | Whether this device is required to start the instance (see {ref}`devices-unix-block-hotplugging`)
-`source`    | string    | -                 | Path on the host (one of `source` and `path` must be set)
-`uid`       | int       | `0`               | UID of the device owner in the instance
+キー       | 型     | デフォルト値       | 説明
+:--        | :--    | :--                | :--
+`gid`      | int    | `0`                | インスタンス内のデバイス所有者のGID
+`major`    | int    | ホスト上のデバイス | デバイスのメジャー番号
+`minor`    | int    | ホスト上のデバイス | デバイスのマイナー番号
+`mode`     | int    | `0660`             | インスタンス内のデバイスのモード
+`path`     | string | -                  | インスタンス内のパス（`source`と`path`のどちらかを設定しなければいけません）
+`required` | bool   | `true`             | このデバイスがインスタンスの起動に必要かどうか（{ref}`devices-unix-block-hotplugging`参照）
+`source`   | string | -                  | ホスト上のパス（`source`と`path`のどちらかを設定しなければいけません）
+`uid`      | int    | `0`                | インスタンス内のデバイス所有者の UID
 
 (devices-unix-block-hotplugging)=
-## Hotplugging
+## ホットプラグ
 
-Hotplugging is enabled if you set `required=false` and specify the `source` option for the device.
+<!-- Include start Hotplugging -->
 
-In this case, the device is automatically passed into the container when it appears on the host, even after the container starts.
-If the device disappears from the host system, it is removed from the container as well.
+ホットプラグは`required=false`を設定しデバイスの`source`オプションを指定した場合に有効になります。
+
+この場合、デバイスはホスト上で出現したときに、コンテナの起動後であっても、自動的にコンテナにパススルーされます。
+ホストシステムからデバイスが消えると、コンテナからも消えます。

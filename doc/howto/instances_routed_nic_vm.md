@@ -1,21 +1,21 @@
 (instances-routed-nic-vm)=
-# How to add a routed NIC device to a virtual machine
+# 仮想マシンに routed NIC を追加するには
 
-When adding a {ref}`routed NIC device <nic-routed>` to an instance, you must configure the instance to use the link-local gateway IPs as default routes.
-For containers, this is configured for you automatically.
-For virtual machines, the gateways must be configured manually or via a mechanism like `cloud-init`.
+インスタンスに {ref}`routed NIC デバイス <nic-routed>` を追加する際、link-local ゲートウェイ IP をデフォルトルートとして使用するようにインスタンスを設定する必要があります。
+コンテナでは、これは自動的に設定されます。
+仮想マシンでは、ゲートウェイは手動あるいは `cloud-init` のような仕組みで設定する必要があります。
 
-To configure the gateways with `cloud-init`, firstly initialize an instance:
+`cloud-init` でゲートウェイを設定するには、まずインスタンスを初期化します:
 
     incus init images:ubuntu/22.04 jammy --vm
 
-Then add the routed NIC device:
+次に routed NIC デバイスを追加します:
 
     incus config device add jammy eth0 nic nictype=routed parent=my-parent-network ipv4.address=192.0.2.2 ipv6.address=2001:db8::2
 
-In this command, `my-parent-network` is your parent network, and the IPv4 and IPv6 addresses are within the subnet of the parent.
+このコマンドでは、`my-parent-network` が親ネットワークで、IPv4 と IPv6 アドレスは親のサブネット内です。
 
-Next we will add some `netplan` configuration to the instance using the `cloud-init.network-config` configuration key:
+次に `cloud-init.network-config` 設定キーを使ってインスタンスに `netplan` 設定を追加します:
 
     cat <<EOF | incus config set jammy cloud-init.network-config -
     network:
@@ -34,21 +34,21 @@ Next we will add some `netplan` configuration to the instance using the `cloud-i
           - 2001:db8::2/128
     EOF
 
-This `netplan` configuration adds the {ref}`static link-local next-hop addresses <nic-routed>` (`169.254.0.1` and `fe80::1`) that are required.
-For each of these routes we set `on-link` to `true`, which specifies that the route is directly connected to the interface.
-We also add the addresses that we configured in our routed NIC device.
-For more information on `netplan`, see [their documentation](https://netplan.readthedocs.io/en/latest/).
+この `netplan` 設定は必要な {ref}`スタティックな link-local next-hop アドレス <nic-routed>`（`169.254.0.1` と `fe80::1`）を追加します。
+これらのルートはそれぞれ `on-link` を `true` に設定します。するとルートがインターフェースに直接接続されるよう指定されます。
+また routed NIC デバイス内でのアドレスも追加します。
+`netplan` の詳細は [ドキュメント](https://netplan.readthedocs.io/en/latest/) を参照してください。
 
 ```{note}
-This `netplan` configuration does not include a name server.
-To enable DNS within the instance, you must set a valid DNS IP address.
-If there is a `incusbr0` network on the host, the name server can be set to that IP instead.
+この `netplan` 設定はネームサーバーを含んでいません。
+インスタンス内で DNS を使うには、有効な DNS の IP アドレスを設定する必要があります。
+ホストに `incusbr0` ネットワークがあれば、ネームサーバーは代わりにその IP を指定できます。
 ```
 
-You can then start your instance with:
+これでネットワークを開始できます:
 
     incus start jammy
 
 ```{note}
-Before you start your instance, make sure that you have {ref}`configured the parent network <nic-routed>` to enable proxy ARP/NDP.
+インスタンスを輝度する前に、 proxy ARP/NDP を有効にするように {ref}`親のネットワークを設定した <nic-routed>` ことを確認してください。
 ```

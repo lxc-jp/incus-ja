@@ -5,11 +5,11 @@
 :maxdepth: 1
 
 image-handling
-Use remote images <howto/images_remote>
-Manage images <howto/images_manage>
-Copy and import images <howto/images_copy>
-Create images <howto/images_create>
-Associate profiles <howto/images_profiles>
+リモートイメージの使用 <howto/images_remote>
+イメージの管理 <howto/images_manage>
+イメージのコピーとインポート <howto/images_copy>
+イメージの作成 <howto/images_create>
+プロファイルの関連付け <howto/images_profiles>
 reference/remote_image_servers
 reference/image_format
 ```

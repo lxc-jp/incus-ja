@@ -1,96 +1,96 @@
 (benchmark-performance)=
-# How to benchmark performance
+# パフォーマンスをベンチマークするには
 
-The performance of your Incus server or cluster depends on a lot of different factors, ranging from the hardware, the server configuration, the selected storage driver and the network bandwidth to the overall usage patterns.
+Incus サーバーあるいはクラスタのパフォーマンスは、ハードウェア、サーバー設定、選択されたストレージドライバー、ネットワーク帯域幅から全体的な利用パターンに至るまでの多数の異なる因子によって変わります。
 
-To find the optimal configuration, you should run benchmark tests to evaluate different setups.
+最適な設定を見つけるには、異なるセットアップを評価するためベンチマークテストを実行するほうが良いです。
 
-Incus provides a benchmarking tool for this purpose.
-This tool allows you to initialize or launch a number of containers and measure the time it takes for the system to create the containers.
-If you run this tool repeatedly with different configurations, you can compare the performance and evaluate which is the ideal configuration.
+Incus ではこの目的のためベンチマークツールを提供しています。
+このツールを使って複数のコンテナを初期化・起動し、システムがコンテナを作成するのに必要な時間を計測できます。
+異なる Incus の設定、システム設定、さらにはハードウェア構成に対して繰り返しツールを実行することで、パフォーマンスを比較し、どの設定が理想的か評価できます。
 
-## Get the tool
+## ツールを取得する
 
-If the `incus-benchmark` tool isn't provided with your installation, you can build it from source.
-Make sure that you have `go` (version 1.20 or later) installed and install the tool with the following command:
+あなたのインストールに`incus-benchmark`が存在しない場合は、ソースからビルドできます。
+`go`（バージョン 1.20 以降）がインストールされていることを確認の上、以下のコマンドでツールをインストールしてください:
 
     go install github.com/lxc/incus/incus-benchmark@latest
 
-## Run the tool
+## ツールを実行する
 
-Run `incus-benchmark [action]` to measure the performance of your Incus setup.
+あなたの Incus 環境のパフォーマンスを計測するには`incus-benchmark [action]`を実行してください。
 
-The benchmarking tool uses the current Incus configuration.
-If you want to use a different project, specify it with `--project`.
+ベンチマークは現在の Incus 設定を使用します。
+別のプロジェクトを使用したい場合は、`--project`で指定してください。
 
-For all actions, you can specify the number of parallel threads to use (default is to use a dynamic batch size).
-You can also choose to append the results to a CSV report file and label them in a certain way.
+すべてのアクションについて、使用する並列スレッド数 (デフォルトはダイナミックなバッチサイズを使用) を指定できます。
+また結果を CSV のレポートファイルに追加し、一定の方法でラベル付けすることもできます。
 
-See `incus-benchmark help` for all available actions and flags.
+利用可能なアクションとフラグについては`incus-benchmark help`を参照してください。
 
-### Select an image
+### イメージを選択する
 
-Before you run the benchmark, select what kind of image you want to use.
+ベンチマークを実行する前に、使用したいイメージの種別を選んでください。
 
-Local image
-: If you want to measure the time it takes to create a container and ignore the time it takes to download the image, you should copy the image to your local image store before you run the benchmarking tool.
+ローカルイメージ
+: コンテナの作成にかかる時間を計測し、イメージをダウンロードするのにかかる時間を無視したい場合は、ベンチマークツールを実行する前にイメージをローカルのイメージストアにコピーするのが良いです。 
 
-  To do so, run a command similar to the following and specify the fingerprint (for example, `2d21da400963`) of the image when you run `incus-benchmark`:
+  そうするには、以下のようなコマンドを実行し、`lxd.benchmark`の実行時にはイメージのフィンガープリント（たとえば`2d21da400963`）を指定します:
 
       incus image copy images:ubuntu/22.04 local:
 
-  You can also assign an alias to the image and specify that alias (for example, `ubuntu`) when you run `incus-benchmark`:
+  またイメージにエイリアスを割り当てて、`incus-benchmark`の実行時にエイリアス (たとえば`ubuntu`) を指定することもできます:
 
       incus image copy images:ubuntu/22.04 local: --alias ubuntu
 
-Remote image
-: If you want to include the download time in the overall result, specify a remote image (for example, `images:ubuntu/22.04`).
-  The default image that `incus-benchmark` uses is the latest Ubuntu image (`images:ubuntu`), so if you want to use this image, you can leave out the image name when running the tool.
+リモートイメージ
+: 全体の結果にダウンロード時間も含めたい場合は、リモートイメージ (たとえば`images:ubuntu/22.04`) を指定します。
+`incus-benchmark`が使用するデフォルトのイメージは最新の Ubuntu イメージ (`images:ubuntu`) ですので、このイメージを使用したい場合は、ツール実行時にイメージ名を省略できます。
 
-### Create and launch containers
+### コンテナを作成、起動する
 
-Run the following command to create a number of containers:
+指定した数のコンテナを作成するには以下のコマンドを実行します:
 
     incus-benchmark init --count <number> <image>
 
-Add `--privileged` to the command to create privileged containers.
+特権コンテナを作成するにはコマンドに`--privileged`を追加します。
 
-For example:
+例:
 
 ```{list-table}
    :header-rows: 1
 
-* - Command
-  - Description
+* - コマンド
+  - 説明
 * - `incus-benchmark init --count 10 --privileged`
-  - Create ten privileged containers that use the latest Ubuntu image.
+  - 最新の Ubuntu イメージを使用して 10 個の特権コンテナを作成する。
 * - `incus-benchmark init --count 20 --parallel 4 images:alpine/edge`
-  - Create 20 containers that use the Alpine Edge image, using four parallel threads.
+  - Alpine Edge イメージを使用する 20 個のコンテナを 4 つのパラレルスレッドを使用して作成する。
 * - `incus-benchmark init 2d21da400963`
-  - Create one container that uses the local image with the fingerprint `2d21da400963`.
+  - フィンガープリントが`2d21da400963`のローカルイメージを使用して 1 個のコンテナを作成する。
 * - `incus-benchmark init --count 10 ubuntu`
-  - Create ten containers that use the image with the alias `ubuntu`.
+  - `ubuntu`のエイリアスを設定されたイメージを使用して 10 個のコンテナを作成する。
 
 ```
 
-If you use the `init` action, the benchmarking containers are created but not started.
-To start the containers that you created, run the following command:
+`init`アクションを使用するとコンテナを作成するが起動はせずにベンチマークを実行します。
+作成したコンテナを起動するには、以下のコマンドを実行します:
 
     incus-benchmark start
 
-Alternatively, use the `launch` action to both create and start the containers:
+あるいは`launch`アクションを使用してコンテナを作成し起動します:
 
     incus-benchmark launch --count 10 <image>
 
-For this action, you can add the `--freeze` flag to freeze each container right after it starts.
-Freezing a container pauses its processes, so this flag allows you to measure the pure launch times without interference of the processes that run in each container after startup.
+このアクションでは、`--freeze`フラグを追加するとコンテナの起動直後に凍結できます。
+コンテナを凍結するとプロセスは一時停止しますので、このフラグは各コンテナ内でプロセスが起動後に干渉するのを回避して純粋な起動時間を計測できます。
 
-### Delete containers
+### コンテナを削除する
 
-To delete the benchmarking containers that you created, run the following command:
+作成したベンチマーク用のコンテナを削除するには、以下のコマンドを実行します:
 
     incus-benchmark delete
 
 ```{note}
-You must delete all existing benchmarking containers before you can run a new benchmark.
+新しいベンチマークを実行する前には既存のベンチマーク用コンテナを全て削除する必要があります。
 ```

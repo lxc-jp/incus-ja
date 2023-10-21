@@ -1,104 +1,102 @@
 (network-forwards)=
-# How to configure network forwards
+# ネットワークフォワードを設定するには
 
 ```{note}
-Network forwards are available for the {ref}`network-ovn` and the {ref}`network-bridge`.
+ネットワークフォワードは {ref}`network-ovn` と {ref}`network-bridge` で利用できます。
 ```
 
-Network forwards allow an external IP address (or specific ports on it) to be forwarded to an internal IP address (or specific ports on it) in the network that the forward belongs to.
+ネットワークフォワードは外部 IP アドレス（あるいは外部 IP アドレスの特定のポート）をフォワード設定が属するネットワーク内の内部 IP アドレス（あるいは内部 IP アドレスの特定のポート）にフォワードする機能です。
 
-This feature can be useful if you have limited external IP addresses and want to share a single external address between multiple instances.
-There are two different ways how you can use network forwards in this case:
+この機能は外部 IP アドレスが限定されていて 1 つの外部アドレスを複数のインスタンスで共有したい場合に有用です。
+この場合にネットワークフォワードを 2 つの異なる方法で利用できます。
 
-- Forward all traffic from the external address to the internal address of one instance.
-  This method makes it easy to move the traffic destined for the external address to another instance by simply reconfiguring the network forward.
-- Forward traffic from different port numbers of the external address to different instances (and optionally different ports on those instances).
-  This method allows to "share" your external IP address and expose more than one instance at a time.
+- 外部アドレスからのすべてのトラフィックを 1 つのインスタンスの内部アドレスにフォワードします。この方法はネットワークフォワードを単に再設定することで外部アドレスに向けられたトラフィックを別のインスタンスに簡単に移動できます。
+- 外部アドレスの異なるポートからのトラフィックを異なるインスタンスにフォワードします（さらにこれらのインスタンスの異なるポートにフォワードもできます）。この方法は外部 IP アドレスを「共有」し、複数のインスタンスを一度に公開できます。
 
-## Create a network forward
+## ネットワークフォワードを作成する
 
-Use the following command to create a network forward:
+ネットワークフォワードを作成するには以下のコマンドを使用します:
 
 ```bash
 incus network forward create <network_name> <listen_address> [configuration_options...]
 ```
 
-Each forward is assigned to a network.
-It requires a single external listen address (see {ref}`network-forwards-listen-addresses` for more information about which addresses can be forwarded, depending on the network that you are using).
+それぞれのフォワードはネットワークに割り当てられます。
+フォワードには単一の外部リッスンアドレスが必要です（使用しているネットワークに応じてどのアドレスがフォワードできるかについて詳細は {ref}`network-forwards-listen-addresses` を参照してください）。
 
-You can specify an optional default target address by adding the `target_address=<IP_address>` configuration option.
-If you do, any traffic that does not match a port specification is forwarded to this address.
-Note that this target address must be within the same subnet as the network that the forward is associated to.
+さらに `target_address=<IP_address>` 設定オプションを追加することでデフォルトのターゲットアドレスを追加することもできます。
+こうするとポート指定にマッチしないトラフィックはすべてこのアドレスにフォワードします。
+このターゲットアドレスはフォワードが関連付けられるネットワークと同じサブネット内でなければならないことに注意してください。
 
-### Forward properties
+### フォワードのプロパティ
 
-Network forwards have the following properties:
+ネットワークフォワードのプロパティには以下のものがあります:
 
-Property         | Type       | Required | Description
-:--              | :--        | :--      | :--
-`listen_address` | string     | yes      | IP address to listen on
-`description`    | string     | no       | Description of the network forward
-`config`         | string set | no       | Configuration options as key/value pairs (only `target_address` and `user.*` custom keys supported)
-`ports`          | port list  | no       | List of {ref}`port specifications <network-forwards-port-specifications>`
+プロパティ       | 型         | 必須 | 説明
+:--              | :--        | :--  | :--
+`listen_address` | string     | yes  | リッスンする IP アドレス
+`description`    | string     | no   | ネットワークフォワードの説明
+`config`         | string set | no   | キー/バリューペア形式の設定オプション（`target_address` と `user.*` カスタムキーのみサポート）
+`ports`          | port list  | no   | {ref}`ポート指定 <network-forwards-port-specifications>` のリスト
 
 (network-forwards-listen-addresses)=
-### Requirements for listen addresses
+### リッスンアドレスの要件
 
-The requirements for valid listen addresses vary depending on which network type the forward is associated to.
+有効なリッスンアドレスの要件はフォワードがどのネットワークタイプに割り当てられるかに応じて異なります。
 
-Bridge network
-: - Any non-conflicting listen address is allowed.
-  - The listen address must not overlap with a subnet that is in use with another network.
+ブリッジネットワーク
+: - 任意の衝突しないリッスンアドレスが使用できます。
+  - リッスンアドレスは他のネットワークで使用中のサブネットとオーバーラップはできません。
 
-OVN network
-: - Allowed listen addresses must be defined in the uplink network's `ipv{n}.routes` settings or the project's {config:option}`project-restricted:restricted.networks.subnets` setting (if set).
-  - The listen address must not overlap with a subnet that is in use with another network.
+OVN ネットワーク
+: - 利用可能なリッスンアドレスはアップリンクネットワークの `ipv{n}.routes` 設定か（設定されている場合は）プロジェクトの `restricted.networks.subnets` 設定で定義されていなければなりません。
+  - リッスンアドレスは他のネットワークで使用中のサブネットとオーバーラップはできません。
 
 (network-forwards-port-specifications)=
-## Configure ports
+## ポートを設定する
 
-You can add port specifications to the network forward to forward traffic from specific ports on the listen address to specific ports on the target address.
-This target address must be different from the default target address.
-It must be within the same subnet as the network that the forward is associated to.
+リッスンアドレスの特定のポートからターゲットアドレスの特定のポートにトラフィックをフォワードするためにネットワークフォワードにポート指定を追加できます。
+このターゲットアドレスはデフォルトターゲットアドレスとは異なるものである必要があります。
+またフォワードを割り当てるネットワークと同じサブネットである必要があります。
 
-Use the following command to add a port specification:
+ポート指定を追加するには以下のコマンドを使用します:
 
 ```bash
 incus network forward port add <network_name> <listen_address> <protocol> <listen_ports> <target_address> [<target_ports>]
 ```
 
-You can specify a single listen port or a set of ports.
-If you want to forward the traffic to different ports, you have two options:
+単一のポートか一組のポートを指定できます。
+異なるポートにトラフィックをフォワードしたい場合、 2 つの選択肢があります。
 
-- Specify a single target port to forward traffic from all listen ports to this target port.
-- Specify a set of target ports with the same number of ports as the listen ports to forward traffic from the first listen port to the first target port, the second listen port to the second target port, and so on.
+- 単一のターゲットポートを指定し、すべてのリッスンポートからのトラフィックをこのターゲットポートにフォワードします。
+- リッスンポートと同じ数の一組のターゲットポートを指定し、最初のリッスンポートを最初のターゲットポートに、 2 番目のリッスンポートを 2 番目のターゲットポートに、以下同様というようにフォワードします。
 
-### Port properties
+### ポートのプロパティ
 
-Network forward ports have the following properties:
+ネットワークフォワードポートのプロパティには以下のものがあります:
 
-Property          | Type       | Required | Description
-:--               | :--        | :--      | :--
-`protocol`        | string     | yes      | Protocol for the port(s) (`tcp` or `udp`)
-`listen_port`     | string     | yes      | Listen port(s) (e.g. `80,90-100`)
-`target_address`  | string     | yes      | IP address to forward to
-`target_port`     | string     | no       | Target port(s) (e.g. `70,80-90` or `90`), same as `listen_port` if empty
-`description`     | string     | no       | Description of port(s)
+プロパティ       | 型     | 必須 | 説明
+:--              | :--    | :--  | :--
+`protocol`       | string | yes  | ポートのプロトコル（`tcp` または `udp`）
+`listen_port`    | string | yes  | リッスンするポート（例 `80,90-100`）
+`target_address` | string | yes  | フォワード先の IP アドレス
+`target_port`    | string | no   | ターゲットのポート（例 `70,80-90` または `90`）、 空の場合は `listen_port` と同じ
+`description`    | string | no   | ポートの説明
 
-## Edit a network forward
+## ネットワークフォワードを編集する
 
-Use the following command to edit a network forward:
+ネットワークフォワードを編集するには以下のコマンドを使用します:
 
 ```bash
 incus network forward edit <network_name> <listen_address>
 ```
 
-This command opens the network forward in YAML format for editing.
-You can edit both the general configuration and the port specifications.
+このコマンドはネットワークフォワードを編集用に YAML 形式でオープンします。
+全般の設定とポート指定の両方を編集できます。
 
-## Delete a network forward
+## ネットワークフォワードを削除する
 
-Use the following command to delete a network forward:
+ネットワークフォワードを削除するには以下のコマンドを使用します:
 
 ```bash
 incus network forward delete <network_name> <listen_address>

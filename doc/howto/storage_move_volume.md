@@ -1,73 +1,73 @@
 (howto-storage-move-volume)=
-# How to move or copy storage volumes
+# ストレージボリュームを移動やコピーするには
 
-You can {ref}`copy <storage-copy-volume>` or {ref}`move <storage-move-volume>` custom storage volumes from one storage pool to another, or copy or rename them within the same storage pool.
+カスタムストレージボリュームはあるストレージプールから別のストレージプールに {ref}`コピー <storage-copy-volume>` や {ref}`移動 <storage-move-volume>` したり、同じストレージプール内でコピーやリネームできます。
 
-To move instance storage volumes from one storage pool to another, {ref}`move the corresponding instance <storage-move-instance>` to another pool.
+インスタンスストレージボリュームをあるストレージプールから別のストレージプールに移動するには、別のストレージプールに {ref}`対応するインスタンスを移動 <storage-move-instance>` します。
 
-When copying or moving a volume between storage pools that use different drivers, the volume is automatically converted.
+別のドライバーを使用するストレージプール間でボリュームをコピーまたは移動する際はボリュームは自動的に変換されます。
 
 (storage-copy-volume)=
-## Copy custom storage volumes
+## カスタムストレージボリュームをコピーする
 
-Use the following command to copy a custom storage volume:
+カスタムストレージボリュームをコピーするには以下のコマンドを使用します:
 
     incus storage volume copy <source_pool_name>/<source_volume_name> <target_pool_name>/<target_volume_name>
 
-Add the `--volume-only` flag to copy only the volume and skip any snapshots that the volume might have.
-If the volume already exists in the target location, use the `--refresh` flag to update the copy.
+ボリュームに存在するかもしれないスナップショットをスキップしてボリュームだけをコピーするには `--volume-only` フラグを追加してください。
+コピー先のロケーションにボリュームが既に存在する場合は、コピーを更新するために `--refresh` フラグを使ってください。
 
-Specify the same pool as the source and target pool to copy the volume within the same storage pool.
-You must specify different volume names for source and target in this case.
+同じストレージプール内でボリュームをコピーするにはコピー元とコピー先に同じプールを指定します。
+この場合コピー元とコピー先で別のボリューム名を指定する必要があります。
 
-When copying from one storage pool to another, you can either use the same name for both volumes or rename the new volume.
+ボリュームをあるストレージプールから別のストレージプールにコピーする場合は、同じボリューム名を使うことも新しいボリューム名にリネームすることもできます。
 
 (storage-move-volume)=
-## Move or rename custom storage volumes
+## カスタムストレージボリュームを移動またはリネームする
 
-Before you can move or rename a custom storage volume, all instances that use it must be {ref}`stopped <instances-manage-stop>`.
+カスタムストレージボリュームを移動またはリネームする前に、それを利用しているすべてのインスタンスを {ref}`停止 <instances-manage-stop>` する必要があります。
 
-Use the following command to move or rename a storage volume:
+ストレージボリュームを移動またはリネームするには以下のコマンドを使用します:
 
     incus storage volume move <source_pool_name>/<source_volume_name> <target_pool_name>/<target_volume_name>
 
-Specify the same pool as the source and target pool to rename the volume while keeping it in the same storage pool.
-You must specify different volume names for source and target in this case.
+変更前のプールと変更後のプールに同じプールを指定すると、同じストレージプールに置いたままボリューム名を変更できます。
+この場合変更前と変更後で別のボリューム名を指定する必要があります。
 
-When moving from one storage pool to another, you can either use the same name for both volumes or rename the new volume.
+ボリュームをあるストレージプールから別のストレージプールに移動する場合は、同じボリューム名を使うことも新しいボリューム名にリネームすることもできます。
 
-## Copy or move between cluster members
+## クラスタメンバー間でコピーまたは移動する
 
-For most storage drivers (except for `ceph` and `ceph-fs`), storage volumes exist only on the cluster member for which they were created.
+（`ceph` と `ceph-fs` を除く）ほとんどのストレージドライバーではストレージボリュームはそれらが作成されたクラスタメンバー上だけに存在します。
 
-To copy or move a custom storage volume from one cluster member to another, add the `--target` and `--destination-target` flags to specify the source cluster member and the target cluster member, respectively.
+あるクラスタメンバーから別のメンバーにカスタムストレージボリュームをコピーまたは移動するには `--target` と `--destination-target` フラグでそれぞれコピー/移動元のクラスタメンバーとコピー/移動先のクラスタメンバーを指定します。
 
-## Copy or move between projects
+## プロジェクト間でコピーまたは移動する
 
-Add the `--target-project` to copy or move a custom storage volume to a different project.
+別のプロジェクトにカスタムストレージボリュームをコピーまたは移動するには `--target-project` を追加してください。
 
-## Copy or move between Incus servers
+## Incus サーバー間でコピーまたは移動する
 
-You can copy or move custom storage volumes between different Incus servers by specifying the remote for each pool:
+対象の各プールにリモートを指定することで異なる Incus サーバー間でカスタムストレージボリュームをコピーまたは移動できます:
 
     incus storage volume copy <source_remote>:<source_pool_name>/<source_volume_name> <target_remote>:<target_pool_name>/<target_volume_name>
     incus storage volume move <source_remote>:<source_pool_name>/<source_volume_name> <target_remote>:<target_pool_name>/<target_volume_name>
 
-You can add the `--mode` flag to choose a transfer mode, depending on your network setup:
+ネットワークのセットアップに応じて `--mode` フラグを追加して転送モードを選べます。
 
-`pull` (default)
-: Instruct the target server to pull the respective storage volume.
+`pull`（デフォルト）
+: コピー/移動先のサーバーに指定のストレージボリュームをプルするように指示します。
 
 `push`
-: Push the storage volume from the source server to the target server.
+: コピー/移動元のサーバーからストレージボリュームをコピー/移動先のサーバーにプッシュします。
 
 `relay`
-: Pull the storage volume from the source server to the local client, and then push it to the target server.
+: コピー/移動元のサーバーからストレージボリュームをローカルクライアントにプルし、それからコピー/移動先のサーバーにプッシュします。
 
 (storage-move-instance)=
-## Move instance storage volumes to another pool
+## インスタンスストレージプールを別のプールに移動する
 
-To move an instance storage volume to another storage pool, make sure the instance is stopped.
-Then use the following command to move the instance to a different pool:
+インスタンスストレージプールを別のプールに移動するにはまずインスタンスが停止されていることを確認してください。
+次に以下のコマンドでインスタンスを別のプールに移動します:
 
     incus move <instance_name> --storage <target_pool_name>

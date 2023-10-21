@@ -1,125 +1,103 @@
-# How to debug Incus
+# Incusをデバッグするには
 
-For information on debugging instance issues, see {ref}`instances-troubleshoot`.
+インスタンスの問題をデバッグする際の情報については、{ref}`instances-troubleshoot`を参照してください。
 
-## Debugging `incus` and `incusd`
+## `incus` と `incusd` のデバッグ
 
-Here are different ways to help troubleshooting `incus` and `incusd` code.
+`incus` と `incusd` のコードをトラブルシューティングするのに役立ついくつかの異なる方法を説明します。
 
 ### `incus --debug`
 
-Adding `--debug` flag to any client command will give extra information
-about internals. If there is no useful info, it can be added with the
-logging call:
+クライアントのどのコマンドにも `--debug` フラグを追加することで内部についての追加情報を出力することができます。
+もし有用な情報がない場合はログ出力の呼び出しで追加することができます:
 
     logger.Debugf("Hello: %s", "Debug")
 
 ### `incus monitor`
 
-This command will monitor messages as they appear on remote server.
+このコマンドはメッセージがリモートのサーバーに現れるのをモニターします。
 
-## REST API through local socket
+## ローカルソケット経由でのREST API
 
-On server side the most easy way is to communicate with Incus through
-local socket. This command accesses `GET /1.0` and formats JSON into
-human readable form using [jq](https://stedolan.github.io/jq/tutorial/)
-utility:
+サーバーサイドで Incus とやりとりするのに最も簡単な方法はローカルソケットを経由することです。
+以下のコマンドは`GET /1.0`にアクセスし、[jq](https://stedolan.github.io/jq/tutorial/)ユーティリティを使って
+JSON を人間が読みやすいように整形します:
 
 ```bash
 curl --unix-socket /var/lib/incus/unix.socket incus/1.0 | jq .
 ```
 
-See the [RESTful API](rest-api.md) for available API.
+利用可能な API については[RESTful API](rest-api.md)をご参照ください。
 
-## REST API through HTTPS
+## HTTPS経由でのREST API
 
-{ref}`HTTPS connection to Incus <security>` requires valid
-client certificate that is generated on first [`incus remote add`](incus_remote_add.md). This
-certificate should be passed to connection tools for authentication
-and encryption.
+[Incus への HTTPS 接続](security.md)には、有効なクライアント証明書が必要で、最初の [`incus remote add`](incus_remote_add.md) で生成されます。
+この証明書は、認証と暗号化のための接続ツールに渡す必要があります。
 
-If desired, `openssl` can be used to examine the certificate (`~/.config/incus/client.crt`):
+必要に応じて、`openssl`を使って証明書（`~/.config/incus/client.crt`）を調べることができます:
 
 ```bash
 openssl x509 -text -noout -in client.crt
 ```
 
-Among the lines you should see:
+表示される行の中に以下のようなものがあるはずです:
 
     Certificate purposes:
     SSL client : Yes
 
-### With command line tools
+### コマンドラインツールを使う
 
 ```bash
 wget --no-check-certificate --certificate=$HOME/.config/incus/client.crt --private-key=$HOME/.config/incus/client.key -qO - https://127.0.0.1:8443/1.0
 ```
 
-### With browser
+### ブラウザを使う
 
-Some browser plugins provide convenient interface to create, modify
-and replay web requests. To authenticate against Incus server, convert
-`incus` client certificate into importable format and import it into
-browser.
+いくつかのブラウザ拡張はウェブのリクエストを作成、修正、リプレイするための便利なインターフェースを提供しています。
+Incus サーバーに対して認証するには`incus`のクライアント証明書をインポート可能な形式に変換しブラウザにインポートしてください。
 
-For example this produces `client.pfx` in Windows-compatible format:
+たとえば Windows で利用可能な形式の`client.pfx`を生成するには以下のようにします:
 
 ```bash
 openssl pkcs12 -clcerts -inkey client.key -in client.crt -export -out client.pfx
 ```
 
-After that, opening [`https://127.0.0.1:8443/1.0`](https://127.0.0.1:8443/1.0) should work as expected.
+上記のコマンドを実行し、（訳注：変換後の証明書をインポートしてから）ブラウザで[`https://127.0.0.1:8443/1.0`](https://127.0.0.1:8443/1.0)を開けば期待通り動くはずです。
 
-## Debug the Incus database
+## Incusデータベースをデバッグ
 
-The files of the global {ref}`database <database>` are stored under the `./database/global`
-sub-directory of your Incus data directory (`/var/lib/incus/database/global`).
+グローバル{ref}`データベース <database>`のファイルは Incus のデータディレクトリー（`/var/lib/incus/database/global`）の`./database/global`サブディレクトリーの下に格納されます。
 
-Since each member of the cluster also needs to keep some data which is specific
-to that member, Incus also uses a plain SQLite database (the "local" database),
-which you can find in `./database/local.db`.
+クラスタの各メンバーもそのメンバー固有の何らかのデータを保持する必要があるため、Incus は通常の SQLite のデータベース(「ローカル」データベース)も使用します。
+これは`./database/local.db`に置かれます。
 
-Backups of the global database directory and of the local database file are made
-before upgrades, and are tagged with the `.bak` suffix. You can use those if
-you need to revert the state as it was before the upgrade.
+アップグレードの前にはグローバルデータベースのディレクトリーとローカルデータベースのファイルのバックアップが作成され、 `.bak` のサフィックス付きでタグ付けされます。
+アップグレード前の状態に戻す必要がある場合は、このバックアップを使うことができます。
 
-### Dumping the database content or schema
+### データベースのデータとスキーマをダンプする
 
-If you want to get a SQL text dump of the content or the schema of the databases,
-use the `incus admin sql <local|global> [.dump|.schema]` command, which produces the
-equivalent output of the `.dump` or `.schema` directives of the `sqlite3`
-command line tool.
+データベースのデータまたはスキーマの SQL テキスト形式でのダンプを取得したい場合は、`incus admin sql <local|global> [.dump|.schema]` コマンドを使ってください。
+これにより`sqlite3`コマンドラインツールの`.dump`または`.schema`ディレクティブと同じ出力を生成できます。
 
-### Running custom queries from the console
+### コンソールからカスタムクエリを実行する
 
-If you need to perform SQL queries (e.g. `SELECT`, `INSERT`, `UPDATE`)
-against the local or global database, you can use the `incus admin sql` command (run
-`incus admin sql --help` for details).
+ローカルまたはグローバルデータベースに SQL クエリ（例 `SELECT`, `INSERT`, `UPDATE`）を実行する必要がある場合、`incus admin sql`コマンドを使うことができます（詳細は`incus admin sql --help`を実行してください）。
 
-You should only need to do that in order to recover from broken updates or bugs.
-Please consult the Incus team first (creating a [GitHub
-issue](https://github.com/lxc/incus/issues/new) or
-[forum](https://discuss.linuxcontainers.org) post).
+ただ、これが必要になるのは壊れたアップデートかバグからリカバーするときだけでしょう。
+その場合、まず Incus チームに相談してみてください（[GitHubのイシュー](https://github.com/lxc/incus/issues/new)を作成するか[フォーラム](https://discuss.linuxcontainers.org/)に投稿）。
 
-### Running custom queries at Incus daemon startup
+### Incusデーモン起動時にカスタムクエリを実行する
 
-In case the Incus daemon fails to start after an upgrade because of SQL data
-migration bugs or similar problems, it's possible to recover the situation by
-creating `.sql` files containing queries that repair the broken update.
+SQL のデータマイグレーションのバグあるいは関連する問題のためにアップグレード後に Incus デーモンが起動に失敗する場合、壊れたアップデートを修復するクエリを含んだ`.sql`ファイルを作成することで、その状況からリカバーできる可能性があります。
 
-To perform repairs against the local database, write a
-`./database/patch.local.sql` file containing the relevant queries, and
-similarly a `./database/patch.global.sql` for global database repairs.
+ローカルデータベースに対して修復を実行するには、修復に必要なクエリを含む`./database/patch.local.sql`というファイルを作成してください。
+同様にグローバルデータベースの修復には`./database/patch.global.sql`というファイルを作成してください。
 
-Those files will be loaded very early in the daemon startup sequence and deleted
-if the queries were successful (if they fail, no state will change as they are
-run in a SQL transaction).
+これらのファイルはデーモンの起動シーケンスの非常に早い段階で読み込まれ、クエリが成功したときは削除されます（クエリは SQL トランザクション内で実行されるので、クエリが失敗したときにデータベースの状態が変更されることはありません）。
 
-As above, please consult the Incus team first.
+上記のとおり、まず Incus チームに相談してみてください。
 
-### Syncing the cluster database to disk
+### クラスタデータベースをディスクに同期
 
-If you want to flush the content of the cluster database to disk, use the `incus
-admin sql global .sync` command, that will write a plain SQLite database file into
-`./database/global/db.bin`, which you can then inspect with the `sqlite3`
-command line tool.
+クラスタデータベースの内容をディスクにフラッシュしたいなら、`incus admin sql global .sync`コマンドを使ってください。これは通常の SQLite 形式のデータベースのファイルを`./database/global/db.bin`に書き込みます。
+その後`sqlite3`コマンドラインツールを使って中身を見ることができます。

@@ -1,60 +1,60 @@
 (network-ovn-peers)=
-# How to create peer routing relationships
+# ピアルーティング関係を作成するには
 
-By default, traffic between two OVN networks goes through the uplink network.
-This path is inefficient, however, because packets must leave the OVN subsystem and transit through the host's networking stack (and, potentially, an external network) and back into the OVN subsystem of the target network.
-Depending on how the host's networking is configured, this might limit the available bandwidth (if the OVN overlay network is on a higher bandwidth network than the host's external network).
+デフォルトでは、 2 つの OVN ネットワーク間のトラフィックはアップリンクのネットワークを経由します。
+しかし、パケットが OVN サブシステムから出てホストのネットワークスタック（そして、場合によっては外部ネットワーク）を通過し対象ネットサークの OVN サブシステムに戻る必要があるため、この経路は非効率です。
+ホストのネットワークの構成によっては、利用できる帯域幅が制限される場合があります（ホストの外部ネットワークより OVN のオーバーレイネットワークが広帯域幅のネットワークにある場合）。
 
-Therefore, Incus allows creating peer routing relationships between two OVN networks.
-Using this method, traffic between the two networks can go directly from one OVN network to the other and thus stays within the OVN subsystem, rather than transiting through the uplink network.
+このため、 Incus では 2 つの OVN ネットワーク間でルーティング関係を作成できます。
+この方法を使うと 2 つのネットワーク間での通信がアップリンクのネットワーク経由ではなく OVN サブシステム内で完結できます。
 
-## Create a routing relationship between networks
+## ネットワーク間にルーティング関係を作成する
 
-To add a peer routing relationship between two networks, you must create a network peering for both networks.
-The relationship must be mutual.
-If you set it up on only one network, the routing relationship will be in pending state, but not active.
+2 つのネットワーク間にルーティング関係を作成するには、両方のネットワークにネットワークピアを作成する必要があります。
+関係は双方向でなくてはなりません。
+1 のネットワークだけセットアップした場合、ルーティング関係はペンディング状態になり、アクディブにはなりません。
 
-When creating the peer routing relationship, specify a peering name that identifies the relationship for the respective network.
-The name can be chosen freely, and you can use it later to edit or delete the relationship.
+ピアのルーティング関係を作成する際は、対象のネットワークとの関係を特定するピアの名前を指定します。
+名前は自由に選ぶことができ、後で関係を編集または削除する際に使用します。
 
-Use the following commands to create a peer routing relationship between networks in the same project:
+同じプロジェクト内のネットワーク間でピアのルーティング関係を作成するには次のコマンドを使います:
 
     incus network peer create <network1> <peering_name> <network2> [configuration_options]
     incus network peer create <network2> <peering_name> <network1> [configuration_options]
 
-You can also create peer routing relationships between OVN networks in different projects:
+別のプロジェクトの OVN ネットワーク間でピアのルーティング関係を作成することもできます:
 
     incus network peer create <network1> <peering_name> <project2/network2> [configuration_options] --project=<project1>
     incus network peer create <network2> <peering_name> <project1/network1> [configuration_options] --project=<project2>
 
 ```{important}
-If the project or the network name is incorrect, the command will not return any error indicating that the respective project/network does not exist, and the routing relationship will remain in pending state.
-This behavior prevents users in a different project from discovering whether a project and network exists.
+プロジェクトまたはネットワークの名前が間違っている場合、コマンドは対応するプロジェクトやネットワークが存在しないというエラーは出さず、ルーティング関係はペンディング状態のままになります。
+これは他のプロジェクトのユーザがプロジェクトやネットワークが存在するか調べられないようにするための（訳注: セキュリティ上の）仕様です。
 ```
 
-### Peering properties
+### アのプロパティ
 
-Peer routing relationships have the following properties:
+ピアのルーティング関係には以下のプロパティがあります。
 
-Property         | Type       | Required | Description
+プロパティ       | 型         | 必須 | 説明
 :--              | :--        | :--      | :--
-`name`           | string     | yes      | Name of the network peering on the local network
-`description`    | string     | no       | Description of the network peering
-`config`         | string set | no       | Configuration options as key/value pairs (only `user.*` custom keys supported)
-`target_project` | string     | yes      | Which project the target network exists in (required at create time)
-`target_network` | string     | yes      | Which network to create a peering with (required at create time)
-`status`         | string     | --       | Status indicating if pending or created (mutual peering exists with the target network)
+`name`           | string     | yes      | ローカルネットワーク上のネットワークピアの名前
+`description`    | string     | no       | ネットワークピアの説明
+`config`         | string set | no       | 設定のキーバリューペアー（`user.*` のカスタムキーのみサポート）
+`target_project` | string     | yes      | 対象のネットワークがどのプロジェクト内に存在するか（作成時に必須）
+`target_network` | string     | yes      | どのネットワークとピアを作成するか（作成時に必須）
+`status`         | string     | --       | 作成中か作成完了（対象のネットワークと相互にピアリングした状態）かを示すステータス
 
-## List routing relationships
+## ルーティング関係の一覧を表示する
 
-To list all network peerings for a network, use the following command:
+ネットワークのネットワークピアすべての一覧を表示するには、次のコマンドを実行します:
 
     incus network peer list <network>
 
-## Edit a routing relationship
+## ルーティング関係を編集する
 
-Use the following command to edit a network peering:
+ネットワークピアを編集するには次のコマンドを実行します:
 
     incus network peer edit <network> <peering_name>
 
-This command opens the network peering in YAML format for editing.
+このコマンドは YAML 形式のネットワークピアを編集モードで開きます。

@@ -1,19 +1,19 @@
 (network-ovn)=
-# OVN network
+# OVN ネットワーク
 
 <!-- Include start OVN intro -->
-{abbr}`OVN (Open Virtual Network)` is a software-defined networking system that supports virtual network abstraction.
-You can use it to build your own private cloud.
-See [`www.ovn.org`](https://www.ovn.org/) for more information.
+{abbr}`OVN (Open Virtual Network)`は仮想ネットワーク抽象化をサポートするソフトウェアで定義されたネットワークシステムです。
+あなた自身のプライベートクラウドを構築するのに使用できます。
+詳細は[`www.ovn.org`](https://www.ovn.org/)をご参照ください。
 <!-- Include end OVN intro -->
 
-The `ovn` network type allows to create logical networks using the OVN {abbr}`SDN (software-defined networking)`.
-This kind of network can be useful for labs and multi-tenant environments where the same logical subnets are used in multiple discrete networks.
+`ovn`ネットワークタイプは OVN{abbr}`SDN (software-defined networking)`を使って論理的なネットワークの作成を可能にします。
+この種のネットワークは複数の個別のネットワーク内で同じ論理ネットワークのサブネットを使うような検証環境やマルチテナントの環境で便利です。
 
-A Incus OVN network can be connected to an existing managed {ref}`network-bridge` or {ref}`network-physical` to gain access to the wider network.
-By default, all connections from the OVN logical networks are NATed to an IP allocated from the uplink network.
+Incus の OVN ネットワークはより広いネットワークへの外向きのアクセスを可能にするため既存の管理された{ref}`network-bridge`や{ref}`network-physical`に接続できます。
+デフォルトでは、OVN 論理ネットワークからのすべての接続はアップリンクのネットワークによって割り当てられた IP に NAT されます。
 
-See {ref}`network-ovn-setup` for basic instructions for setting up an OVN network.
+OVN ネットワークをセットアップする基本的な手順については{ref}`network-ovn-setup`をご参照ください。
 
 % Include content from [network_bridge.md](network_bridge.md)
 ```{include} network_bridge.md
@@ -22,55 +22,55 @@ See {ref}`network-ovn-setup` for basic instructions for setting up an OVN networ
 ```
 
 (network-ovn-options)=
-## Configuration options
+## 設定オプション
 
-The following configuration key namespaces are currently supported for the `ovn` network type:
+`ovn`ネットワークタイプでは現在以下の設定キーNamespace がサポートされています:
 
-- `bridge` (L2 interface configuration)
-- `dns` (DNS server and resolution configuration)
-- `ipv4` (L3 IPv4 configuration)
-- `ipv6` (L3 IPv6 configuration)
-- `security` (network ACL configuration)
-- `user` (free-form key/value for user metadata)
+- `bridge` （L2 インターフェースの設定）
+- `dns` （DNS サーバーと名前解決の設定）
+- `ipv4` （L3 IPv4 設定）
+- `ipv6` （L3 IPv6 設定）
+- `security` （ネットワーク ACL 設定）
+- `user` （key/value の自由形式のユーザーメタデータ）
 
 ```{note}
 {{note_ip_addresses_CIDR}}
 ```
 
-The following configuration options are available for the `ovn` network type:
+`ovn` ネットワークタイプには以下の設定オプションがあります:
 
-Key                                  | Type      | Condition             | Default                   | Description
-:--                                  | :--       | :--                   | :--                       | :--
-`network`                            | string    | -                     | -                         | Uplink network to use for external network access
-`bridge.hwaddr`                      | string    | -                     | -                         | MAC address for the bridge
-`bridge.mtu`                         | integer   | -                     | `1442`                    | Bridge MTU (default allows host to host Geneve tunnels)
-`dns.domain`                         | string    | -                     | `incus`                   | Domain to advertise to DHCP clients and use for DNS resolution
-`dns.search`                         | string    | -                     | -                         | Full comma-separated domain search list, defaulting to `dns.domain` value
-`dns.zone.forward`                   | string    | -                     | -                         | Comma-separated list of DNS zone names for forward DNS records
-`dns.zone.reverse.ipv4`              | string    | -                     | -                         | DNS zone name for IPv4 reverse DNS records
-`dns.zone.reverse.ipv6`              | string    | -                     | -                         | DNS zone name for IPv6 reverse DNS records
-`ipv4.address`                       | string    | standard mode         | - (initial value on creation: `auto`) | IPv4 address for the bridge (use `none` to turn off IPv4 or `auto` to generate a new random unused subnet) (CIDR)
-`ipv4.dhcp`                          | bool      | IPv4 address          | `true`                    | Whether to allocate addresses using DHCP
-`ipv4.l3only`                        | bool      | IPv4 address          | `false`                   | Whether to enable layer 3 only mode.
-`ipv4.nat`                           | bool      | IPv4 address          | `false` (initial value on creation if `ipv4.address` is set to `auto`: `true`) | Whether to NAT
-`ipv4.nat.address`                   | string    | IPv4 address          | -                         | The source address used for outbound traffic from the network (requires uplink `ovn.ingress_mode=routed`)
-`ipv6.address`                       | string    | standard mode         | - (initial value on creation: `auto`) | IPv6 address for the bridge (use `none` to turn off IPv6 or `auto` to generate a new random unused subnet) (CIDR)
-`ipv6.dhcp`                          | bool      | IPv6 address          | `true`                    | Whether to provide additional network configuration over DHCP
-`ipv6.dhcp.stateful`                 | bool      | IPv6 DHCP             | `false`                   | Whether to allocate addresses using DHCP
-`ipv6.l3only`                        | bool      | IPv6 DHCP stateful    | `false`                   | Whether to enable layer 3 only mode.
-`ipv6.nat`                           | bool      | IPv6 address          | `false` (initial value on creation if `ipv6.address` is set to `auto`: `true`) | Whether to NAT
-`ipv6.nat.address`                   | string    | IPv6 address          | -                         | The source address used for outbound traffic from the network (requires uplink `ovn.ingress_mode=routed`)
-`security.acls`                      | string    | -                     | -                         | Comma-separated list of Network ACLs to apply to NICs connected to this network
-`security.acls.default.egress.action`| string    | `security.acls`       | `reject`                  | Action to use for egress traffic that doesn't match any ACL rule
-`security.acls.default.egress.logged`| bool      | `security.acls`       | `false`                   | Whether to log egress traffic that doesn't match any ACL rule
-`security.acls.default.ingress.action` | string  | `security.acls`       | `reject`                  | Action to use for ingress traffic that doesn't match any ACL rule
-`security.acls.default.ingress.logged` | bool    | `security.acls`       | `false`                   | Whether to log ingress traffic that doesn't match any ACL rule
-`user.*`                             | string    | -                     | -                         | User-provided free-form key/value pairs
+キー                                   | 型      | 条件                   | デフォルト                                                       | 説明
+:--                                    | :--     | :--                    | :--                                                              | :--
+`network`                              | string  | -                      | -                                                                | 外部ネットワークへのアクセスに使うアップリンクのネットワーク
+`bridge.hwaddr`                        | string  | -                      | -                                                                | ブリッジのMACアドレス
+`bridge.mtu`                           | integer | -                      | `1442`                                                           | ブリッジのMTU（デフォルトではホストからホストへのGeneveトンネルを許可します）
+`dns.domain`                           | string  | -                      | `incus`                                                          | DHCPのクライアントに広告しDNSの名前解決に使用するドメイン
+`dns.search`                           | string  | -                      | -                                                                | 完全なドメインサーチのカンマ区切りリスト（デフォルトは`dns.domain`の値）
+`dns.zone.forward`                     | string  | -                      | -                                                                | 正引きDNSレコード用のDNSゾーン名のカンマ区切りリスト
+`dns.zone.reverse.ipv4`                | string  | -                      | -                                                                | IPv4逆引きDNSレコード用のDNSゾーン名
+`dns.zone.reverse.ipv6`                | string  | -                      | -                                                                | IPv6逆引きDNSレコード用のDNSゾーン名
+`ipv4.address`                         | string  | 標準モード             | - （作成時の初期値: `auto`）                                     | ブリッジのIPv4アドレス（CIDR形式）。IPv4をオフにするには`none`、新しいランダムな未使用のサブネットを生成するには`auto`を指定。
+`ipv4.dhcp`                            | bool    | IPv4 アドレス          | `true`                                                           | DHCPを使ってアドレスを割り当てるかどうか
+`ipv4.l3only`                          | bool    | IPv4 アドレス          | `false`                                                          | layer 3 only モード を有効にするかどうか
+`ipv4.nat`                             | bool    | IPv4 アドレス          | `false` （`ipv4.address`が`auto`の場合の作成時の初期値: `true`） | NATするかどうか
+`ipv4.nat.address`                     | string  | IPv4 アドレス          | -                                                                | ネットワークからの外向きトラフィックに使用されるソースアドレス（アップリンクに`ovn.ingress_mode=routed`が必要）
+`ipv6.address`                         | string  | 標準モード             | - （作成時の初期値: `auto`）                                     | ブリッジのIPv6アドレス（CIDR形式）。IPv6をオフにするには`none`、新しいランダムな未使用のサブネットを生成するには`auto`を指定。
+`ipv6.dhcp`                            | bool    | IPv6 アドレス          | `true`                                                           | Whether to provide additional network configuration over DHCP
+`ipv6.dhcp.stateful`                   | bool    | IPv6 DHCP              | `false`                                                          | DHCPを使ってアドレスを割り当てるかどうか
+`ipv6.l3only`                          | bool    | IPv6 DHCP ステートフル | `false`                                                          | layer 3 only モード を有効にするかどうか
+`ipv6.nat`                             | bool    | IPv6 アドレス          | `false` （`ipv6.address`が`auto`の場合の作成時の初期値: `true`） | NATするかどうか
+`ipv6.nat.address`                     | string  | IPv6 アドレス          | -                                                                | ネットワークからの外向きトラフィックに使用されるソースアドレス（アップリンクに`ovn.ingress_mode=routed`が必要）
+`security.acls`                        | string  | -                      | -                                                                | このネットワークに接続するNICに適用するネットワークACLのカンマ区切りリスト
+`security.acls.default.egress.action`  | string  | `security.acls`        | `reject`                                                         | どのACLルールにもマッチしない外向きトラフィックに使うアクション
+`security.acls.default.egress.logged`  | bool    | `security.acls`        | `false`                                                          | どのACLルールにもマッチしない外向きトラフィックをログ出力するかどうか
+`security.acls.default.ingress.action` | string  | `security.acls`        | `reject`                                                         | どのACLルールにもマッチしない内向きトラフィックに使うアクション
+`security.acls.default.ingress.logged` | bool    | `security.acls`        | `false`                                                          | どのACLルールにもマッチしない内向きトラフィックをログ出力するかどうか
+`user.*`                               | string  | -                      | -                                                                | ユーザー指定の自由形式のキー／バリューペア
 
 (network-ovn-features)=
-## Supported features
+## サポートされている機能
 
-The following features are supported for the `ovn` network type:
+`ovn`ネットワークタイプでは以下の機能がサポートされています:
 
 - {ref}`network-acls`
 - {ref}`network-forwards`
@@ -82,7 +82,7 @@ The following features are supported for the `ovn` network type:
 :maxdepth: 1
 :hidden:
 
-Set up OVN </howto/network_ovn_setup>
-Create routing relationships </howto/network_ovn_peers>
-Configure network load balancers </howto/network_load_balancers>
+OVNのセットアップ </howto/network_ovn_setup>
+ルーティング関係を作成 </howto/network_ovn_peers>
+ネットワークロードバランサーを設定 </howto/network_load_balancers>
 ```

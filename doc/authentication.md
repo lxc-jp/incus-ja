@@ -1,157 +1,155 @@
 (authentication)=
-# Remote API authentication
+# リモートAPI認証
 
-Remote communications with the Incus daemon happen using JSON over HTTPS.
+Incus デーモンとのリモート通信は、HTTPS 上の JSON を使って行われます。
 
-To be able to access the remote API, clients must authenticate with the Incus server.
-The following authentication methods are supported:
+リモート API にアクセスするためには、クライアントは Incus サーバーとの間で認証を行う必要があります。
+以下の認証方法がサポートされています:
 
 - {ref}`authentication-tls-certs`
 - {ref}`authentication-openid`
 
 (authentication-tls-certs)=
-## TLS client certificates
+## TLSクライアント証明書
 
-When using {abbr}`TLS (Transport Layer Security)` client certificates for authentication, both the client and the server will generate a key pair the first time they're launched.
-The server will use that key pair for all HTTPS connections to the Incus socket.
-The client will use its certificate as a client certificate for any client-server communication.
+認証に{abbr}`TLS (Transport Layer Security)`クライアント証明書を使用する場合、クライアントとサーバーの両方が最初に起動したときにキーペアを生成します。
+サーバーはそのキーペアを Incus ソケットへのすべての HTTPS 接続に使用します。
+クライアントは、その証明書をクライアント証明書として、あらゆるクライアント・サーバー間の通信に使用します。
 
-To cause certificates to be regenerated, simply remove the old ones.
-On the next connection, a new certificate is generated.
+証明書を再生成させるには、単に古いものを削除します。
+次の接続時には、新しい証明書が生成されます。
 
-### Communication protocol
+### 通信プロトコル
 
-The supported protocol must be TLS 1.3 or better.
+サポートしているプロトコルは TLS 1.3 以上である必要があります。
 
-It's possible to force Incus to accept TLS 1.2 by setting the `Incus_INSECURE_TLS` environment variable on both client and server.
-However this isn't a supported setup and should only ever be used when forced to use an outdated corporate proxy.
+`INCUS_INSECURE_TLS`環境変数をクライアントとサーバーの両方で設定することにより Incus が TLS 1.2 を受け入れるようにすることはできます。
+しかし、これはサポートされる構成ではなく、時代遅れな企業プロキシを使うために強制される場合にのみ使用すべきです。
 
-All communications must use perfect forward secrecy, and ciphers must be limited to strong elliptic curve ones (such as ECDHE-RSA or ECDHE-ECDSA).
+すべての通信には完全な前方秘匿を使用し、暗号は強力な楕円曲線（ECDHE-RSA や ECDHE-ECDSA など）に限定してください。
 
-Any generated key should be at least 4096 bit RSA, preferably 384 bit ECDSA.
-When using signatures, only SHA-2 signatures should be trusted.
+生成される鍵は最低でも 4096 ビットの RSA、できれば 384 ビットの ECDSA が望ましいです。
+署名を使用する場合は、SHA-2 署名のみを信頼すべきです。
 
-Since we control both client and server, there is no reason to support
-any backward compatibility to broken protocol or ciphers.
+我々はクライアントとサーバーの両方を管理しているので、壊れたプロトコルや暗号の下位互換をサポートする理由はありません。
 
 (authentication-trusted-clients)=
-### Trusted TLS clients
+### 信頼できるTLSクライアント
 
-You can obtain the list of TLS certificates trusted by a Incus server with [`incus config trust list`](incus_config_trust_list.md).
+Incus サーバーが信頼する TLS 証明書のリストは、 [`incus config trust list`](incus_config_trust_list.md) で取得できます。
 
-Trusted clients can be added in either of the following ways:
+信頼できるクライアントは以下のいずれかの方法で追加できます:
 
 - {ref}`authentication-add-certs`
 - {ref}`authentication-token`
 
-The workflow to authenticate with the server is similar to that of SSH, where an initial connection to an unknown server triggers a prompt:
+サーバーとの認証を行うワークフローは、SSH の場合と同様で、未知のサーバーへの初回接続時にプロンプトが表示されます:
 
-1. When the user adds a server with [`incus remote add`](incus_remote_add.md), the server is contacted over HTTPS, its certificate is downloaded and the fingerprint is shown to the user.
-1. The user is asked to confirm that this is indeed the server's fingerprint, which they can manually check by connecting to the server or by asking someone with access to the server to run the info command and compare the fingerprints.
-1. The server attempts to authenticate the client:
+1. ユーザーが [`incus remote add`](incus_remote_add.md) でサーバーを追加すると、HTTPS でサーバーに接続され、その証明書がダウンロードされ、フィンガープリントがユーザーに表示されます。
+1. ユーザーは、これが本当にサーバーのフィンガープリントであることを確認するよう求められます。これは、サーバーに接続して手動で確認するか、サーバーにアクセスできる人に info コマンドを実行してフィンガープリントを比較してもらうことで確認できます。
+1. サーバーはクライアントの認証を試みます:
 
-   - If the client certificate is in the server's trust store, the connection is granted.
-   - If the client certificate is not in the server's trust store, the server prompts the user for a token or the trust password.
-     If the provided token or trust password matches, the client certificate is added to the server's trust store and the connection is granted.
-     Otherwise, the connection is rejected.
+   - クライアント証明書がサーバーのトラストストアにある場合は、接続が許可されます。
+   - クライアント証明書がサーバーのトラストストアにない場合、サーバーはユーザーにトークンの入力を求めます。
+     提供されたトークンが一致した場合、クライアント証明書はサーバーのトラストストアに追加され、接続が許可されます。
+     そうでない場合は、接続が拒否されます。
 
-To revoke trust to a client, remove its certificate from the server with [`incus config trust remove <fingerprint>`](incus_config_trust_remove.md).
+クライアントへの信頼を取り消すには、[`incus config trust remove <fingerprint>`](incus_config_trust_remove.md) でそのクライアント証明書をサーバーから削除します。
 
-It's possible to restrict a TLS client to one or multiple projects.
-In this case, the client will also be prevented from performing global configuration changes or altering the configuration (limits, restrictions) of the projects it's allowed access to.
+TLS クライアントを 1 つまたは複数のプロジェクトに制限できます。
+この場合、クライアントは、グローバルな構成変更の実行や、アクセスを許可されたプロジェクトの構成（制限、制約）の変更もできなくなります。
 
-To restrict access, use [`incus config trust edit <fingerprint>`](incus_config_trust_edit.md).
-Set the `restricted` key to `true` and specify a list of projects to restrict the client to.
-If the list of projects is empty, the client will not be allowed access to any of them.
+アクセスを制限するには、[`incus config trust edit <fingerprint>`](incus_config_trust_edit.md) を使用します。
+`restricted`キーを`true`に設定し、クライアントのアクセスを制限するプロジェクトのリストを指定します。
+プロジェクトのリストが空の場合、クライアントはどのプロジェクトへのアクセスも許可されません。
 
 (authentication-add-certs)=
-#### Adding trusted certificates to the server
+#### 信頼できる証明書をサーバーに追加する
 
-The preferred way to add trusted clients is to directly add their certificates to the trust store on the server.
-To do so, copy the client certificate to the server and register it using [`incus config trust add <file>`](incus_config_trust_add.md).
+信頼できるクライアントを追加するには、そのクライアント証明書をサーバーのトラストストアに直接追加するのが望ましい方法です。
+これを行うには、クライアント証明書をサーバーにコピーし、[`incus config trust add <file>`](incus_config_trust_add.md) で登録します。
 
 (authentication-token)=
-#### Adding client certificates using tokens
+#### トークンを使ったクライアント証明書の追加
 
-You can also add new clients by using tokens. This is a safer way than using the trust password, because tokens expire after a configurable time ({config:option}`server-core:core.remote_token_expiry`) or once they've been used.
+トークンを使って新しいクライアントを追加することもできます。
+トークンは調整可能な時間（{config:option}`server-core:core.remote_token_expiry`）を過ぎるか一度使用すると無効になります。
 
-To use this method, generate a token for each client by calling [`incus config trust add`](incus_config_trust_add.md), which will prompt for the client name.
-The clients can then add their certificates to the server's trust store by providing the generated token when prompted for the trust password.
+この方法を使用するには、クライアント名の入力を促す [`incus config trust add`](incus_config_trust_add.md) を呼び出して、各クライアント用のトークンを生成します。
+その後、クライアントは、生成されたトークンをプロンプトが表示されたときに入力することで、自分の証明書をサーバーのトラストストアに追加することができます。
+
+クライアント側から新しい信頼関係を確立できるようにするには、サーバーにトラストパスワード({config:option}`server-core:core.remote_token_expiry`)を設定する必要があります。クライアントは、プロンプト時にトラストパスワードを入力することで、自分の証明書をサーバーのトラストストアに追加することができます。
 
 <!-- Include start NAT authentication -->
 
 ```{note}
-If your Incus server is behind NAT, you must specify its external public address when adding it as a remote for a client:
+Incus サーバーが NAT の後ろ側にいる場合、クライアント用のリモートを追加する際には外部のパブリックアドレスを指定する必要があります:
 
     incus remote add <name> <IP_address>
 
-When you are prompted for the admin password, specify the generated token.
-
-When generating the token on the server, Incus includes a list of IP addresses that the client can use to access the server.
-However, if the server is behind NAT, these addresses might be local addresses that the client cannot connect to.
-In this case, you must specify the external address manually.
+サーバーでトークンを生成する際、 Incus はクライアントがサーバーにアクセスするために使える IP アドレスのリストを含めます。
+しかし、サーバーが NAT の後ろ側にいる場合、これらのアドレスはクライアントが接続できないローカルアドレスの場合があります。
+その場合、手動で外部アドレスを指定する必要があります。
 ```
 
 <!-- Include end NAT authentication -->
 
-Alternatively, the clients can provide the token directly when adding the remote: [`incus remote add <name> <token>`](incus_remote_add.md).
+あるいは、クライアントはリモートの追加時にトークンを直接提供することもできます: [`incus remote add <name> <token>`](incus_remote_add.md).
 
-### Using a PKI system
+### PKI システムの使用
 
-In a {abbr}`PKI (Public key infrastructure)` setup, a system administrator manages a central PKI that issues client certificates for all the Incus clients and server certificates for all the Incus daemons.
+{abbr}`PKI (Public key infrastructure)`の設定では、システム管理者が中央の PKI を管理し、すべての Incus クライアント用のクライアント証明書とすべての Incus デーモン用のサーバー証明書を発行します。
 
-To enable PKI mode, complete the following steps:
+PKI モードを有効にするには、以下の手順を実行します:
 
-1. Add the {abbr}`CA (Certificate authority)` certificate to all machines:
+1. すべてのマシンに{abbr}`CA（Certificate authority、認証局）`の証明書を追加します:
 
-   - Place the `client.ca` file in the clients' configuration directories (`~/.config/incus`).
-   - Place the `server.ca` file in the server's configuration directory (`/var/lib/incus`).
-1. Place the certificates issued by the CA on the clients and the server, replacing the automatically generated ones.
-1. Restart the server.
+   - `client.ca`ファイルをクライアントの設定ディレクトリー（`~/.config/incus`）に置く。
+   - `server.ca`ファイルをサーバーの設定ディレクトリー（`/var/lib/incus`）に置く。
+1. CA から発行された証明書をクライアントとサーバーに配置し、自動生成された証明書を置き換える。
+1. サーバーを再起動します。
 
-In that mode, any connection to a Incus daemon will be done using the
-pre-seeded CA certificate.
+このモードでは、Incus デーモンへの接続はすべて、事前に発行された CA 証明書を使って行われます。
 
-If the server certificate isn't signed by the CA, the connection will simply go through the normal authentication mechanism.
-If the server certificate is valid and signed by the CA, then the connection continues without prompting the user for the certificate.
+もしサーバー証明書が CA によって署名されていなければ、接続は単に通常の認証メカニズムを通過します。
+サーバー証明書が有効で CA によって署名されていれば、ユーザーに証明書を求めるプロンプトを出さずに接続を続行します。
 
-Note that the generated certificates are not automatically trusted. You must still add them to the server in one of the ways described in {ref}`authentication-trusted-clients`.
+生成された証明書は自動的には信頼されないことに注意してください。そのため、{ref}`authentication-trusted-clients`で説明している方法のいずれかで、サーバーに追加する必要があります。
 
 (authentication-openid)=
-## OpenID Connect authentication
+## OpenID Connect認証
 
-Incus supports using [OpenID Connect](https://openid.net/connect/) to authenticate users through an {abbr}`OIDC (OpenID Connect)` Identity Provider.
+Incus は[OpenID Connect](https://openid.net/connect/)を使用して、{abbr}`OIDC (OpenID Connect)` アイデンティティプロバイダーを通じてユーザーを認証することをサポートしています。
 
 ```{note}
-OpenID Connect authentication is currently under development.
-Starting with Incus 5.13, authentication through OpenID Connect is supported, but there is no user role handling in place so far.
-Any user that authenticates through the configured OIDC Identity Provider gets full access to Incus.
+OpenID Connect を通じた認証がサポートされていますが、まだユーザーロールの取り扱いはありません。
+設定された OIDC アイデンティティプロバイダーを通じて認証するすべてのユーザーは、Incus へのフルアクセスを得ます。
 ```
 
-To configure Incus to use OIDC authentication, set the [`oidc.*`](server-options-oidc) server configuration options.
-Your OIDC provider must be configured to enable the [Device Authorization Grant](https://oauth.net/2/device-flow/) type.
+Incus を OIDC 認証を使用するように設定するには、[`oidc.*`](server-options-oidc)サーバー設定オプションを設定します。
+あなたの OIDC プロバイダーは[Device Authorization Grant](https://oauth.net/2/device-flow/)タイプを有効にするように設定する必要があります。
 
-To add a remote pointing to a Incus server configured with OIDC authentication, run [`incus remote add <remote_name> <remote_address>`](incus_remote_add.md).
-You are then prompted to authenticate through your web browser, where you must confirm the device code that Incus uses.
-The Incus client then retrieves and stores the access and refresh tokens and provides those to Incus for all interactions.
+OIDC 認証で設定された Incus サーバーを指すリモートを追加するには、[`incus remote add <remote_name> <remote_address>`](incus_remote_add.md) を実行します。
+その後、ウェブブラウザで認証を求められ、Incus が使用するデバイスコードを確認する必要があります。
+Incus クライアントはその後、アクセストークンとリフレッシュトークンを取得し保存し、それらを Incus とのすべてのやりとりに使用します。
 
 (authentication-server-certificate)=
-## TLS server certificate
+## TLS サーバー証明書
 
-Incus supports issuing server certificates using {abbr}`ACME (Automatic Certificate Management Environment)` services, for example, [Let's Encrypt](https://letsencrypt.org/).
+Incus は {abbr}`ACME (Automatic Certificate Management Environment)` サービス（たとえば、[Let's Encrypt](https://letsencrypt.org/)）を使ったサーバー証明書の発行をサポートします。
 
-To enable this feature, set the following server configuration:
+この機能を有効にするには、以下のサーバー設定をしてください:
 
-- {config:option}`server-acme:acme.domain`: The domain for which the certificate should be issued.
-- {config:option}`server-acme:acme.email`: The email address used for the account of the ACME service.
-- {config:option}`server-acme:acme.agree_tos`: Must be set to `true` to agree to the ACME service's terms of service.
-- {config:option}`server-acme:acme.ca_url`: The directory URL of the ACME service. By default, Incus uses "Let's Encrypt".
+- {config:option}`server-acme:acme.domain`: 証明書を発行するドメイン。
+- {config:option}`server-acme:acme.email`: ACME サービスのアカウントに使用する email アドレス。
+- {config:option}`server-acme:acme.agree_tos`: ACME サービスの利用規約に同意するためには `true` に設定する必要あり。
+- {config:option}`server-acme:acme.ca_url`: ACME サービスのディレクトリー URL。デフォルトでは Incus は "Let's Encrypt" を使用。
 
-For this feature to work, Incus must be reachable from port 80.
-This can be achieved by using a reverse proxy such as [HAProxy](http://www.haproxy.org/).
+この機能を利用するには、 Incus は 80 番ポートを開放する必要があります。
+これは [HAProxy](http://www.haproxy.org/) のようなリバースプロキシを使用することで実現できます。
 
-Here's a minimal HAProxy configuration that uses `incus.example.net` as the domain.
-After the certificate has been issued, Incus will be reachable from `https://incus.example.net/`.
+以下は `incus.example.net` をドメインとして使用する HAProxy の最小限の設定です。
+証明書が発行された後、 Incus は`https://incus.example.net/` でアクセスできます。
 
 ```
 # Global configuration
@@ -227,24 +225,24 @@ backend incus-nodes
   server incus-node03 1.2.3.6:8443 check
 ```
 
-## Failure scenarios
+## 失敗のシナリオ
 
-In the following scenarios, authentication is expected to fail.
+以下のシナリオでは認証は失敗します。
 
-### Server certificate changed
+### サーバー証明書が変更された場合
 
-The server certificate might change in the following cases:
+サーバー証明書は以下の場合に変更されるかも知れません:
 
-- The server was fully reinstalled and therefore got a new certificate.
-- The connection is being intercepted ({abbr}`MITM (Machine in the middle)`).
+- サーバーが完全に再インストールされたため新しい証明書に変わった。
+- 接続がインターセプトされた（{abbr}`MITM (Machine in the middle)`）。
 
-In such cases, the client will refuse to connect to the server because the certificate fingerprint does not match the fingerprint in the configuration for this remote.
+このような場合、このリモートの設定内のフィンガープリントと証明書のフィンガープリントが一致しないため、クライアントはサーバーへの接続を拒否します。
 
-It is then up to the user to contact the server administrator to check if the certificate did in fact change.
-If it did, the certificate can be replaced by the new one, or the remote can be removed altogether and re-added.
+この場合サーバー管理者に連絡して証明書が実際に変更されたのかを確認するのはユーザー次第です。
+実際に変更されたのであれば、証明書を新しいものに置き換えるか、リモートを削除して追加し直すことができます。
 
-### Server trust relationship revoked
+### サーバーとの信頼関係が取り消された場合
 
-The server trust relationship is revoked for a client if another trusted client or the local server administrator removes the trust entry for the client on the server.
+別の信頼されたクライアントまたはローカルのサーバー管理者がサーバー上で対象のクライアントの信頼エントリを削除した場合、そのクライアントに対するサーバーの信頼関係は取り消されます。
 
-In this case, the server still uses the same certificate, but all API calls return a 403 code with an error indicating that the client isn't trusted.
+この場合、サーバーは引き続き同じ証明書を使用していますが、すべての API 呼び出しは対象のクライアントが信頼されていないことを示す 403 のステータスコードを返します。

@@ -1,15 +1,15 @@
 (storage)=
-# Storage
+# ストレージ
 
 ```{toctree}
 :maxdepth: 1
 
-About storage </explanation/storage>
-Manage pools <howto/storage_pools>
-Create an instance in a pool <howto/storage_create_instance>
-Manage volumes <howto/storage_volumes>
-Move or copy a volume <howto/storage_move_volume>
-Back up a volume <howto/storage_backup_volume>
-Manage buckets <howto/storage_buckets>
+ストレージについて </explanation/storage>
+プールの管理 <howto/storage_pools>
+プール内にインスタンスを作成 <howto/storage_create_instance>
+ボリュームの管理 <howto/storage_volumes>
+ボリュームの移動とコピー <howto/storage_move_volume>
+ボリュームのバックアップ <howto/storage_backup_volume>
+バケットの管理 <howto/storage_buckets>
 reference/storage_drivers
 ```

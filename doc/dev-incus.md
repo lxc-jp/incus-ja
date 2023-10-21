@@ -1,50 +1,48 @@
 (dev-incus)=
-# Communication between instance and host
+# インスタンス〜ホスト間の通信
 
-Communication between the hosted workload (instance) and its host while
-not strictly needed is a pretty useful feature.
+ホストされているワークロード（インスタンス）とそのホストのコミュニケーションは
+厳密には必要とされているわけではないですが、とても便利な機能です。
 
-In Incus, this feature is implemented through a `/dev/incus/sock` node which is
-created and set up for all Incus instances.
+Incus ではこの機能は `/dev/incus/sock` というノードを通して実装されており、
+このノードはすべての Incus のインスタンスに対して作成、セットアップされます。
 
-This file is a Unix socket which processes inside the instance can
-connect to. It's multi-threaded so multiple clients can be connected at the
-same time.
+このファイルはインスタンス内部のプロセスが接続できる Unix ソケットです。
+マルチスレッドで動いているので複数のクライアントが同時に接続できます。
 
 ```{note}
-{config:option}`instance-security:security.guestapi` must be set to `true` (which is the default) for an instance to allow access to the socket.
+インスタンスのソケットへのアクセスを許可するには {config:option}`instance-security:security.guestapi` を `true`（これがデフォルトです）に設定する必要があります。
 ```
 
-## Implementation details
+## 実装詳細
 
-Incus on the host binds `/var/lib/incus/guestapi/sock` and starts listening for new
-connections on it.
+ホストでは Incus は `/var/lib/incus/guestapi/sock` をバインドして新しいコネクションの
+リッスンを開始します。
 
-This socket is then exposed into every single instance started by
-Incus at `/dev/incus/sock`.
+このソケットは、Incus が開始させたすべてのインスタンス内の `/dev/incus/sock` に
+公開されます。
 
-The single socket is required so we can exceed 4096 instances, otherwise,
-Incus would have to bind a different socket for every instance, quickly
-reaching the FD limit.
+4096 を超えるインスタンスを扱うのに単一のソケットが必要です。そうでなければ、
+Incus は各々のインスタンスに異なるソケットをバインドする必要があり、
+ファイルディスクリプター数の上限にすぐ到達してしまいます。
 
-## Authentication
+## 認証
 
-Queries on `/dev/incus/sock` will only return information related to the
-requesting instance. To figure out where a request comes from, Incus will
-extract the initial socket's user credentials and compare that to the list of
-instances it manages.
+`/dev/incus/sock` への問い合わせは依頼するインスタンスに関連した情報のみを
+返します。リクエストがどこから来たかを知るために、 Incus は初期のソケットの
+ユーザークレデンシャルを取り出し、 Incus が管理しているインスタンスのリストと比較します。
 
-## Protocol
+## プロトコル
 
-The protocol on `/dev/incus/sock` is plain-text HTTP with JSON messaging, so very
-similar to the local version of the Incus protocol.
+`/dev/incus/sock` のプロトコルは JSON メッセージを用いたプレーンテキストの
+HTTP であり、 Incus プロトコルのローカル版に非常に似ています。
 
-Unlike the main Incus API, there is no background operation and no
-authentication support in the `/dev/incus/sock` API.
+メインの Incus API とは異なり、 `/dev/incus/sock` API にはバックグラウンド処理と
+認証サポートはありません。
 
 ## REST-API
 
-### API structure
+### API の構造
 
 * `/`
    * `/1.0`
@@ -55,16 +53,16 @@ authentication support in the `/dev/incus/sock` API.
       * `/1.0/images/{fingerprint}/export`
       * `/1.0/meta-data`
 
-### API details
+### API の詳細
 
 #### `/`
 
 ##### GET
 
-* Description: List of supported APIs
-* Return: list of supported API endpoint URLs (by default `['/1.0']`)
+* 説明: サポートされている API のリスト
+* 出力: サポートされている API エンドポイント URL のリスト（デフォルトでは ['/1.0']`）
 
-Return value:
+戻り値:
 
 ```json
 [
@@ -76,10 +74,10 @@ Return value:
 
 ##### GET
 
-* Description: Information about the 1.0 API
-* Return: JSON object
+* 説明: 1.0 API についての情報
+* 出力: dict 形式のオブジェクト
 
-Return value:
+戻り値:
 
 ```json
 {
@@ -92,10 +90,10 @@ Return value:
 
 #### PATCH
 
-* Description: Update instance state (valid states are `Ready` and `Started`)
-* Return: none
+* 説明: インスタンスの状態を更新する（有効な状態は `Ready` と `Started`）
+* 戻り値: 無し
 
- Input:
+ 入力:
 
  ```json
  {
@@ -107,17 +105,17 @@ Return value:
 
 ##### GET
 
-* Description: List of configuration keys
-* Return: list of configuration keys URL
+* 説明: 設定キーの一覧
+* 出力: 設定キー URL のリスト
 
-Note that the configuration key names match those in the instance
-configuration, however not all configuration namespaces will be exported to
-`/dev/incus/sock`.
-Currently only the `cloud-init.*` and `user.*` keys are accessible to the instance.
+設定キーの名前はインスタンスの設定の名前と一致するようにしています。
+しかし、設定の namespace のすべてが `/dev/incus/sock` にエクスポート
+されているわけではありません。
+現在は `cloud-init.*` と `user.*` キーのみがインスタンスにアクセス可能となっています。
 
-At this time, there also aren't any instance-writable namespace.
+現時点ではインスタンスが書き込み可能な名前空間はありません。
 
-Return value:
+戻り値:
 
 ```json
 [
@@ -129,10 +127,10 @@ Return value:
 
 ##### GET
 
-* Description: Value of that key
-* Return: Plain-text value
+* 説明: そのキーの値
+* 出力: プレーンテキストの値
 
-Return value:
+戻り値:
 
     blah
 
@@ -140,10 +138,10 @@ Return value:
 
 ##### GET
 
-* Description: Map of instance devices
-* Return: JSON object
+* 説明: インスタンスのデバイスのマップ
+* 出力: dict
 
-Return value:
+戻り値:
 
 ```json
 {
@@ -164,19 +162,19 @@ Return value:
 
 ##### GET
 
-* Description: WebSocket upgrade
-* Return: none (never ending flow of events)
+* 説明: この API ではプロトコルが WebSocket にアップグレードされます。
+* 出力: 無し（イベントのフローが終わることがなくずっと続く）
 
-Supported arguments are:
+サポートされる引数は以下の通りです:
 
-* type: comma-separated list of notifications to subscribe to (defaults to all)
+* type: 購読する通知の種別のカンマ区切りリスト（デフォルトは all）
 
-The notification types are:
+通知の種別には以下のものがあります:
 
-* `config` (changes to any of the `user.*` configuration keys)
-* `device` (any device addition, change or removal)
+* `config`（あらゆる `user.*` 設定キーの変更）
+* `device`（あらゆるデバイスの追加、変更、削除）
 
-This never returns. Each notification is sent as a separate JSON object:
+この API は決して終了しません。それぞれの通知は別々の JSON の dict として送られます:
 
 ```json
 {
@@ -209,22 +207,22 @@ This never returns. Each notification is sent as a separate JSON object:
 
 ##### GET
 
-* Description: Download a public/cached image from the host
-* Return: raw image or error
-* Access: Requires `security.guestapi.images` set to `true`
+* 説明: 公開されたあるいはキャッシュされたイメージをホストからダウンロードする
+* 出力: 生のイメージあるいはエラー
+* アクセス権: `security.devlxd.images` を `true` に設定する必要があります
 
-Return value:
+戻り値:
 
-    See /1.0/images/<FINGERPRINT>/export in the daemon API.
+    LXD デーモン API の /1.0/images/<FINGERPRINT>/export を参照してください。
 
 #### `/1.0/meta-data`
 
 ##### GET
 
-* Description: Container meta-data compatible with cloud-init
-* Return: cloud-init meta-data
+* 説明: cloud-init と互換性のあるコンテナのメタデータ
+* 出力: cloud-init のメタデータ
 
-Return value:
+戻り値:
 
     #cloud-config
     instance-id: af6a01c7-f847-4688-a2a4-37fddd744625

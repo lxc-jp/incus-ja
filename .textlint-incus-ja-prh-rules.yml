@@ -1,0 +1,74 @@
+meta:
+  reviewer:
+    - hnakamur
+    - tenforward
+related: https://github.com/lxc-jp/incus-ja/
+version: 1
+rules:
+  # カタカナの長音記号をつけない単語
+  - expected: アーキテクチャ
+    pattern: アーキテクチャー
+  - expected: エディタ
+    pattern: エディター
+  - expected: コンテナ
+    pattern: コンテナー
+  - expected: セマフォ
+    pattern: セマフォー
+  - expected: ダーティ
+    pattern: ダーティー
+  - expected: ブラウザ
+    pattern: ブラウザー
+
+  # カタカナの長音記号をつける単語
+  # https://github.com/prh/prh/blob/602794323a717b9511ea23e32c5b1e760cf16227/misc/prh.yml#L86
+  - expected: コントローラー
+    pattern: /コントローラ(?!ー)/
+  - expected: コンピューター
+    pattern: /コンピュータ(?!ー)/
+  - expected: サーバー
+    pattern: /サーバ(?!ー)/
+  - expected: セキュリティー
+    pattern: /セキュリティ(?!ー)/
+  - expected: ディスクリプター
+    pattern: /ディスクリプタ(?!ー)/
+  - expected: ディレクトリー
+    pattern: /ディレクトリ(?!ー)/
+  - expected: ドライバー
+    pattern: /ドライバ(?!ー)/
+  - expected: バッファー
+    pattern: /バッファ(?!ー)/
+  - expected: パラメーター
+    pattern: /パラメータ(?!ー)/
+  - expected: プロセッサー
+    pattern: /プロセッサ(?!ー)/
+  - expected: メモリー
+    pattern: /メモリ(?!ー)/
+  - expected: ユーザー
+    pattern: /ユーザ(?!ー)/
+  - expected: リーダー
+    pattern: /リーダ(?!(ー|ブル))/
+    specs:
+      - from: リーダ
+        to:   リーダー
+      - from: リーダブル
+        to:   リーダブル
+
+  # カタカナではなく英語にする単語
+  - expected: Namespace
+    pattern: ネームスペース
+
+  # 一般的なカタカタ語の表記ゆれ
+  - expected: インターフェース
+    pattern: /インタ(ーフェイ|フェー|フェイ)ス/
+  - expected: レプリケーション
+    pattern: リプリケーション
+
+  # ひらがなに開く単語
+  - expected: すべて
+    pattern: 全て
+  - expected: たとえば
+    pattern: 例えば
+
+  # LXDからの移行
+  - expected: Incus
+    pattern: /LXD(?!_DIR)/

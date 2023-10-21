@@ -1,58 +1,59 @@
 (network-bridge-firewall)=
-# How to configure your firewall
+# ファイアウォールを設定するには
 
-Linux firewalls are based on `netfilter`.
-Incus uses the same subsystem, which can lead to connectivity issues.
+Linux のファイアウォールは `netfilter` をベースにしています。
+Incus は同じサブシステムを使用しているため、接続に問題を引き起こすことがありえます。
 
-If you run a firewall on your system, you might need to configure it to allow network traffic between the managed Incus bridge and the host.
-Otherwise, some network functionality (DHCP, DNS and external network access) might not work as expected.
+ファイアウォールを動かしている場合、 Incus が管理しているブリッジとホストの間のネットワークトラフィックを許可するように設定する必要があるかもしれません。
+そうしないと、一部のネットワークの機能（DHCP、DNS と外部ネットワークへのアクセス）が期待通り動かないかもしれません。
 
-You might also see conflicts between the rules defined by your firewall (or another application) and the firewall rules that Incus adds.
-For example, your firewall might erase Incus rules if it is started after the Incus daemon, which might interrupt network connectivity to the instance.
+ファイアウォール（あるいは他のアプリケーション）に設定されたルールと Incus が追加するファイアウォールのルールが衝突するケースがあります。
+たとえば、ファイアウォールが Incus デーモンより後に起動した場合ファイアウォールが Incus のルールを削除するかもしれず、そうするとインスタンスへのネットワーク接続を妨げるかもしれません。
 
-## `xtables` vs. `nftables`
+## `xtables` 対 `nftables`
 
-There are different userspace commands to add rules to `netfilter`: `xtables` (`iptables` for IPv4 and `ip6tables` for IPv6) and `nftables`.
+`netfilter` にルールを追加するには `xtables`（IPv4 には `iptables` と IPv6 には `ip6tables`）と `nftables` という異なるユーザースペースのコマンドがあります。
 
-`xtables` provides an ordered list of rules, which might cause issues if multiple systems add and remove entries from the list.
-`nftables` adds the ability to separate rules into namespaces, which helps to separate rules from different applications.
-However, if a packet is blocked in one namespace, it is not possible for another namespace to allow it.
-Therefore, rules in one namespace can still affect rules in another namespace, and firewall applications can still impact Incus network functionality.
+`xtables` は順序ありのルールのリストを提供しますが、そのため複数のシステムがルールの追加や削除を行うと問題が起きるかもしれません。
+`nftables` は分離されたルールを別々の Namespace に追加することができますので、異なるアプリケーションからのルールを分離するのに役立ちます。
+しかし、パケットが 1 つの Namespace でブロックされる場合、他の Namespace がそれを許可することはできません。
+そのため、 1 つの Namespace が他の Namespace のルールへ影響することは依然としてあり、ファイアウォールのアプリケーションが Incus のネットワーク機能に影響することがありえます。
 
-If your system supports and uses `nftables`, Incus detects this and switches to `nftables` mode.
-In this mode, Incus adds its rules into the `nftables`, using its own `nftables` namespace.
+システムで `nftables` を利用可能な場合、 Incus はそれを検知して `nftables` モードにスイッチします。
+このモードでは Incus は自身の `nftables` の Namespace を用いてルールを `nftables` に追加します。
 
-## Use Incus' firewall
+## Incus のファイアウォールを使用する
 
-By default, managed Incus bridges add firewall rules to ensure full functionality.
-If you do not run another firewall on your system, you can let Incus manage its firewall rules.
+デフォルトでは Incus が管理するブリッジはフル機能を使えるようにするためファイアウォールにルールを追加します。
+システムで他のファイアウォールを使用していない場合は Incus にファイアウォールのルールを管理させることができます。
 
-To enable or disable this behavior, use the `ipv4.firewall` or `ipv6.firewall` {ref}`configuration options <network-bridge-options>`.
+これを有効または無効にするには `ipv4.firewall` または `ipv6.firewall` {ref}`設定オプション <network-bridge-options>` を使用してください。
 
-## Use another firewall
+## 別のファイアウォールを使用する
 
-Firewall rules added by other applications might interfere with the firewall rules that Incus adds.
-Therefore, if you use another firewall, you should disable Incus' firewall rules.
-You must also configure your firewall to allow network traffic between the instances and the Incus bridge, so that the Incus instances can access the DHCP and DNS server that Incus runs on the host.
+別のアプリケーションが追加するファイアウォールのルールは Incus が追加するファイアウォールルールと干渉するかもしれません。
+このため、別のファイアウォールを使用する場合は Incus のファイアウォールルールを無効にするべきです。
+また Incus のインスタンスがホスト上で Incus が動かしている DHCP と DNS サーバーにアクセスできるようにするため、
+インスタンスと Incus ブリッジ間のネットワークトラフィックを許可するように設定しなければなりません。
 
-See the following sections for instructions on how to disable Incus' firewall rules and how to properly configure `firewalld` and UFW, respectively.
+Incus のファイアウォールルールをどのように無効化し、 `firewalld` と UFW をどのように適切に設定するかは以下を参照してください。
 
-### Disable Incus' firewall rules
+### Incus のファイアウォールルールを無効化する
 
-Run the following commands to prevent Incus from setting firewall rules for a specific network bridge (for example, `incusbr0`):
+指定のネットワークブリッジ（たとえば、`incusbr0`）に Incus がファイアウォールルールを設定しないようにするためには以下のコマンドを実行してください:
 
     incus network set <network_bridge> ipv6.firewall false
     incus network set <network_bridge> ipv4.firewall false
 
-### `firewalld`: Add the bridge to the trusted zone
+### `firewalld` で信頼されたゾーンにブリッジを追加する
 
-To allow traffic to and from the Incus bridge in `firewalld`, add the bridge interface to the `trusted` zone.
-To do this permanently (so that it persists after a reboot), run the following commands:
+`firewalld` で Incus ブリッジへとブリッジからのトラフィックを許可するには、ブリッジインターフェースを `trusted` ゾーンに追加してください。
+（再起動後も設定が残るように）永続的にこれを行うには以下のコマンドを実行してください:
 
     sudo firewall-cmd --zone=trusted --change-interface=<network_bridge> --permanent
     sudo firewall-cmd --reload
 
-For example:
+たとえば:
 
     sudo firewall-cmd --zone=trusted --change-interface=incusbr0 --permanent
     sudo firewall-cmd --reload
@@ -60,24 +61,24 @@ For example:
 <!-- Include start warning -->
 
 ```{warning}
-The commands given above show a simple example configuration.
-Depending on your use case, you might need more advanced rules and the example configuration might inadvertently introduce a security risk.
+上に示したコマンドはシンプルな例です。
+あなたの使い方に応じて、より高度なルールが必要な場合があり、その場合上の例をそのまま実行するとうっかりセキュリティリスクを引き起こす可能性があります。
 ```
 
 <!-- Include end warning -->
 
-### UFW: Add rules for the bridge
+### UFW でブリッジにルールを追加する
 
-If UFW has a rule to drop all unrecognized traffic, it blocks the traffic to and from the Incus bridge.
-In this case, you must add rules to allow traffic to and from the bridge, as well as allowing traffic forwarded to it.
+UFW で認識不能なトラフィックをすべてドロップするルールを入れていると、 Incus ブリッジへとブリッジからのトラフィックをブロックしてしまいます。
+この場合ブリッジへとブリッジからのトラフィックを許可し、さらにブリッジへフォワードされるトラフィックを許可するルールを追加する必要があります。
 
-To do so, run the following commands:
+そのためには次のコマンドを実行します:
 
     sudo ufw allow in on <network_bridge>
     sudo ufw route allow in on <network_bridge>
     sudo ufw route allow out on <network_bridge>
 
-For example:
+たとえば:
 
     sudo ufw allow in on incusbr0
     sudo ufw route allow in on incusbr0
@@ -90,57 +91,57 @@ For example:
 ```
 
 (network-incus-docker)=
-## Prevent connectivity issues with Incus and Docker
+## Incus と Docker の接続の問題を回避する
 
-Running Incus and Docker on the same host can cause connectivity issues.
-A common reason for these issues is that Docker sets the global FORWARD policy to `drop`, which prevents Incus from forwarding traffic and thus causes the instances to lose network connectivity.
-See [Docker on a router](https://docs.docker.com/network/iptables/#docker-on-a-router) for detailed information.
+同じホストで Incus と Docker を動かすと接続の問題を引き起こします。
+この問題のよくある理由は Docker はグローバルの FOWARD のポリシーを `drop` に設定するので、それが Incus がトラフィックをフォワードすることを妨げインスタンスのネットワーク接続を失わせるということです。
+詳細は [Docker on a router](https://docs.docker.com/network/iptables/#docker-on-a-router) を参照してください。
 
-There are different ways of working around this problem:
+この問題を回避するためのさまざまな方法があります:
 
-Uninstall Docker
-: The easiest way to prevent such issues is to uninstall Docker from the system that runs Incus and restart the system.
-  You can run Docker inside a Incus container or virtual machine instead.
+Docker をアンインストールする
+: このような問題を防ぐ最も簡単な方法は、Incus を実行しているシステムから Docker をアンインストールしてシステムを再起動することです。
+  代わりに、Incus のコンテナや仮想マシンの中で Docker を実行できます。
 
-Enable IPv4 forwarding
-: If uninstalling Docker is not an option, enabling IPv4 forwarding before the Docker service starts will prevent Docker from modifying the global FORWARD policy.
-  Incus bridge networks enable this setting normally.
-  However, if Incus starts after Docker, then Docker will already have modified the global FORWARD policy.
+IPv4 の転送を有効にする
+: Docker をアンインストールすることができない場合、Docker サービスが開始する前に IPv4 転送を有効にすることで、Docker がグローバル FORWARD ポリシーを変更するのを防ぐことができます。
+  Incus ブリッジネットワークは通常、この設定を有効にします。
+  しかし、Incus が Docker の後に起動すると、Docker は既にグローバル FORWARD ポリシーを変更している可能性があります。
 
   ```{warning}
-  Enabling IPv4 forwarding can cause your Docker container ports to be reachable from any machine on your local network.
-  Depending on your environment, this might be undesirable.
-  See [local network container access issue](https://github.com/moby/moby/issues/14041) for more information.
+  IPv4の転送を有効にすると、Dockerのコンテナポートがローカルネットワーク上の任意のマシンからアクセス可能になる可能性があります。
+  環境によりますが、これは望ましくない場合があります。
+  詳細については、[ローカルネットワークのコンテナアクセス問題](https://github.com/moby/moby/issues/14041)を参照してください。
   ```
 
-  To enable IPv4 forwarding before Docker starts, ensure that the following `sysctl` setting is enabled:
+  Docker が開始する前に IPv4 転送を有効にするためには、次の`sysctl`設定が有効になっていることを確認します:
 
       net.ipv4.conf.all.forwarding=1
 
   ```{important}
-  You must make this setting persistent across host reboots.
+  この設定はホストの再起動時にも保持されるようにする必要があります。
 
-  One way of doing this is to add a file to the `/etc/sysctl.d/` directory using the following commands:
+  これを行う一つの方法は、次のコマンドを使用して`/etc/sysctl.d/`ディレクトリにファイルを追加することです:
 
       echo "net.ipv4.conf.all.forwarding=1" > /etc/sysctl.d/99-forwarding.conf
       systemctl restart systemd-sysctl
 
   ```
 
-Allow egress network traffic flows
-: If you do not want the Docker container ports to be potentially reachable from any machine on your local network, you can apply a more complex solution provided by Docker.
+外向きネットワークトラフィックフローを許可する
+: Docker のコンテナポートがローカルネットワーク上の任意のマシンからアクセス可能になる可能性を避けたい場合、Docker が提供するより複雑なソリューションを適用できます。
 
-  Use the following commands to explicitly allow egress network traffic flows from your Incus managed bridge interface:
+  次のコマンドを使用して、Incus 管理ブリッジインターフェースからの外向きネットワークトラフィックフローを明示的に許可します:
 
       iptables -I DOCKER-USER -i <network_bridge> -j ACCEPT
       iptables -I DOCKER-USER -o <network_bridge> -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
-  For example, if your Incus managed bridge is called `incusbr0`, you can allow egress traffic to flow using the following commands:
+  たとえば、Incus の管理ブリッジが`incusbr0`と呼ばれている場合、次のコマンドを使用して外向きトラフィックのフローを許可できます:
 
       iptables -I DOCKER-USER -i incusbr0 -j ACCEPT
       iptables -I DOCKER-USER -o incusbr0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
   ```{important}
-  You  must make these firewall rules persistent across host reboots.
-  How to do this depends on your Linux distribution.
+  これらのファイアウォールルールは、ホストの再起動時にも保持されるようにする必要があります。
+  これを行う方法は Linux ディストリビューションによります。
   ```

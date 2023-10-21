@@ -1,16 +1,16 @@
 (clustering)=
-# Clustering
+# クラスタリング
 
 ```{toctree}
 :titlesonly:
 
 explanation/clustering.md
-Form a cluster <howto/cluster_form>
-Manage a cluster <howto/cluster_manage>
-Recover a cluster <howto/cluster_recover>
-Manage instances <howto/cluster_manage_instance>
-Configure storage <howto/cluster_config_storage>
-Configure networks <howto/cluster_config_networks>
-Set up cluster groups <howto/cluster_groups>
+クラスタの形成 <howto/cluster_form>
+クラスタの管理 <howto/cluster_manage>
+クラスタの復旧 <howto/cluster_recover>
+インスタンスの管理 <howto/cluster_manage_instance>
+ストレージの設定 <howto/cluster_config_storage>
+ネットワークの設定 <howto/cluster_config_networks>
+クラスタグループのセットアップ <howto/cluster_groups>
 reference/cluster_member_config
 ```

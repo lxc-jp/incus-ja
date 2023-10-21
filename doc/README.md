@@ -1,27 +1,26 @@
-# Incus documentation
+# Incusドキュメント
 
-The Incus documentation is available at: <https://linuxcontainers.org/incus/docs/main/>
+Incus の日本語ドキュメントは、<https://incus-ja.readthedocs.io/ja/latest/>(原文のドキュメントは<https://linuxcontainers.org/incus/docs/latest/>)で閲覧できます。
 
-GitHub provides a basic rendering of the documentation as well, but important features like includes and clickable links are missing. Therefore, we recommend reading the [published documentation](https://linuxcontainers.org/incus/docs/main/).
+GitHub でもドキュメントの基本的なレンダリングを提供していますが、include やクリッカブルリンクなどの重要な機能が欠落しています。そのため、[公開ドキュメント](https://incus-ja.readthedocs.io/ja/latest/)を読むことをお勧めします。
 
-## How it works
+## どのように動作するか
 
 <!-- Include start docs -->
 
-### Documentation framework
+### ドキュメントのフレームワーク
 
-Incus' documentation is built with [Sphinx](https://www.sphinx-doc.org/en/master/index.html).
+Incus のドキュメントは[Sphinx](https://www.sphinx-doc.org/en/master/index.html)でビルドされます。
 
-It is written in [Markdown](https://commonmark.org/) with [MyST](https://myst-parser.readthedocs.io/) extensions.
-For syntax help and guidelines, see the [documentation cheat sheet](https://linuxcontainers.org/incus/docs/main/doc-cheat-sheet/) ([source](https://raw.githubusercontent.com/lxc/incus/main/doc/doc-cheat-sheet.md)).
+ドキュメントは[Markdown](https://commonmark.org/)と[MyST](https://myst-parser.readthedocs.io/)の拡張で書かれています。
+構文のヘルプやガイドラインについては、[ドキュメントチートシート](https://incus-ja.readthedocs.io/ja/latest/doc-cheat-sheet/) ([ソース](https://raw.githubusercontent.com/lxc-jp/incus-ja/main/doc/doc-cheat-sheet.md))を参照してください。
 
-For structuring, the documentation uses the [Diátaxis](https://diataxis.fr/) approach.
+構成に関しては、このドキュメントでは[Diátaxis](https://diataxis.fr/)アプローチを採用しています。
 
-### Build the documentation
+### ドキュメントのビルド
 
-To build the documentation, run `make doc` from the root directory of the repository.
-This command installs the required tools and renders the output to the `doc/html/` directory.
-To update the documentation for changed files only (without re-installing the tools), run `make doc-incremental`.
+ドキュメントをビルドするには、リポジトリのルートディレクトリーから`make doc`を実行します。このコマンドは必要なツールをインストールして、出力を`doc/html/`ディレクトリーにレンダリングします。
+変更されたファイルのみを対象に（ツールを再インストールすることなく）ドキュメントを更新するには、`make doc-incremental`を実行します。
 
-Before opening a pull request, make sure that the documentation builds without any warnings (warnings are treated as errors).
-To preview the documentation locally, run `make doc-serve` and go to [`http://localhost:8001`](http://localhost:8001) to view the rendered documentation.
+Pull Request をオープンする前に、ドキュメントが警告なしでビルドできることを確認してください（警告はエラーとして扱われます）。
+ドキュメントをローカルでプレビューするには、`make doc-serve`を実行し[`http://localhost:8001`](http://localhost:8001)をブラウザで開いてください。

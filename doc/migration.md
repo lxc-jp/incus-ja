@@ -1,31 +1,31 @@
 (migration)=
-# Migration
+# マイグレーション
 
-Incus provides tools and functionality to migrate instances in different contexts.
+Incus は異なる状況でインスタンスをマイグレートするためのツールと機能を提供します。
 
-Migrate existing Incus instances between servers
-: The most basic kind of migration is if you have a Incus instance on one server and want to move it to a different Incus server.
-  For virtual machines, you can do that as a live migration, which means that you can migrate your VM while it is running and there will be no downtime.
+サーバー間で既存の Incus インスタンスをマイグレートする
+: 最も基本的な種類のマイグレーションは 1 つのサーバー上に Incus インスタンスがあり、それを別の Incus サーバーに移動したいというものです。
+  仮想マシンでは、ライブマイグレーションを行えます。これは稼働中にダウンタイムなしで VM をマイグレートできることを意味します。
 
-  See {ref}`move-instances` for more information.
+  詳細は {ref}`move-instances` を参照してくだい。
 
-Migrate physical or virtual machines to Incus instances
-: If you have an existing machine, either physical or virtual (VM or container), you can use the `incus-migrate` tool to create a Incus instance based on your existing machine.
-  The tool copies the provided partition, disk or image to the Incus storage pool of the provided Incus server, sets up an instance using that storage and allows you to configure additional settings for the new instance.
+物理または仮想マシンを Incus インスタンスにマイグレートする
+: 物理または仮想（VM またはコンテナ）の既存のマシンがある場合、既存のマシン上に Incus インスタンスを作成するために `incus-migrate` ツールが使えます。
+  このツールは提供されたパーティション、ディスクやイメージを Incus サーバーの Incus ストレージプールにコピーし、そのストレージを使ってインスタンスをセットアップします。新しいインスタンスの追加の設定を行うこともできます。
 
-  See {ref}`import-machines-to-instances` for more information.
+  詳細は {ref}`import-machines-to-instances` を参照してくだい。
 
-Migrate instances from LXC to Incus
-: If you are using LXC and want to migrate all or some of your LXC containers to a Incus installation on the same machine, you can use the `lxc-to-incus` tool.
-  The tool analyzes the LXC configuration and copies the data and configuration of your existing LXC containers into new Incus containers.
+Incus から Incus へインスタンスをマイグレートする
+: LXC を使っていてすべてまたは一部の LXC コンテナを同じマシン上の Incus に移動したい場合、 `lxc-to-incus` ツールが使えます。
+  このツールは LXC 設定を解析し、既存の LXC コンテナのデータと設定を新しい Incus コンテナにコピーします。
 
-  See {ref}`migrate-from-lxc` for more information.
+  詳細は {ref}`migrate-from-lxc` を参照してくだい。
 
 ```{toctree}
 :maxdepth: 1
 :hidden:
 
-Move instances <howto/move_instances>
-Import existing machines <howto/import_machines_to_instances>
-Migrate from LXC <howto/migrate_from_lxc>
+インスタンスの移動 <howto/move_instances>
+既存のマシンのインポート <howto/import_machines_to_instances>
+LXCからのマイグレート <howto/migrate_from_lxc>
 ```

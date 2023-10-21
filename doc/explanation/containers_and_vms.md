@@ -1,24 +1,24 @@
 (containers-and-vms)=
-# About containers and VMs
+# コンテナと仮想マシンについて
 
-Incus provides support for two different types of {ref}`instances <expl-instances>`: *system containers* and *virtual machines*.
+Incus は*システムコンテナ*と*仮想マシン*という 2 つの異なるタイプの{ref}`インスタンス <expl-instances>`をサポートしています。
 
-When running a system container, Incus simulates a virtual version of a full operating system. To do this, it uses the functionality provided by the kernel running on the host system.
+システムコンテナを動かす際は、Incus は完全なバージョンの OS をシミュレートします。このために、ホストシステム上で稼働しているカーネルが提供する機能を使用します。
 
-When running a virtual machine, Incus uses the hardware of the host system, but the kernel is provided by the virtual machine. Therefore, virtual machines can be used to run, for example, a different operating system.
+仮想マシンを動かす際は、Incus はホストシステムのハードウェアを使用しますが、カーネルは仮想マシンにより提供されます。ですので、仮想マシンはたとえば別の OS を動かすこともできます。
 
-## Application containers vs. system containers
+## アプリケーションコンテナとシステムコンテナ
 
-Application containers (as provided by, for example, Docker) package a single process or application. System containers, on the other hand, simulate a full operating system and let you run multiple processes at the same time.
+（たとえば Docker で提供される）アプリケーションコンテナは単一のプロセスあるいはアプリケーションをパッケージするものです。一方、システムコンテナは完全な OS をシミュレートし、同時に複数のプロセスを稼働させます。
 
-Therefore, application containers are suitable to provide separate components, while system containers provide a full solution of libraries, applications, databases and so on. In addition, you can use system containers to create different user spaces and isolate all processes belonging to each user space, which is not what application containers are intended for.
+ですので、アプリケーションは分離したコンポーネントを提供するのに適しているのに対して、システムコンテナはライブラリ、アプリケーション、データベースなど、あらゆるソリューションを提供します。さらに、異なるユーザー空間を作成し、それぞれのユーザー空間に属するすべてのプロセスを隔離するためにシステムコンテナを使うこともできます。これらの用途はアプリケーションコンテナ向きではありません。
 
-![Application and system containers](/images/application-vs-system-containers.svg "Application and system containers")
+![アプリケーションとシステムコンテナ](/images/application-vs-system-containers.svg "アプリケーションとシステムコンテナ")
 
-## Virtual machines vs. system containers
+## 仮想マシンとシステムコンテナ
 
-Virtual machines emulate a physical machine, using the hardware of the host system from a full and completely isolated operating system. System containers, on the other hand, use the OS kernel of the host system instead of creating their own environment. If you run several system containers, they all share the same kernel, which makes them faster and more light-weight than virtual machines.
+仮想マシンは完全で隔離された OS を使いホストシステムのハードウェアを使用して物理マシンをエミュレートします。一方、システムコンテナは自分自身のカーネルを作成せずホストシステムのカーネルを使用します。複数のシステムコンテナを稼働させる場合、それらすべては同じカーネルを共有しますので、仮想マシンより高速で軽量になります。
 
-With Incus, you can create both system containers and virtual machines. You should use a system container to leverage the smaller size and increased performance if all functionality you require is compatible with the kernel of your host operating system. If you need functionality that is not supported by the OS kernel of your host system or you want to run a completely different OS, use a virtual machine.
+Incus ではシステムコンテナと仮想マシンの両方を作成できます。必要な機能のすべてがホストの OS カーネルと互換性がある場合は、システムコンテナを使うとより小さいサイズで高パフォーマンスを得られます。ホストシステムの OS カーネルでサポートされない機能が必要かあるいは完全に異なる OS を使いたい場合は仮想マシンを使ってください。
 
-![Virtual machines and system containers](/images/virtual-machines-vs-system-containers.svg "Virtual machines and system containers")
+![仮想マシンとシステムコンテナ](/images/virtual-machines-vs-system-containers.svg "仮想マシンとシステムコンテナ")

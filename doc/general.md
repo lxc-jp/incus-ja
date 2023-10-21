@@ -1,18 +1,18 @@
-# General
+# 概要
 
-See the following sections for information on how to get started with Incus:
+どのように Incus を使い始めるかについての情報は以下のセクションを参照してください。
 
 ```{toctree}
 :maxdepth: 1
 
-Containers and VMs </explanation/containers_and_vms>
-Install Incus </installing>
-Initialize Incus </howto/initialize>
-Get support </support>
-Frequently asked </faq>
-Contribute to Incus </contributing>
+コンテナと仮想マシン </explanation/containers_and_vms>
+Incusのインストール </installing>
+Incusの初期化 </howto/initialize>
+サポートを受ける </support>
+よく聞かれる質問 </faq>
+Incusへのコントリビュート </contributing>
 ```
 
-You can find a series of demos and tutorials on YouTube:
+YouTube に一連のデモとチュートリアルがあります。
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/videoseries?list=PLVhiK8li7a-5aRPwUHHfpfMu_wWCava4_" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>

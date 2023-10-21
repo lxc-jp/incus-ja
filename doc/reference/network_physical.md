@@ -1,56 +1,55 @@
 (network-physical)=
-# Physical network
+# 物理ネットワーク
 
 <!-- Include start physical intro -->
-The `physical` network type connects to an existing physical network, which can be a network interface or a bridge, and serves as an uplink network for OVN.
+物理 (`physical`) ネットワークタイプは既存のネットワークに接続します。これはネットワークインターフェースまたはブリッジになることができ、OVN のためのアップリンクネットワークとしての役目を果たします。
 <!-- Include end physical intro -->
 
-This network type allows to specify presets to use when connecting OVN networks to a parent interface or to allow an instance to use a physical interface as a NIC.
-In this case, the instance NICs can simply set the `network`option to the network they connect to without knowing any of the underlying configuration details.
+このネットワークタイプは OVN ネットワークを親インターフェースに接続する際に使用するプリセットの設定を提供したり、インスタンスが物理インターフェースを NIC として使用できるようにします。この場合、インスタンス NIC は接続先の設定詳細を知ること無く単に `network` オプションを設定できるようにします。
 
 (network-physical-options)=
-## Configuration options
+## 設定オプション
 
-The following configuration key namespaces are currently supported for the `physical` network type:
+物理ネットワークでは現在以下の設定キーNamespace がサポートされています:
 
-- `bgp` (BGP peer configuration)
-- `dns` (DNS server and resolution configuration)
-- `ipv4` (L3 IPv4 configuration)
-- `ipv6` (L3 IPv6 configuration)
-- `ovn` (OVN configuration)
-- `user` (free-form key/value for user metadata)
+- `bgp`（BGP ピア設定）
+- `dns`（DNS サーバーと名前解決の設定）
+- `ipv4`（L3 IPv4 設定）
+- `ipv6`（L3 IPv6 設定）
+- `ovn`（OVN 設定）
+- `user`（key/value の自由形式のユーザーメタデータ）
 
 ```{note}
 {{note_ip_addresses_CIDR}}
 ```
 
-The following configuration options are available for the `physical` network type:
+物理ネットワークタイプには以下の設定オプションがあります:
 
-Key                             | Type      | Condition             | Default                   | Description
-:--                             | :--       | :--                   | :--                       | :--
-`gvrp`                          | bool      | -                     | `false`                   | Register VLAN using GARP VLAN Registration Protocol
-`mtu`                           | integer   | -                     | -                         | The MTU of the new interface
-`parent`                        | string    | -                     | -                         | Existing interface to use for network
-`vlan`                          | integer   | -                     | -                         | The VLAN ID to attach to
-`bgp.peers.NAME.address`        | string    | BGP server            | -                         | Peer address (IPv4 or IPv6) for use by `ovn` downstream networks
-`bgp.peers.NAME.asn`            | integer   | BGP server            | -                         | Peer AS number for use by `ovn` downstream networks
-`bgp.peers.NAME.password`       | string    | BGP server            | - (no password)           | Peer session password (optional) for use by `ovn` downstream networks
-`bgp.peers.NAME.holdtime`       | integer   | BGP server            | `180`                     | Peer session hold time (in seconds; optional)
-`dns.nameservers`               | string    | standard mode         | -                         | List of DNS server IPs on `physical` network
-`ipv4.gateway`                  | string    | standard mode         | -                         | IPv4 address for the gateway and network (CIDR)
-`ipv4.ovn.ranges`               | string    | -                     | -                         | Comma-separated list of IPv4 ranges to use for child OVN network routers (FIRST-LAST format)
-`ipv4.routes`                   | string    | IPv4 address          | -                         | Comma-separated list of additional IPv4 CIDR subnets that can be used with child OVN networks `ipv4.routes.external` setting
-`ipv4.routes.anycast`           | bool      | IPv4 address          | `false`                   | Allow the overlapping routes to be used on multiple networks/NIC at the same time
-`ipv6.gateway`                  | string    | standard mode         | -                         | IPv6 address for the gateway and network (CIDR)
-`ipv6.ovn.ranges`               | string    | -                     | -                         | Comma-separated list of IPv6 ranges to use for child OVN network routers (FIRST-LAST format)
-`ipv6.routes`                   | string    | IPv6 address          | -                         | Comma-separated list of additional IPv6 CIDR subnets that can be used with child OVN networks `ipv6.routes.external` setting
-`ipv6.routes.anycast`           | bool      | IPv6 address          | `false`                   | Allow the overlapping routes to be used on multiple networks/NIC at the same time
-`ovn.ingress_mode`              | string    | standard mode         | `l2proxy`                 | Sets the method how OVN NIC external IPs will be advertised on uplink network: `l2proxy` (proxy ARP/NDP) or `routed`
-`user.*`                        | string    | -                     | -                         | User-provided free-form key/value pairs
+キー                      | 型      | 条件          | デフォルト         | 説明
+:--                       | :--     | :--           | :--                | :--
+`gvrp`                    | bool    | -             | `false`            | GARP VLAN Registration Protocol を使って VLAN を登録する
+`mtu`                     | integer | -             | -                  | 作成するインターフェースの MTU
+`parent`                  | string  | -             | -                  | ネットワークで使う既存のインターフェース
+`vlan`                    | integer | -             | -                  | アタッチする先の VLAN ID
+`bgp.peers.NAME.address`  | string  | BGP server    | -                  | `ovn` ダウンストリームネットワークで使用するピアアドレス (IPv4 か IPv6)
+`bgp.peers.NAME.asn`      | integer | BGP server    | -                  | `ovn` ダウンストリームネットワークで使用する AS 番号
+`bgp.peers.NAME.password` | string  | BGP server    | - (パスワード無し) | `ovn` ダウンストリームネットワークで使用するピアのセッションパスワード（省略可能）
+`bgp.peers.NAME.holdtime` | integer | BGP server    | `180`              | ピアセッションホールドタイム (秒で指定、省略可能)
+`dns.nameservers`         | string  | 標準モード    | -                  | 物理 (`physical`) ネットワークの DNS サーバー IP のリスト
+`ipv4.gateway`            | string  | 標準モード    | -                  | ゲートウェイとネットワークの IPv4 アドレス（CIDR表記）
+`ipv4.ovn.ranges`         | string  | -             | -                  | 子供の OVN ネットワークルーターに使用する IPv4 アドレスの範囲（開始-終了 形式) のカンマ区切りリスト
+`ipv4.routes`             | string  | IPv4 アドレス | -                  | 子供の OVN ネットワークの `ipv4.routes.external` 設定で利用可能な追加の IPv4 CIDR サブネットのカンマ区切りリスト
+`ipv4.routes.anycast`     | bool    | IPv4 アドレス | `false`            | 複数のネットワーク／NICで同時にオーバーラップするルートが使われることを許可するかどうか
+`ipv6.gateway`            | string  | 標準モード    | -                  | ゲートウェイとネットワークの IPv6 アドレス（CIDR表記）
+`ipv6.ovn.ranges`         | string  | -             | -                  | 子供の OVN ネットワークルーターに使用する IPv6 アドレスの範囲（開始-終了 形式) のカンマ区切りリスト
+`ipv6.routes`             | string  | IPv6 アドレス | -                  | 子供の OVN ネットワークの `ipv6.routes.external` 設定で利用可能な追加の IPv6 CIDR サブネットのカンマ区切りリスト
+`ipv6.routes.anycast`     | bool    | IPv6 アドレス | `false`            | 複数のネットワーク／NICで同時にオーバーラップするルートが使われることを許可するかどうか
+`ovn.ingress_mode`        | string  | 標準モード    | `l2proxy`          | OVN NIC の外部 IP アドレスがアップリンクネットワークで広告される方法を設定します。 `l2proxy` (proxy ARP/NDP) か `routed` です。
+`user.*`                  | string  | -             | -                  | ユーザー指定の自由形式のキー／バリューペア
 
 (network-physical-features)=
-## Supported features
+## サポートされている機能
 
-The following features are supported for the `physical` network type:
+物理ネットワークタイプでは以下の機能がサポートされています:
 
 - {ref}`network-bgp`

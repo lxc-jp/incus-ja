@@ -1,54 +1,54 @@
 (storage-dir)=
-# Directory - `dir`
+# ディレクトリー - `dir`
 
-The directory storage driver is a basic backend that stores its data in a standard file and directory structure.
-This driver is quick to set up and allows inspecting the files directly on the disk, which can be convenient for testing.
-However, Incus operations are {ref}`not optimized <storage-drivers-features>` for this driver.
+ディレクトリーストレージドライバーは基本的なバックエンドで通常のファイルとディレクトリー構造にデータを保管します。
+このドライバーは素早くセットアップできディスク上のファイルを直接見ることができるので、テストには便利かもしれません。
+しかし、 Incus の操作はこのドライバー用には {ref}`最適化されていません <storage-drivers-features>`。
 
-## `dir` driver in Incus
+## Incus の `dir` ドライバー
 
-The `dir` driver in Incus is fully functional and provides the same set of features as other drivers.
-However, it is much slower than all the other drivers because it must unpack images and do instant copies of instances, snapshots and images.
+Incus の `dir` ドライバーは完全に機能し、他のドライバーと同じ機能セットを提供します。
+しかし、他のドライバーよりは圧倒的に遅いです。これはインスタンス、スナップ、ショットを一瞬でコピーする代わりにイメージの解凍を行う必要があるためです。
 
-Unless specified differently during creation (with the `source` configuration option), the data is stored in the `/var/lib/incus/storage-pools/` directory.
+作成時に（`source` 設定オプションを使って）別途指定されてない限り、データは `/var/lib/incus/storage-pools/` ディレクトリーに保管されます。
 
 (storage-dir-quotas)=
-### Quotas
+### クォータ
 
 <!-- Include start dir quotas -->
-The `dir` driver supports storage quotas when running on either ext4 or XFS with project quotas enabled at the file system level.
+`dir` ドライバーは ext4 か XFS 上で動作しファイルシステムレベルでプロジェクトのクォータが有効な場合にストレージのクォータをサポートします。
 <!-- Include end dir quotas -->
 
-## Configuration options
+## 設定オプション
 
-The following configuration options are available for storage pools that use the `dir` driver and for storage volumes in these pools.
+`dir` ドライバーを使うストレージプールとこれらのプール内のストレージボリュームには以下の設定オプションが利用できます。
 
-### Storage pool configuration
+## ストレージプール設定
 
-Key                           | Type                          | Default                                 | Description
-:--                           | :---                          | :------                                 | :----------
-`rsync.bwlimit`               | string                        | `0` (no limit)                          | The upper limit to be placed on the socket I/O when `rsync` must be used to transfer storage entities
-`rsync.compression`           | bool                          | `true`                                  | Whether to use compression while migrating storage pools
-`source`                      | string                        | -                                       | Path to an existing directory
+キー                | 型     | デフォルト値   | 説明
+:--                 | :---   | :------        | :----------
+`rsync.bwlimit`     | string | `0` (no limit) | ストレージエンティティの転送に rsync を使う必要があるときにソケット I/O に指定する上限を設定
+`rsync.compression` | bool   | `true`         | ストレージブールのマイグレーションの際に圧縮を使うかどうか
+`source`            | string | -              | ブロックデバイスかループファイルかファイルシステムエントリのパス
 
 {{volume_configuration}}
 
-### Storage volume configuration
+## ストレージボリューム設定
 
-Key                     | Type      | Condition                 | Default                                        | Description
-:--                     | :---      | :--------                 | :------                                        | :----------
-`security.shifted`      | bool      | custom volume             | same as `volume.security.shifted` or `false`   | {{enable_ID_shifting}}
-`security.unmapped`     | bool      | custom volume             | same as `volume.security.unmapped` or `false`  | Disable ID mapping for the volume
-`size`                  | string    | appropriate driver        | same as `volume.size`                          | Size/quota of the storage volume
-`snapshots.expiry`      | string    | custom volume             | same as `volume.snapshots.expiry`              | {{snapshot_expiry_format}}
-`snapshots.pattern`     | string    | custom volume             | same as `volume.snapshots.pattern` or `snap%d` | {{snapshot_pattern_format}} [^*]
-`snapshots.schedule`    | string    | custom volume             | same as `volume.snapshots.schedule`            | {{snapshot_schedule_format}}
+キー                 | 型     | 条件               | デフォルト値                                 | 説明
+:--                  | :---   | :--------          | :------                                      | :----------
+`security.shifted`   | bool   | カスタムボリューム | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
+`security.unmapped`  | bool   | カスタムボリューム | `volume.security.unmapped` と同じか `false`  | ボリュームの ID マッピングを無効にする
+`size`               | string | 適切なドライバー   | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
+`snapshots.expiry`   | string | カスタムボリューム | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
+`snapshots.pattern`  | string | カスタムボリューム | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
+`snapshots.schedule` | string | カスタムボリューム | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
 
 [^*]: {{snapshot_pattern_detail}}
 
-### Storage bucket configuration
+### ストレージバケット設定
 
-To enable storage buckets for local storage pool drivers and allow applications to access the buckets via the S3 protocol, you must configure the {config:option}`server-core:core.storage_buckets_address` server setting.
+ローカルのストレージプールドライバーでストレージバケットを有効にし、 S3 プロトコル経由でアプリケーションがバケットにアクセスできるようにするには{config:option}`server-core:core.storage_buckets_address`サーバー設定を調整する必要があります。
 
-Storage buckets do not have any configuration for `dir` pools.
-Unlike the other storage pool drivers, the `dir` driver does not support bucket quotas via the `size` setting.
+ストレージバケットは `dir` プール用の設定はありません。
+他のストレージプールドライバーとは異なり、 `dir` ドライバーは `size` 設定によるバケットクォータのサポートはありません。

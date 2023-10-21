@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +10,7 @@ import (
 	lxdAPI "github.com/canonical/lxd/shared/api"
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/internal/cmd"
+	cli "github.com/lxc/incus/internal/cmd"
 	"github.com/lxc/incus/internal/version"
 	incusAPI "github.com/lxc/incus/shared/api"
 	"github.com/lxc/incus/shared/subprocess"
@@ -19,15 +20,17 @@ var minLXDVersion = &version.DottedVersion{4, 0, 0}
 var maxLXDVersion = &version.DottedVersion{5, 18, 0}
 
 type cmdGlobal struct {
+	asker cli.Asker
+
 	flagHelp    bool
 	flagVersion bool
 }
 
 func main() {
 	// Setup command line parser.
-	daemonCmd := cmdMigrate{}
+	migrateCmd := cmdMigrate{}
 
-	app := daemonCmd.Command()
+	app := migrateCmd.Command()
 	app.Use = "lxd-to-incus"
 	app.Short = "LXD to Incus migration tool"
 	app.Long = `Description:
@@ -39,7 +42,8 @@ func main() {
 	app.CompletionOptions = cobra.CompletionOptions{DisableDefaultCmd: true}
 
 	// Global flags.
-	globalCmd := cmdGlobal{}
+	globalCmd := cmdGlobal{asker: cli.NewAsker(bufio.NewReader(os.Stdin))}
+	migrateCmd.global = globalCmd
 	app.PersistentFlags().BoolVar(&globalCmd.flagVersion, "version", false, "Print version number")
 	app.PersistentFlags().BoolVarP(&globalCmd.flagHelp, "help", "h", false, "Print help")
 
@@ -55,6 +59,8 @@ func main() {
 }
 
 type cmdMigrate struct {
+	global cmdGlobal
+
 	flagYes bool
 }
 
@@ -88,6 +94,8 @@ func (c *cmdMigrate) Run(app *cobra.Command, args []string) error {
 	if source == nil {
 		return fmt.Errorf("No source server could be found")
 	}
+
+	fmt.Printf("==> Detected: %s\n", source.Name())
 
 	// Iterate through potential targets.
 	fmt.Println("=> Looking for target server")
@@ -456,7 +464,7 @@ At this point, the source server and all its instances will be stopped.
 Instances will come back online once the migration is complete.
 `)
 
-		ok, err := cmd.AskBool("Proceed with the migration? [default=no]: ", "no")
+		ok, err := c.global.asker.AskBool("Proceed with the migration? [default=no]: ", "no")
 		if err != nil {
 			return err
 		}
@@ -532,6 +540,11 @@ Instances will come back online once the migration is complete.
 	// Cleanup paths.
 	fmt.Println("=> Cleaning up target paths")
 
+	for _, dir := range []string{"backups", "images"} {
+		// Remove any potential symlink (ignore errors for real directories).
+		_ = os.Remove(filepath.Join(targetPaths.Daemon, dir))
+	}
+
 	for _, dir := range []string{"devices", "devlxd", "security", "shmounts"} {
 		err = os.RemoveAll(filepath.Join(targetPaths.Daemon, dir))
 		if err != nil && !os.IsNotExist(err) {
@@ -585,7 +598,7 @@ Instances will come back online once the migration is complete.
 
 	// Confirm uninstall.
 	if !c.flagYes {
-		ok, err := cmd.AskBool("Uninstall the LXD package? [default=no]: ", "no")
+		ok, err := c.global.asker.AskBool("Uninstall the LXD package? [default=no]: ", "no")
 		if err != nil {
 			return err
 		}

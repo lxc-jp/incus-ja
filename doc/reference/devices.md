@@ -1,29 +1,29 @@
 (devices)=
-# Devices
+# デバイス
 
-Devices are attached to an instance (see {ref}`instances-configure-devices`) or to a profile (see {ref}`profiles-edit`).
+デバイスはインスタンス（{ref}`instances-configure-devices` 参照）またはプロファイル（{ref}`profiles-edit` 参照）にアタッチされます。
 
-They include, for example, network interfaces, mount points, USB and GPU devices.
-These devices can have instance device options, depending on the type of the instance device.
+デバイスには、たとえば、ネットワークインターフェース、マウントポイント、USB そして GPU デバイスがあります。
+これらのデバイスはインスタンスデバイスの種別に応じてインスタンスデバイスオプションを持つことができます。
 
-Incus supports the following device types:
+Incus では次のデバイスタイプが使えます:
 
-| ID (database) | Name                                   | Condition | Description                     |
-|:--------------|:---------------------------------------|:----------|:--------------------------------|
-| 0             | [`none`](devices-none)                 | -         | Inheritance blocker             |
-| 1             | [`nic`](devices-nic)                   | -         | Network interface               |
-| 2             | [`disk`](devices-disk)                 | -         | Mount point inside the instance |
-| 3             | [`unix-char`](devices-unix-char)       | container | Unix character device           |
-| 4             | [`unix-block`](devices-unix-block)     | container | Unix block device               |
-| 5             | [`usb`](devices-usb)                   | -         | USB device                      |
-| 6             | [`gpu`](devices-gpu)                   | -         | GPU device                      |
-| 7             | [`infiniband`](devices-infiniband)     | container | InfiniBand device               |
-| 8             | [`proxy`](devices-proxy)               | container | Proxy device                    |
-| 9             | [`unix-hotplug`](devices-unix-hotplug) | container | Unix hotplug device             |
-| 10            | [`tpm`](devices-tpm)                   | -         | TPM device                      |
-| 11            | [`pci`](devices-pci)                   | VM        | PCI device                      |
+| ID (データベース)   | 名前                                   | 条件         | 説明                               |
+| :------------------ | :------------------------------------  | :----------- | :--------------------------------- |
+| 0                   | [`none`](devices-none)                 | -            | 継承ブロッカー                     |
+| 1                   | [`nic`](devices-nic)                   | -            | ネットワークインターフェース       |
+| 2                   | [`disk`](devices-disk)                 | -            | インスタンス内のマウントポイント   |
+| 3                   | [`unix-char`](devices-unix-char)       | コンテナ     | Unix キャラクタデバイス            |
+| 4                   | [`unix-block`](devices-unix-block)     | コンテナ     | Unix ブロックデバイス              |
+| 5                   | [`usb`](devices-usb)                   | -            | USB デバイス                       |
+| 6                   | [`gpu`](devices-gpu)                   | -            | GPU デバイス                       |
+| 7                   | [`infiniband`](devices-infiniband)     | コンテナ     | インフィニバンドデバイス           |
+| 8                   | [`proxy`](devices-proxy)               | コンテナ     | プロキシデバイス                   |
+| 9                   | [`unix-hotplug`](devices-unix-hotplug) | コンテナ     | Unix ホットプラグデバイス          |
+| 10                  | [`tpm`](devices-tpm)                   | -            | TPM デバイス                       |
+| 11                  | [`pci`](devices-pci)                   | 仮想マシン   | PCI デバイス                       |
 
-Each instance comes with a set of {ref}`standard-devices`.
+各インスタンスには一組の {ref}`standard-devices` が付属します。
 
 ```{toctree}
 :maxdepth: 1

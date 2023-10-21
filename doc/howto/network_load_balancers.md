@@ -1,121 +1,121 @@
 (network-load-balancers)=
-# How to configure network load balancers
+# ネットワークロードバランサーを設定するには
 
 ```{note}
-Network load balancers are currently available for the {ref}`network-ovn`.
+ネットワークロードバランサーは現状では {ref}`network-ovn` でのみ利用できます。
 ```
 
-Network load balancers are similar to forwards in that they allow specific ports on an external IP address to be forwarded to specific ports on internal IP addresses in the network that the load balancer belongs to. The difference between load balancers and forwards is that load balancers can be used to share ingress traffic between multiple internal backend addresses.
+ネットワークロードバランサーは、外部 IP アドレス上の特定のポートを、ロードバランサーが属するネットワークの内部 IP アドレス上の特定のポートにフォワードできるという点で、ネットワークフォワードに似ています。ネットワークロードバランサーとネットワークフォワードの違いは、ロードバランサーは内向きのトラフィックを複数の内部のバックエンドアドレスで共有するのに使えることです。
 
-This feature can be useful if you have limited external IP addresses or want to share a single external address and ports over multiple instances.
+この機能は外部 IP アドレスの数に限りがあったり、複数のインスタンスで単一の外部アドレスとそのアドレス上のポートを共有したい場合に有用です。
 
-A load balancer is made up of:
+ロードバランサーは以下の要素で構成されます:
 
-- A single external listen IP address.
-- One or more named backends consisting of an internal IP and optional port ranges.
-- One or more listen port ranges that are configured to forward to one or more named backends.
+- 単一の外部リッスン IP アドレス。
+- 内部 IP アドレスとオプショナルなポートレンジからなる単一あるいは複数の名前付きバックエンド。
+- 単一または複数の名前付きバックエンドにフォワードされるように設定された単一または複数のリッスンポートレンジ。
 
-## Create a network load balancer
+## ネットワークロードバランサーを作成する
 
-Use the following command to create a network load balancer:
+ネットワークロードバランサーを作成するには以下のコマンドを使用します:
 
 ```bash
 incus network load-balancer create <network_name> <listen_address> [configuration_options...]
 ```
 
-Each load balancer is assigned to a network.
-It requires a single external listen address (see {ref}`network-load-balancers-listen-addresses` for more information about which addresses can be load-balanced).
+それぞれのロードバランサーはネットワークに割り当てられます。
+ロードバランサーには単一の外部リッスンアドレスが必要です（どのアドレスがロードバランス可能かについてのさらなる情報は {ref}`network-load-balancers-listen-addresses` 参照）。
 
-### Load balancer properties
+### ロードバランサーのプロパティ
 
-Network load balancers have the following properties:
+ネットワークロードバランサーは以下のプロパティを持ちます。
 
-Property         | Type         | Required | Description
-:--              | :--          | :--      | :--
-`listen_address` | string       | yes      | IP address to listen on
-`description`    | string       | no       | Description of the network load balancer
-`config`         | string set   | no       | Configuration options as key/value pairs (only `user.*` custom keys supported)
-`backends`       | backend list | no       | List of {ref}`backend specifications <network-load-balancers-backend-specifications>`
-`ports`          | port list    | no       | List of {ref}`port specifications <network-load-balancers-port-specifications>`
+プロパティ       | 型           | 必須 | 説明
+:--              | :--          | :--  | :--
+`listen_address` | string       | yes  | リッスンする IP アドレス
+`description`    | string       | no   | ネットワークロードバランサーの説明
+`config`         | string set   | no   | キー/バリュー形式の設定オプション（`user.*` カスタムキーのみがサポートされます）
+`backends`       | backend list | no   | {ref}`バックエンド仕様 <network-load-balancers-backend-specifications>` のリスト
+`ports`          | port list    | no   | {ref}`ポート仕様 <network-load-balancers-port-specifications>` のリスト
 
 (network-load-balancers-listen-addresses)=
-### Requirements for listen addresses
+### リッスンアドレスの要件
 
-The following requirements must be met for valid listen addresses:
+有効なリッスンアドレスは以下の要件を満たす必要があります:
 
-- Allowed listen addresses must be defined in the uplink network's `ipv{n}.routes` settings or the project's {config:option}`project-restricted:restricted.networks.subnets` setting (if set).
-- The listen address must not overlap with a subnet that is in use with another network or entity in that network.
+- 許可されるリッスンアドレスはアップリンクのネットワークの `ipv{n}.routes` 設定またはプロジェクトの {config:option}`project-restricted:restricted.networks.subnets` 設定（設定されている場合）に定義されている必要があります。
+- リッスンアドレスは他のネットワークやネットワーク内のエンティティで使用されているサブネットと重なってはいけません。
 
 (network-load-balancers-backend-specifications)=
-## Configure backends
+## バックエンドを設定する
 
-You can add backend specifications to the network load balancer to define target addresses (and optionally ports).
-The backend target address must be within the same subnet as the network that the load balancer is associated to.
+ターゲットのアドレス（と省略可能なポート）をネットワークロードバランサーに定義するためにバックエンド仕様を追加できます。
+バックエンドのターゲットアドレスはロードバランサーが関連付けられているネットワークと同じサブネット内である必要があります。
 
-Use the following command to add a backend specification:
+バックエンド仕様を追加するには以下のコマンドを使用します:
 
 ```bash
 incus network load-balancer backend add <network_name> <listen_address> <backend_name> <listen_ports> <target_address> [<target_ports>]
 ```
 
-The target ports are optional.
-If not specified, the load balancer will use the listen ports for the backend for the backend target ports.
+ターゲットポートは省略可能です。
+省略した場合、ロードバランサーはバックエンドのリッスンポートをバックエンドのターゲットポートとして使用します。
 
-If you want to forward the traffic to different ports, you have two options:
+トラフィックを別のポートにフォワードしたい場合、2 つの選択肢があります。
 
-- Specify a single target port to forward traffic from all listen ports to this target port.
-- Specify a set of target ports with the same number of ports as the listen ports to forward traffic from the first listen port to the first target port, the second listen port to the second target port, and so on.
+- 単一のターゲットポートを指定し、すべてのリッスンポートへのトラフィックをこのターゲットポートにフォワードする。
+- 一組のターゲットポートをリッスンポートと同じ数のポートで指定し、リッスンポートの最初のポートをターゲットポートの最初のポート、リッスンポートの 2 番目のポートをターゲットポートの 2 番目のポート、というようにトラフィックをフォワードする。
 
-### Backend properties
+### バックエンドのプロパティ
 
-Network load balancer backends have the following properties:
+ネットワークロードバランサーのバックエンドは以下のプロパティを持ちます。
 
-Property          | Type       | Required | Description
-:--               | :--        | :--      | :--
-`name`            | string     | yes      | Name of the backend
-`target_address`  | string     | yes      | IP address to forward to
-`target_port`     | string     | no       | Target port(s) (e.g. `70,80-90` or `90`), same as the {ref}`port <network-load-balancers-port-specifications>`'s `listen_port` if empty
-`description`     | string     | no       | Description of backend
+プロパティ       | 型     | 必須 | 説明
+:--              | :--    | :--  | :--
+`name`           | string | yes  | バックエンドの名前
+`target_address` | string | yes  | フォワード先の IP アドレス
+`target_port`    | string | no   | ターゲットポート（例 `70,80-90` や `90`）、空の場合 {ref}`ポート <network-load-balancers-port-specifications>` の `listen_port` と同じ
+`description`    | string | no   | バックエンドの説明
 
 (network-load-balancers-port-specifications)=
-## Configure ports
+## ポートを設定する
 
-You can add port specifications to the network load balancer to forward traffic from specific ports on the listen address to specific ports on one or more target backends.
+ネットワークロードバランサーにポート指定を追加し、リッスンアドレスの特定のポートから、単一または複数のバックエンド上の特定のポートにトラフィックを転送できます。
 
-Use the following command to add a port specification:
+ポート仕様を追加するには以下のコマンドを使用します:
 
 ```bash
 incus network load-balancer port add <network_name> <listen_address> <protocol> <listen_ports> <backend_name>[,<backend_name>...]
 ```
 
-You can specify a single listen port or a set of ports.
-The backend(s) specified must have target port(s) settings compatible with the port's listen port(s) setting.
+単一のリッスンポートまたは一組のポートを指定できます。
+指定されたバックエンドはポートのリッスンポート設定と互換性があるターゲットポート設定を持たなければなりません。
 
-### Port properties
+### ポートのプロパティ
 
-Network load balancer ports have the following properties:
+ネットワークロードバランサーのポートは以下のプロパティを持ちます。
 
-Property          | Type         | Required | Description
-:--               | :--          | :--      | :--
-`protocol`        | string       | yes      | Protocol for the port(s) (`tcp` or `udp`)
-`listen_port`     | string       | yes      | Listen port(s) (e.g. `80,90-100`)
-`target_backend`  | backend list | yes      | Backend name(s) to forward to
-`description`     | string       | no       | Description of port(s)
+プロパティ       | 型           | 必須 | 説明
+:--              | :--          | :--  | :--
+`protocol`       | string       | yes  | ポートのプロトコル（`tcp` または `udp`）
+`listen_port`    | string       | yes  | リッスンポート（例 `80,90-100`）
+`target_backend` | backend list | yes  | フォワード先のバックエンドの名前
+`description`    | string       | no   | ポートの説明
 
-## Edit a network load balancer
+## ネットワークロードバランサーを編集する
 
-Use the following command to edit a network load balancer:
+ネットワークロードバランサーを編集するには以下のコマンドを使用します:
 
 ```bash
 incus network load-balancer edit <network_name> <listen_address>
 ```
 
-This command opens the network load balancer in YAML format for editing.
-You can edit both the general configuration, backend and the port specifications.
+このコマンドは YAML 形式のネットワークロードバランサーの設定を編集用に開きます。
+一般の設定、バックエンド、ポート仕様を編集できます。
 
-## Delete a network load balancer
+## ネットワークロードバランサーを削除する
 
-Use the following command to delete a network load balancer:
+ネットワークロードバランサーを削除するには以下のコマンドを使用します:
 
 ```bash
 incus network load-balancer delete <network_name> <listen_address>

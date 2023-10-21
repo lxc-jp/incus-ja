@@ -1,39 +1,33 @@
 (daemon-behavior)=
-# Daemon behavior
+# デーモンの動作
 
-This specification covers some of the Incus daemon's behavior.
+この仕様書は Incus デーモンの振る舞いの一部を取り扱います。
 
-## Startup
+## 起動
 
-On every start, Incus checks that its directory structure exists. If it
-doesn't, it creates the required directories, generates a key pair and
-initializes the database.
+起動する度に Incus はディレクトリー構造が存在することをチェックします。
+もし存在しない場合は、必要なディレクトリーを作成し、キーペアを生成し、データベースを初期化します。
 
-Once the daemon is ready for work, Incus scans the instances table
-for any instance for which the stored power state differs from the
-current one. If an instance's power state was recorded as running and the
-instance isn't running, Incus starts it.
+ひとたびデーモンが動作の準備が出来ると、 Incus はデータベース内のインスタンスのテーブルから対象のテーブルを検索し、電源状態が実際の状態と異なっていないかを確認します。
+もしインスタンスの電源状態が稼働中と記録されているのにインスタンスが稼働していない場合は Incus はそのインスタンスを開始します。
 
-## Signal handling
+## シグナル処理
 
 ### `SIGINT`, `SIGQUIT`, `SIGTERM`
 
-For those signals, Incus assumes that it's being temporarily stopped and
-will be restarted at a later time to continue handling the instances.
+これらのシグナルについては Incus は一時的に停止し、後に再開してインスタンスの処理を継続することを想定しています。
 
-The instances will keep running and Incus will close all connections and
-exit cleanly.
+インスタンスは稼働し続けて Incus はすべての接続を閉じ、クリーンな状態で終了するでしょう。
 
 ### `SIGPWR`
 
-Indicates to Incus that the host is going down.
+Incus にホストがシャットダウンしようとしていることを伝えます。
 
-Incus will attempt a clean shutdown of all the instances. After 30 seconds, it
-kills any remaining instance.
+Incus はすべてのインスタンスをクリーンにシャットダウンしようと試みます。
+30 秒後、Incus は残りのインスタンスを kill します。
 
-The instance `power_state` in the instances table is kept as it was so
-that Incus can restore the instances as they were after the host is done rebooting.
+ホストがリブート完了後に Incus がインスタンスを元の状態に戻せるように、データベース内のインスタンスのテーブルの`power_state`カラムにインスタンスの元の電源状態を記録しておきます。
 
 ### `SIGUSR1`
 
-Write a memory profile dump to the file specified with `--memprofile`.
+メモリープロファイルを`--memprofile`で指定したファイルにダンプします。

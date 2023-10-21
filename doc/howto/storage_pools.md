@@ -1,138 +1,138 @@
 (howto-storage-pools)=
-# How to manage storage pools
+# ストレージプールを管理するには
 
-See the following sections for instructions on how to create, configure, view and resize {ref}`storage-pools`.
+{ref}`storage-pools` を作成、設定、表示、リサイズするための手順については以下のセクションを参照してください。
 
 (storage-create-pool)=
-## Create a storage pool
+## ストレージプールを作成する
 
-Incus creates a storage pool during initialization.
-You can add more storage pools later, using the same driver or different drivers.
+Incus は初期化中にストレージプールを作成します。
+同じドライバーあるいは別のドライバーを使用して、後からさらにストレージプールを追加できます。
 
-To create a storage pool, use the following command:
+ストレージプールを作成するには以下のコマンドを使用します:
 
     incus storage create <pool_name> <driver> [configuration_options...]
 
-Unless specified otherwise, Incus sets up loop-based storage with a sensible default size (20% of the free disk space, but at least 5 GiB and at most 30 GiB).
+別途指定しない場合は、 Incus は実用的なデフォルトのサイズ（空きディスクスペースの 20%、しかし最低 5GiB で最大 30GiB）でループベースのストレージをセットアップします。
 
-See the {ref}`storage-drivers` documentation for a list of available configuration options for each driver.
+それぞれのドライバーで利用可能な設定オプションの一覧は {ref}`storage-drivers` ドキュメントを参照してください。
 
-### Examples
+### 例
 
-See the following examples for how to create a storage pool using different storage drivers.
+それぞれのストレージドライバーでストレージプールを作成する例は以下を参照してください。
 
 `````{tabs}
 
-````{group-tab} Directory
+````{group-tab} ディレクトリ
 
-Create a directory pool named `pool1`:
+`pool1` という名前のディレクトリプールを作成する:
 
     incus storage create pool1 dir
 
-Use the existing directory `/data/incus` for `pool2`:
+`/data/incus` という既存のディレクトリを使って `pool2` を作成する:
 
     incus storage create pool2 dir source=/data/incus
 ````
 ````{group-tab} Btrfs
 
-Create a loop-backed pool named `pool1`:
+`pool1` という名前のループバックプールを作成する:
 
     incus storage create pool1 btrfs
 
-Use the existing Btrfs file system at `/some/path` for `pool2`:
+`/some/path` にある既存の Btrfs ファイルシステムを使って `pool2` を作成する:
 
     incus storage create pool2 btrfs source=/some/path
 
-Create a pool named `pool3` on `/dev/sdX`:
+`/dev/sdX` 上に `pool3` という名前のプールを作成する:
 
     incus storage create pool3 btrfs source=/dev/sdX
 ````
 ````{group-tab} LVM
 
-Create a loop-backed pool named `pool1` (the LVM volume group will also be called `pool1`):
+`pool1` という名前のループバックのプールを作成する（LVM ボリュームグループ名も `pool1` になります）:
 
     incus storage create pool1 lvm
 
-Use the existing LVM volume group called `my-pool` for `pool2`:
+`my-pool` という既存の LVM ボリュームグループを使って `pool2` を作成する:
 
     incus storage create pool2 lvm source=my-pool
 
-Use the existing LVM thin pool called `my-pool` in volume group `my-vg` for `pool3`:
+`my-vg` というボリュームグループ内の `my-pool` という既存の LVM thin-pool を使って `pool3` を作成する:
 
     incus storage create pool3 lvm source=my-vg lvm.thinpool_name=my-pool
 
-Create a pool named `pool4` on `/dev/sdX` (the LVM volume group will also be called `pool4`):
+`/dev/sdX` 上に `pool4` という名前のプールを作成する（LVM ボリュームグループ名も `pool4` になります）:
 
     incus storage create pool4 lvm source=/dev/sdX
 
-Create a pool named `pool5` on `/dev/sdX` with the LVM volume group name `my-pool`:
+`/dev/sdX` 上に `my-pool` というLVM ボリュームグループ名で `pool5` という名前のプールを作成する:
 
     incus storage create pool5 lvm source=/dev/sdX lvm.vg_name=my-pool
 ````
 ````{group-tab} ZFS
 
-Create a loop-backed pool named `pool1` (the ZFS zpool will also be called `pool1`):
+`pool1` という名前のループバックプールを作成する（ZFS zpool 名も `pool1` になります）:
 
     incus storage create pool1 zfs
 
-Create a loop-backed pool named `pool2` with the ZFS zpool name `my-tank`:
+`pool2` という名前のループバックプールを `my-tank` という ZFS zpool 名で作成する:
 
     incus storage create pool2 zfs zfs.pool_name=my-tank
 
-Use the existing ZFS zpool `my-tank` for `pool3`:
+`my-tank` という既存の ZFS zpool を使用して `pool3` を作成する:
 
     incus storage create pool3 zfs source=my-tank
 
-Use the existing ZFS dataset `my-tank/slice` for `pool4`:
+`my-tank/slice` という既存の ZFS データセットを使用して `pool4` を作成する:
 
     incus storage create pool4 zfs source=my-tank/slice
 
-Use the existing ZFS dataset `my-tank/zvol` for `pool5` and configure it to use ZFS block mode:
+`/dev/sdX` 上に `pool5` という名前のプールを作成する（ZFS zpool 名も `pool5` になります）:
 
     incus storage create pool5 zfs source=my-tank/zvol volume.zfs.block_mode=yes
 
-Create a pool named `pool6` on `/dev/sdX` (the ZFS zpool will also be called `pool6`):
+`/dev/sdX` 上に `pool6` という名前のプールを作成する（ZFS zpool 名も `pool6` になります）:
 
     incus storage create pool6 zfs source=/dev/sdX
 
-Create a pool named `pool7` on `/dev/sdX` with the ZFS zpool name `my-tank`:
+`/dev/sdX` 上に `my-tank` という ZFS zpool 名で `pool7` という名前のプールを作成する:
 
     incus storage create pool7 zfs source=/dev/sdX zfs.pool_name=my-tank
 ````
 ````{group-tab} Ceph RBD
 
-Create an OSD storage pool named `pool1` in the default Ceph cluster (named `ceph`):
+デフォルトの Ceph クラスタ（名前は `ceph`）内に `pool1` という名前の OSD ストレージプールを作成する:
 
     incus storage create pool1 ceph
 
-Create an OSD storage pool named `pool2` in the Ceph cluster `my-cluster`:
+`my-cluster` という Ceph クラスタ内に `pool2` という名前の OSD ストレージプールを作成する:
 
     incus storage create pool2 ceph ceph.cluster_name=my-cluster
 
-Create an OSD storage pool named `pool3` with the on-disk name `my-osd` in the default Ceph cluster:
+デフォルトの Ceph クラスタ内に `my-osd` という on-disk 名で `pool3` という名前の OSD ストレージプールを作成する:
 
     incus storage create pool3 ceph ceph.osd.pool_name=my-osd
 
-Use the existing OSD storage pool `my-already-existing-osd` for `pool4`:
+`my-already-existing-osd` という既存の OSD ストレージプールを使って `pool4` を作成する:
 
     incus storage create pool4 ceph source=my-already-existing-osd
 
-Use the existing OSD erasure-coded pool `ecpool` and the OSD replicated pool `rpl-pool` for `pool5`:
+`ecpool` という既存の OSD erasure-coded ストレージプールと `rpl-pool` という OSD リプリケーテッドプールを使って `pool5` を作成する:
 
     incus storage create pool5 ceph source=rpl-pool ceph.osd.data_pool_name=ecpool
 ````
 ````{group-tab} CephFS
 
 ```{note}
-When using the CephFS driver, you must create a CephFS file system beforehand.
-This file system consists of two OSD storage pools, one for the actual data and one for the file metadata.
+CephFS ドライバを使用する際は、事前に CephFS ファイルシステムを作成する必要があります。
+このファイルシステムは 2 つの OSD ストレージプールからなります。そのうち 1 つは実際のデータ、もう 1 つはファイルメタデータに使用されます。
 ```
 
-Use the existing CephFS file system `my-filesystem` for `pool1`:
+既存の CephFS ファイルシステム `my-filesystem` を使って `pool1` を作成する:
 
     incus storage create pool1 cephfs source=my-filesystem
 
-Use the sub-directory `my-directory` from the `my-filesystem` file system for `pool2`:
+`my-filesystem` ファイルシステムからサブディレクトリ `my-directory` を使って `pool2` を作成する:
 
     incus storage create pool2 cephfs source=my-filesystem/my-directory
 
@@ -140,26 +140,26 @@ Use the sub-directory `my-directory` from the `my-filesystem` file system for `p
 ````{group-tab} Ceph Object
 
 ```{note}
-When using the Ceph Object driver, you must have a running Ceph Object Gateway [`radosgw`](https://docs.ceph.com/en/latest/radosgw/) URL available beforehand.
+Ceph Object ドライバを使用する場合、事前に稼働中の Ceph Object Gateway [`radosgw`](https://docs.ceph.com/en/latest/radosgw/) の URL を用意しておく必要があります。
 ```
 
-Use the existing Ceph Object Gateway `https://www.example.com/radosgw` to create `pool1`:
+既存の Ceph Object Gateway `https://www.example.com/radosgw` を使用して `pool1` を作成する:
 
     incus storage create pool1 cephobject cephobject.radosgw.endpoint=https://www.example.com/radosgw
 ````
 `````
 
 (storage-pools-cluster)=
-### Create a storage pool in a cluster
+### クラスタ内にストレージプールを作成する
 
-If you are running a Incus cluster and want to add a storage pool, you must create the storage pool for each cluster member separately.
-The reason for this is that the configuration, for example, the storage location or the size of the pool, might be different between cluster members.
+Incus クラスタを稼働していてストレージプールを追加したい場合、それぞれのクラスタメンバー内にストレージを別々に作る必要があります。
+この理由は、設定、たとえばストレージのロケーションやプールのサイズがクラスタメンバー間で異なるかもしれないからです。
 
-Therefore, you must first create a pending storage pool on each member with the `--target=<cluster_member>` flag and the appropriate configuration for the member.
-Make sure to use the same storage pool name for all members.
-Then create the storage pool without specifying the `--target` flag to actually set it up.
+このため、 `--target=<cluster_member>` フラグを指定してストレージプールをペンディング状態でまず作成し、メンバーごとに適切な設定を行う必要があります。
+すべてのメンバーで同じストレージプール名を使用しているか確認してください。
+次に `--target` フラグなしでストレージプールを作成し、実際にセットアップします。
 
-For example, the following series of commands sets up a storage pool with the name `my-pool` at different locations and with different sizes on three cluster members:
+たとえば、以下の一連のコマンドは 3 つのクラスタメンバー上で異なるロケーションと異なるサイズで `my-pool` という名前のストレージプールをセットアップします:
 
 ```{terminal}
 :input: incus storage create my-pool zfs source=/dev/sdX size=10GiB --target=vm01
@@ -172,58 +172,58 @@ Storage pool my-pool pending on member vm03
 Storage pool my-pool created
 ```
 
-Also see {ref}`cluster-config-storage`.
+{ref}`cluster-config-storage`も参照してください。
 
 ```{note}
-For most storage drivers, the storage pools exist locally on each cluster member.
-That means that if you create a storage volume in a storage pool on one member, it will not be available on other cluster members.
+ほとんどのストレージドライバでは、ストレージプールは各クラスタメンバー上にローカルに存在します。
+これは 1 つのメンバー上のストレージプール内にストレージボリュームを作成しても、別のクラスタメンバー上では利用可能にはならないことを意味します。
 
-This behavior is different for Ceph-based storage pools (`ceph`, `cephfs` and `cephobject`) where each storage pool exists in one central location and therefore, all cluster members access the same storage pool with the same storage volumes.
+この挙動は Ceph ベースのストレージプール（`ceph`、 `cephfs`、 `cephobject`）では異なります。これらではストレージプールは 1 つの中央のロケーション上に存在し、全てのクラスタメンバーが同じストレージボリュームを持つ同じストレージプールにアクセスします。
 ```
 
-## Configure storage pool settings
+## ストレージプールを設定する
 
-See the {ref}`storage-drivers` documentation for the available configuration options for each storage driver.
+各ストレージドライバーで利用可能な設定オプションについては {ref}`storage-drivers` ドキュメントを参照してください。
 
-General keys for a storage pool (like `source`) are top-level.
-Driver-specific keys are namespaced by the driver name.
+（`source` のような）ストレージプールの一般的なキーはトップレベルです。
+ドライバー固有のキーはドライバー名で名前空間が分けられています。
 
-Use the following command to set configuration options for a storage pool:
+ストレージプールに設定オプションを設定するには以下のコマンドを使用します:
 
     incus storage set <pool_name> <key> <value>
 
-For example, to turn off compression during storage pool migration for a `dir` storage pool, use the following command:
+たとえば、 `dir` ストレージプールでストレージプールのマイグレーション中に圧縮をオフにするには以下のコマンドを使用します:
 
     incus storage set my-dir-pool rsync.compression false
 
-You can also edit the storage pool configuration by using the following command:
+ストレージプールの設定を編集するには以下のコマンドを使用します:
 
     incus storage edit <pool_name>
 
-## View storage pools
+## ストレージプールを表示する
 
-You can display a list of all available storage pools and check their configuration.
+すべての利用可能なストレージプールの一覧を表示し設定を確認できます。
 
-Use the following command to list all available storage pools:
+以下のコマンドですべての利用可能なストレージプールを一覧表示できます:
 
     incus storage list
 
-The resulting table contains the storage pool that you created during initialization (usually called `default` or `local`) and any storage pools that you added.
+出力結果の表には（訳注: Incus の）初期化時に作成した（通常 `default` や `local` と呼ばれる）ストレージプールとあなたが追加したあらゆるストレージプールが含まれます。
 
-To show detailed information about a specific pool, use the following command:
+特定のプールに関する詳細情報を表示するには、以下のコマンドを使用します:
 
     incus storage show <pool_name>
 
-To see usage information for a specific pool, run the following command:
+特定のプールに関する使用量を表示するには、以下のコマンドを使用します:
 
     incus storage info <pool_name>
 
 (storage-resize-pool)=
-## Resize a storage pool
+## ストレージプールをリサイズする
 
-If you need more storage, you can increase the size of your storage pool by changing the `size` configuration key:
+ストレージがもっと必要な場合、`size` 設定キーを変更することでストレージプールのサイズを拡大できます:
 
     incus storage set <pool_name> size=<new_size>
 
-This will only work for loop-backed storage pools that are managed by Incus.
-You can only grow the pool (increase its size), not shrink it.
+これはループファイルをバックエンドとし Incus で管理されているストレージプールでのみ機能します。
+プールは拡張（サイズを増やす）のみが可能で、縮小はできません。

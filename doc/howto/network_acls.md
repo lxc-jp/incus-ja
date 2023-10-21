@@ -1,218 +1,217 @@
 (network-acls)=
-# How to configure network ACLs
+# ネットワーク ACL を設定するには
 
 ```{note}
-Network ACLs are available for the {ref}`OVN NIC type <nic-ovn>`, the {ref}`network-ovn` and the {ref}`network-bridge` (with some exceptions, see {ref}`network-acls-bridge-limitations`).
+ネットワーク ACL は {ref}`OVN NIC タイプ <nic-ovn>`、{ref}`network-ovn` と {ref}`network-bridge`（いくつか制限あり、{ref}`network-acls-bridge-limitations` 参照）で利用できます。
 ```
 
-Network {abbr}`ACLs (Access Control Lists)` define traffic rules that allow controlling network access between different instances connected to the same network, and access to and from other networks.
+ネットワーク {abbr}`ACL (Access Control Lists; アクセス制御リスト)` は同じネットワークに接続された異なるインスタンス間のネットワークアクセスや、他のネットワークとのアクセスを制御するトラフィクルールを定義します。
 
-Network ACLs can be assigned directly to the {abbr}`NIC (Network Interface Controller)` of an instance or to a network.
-When assigned to a network, the ACL applies to all NICs connected to the network.
+ネットワーク ACL は インスタンスの {abbr}`NIC (Network Interface Controller; ネットワークインタフェースコントローラ)` やネットワークに直接適用できます。
+ネットワークに適用するときは、ネットワークに接続されたすべての NIC に ACL が適用されます。
 
-The instance NICs that have a particular ACL applied (either explicitly or implicitly through a network) make up a logical group, which can be referenced from other rules as a source or destination.
-See {ref}`network-acls-groups` for more information.
+特定の ACL を(明示的にあるいはネットワークから暗黙的に)適用したインスタンス NIC は論理的なグループを形成し、他のルールから送信元あるいは送信先として参照できます。
+より詳細な情報は {ref}`network-acls-groups` を参照してください。
 
-## Create an ACL
+## ACL を作成する
 
-Use the following command to create an ACL:
+ACL を作成するには以下のコマンドを使用します:
 
 ```bash
 incus network acl create <ACL_name> [configuration_options...]
 ```
 
-This command creates an ACL without rules.
-As a next step, {ref}`add rules <network-acls-rules>` to the ACL.
+このコマンドはルール無しの ACL を作成します。
+次のステップとして ACL に {ref}`ルールを追加します <network-acls-rules>`。
 
-Valid network ACL names must adhere to the following rules:
+有効なネットワーク ACL の名前は以下のルールに従う必要があります。
 
-- Names must be between 1 and 63 characters long.
-- Names must be made up exclusively of letters, numbers and dashes from the ASCII table.
-- Names must not start with a digit or a dash.
-- Names must not end with a dash.
+- 名前は 1 文字から 63 文字の間である。
+- 名前は ASCII の文字、数字、ハイフンからのみなる。
+- 名前は数字やハイフンから始まらない。
+- 名前はハイフンで終わらない。
 
-### ACL properties
+### ACL のプロパティ
 
-ACLs have the following properties:
+ACL のプロパティには次のものがあります:
 
-Property         | Type       | Required | Description
-:--              | :--        | :--      | :--
-`name`           | string     | yes      | Unique name of the network ACL in the project
-`description`    | string     | no       | Description of the network ACL
-`ingress`        | rule list  | no       | Ingress traffic rules
-`egress`         | rule list  | no       | Egress traffic rules
-`config`         | string set | no       | Configuration options as key/value pairs (only `user.*` custom keys supported)
+プロパティ    | 型         | 必須 | 説明
+:--           | :--        | :--  | :--
+`name`        | string     | yes  | プロジェクト内でユニークなネットワーク ACL の名前
+`description` | string     | no   | ネットワーク ACL の説明
+`ingress`     | rule list  | no   | 内向きのトラフィックルールのリスト
+`egress`      | rule list  | no   | 外向きのトラフィックルールのリスト
+`config`      | string set | no   | キー・バリューペア形式での設定オプション（`user.*` カスタムキーのみサポート）
 
 (network-acls-rules)=
-## Add or remove rules
+## ルールの追加と削除
 
-Each ACL contains two lists of rules:
+それぞれの ACL はルールの 2 つのリストを含みます。
 
-- *Ingress* rules apply to inbound traffic going towards the NIC.
-- *Egress* rules apply to outbound traffic leaving the NIC.
+- *イングレス (ingress)* ルールは NIC に向かう内向きのトラフィックに適用されます。
+- *エグレス (egress)* ルールは NIC から出ていく外向きのトラフィックに適用されます。
 
-To add a rule to an ACL, use the following command, where `<direction>` can be either `ingress` or `egress`:
+ACL にルールを追加するには、以下のコマンドを使います。 `<direction>` には `ingress` か `egress` のどちらかを指定します:
 
 ```bash
 incus network acl rule add <ACL_name> <direction> [properties...]
 ```
 
-This command adds a rule to the list for the specified direction.
+このコマンドは指定した方向（direction）に対応するリストにルールを追加します。
 
-You cannot edit a rule (except if you {ref}`edit the full ACL <network-acls-edit>`), but you can delete rules with the following command:
+（{ref}`ACL 全体を編集する <network-acls-edit>` 場合を除き）ルールを編集することはできませんが、以下のコマンドでルールを削除はできます:
 
 ```bash
 incus network acl rule remove <ACL_name> <direction> [properties...]
 ```
 
-You must either specify all properties needed to uniquely identify a rule or add `--force` to the command to delete all matching rules.
+ユニークにルールを特定するのに必要なすべてのプロパティを指定するか、またはマッチしたすべてのルールを削除するためコマンドに `--force` を追加する必要があります。
 
-### Rule ordering and priorities
+### ルールの順番と優先度
 
-Rules are provided as lists.
-However, the order of the rules in the list is not important and does not affect
-filtering.
+ルールはリストとして提供されます。
+しかしリスト内のルールの順番は重要ではなくフィルタリングには影響しません。
 
-Incus automatically orders the rules based on the `action` property as follows:
+Incus は以下のように `action` プロパティに基づいてルールの順番を自動的に決めます:
 
 - `drop`
 - `reject`
 - `allow`
-- Automatic default action for any unmatched traffic (defaults to `reject`, see {ref}`network-acls-defaults`).
+- 上記のすべてにマッチしなかったトラフィックに対する自動のデフォルトアクション（￥デフォルトでは `reject`、{ref}`network-acls-defaults` 参照）。
 
-This means that when you apply multiple ACLs to a NIC, there is no need to specify a combined rule ordering.
-If one of the rules in the ACLs matches, the action for that rule is taken and no other rules are considered.
+これは NIC に複数の ACL を適用する際、組み合わせたルールの順番を指定する必要がないことを意味します。
+ACL 内のあるルールがマッチすれば、そのルールが採用され、他のルールは考慮されません。
 
-### Rule properties
+### ルールのプロパティ
 
-ACL rules have the following properties:
+ACL ルールには次のプロパティがあります:
 
-Property          | Type       | Required | Description
-:--               | :--        | :--      | :--
-`action`          | string     | yes      | Action to take for matching traffic (`allow`, `reject` or `drop`)
-`state`           | string     | yes      | State of the rule (`enabled`, `disabled` or `logged`), defaulting to `enabled` if not specified
-`description`     | string     | no       | Description of the rule
-`source`          | string     | no       | Comma-separated list of CIDR or IP ranges, source subject name selectors (for ingress rules), or empty for any
-`destination`     | string     | no       | Comma-separated list of CIDR or IP ranges, destination subject name selectors (for egress rules), or empty for any
-`protocol`        | string     | no       | Protocol to match (`icmp4`, `icmp6`, `tcp`, `udp`) or empty for any
-`source_port`     | string     | no       | If protocol is `udp` or `tcp`, then a comma-separated list of ports or port ranges (start-end inclusive), or empty for any
-`destination_port`| string     | no       | If protocol is `udp` or `tcp`, then a comma-separated list of ports or port ranges (start-end inclusive), or empty for any
-`icmp_type`       | string     | no       | If protocol is `icmp4` or `icmp6`, then ICMP type number, or empty for any
-`icmp_code`       | string     | no       | If protocol is `icmp4` or `icmp6`, then ICMP code number, or empty for any
+
+プロパティ         | 型     | 必須 | 説明
+:--                | :--    | :--  | :--
+`action`           | string | yes  | マッチしたトラフィックに適用するアクション（`allow`, `reject` または `drop`）
+`state`            | string | yes  | ルールの状態（`enabled`, `disabled` または `logged`）、未設定の場合のデフォルト値は `enabled`
+`description`      | string | no   | ルールの説明
+`source`           | string | no   | CIDR か IP の範囲、送信元の ACL の名前、あるいは（ingress ルールに対しての） ソースサブジェクト名セレクターのカンマ区切りリスト、または any の場合は空を指定
+`destination`      | string | no   | CIDR か IP の範囲、送信先の ACL の名前、あるいは（egress ルールに対しての） デスティネーションサブジェクト名セレクターのカンマ区切りリスト、または any の場合は空を指定
+`protocol`         | string | no   | マッチ対象のプロトコル（`icmp4`, `icmp6`, `tcp`, `udp`）、または any の場合は空を指定
+`source_port`      | string | no   | protocol が `udp` か `tcp` の場合はポートかポートの範囲（開始-終了で両端含む）のカンマ区切りリスト、または any の場合は空を指定
+`destination_port` | string | no   | protocol が `udp` か `tcp` の場合はポートかポートの範囲（開始-終了で両端含む）のカンマ区切りリスト、または any の場合は空を指定
+`icmp_type`        | string | no   | protocol が `icmp4` か `icmp6` の場合は ICMP の Type 番号、または any の場合は空を指定
+`icmp_code`        | string | no   | protocol が `icmp4` か `icmp6` の場合は ICMP の Code 番号、または any の場合は空を指定
 
 (network-acls-selectors)=
-### Use selectors in rules
+### ルール内でセレクタを使う
 
 ```{note}
-This feature is supported only for the {ref}`OVN NIC type <nic-ovn>` and the {ref}`network-ovn`.
+この機能は {ref}`OVN NIC タイプ <nic-ovn>` と {ref}`network-ovn` でのみサポートされます。
 ```
 
-The `source` field (for ingress rules) and the `destination` field (for egress rules) support using selectors instead of CIDR or IP ranges.
+（ingress ルールの）`source` フィールドと （egress ルールの）`destination` フィールドは CIDR や IP の範囲の代わりにセレクタの使用をサポートします。
 
-With this method, you can use ACL groups or network selectors to define rules for groups of instances without needing to maintain IP lists or create additional subnets.
+この機能を使えば、 IP のリストを管理したり追加のサブネットを作ることなしに、 ACL グループかネットワークセレクタを使ってインスタンスのグループに対するルールを定義できます。
 
 (network-acls-groups)=
-#### ACL groups
+#### ACL グループ
 
-Instance NICs that are assigned a particular ACL (either explicitly or implicitly through a network) make up a logical port group.
+（明示的にあるいはネットワーク経由で暗黙的に）特定の ACL を適用されたインスタンス NIC は論理的なポートグループを形成します。
 
-Such ACL groups are called *subject name selectors*, and they can be referenced with the name of the ACL in other ACL groups.
+そのような ACL グループは *サブジェクト名セレクタ* と呼ばれ、他の ACL グループ内で ACL 名を用いて参照できます。
 
-For example, if you have an ACL with the name `foo`, you can specify the group of instance NICs that are assigned this ACL as source with `source=foo`.
+たとえば `foo` という名前の ACL がある場合、この ACL が適用されたインスタンス NIC のグループを `source=foo` で参照できます。
 
-#### Network selectors
+#### ネットワークセレクタ
 
-You can use *network subject selectors* to define rules based on the network that the traffic is coming from or going to.
+*ネットワークサブジェクトセレクタ* を用いて、ネットワーク上の外向きと内向きのトラフィックにルールを定義できます。
 
-There are two special network subject selectors called `@internal` and `@external`.
-They represent network local and external traffic, respectively.
-For example:
+`@internal` と `@external` という 2 つの特別なネットワークサブジェクトセレクタがあります。
+これらはそれぞれネットワークのローカルと外向きのトラフィックを示します。
+たとえば:
 
 ```bash
 source=@internal
 ```
 
-If your network supports [network peers](network_ovn_peers.md), you can reference traffic to or from the peer connection by using a network subject selector in the format `@<network_name>/<peer_name>`.
-For example:
+ネットワークが [ネットワークピア](network_ovn_peers.md) をサポートする場合、ピア接続間のトラフィックを
+`@<network_name>/<peer_name>` という形式のネットワークサブジェクトセレクタで参照できます。
+たとえば:
 
 ```bash
 source=@ovn1/mypeer
 ```
 
-When using a network subject selector, the network that has the ACL applied to it must have the specified peer connection.
-Otherwise, the ACL cannot be applied to it.
+ネットワークサブジェクトセレクターを使用する際は、 ACL 適用先のネットワークは指定されたピア接続を持っていなければなりません。
+持っていない場合 ACL は適用できません。
 
-### Log traffic
+### トラフィックのログ
 
-Generally, ACL rules are meant to control the network traffic between instances and networks.
-However, you can also use them to log specific network traffic, which can be useful for monitoring, or to test rules before actually enabling them.
+一般的には ACL はインスタンスとネットワーク間のネットワークトラフィックを制御するためのものです。
+しかし、特定のネットワークトラフィックをログ出力するためにルールを使うこともできます。
+これはモニタリングや、ルールを実際に有効にする前にテストするのに役立ちます。
 
-To add a rule for logging, create it with the `state=logged` property.
-You can then display the log output for all logging rules in the ACL with the following command:
+ログのためにルールを追加するには `state=logged` プロパティ付きでルールを作成してください。
+ACL 内のすべてのログのルールに対するログ出力は以下のコマンドで表示できます:
 
 ```bash
 incus network acl show-log <ACL_name>
 ```
 
 (network-acls-edit)=
-## Edit an ACL
+## ACL を編集する
 
-Use the following command to edit an ACL:
+ACL を編集するには以下のコマンドを使用します:
 
 ```bash
 incus network acl edit <ACL_name>
 ```
 
-This command opens the ACL in YAML format for editing.
-You can edit both the ACL configuration and the rules.
+このコマンドは ACL を編集用に YAML 形式でオープンします。
+ACL 設定とルールの両方を編集できます。
 
-## Assign an ACL
+## ACL の適用
 
-After configuring an ACL, you must assign it to a network or an instance NIC.
+ACL の設定が終わったらネットワークかインスタンス NIC に適用する必要があります。
 
-To do so, add it to the `security.acls` list of the network or NIC configuration.
-For networks, use the following command:
+そのためにはネットワークか NIC の設定の `security.acls` リストに ACL を追加してください。
+ネットワークの場合は、以下のコマンドを使います:
 
 ```bash
 incus network set <network_name> security.acls="<ACL_name>"
 ```
 
-For instance NICs, use the following command:
+インスタンス NIC の場合は、以下のコマンドを使います:
 
 ```bash
 incus config device set <instance_name> <device_name> security.acls="<ACL_name>"
 ```
 
 (network-acls-defaults)=
-## Configure default actions
+## デフォルトアクションの設定
 
-When one or more ACLs are applied to a NIC (either explicitly or implicitly through a network), a default reject rule is added to the NIC.
-This rule rejects all traffic that doesn't match any of the rules in the applied ACLs.
+1 つ以上の ACL が NIC に（明示的にあるいはネットワーク経由で暗黙的に）適用されると、 NIC にデフォルトの reject ルールが追加されます。
+このルールは適用された ACL 内のどのルールにもマッチしないすべてのトラフィックを拒否（reject）します。
 
-You can change this behavior with the network and NIC level `security.acls.default.ingress.action` and `security.acls.default.egress.action` settings.
-The NIC level settings override the network level settings.
+この挙動はネットワークと NIC レベルの `security.acls.default.ingress.action` と `security.acls.default.egress.action` 設定で変更できます。
+NIC レベルの設定はネットワークレベルの設定を上書きします。
 
-For example, to set the default action for inbound traffic to `allow` for all instances connected to a network, use the following command:
+たとえば、ネットワークに接続されたすべてのインスタンスの内向きのトラフィックを許可（`allow`）するには以下のコマンドを使用します:
 
 ```bash
 incus network set <network_name> security.acls.default.ingress.action=allow
 ```
 
-To configure the same default action for an instance NIC, use the following command:
+インスタンス NIC に同じデフォルトアクションを設定するには以下のコマンドを使用します:
 
 ```bash
 incus config device set <instance_name> <device_name> security.acls.default.ingress.action=allow
 ```
 
 (network-acls-bridge-limitations)=
-## Bridge limitations
+## ブリッジの制限
 
-When using network ACLs with a bridge network, be aware of the following limitations:
+ブリッジネットワークにネットワーク ACL を使用する場合は以下の制限に気を付けてください。
 
-- Unlike OVN ACLs, bridge ACLs are applied only on the boundary between the bridge and the Incus host.
-  This means they can only be used to apply network policies for traffic going to or from external networks.
-  They cannot be used for to create {spellexception}`intra-bridge` firewalls, thus firewalls that control traffic between instances connected to the same bridge.
-- {ref}`ACL groups and network selectors <network-acls-selectors>` are not supported.
-- When using the `iptables` firewall driver, you cannot use IP range subjects (for example, `192.0.2.1-192.0.2.10`).
-- Baseline network service rules are added before ACL rules (in their respective INPUT/OUTPUT chains), because we cannot differentiate between INPUT/OUTPUT and FORWARD traffic once we have jumped into the ACL chain.
-  Because of this, ACL rules cannot be used to block baseline service rules.
+- OVN ACL とは違い、ブリッジ ACL はブリッジと Incus ホストの間の境界のみに適用されます。これは外部へと外部からのトラフィックにネットワークポリシーを適用するために使うことしかできないことを意味します。ブリッジ間のファイアウォール、つまり同じブリッジに接続されたインスタンス間のトラフィックを制御するファイアウォールには使えません。
+- {ref}`ACL グループとネットワークセレクタ <network-acls-selectors>` はサポートされません。
+- `iptables` ファイアウォールドライバーを使う際は、 IP レンジサブジェクト（例：`192.0.2.1-192.0.2.10`）は使用できません。
+- ベースラインのネットワークサービスルールが（対応する INPUT/OUTPUT チェイン内の） ACL ルールの前に適用されます。これは一旦 ACL チェインに入ってしまうと INPUT/OUTPUT と FORWARD トラフィックを区別できないからです。このため ACL ルールはベースラインのサービスルールをブロックするのには使えません。

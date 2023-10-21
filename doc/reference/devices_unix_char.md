@@ -1,33 +1,33 @@
 (devices-unix-char)=
-# Type: `unix-char`
+# タイプ: `unix-char`
 
 ```{note}
-The `unix-char` device type is supported for containers.
-It supports hotplugging.
+`unix-char`デバイスタイプはコンテナでサポートされます。
+ホットプラグをサポートします。
 ```
 
-Unix character devices make the specified character device appear as a device in the instance (under `/dev`).
-You can read from the device and write to it.
+Unix キャラクタデバイスは、指定したキャラクタデバイスをインスタンス内の（`/dev`以下の）デバイスとして出現させます。
+そのデバイスから読み取りやデバイスへ書き込みができます。
 
-## Device options
+## デバイスオプション
 
-`unix-char` devices have the following device options:
+`unix-char`デバイスには以下のデバイスオプションがあります:
 
-Key         | Type      | Default           | Description
-:--         | :--       | :--               | :--
-`gid`       | int       | `0`               | GID of the device owner in the instance
-`major`     | int       | device on host    | Device major number
-`minor`     | int       | device on host    | Device minor number
-`mode`      | int       | `0660`            | Mode of the device in the instance
-`path`      | string    | -                 | Path inside the instance (one of `source` and `path` must be set)
-`required`  | bool      | `true`            | Whether this device is required to start the instance (see {ref}`devices-unix-char-hotplugging`)
-`source`    | string    | -                 | Path on the host (one of `source` and `path` must be set)
-`uid`       | int       | `0`               | UID of the device owner in the instance
+キー       | 型     | デフォルト値       | 説明
+:--        | :--    | :--                | :--
+`gid`      | int    | `0`                | インスタンス内のデバイス所有者のGID
+`major`    | int    | ホスト上のデバイス | デバイスのメジャー番号
+`minor`    | int    | ホスト上のデバイス | デバイスのマイナー番号
+`mode`     | int    | `0660`             | インスタンス内のデバイスのモード
+`path`     | string | -                  | インスタンス内のパス（`source`と`path`のどちらかを設定しなければいけません）
+`required` | bool   | `true`             | このデバイスがインスタンスの起動に必要かどうか（{ref}`devices-unix-char-hotplugging`参照）
+`source`   | string | -                  | ホスト上のパス（`source`と`path`のどちらかを設定しなければいけません）
+`uid`      | int    | `0`                | インスタンス内のデバイス所有者の UID
 
 (devices-unix-char-hotplugging)=
-## Hotplugging
+## ホットプラグ
 
 % Include content from [devices_unix_block.md](device_unix_block.md)
 ```{include} devices_unix_block.md
-    :start-after: Hotplugging
+    :start-after: Hotplugging -->
 ```

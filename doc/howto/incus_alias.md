@@ -1,14 +1,14 @@
 (incus-alias)=
-# How to add command aliases
+# コマンドエイリアスを追加するには
 
-The Incus command-line client supports adding aliases for commands that you use frequently.
-You can use aliases as shortcuts for longer commands, or to automatically add flags to existing commands.
+Incus コマンドラインクライアントでは良く使うコマンドのエイリアスを追加できます。
+長いコマンドのショートカットとして、あるいは既存のコマンドに自動的にフラグを追加するために、エイリアスを使用できます。
 
-To manage command aliases, you use the [`incus alias`](incus_alias.md) command.
+コマンドエイリアスを管理するには、[`incus alias`](incus_alias.md)コマンドを使用します。
 
-For example, to always ask for confirmation when deleting an instance, create an alias for `incus delete` that always runs `incus delete -i`:
+たとえば、インスタンスを削除する際に必ず確認を求めるようにするには`incus delete`に常に`incus delete -i`を実行するようにエイリアスを作成します:
 
-    incus alias add delete "delete -i"
+    lxc alias add delete "delete -i"
 
-To see all configured aliases, run [`incus alias list`](incus_alias_list.md).
-Run [`incus alias --help`](incus_alias.md) to see all available subcommands.
+登録されたすべてののエイリアスを表示するには[`incus alias list`](incus_alias_list.md)を実行します。
+すべての利用可能なサブコマンドを表示するには[`incus alias --help`](incus_alias.md)を実行してください。

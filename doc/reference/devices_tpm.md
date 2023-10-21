@@ -1,24 +1,24 @@
 (devices-tpm)=
-# Type: `tpm`
+# タイプ: `tpm`
 
 ```{note}
-The `tpm` device type is supported for both containers and VMs.
-It supports hotplugging only for containers, not for VMs.
+`tpm`デバイスタイプは、コンテナと VM の両方でサポートされています。
+ただし、コンテナではホットプラグがサポートされていますが、VM ではサポートされていません。
 ```
 
-TPM devices enable access to a {abbr}`TPM (Trusted Platform Module)` emulator.
+TPM デバイスは、{abbr}`TPM (Trusted Platform Module)`エミュレータへのアクセスを有効にします。
 
-TPM devices can be used to validate the boot process and ensure that no steps in the boot chain have been tampered with, and they can securely generate and store encryption keys.
+TPM デバイスは、ブートプロセスを検証し、ブートチェーンのステップが改ざんされていないことを確認するために使用できます。また、暗号化キーを安全に生成および保存することもできます。
 
-Incus uses a software TPM that supports TPM 2.0.
-For containers, the main use case is sealing certificates, which means that the keys are stored outside of the container, making it virtually impossible for attackers to retrieve them.
-For virtual machines, TPM can be used both for sealing certificates and for validating the boot process, which allows using full disk encryption compatible with, for example, Windows BitLocker.
+Incus は、TPM 2.0 をサポートするソフトウェア TPM を使用します。  
+コンテナの主な使用例は、証明書のシールで、これによりキーがコンテナの外部に保存され、攻撃者がそれらを取得することがほぼ不可能になります。  
+仮想マシンでは、TPM を証明書のシールに使用するだけでなく、ブートプロセスの検証にも使用できます。これにより、たとえば、Windows BitLocker と互換性のあるフルディスク暗号化が可能になります。
 
-## Device options
+## デバイスオプション
 
-`tpm` devices have the following device options:
+`tpm`デバイスには以下のデバイスオプションがあります:
 
-Key                 | Type      | Default   | Required       | Description
-:--                 | :--       | :--       | :--            | :--
-`path`              | string    | -         | for containers | Only for containers: path inside the instance (for example, `/dev/tpm0`)
-`pathrm`            | string    | -         | for containers | Only for containers: resource manager path inside the instance (for example, `/dev/tpmrm0`)
+キー     | 型     | デフォルト値 | 必須             | 説明
+:--      | :--    | :--          | :--              | :--
+`path`   | string | -            | コンテナでは必須 | コンテナのみ: インスタンス内でのパス（例:`/dev/tpm0`）
+`pathrm` | string | -            | コンテナでは必須 | コンテナのみ: インスタンス内でのリソースマネージャのパス（例:`dev/tpmrm0`）

@@ -1,92 +1,93 @@
-# Idmaps for user namespace
+# User Namespace 用の ID のマッピング
 
-Incus runs safe containers. This is achieved mostly through the use of
-user namespaces which make it possible to run containers unprivileged,
-greatly limiting the attack surface.
+Incus は安全なコンテナを実行します。これは主に User Namespace の使用
+によって実現されています。User Namespace はコンテナを非特権で実行
+することを可能にし、攻撃対象を大幅に限定します。
 
-User namespaces work by mapping a set of UIDs and GIDs on the host to a
-set of UIDs and GIDs in the container.
+User Namespace はコンテナの UID と GID の組をホストの UID と
+GID の組にマッピングすることで機能します。
 
-For example, we can define that the host UIDs and GIDs from 100000 to
-165535 may be used by Incus and should be mapped to UID/GID 0 through
-65535 in the container.
+たとえば、 100000 から 165535 までのホストの UID と GID を Incus が使用できる
+ようにし、コンテナで 0 から 65535 までの UID/GID にマッピングするように
+設定できます。
 
-As a result a process running as UID 0 in the container will actually be
-running as UID 100000.
+この結果、コンテナ内で 0 の UID で動くプロセスが実際には UID 100000 で動く
+ことになります。
 
-Allocations should always be of at least 65536 UIDs and GIDs to cover
-the POSIX range including root (0) and nobody (65534).
+root（0）と nobody（65534）の POSIX の範囲をカバーするため、割当は必ず
+最低 65535 個の UID と GID であるべきです。
 
-## Kernel support
+## カーネルのサポート
 
-User namespaces require a kernel >= 3.12, Incus will start even on older
-kernels but will refuse to start containers.
+User Namespace の使用にはカーネル 3.12 以上が必要です。 Incus は
+古いカーネルでも起動しますが、コンテナを起動するのは拒否します。
 
-## Allowed ranges
+## 使用可能な範囲
 
-On most hosts, Incus will check `/etc/subuid` and `/etc/subgid` for
-allocations for the `incus` user and on first start, set the default
-profile to use the first 65536 UIDs and GIDs from that range.
+ほとんどのホストでは、 Incus は初回起動時に `lxd` ユーザーの割当のために
+`/etc/subuid` と `/etc/subgid` をチェックし、そこで指定されている範囲の
+最初の 65536 個の UID と GID をデフォルト・プロファイルで使用するように
+設定します。
 
-If the range is shorter than 65536 (which includes no range at all),
-then Incus will fail to create or start any container until this is corrected.
+範囲が 65536 より小さい場合（範囲が全く無い場合を含む）、これが修正される
+まで Incus はコンテナの作成と起動に失敗します。
 
-If some but not all of `/etc/subuid`, `/etc/subgid`, `newuidmap` (path lookup)
-and `newgidmap` (path lookup) can be found on the system, Incus will fail
-the startup of any container until this is corrected as this shows a
-broken shadow setup.
+`/etc/subuid` 、 `/etc/subgid` 、 `newuidmap`（パスを検索）、 `newgidmap`
+（パスを検索）のいくつか（ただし全部ではない）がシステムに存在する場合、
+これは shadow の設定が間違っていることを示しているので、これが修正されるまで
+Incus はコンテナの起動に失敗します。
 
-If none of those files can be found, then Incus will assume a 1000000000
-UID/GID range starting at a base UID/GID of 1000000.
+これらのファイルが 1 つも無い場合、 Incus は 1000000 の基点の UID/GID から開始する
+1000000000 の UID/GID の範囲を想定します。
 
-This is the most common case and is usually the recommended setup when
-not running on a system which also hosts fully unprivileged containers
-(where the container runtime itself runs as a user).
+これは最もよくあるケースであり、完全に非特権なコンテナをホストするシステム上で稼働するのではない場合
+（コンテナランタイム自身はユーザー権限で実行するような場合）に、通常は推奨される設定です。
 
-## Varying ranges between hosts
+## ホスト間で異なる範囲の使用
 
-The source map is sent when moving containers between hosts so that they
-can be remapped on the receiving host.
+ホスト間でコンテナを移動する時、送信側のマッピングが送られるので、受信側の
+ホストで異なる範囲にマッピング可能です。
 
-## Different idmaps per container
+## コンテナ毎に異なる ID マッピング
 
-Incus supports using different idmaps per container, to further isolate
-containers from each other. This is controlled with two per-container
-configuration keys, `security.idmap.isolated` and `security.idmap.size`.
+コンテナを他のコンテナからより一層隔離するために、 Incus はコンテナ毎に
+異なる ID マッピングを使用することをサポートしています。これはコンテナ毎に
+`security.idmap.isolated` と `security.idmap.size` という 2 つの設定項目で
+制御できます。
 
-Containers with `security.idmap.isolated` will have a unique ID range computed
-for them among the other containers with `security.idmap.isolated` set (if none
-is available, setting this key will simply fail).
+`security.idmap.isolated` が設定されたコンテナは
+`security.idmap.isolated` が設定された他のコンテナと衝突しないユニークな
+ID の範囲を持つように設定されます (もしそのようなコンテナが 1 つも存在しない場合、
+このキーを設定しようとしても失敗します)。
 
-Containers with `security.idmap.size` set will have their ID range set to this
-size. Isolated containers without this property set default to a ID range of
-size 65536; this allows for POSIX compliance and a `nobody` user inside the
-container.
+`security.idmap.size` が設定されたコンテナはこのサイズに ID の範囲が設定
+されます。このプロパティが設定されていない隔離されたコンテナは ID の範囲が
+デフォルトのサイズ 65536 に設定されます。これにより POSIX に準拠し、コンテナ内で
+`nobody` ユーザーが使用できます。
 
-To select a specific map, the `security.idmap.base` key will let you
-override the auto-detection mechanism and tell Incus what host UID/GID you
-want to use as the base for the container.
+特定のマッピングを選択するには `security.idmap.base` を設定すると
+自動検出機構をオーバーライドし、コンテナでベースとして使用したい
+ホストの UID/GID を Incus に伝えることができます。
 
-These properties require a container reboot to take effect.
+これらのプロパティを反映するにはコンテナの再起動が必要です。
 
-## Custom idmaps
+## カスタムの ID マッピング
 
-Incus also supports customizing bits of the idmap, e.g. to allow users to bind
-mount parts of the host's file system into a container without the need for any
-UID-shifting file system. The per-container configuration key for this is
-`raw.idmap`, and looks like:
+さらに Incus は ID マッピングの一部をカスタマイズすることをサポートします。たとえば、
+UID を変更するファイルシステムを必要とせずに、ホストのファイルシステムの一部を
+コンテナにバインドマウントすることをユーザーに許可できます。このためのコンテナ毎の
+設定項目は `raw.idmap` で、設定例は以下のようになります:
 
     both 1000 1000
     uid 50-60 500-510
     gid 100000-110000 10000-20000
 
-The first line configures both the UID and GID 1000 on the host to map to UID
-1000 inside the container (this can be used for example to bind mount a user's
-home directory into a container).
+1 行目は、ホストの UID と GID 1000 の両方をコンテナ内の UID 1000 にマッピング
+する設定です（これはたとえばユーザーのホームディレクトリーをコンテナ内にバインドマウント
+するのに使用できます）。
 
-The second and third lines map only the UID or GID ranges into the container,
-respectively. The second entry per line is the source ID, i.e. the ID on the
-host, and the third entry is the range inside the container. These ranges must
-be the same size.
+2 行目と 3 行目は UID または GID のどちらかだけをコンテナ内にマッピングする設定
+です。行の中の 2 番目のエントリーはソース ID 、 つまりホスト上の ID で、 3 番目の
+エントリーはコンテナ内部での範囲です。これらの範囲は同じサイズでなければなりません。
 
-This property requires a container reboot to take effect.
+このプロパティを反映するにはコンテナの再起動が必要です。

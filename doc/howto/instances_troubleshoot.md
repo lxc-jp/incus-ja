@@ -1,32 +1,32 @@
 (instances-troubleshoot)=
-# How to troubleshoot failing instances
+# インスタンスの起動に失敗する問題のトラブルシューティング方法
 
-If your instance fails to start and ends up in an error state, this usually indicates a bigger issue related to either the image that you used to create the instance or the server configuration.
+インスタンスの起動に失敗し、エラー状態になる場合、これは通常、インスタンスの作成に使用したイメージまたはサーバー設定に関連する大きな問題を示しています。
 
-To troubleshoot the problem, complete the following steps:
+問題のトラブルシューティングを行うには、以下の手順を完了してください:
 
-1. Save the relevant log files and debug information:
+1. 関連するログファイルとデバッグ情報を保存します:
 
-   Instance log
-   : Enter the following command to display the instance log:
+   インスタンスログ
+   : インスタンスログを表示するには、次のコマンドを入力します:
 
          incus info <instance_name> --show-log
 
-   Console log
-   : Enter the following command to display the console log:
+   コンソールログ
+   : コンソールログを表示するには、次のコマンドを入力します:
 
          incus console <instance_name> --show-log
 
-1. Reboot the machine that runs your Incus server.
-1. Try starting your instance again.
-   If the error occurs again, compare the logs to check if it is the same error.
+1. Incus サーバーを実行しているマシンを再起動します.
+1. インスタンスをもう一度起動してみてください。
+   エラーが再発した場合は、ログを比較して同じエラーかどうか確認します。
 
-   If it is, and if you cannot figure out the source of the error from the log information, open a question in the [forum](https://discuss.linuxcontainers.org).
-   Make sure to include the log files you collected.
+   同じエラーであり、ログ情報からエラーの原因を特定できない場合は、[フォーラム](https://discuss.linuxcontainers.org)で質問を投稿してください。
+   収集したログファイルを含めるようにしてください。
 
-## Troubleshooting example
+## トラブルシューティングの例
 
-In this example, let's investigate a RHEL 7 system in which `systemd` cannot start.
+この例では、systemd が起動できない RHEL 7 システムを調査しましょう。
 
 ```{terminal}
 :input: incus console --show-log systemd
@@ -40,19 +40,19 @@ Failed to mount proc at /proc: Operation not permitted
 [!!!!!!] Failed to mount API filesystems, freezing.
 ```
 
-The errors here say that `/sys` and `/proc` cannot be mounted - which is correct in an unprivileged container.
-However, Incus mounts these file systems automatically if it can.
+ここでのエラーは、 /sys と /proc がマウントできないと言っています - これは、非特権コンテナでは正しいです。
+しかし、Incus は可能であればこれらのファイルシステムを自動的にマウントします。
 
-The {doc}`container requirements <../container-environment>` specify that every container must come with an empty `/dev`, `/proc` and `/sys` directory, and that `/sbin/init` must exist.
-If those directories don't exist, Incus cannot mount them, and `systemd` will then try to do so.
-As this is an unprivileged container, `systemd` does not have the ability to do this, and it then freezes.
+{doc}`コンテナの要件 <../container-environment>`では、すべてのコンテナには空の `/dev`、`/proc`、`/sys` ディレクトリーが必要であり、`/sbin/init` が存在していなければなりません。
+これらのディレクトリーが存在しない場合、Incus はそれらをマウントできず、`systemd`がその後それを試みます。
+これは非特権コンテナなので、`systemd`はこれを行う能力がなく、コンテナはフリーズします。
 
-So you can see the environment before anything is changed, and you can explicitly change the init system in a container using the `raw.lxc` configuration parameter.
-This is equivalent to setting `init=/bin/bash` on the Linux kernel command line.
+したがって、何も変更される前の環境を確認でき、`raw.lxc` 設定パラメーターを使用してコンテナ内の`init`システムを明示的に変更できます。
+これは、Linux カーネルのコマンドラインで `init=/bin/bash` を設定するのと同等です。
 
     incus config set systemd raw.lxc 'lxc.init.cmd = /bin/bash'
 
-Here is what it looks like:
+これがどのように見えるかを示します:
 
 ```{terminal}
 :input: incus config set systemd raw.lxc 'lxc.init.cmd = /bin/bash'
@@ -65,7 +65,7 @@ Console log:
 [root@systemd /]#
 ```
 
-Now that the container has started, you can check it and see that things are not running as well as expected:
+これでコンテナが起動したので、確認して期待通りにうまく動作していないことがわかります:
 
 ```{terminal}
 :input: incus exec systemd bash
@@ -79,5 +79,5 @@ sys
 [root@systemd /]# exit
 ```
 
-Because Incus tries to auto-heal, it created some of the directories when it was starting up.
-Shutting down and restarting the container fixes the problem, but the original cause is still there - the template does not contain the required files.
+Incus は自動的に回復しようとするため、起動時にいくつかのディレクトリーが作成されました。
+コンテナをシャットダウンして再起動すると問題が解決しますが、元の原因はまだ残っています - テンプレートには必要なファイルが含まれていません。

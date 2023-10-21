@@ -1,54 +1,55 @@
 (networks)=
-# About networking
+# ネットワークについて
 
-There are different ways to connect your instances to the Internet. The easiest method is to have Incus create a network bridge during initialization and use this bridge for all instances, but Incus supports many different and advanced setups for networking.
+あなたのインスタンスをインターネットに接続するにはいろいろな方法があります。
+最も簡単な方法は Incus の初期化時にネットワークブリッジを作ってすべてのインスタンスでこのブリッジを使うことですが、 Incus はネットワークに関するさまざまな高度な設定をサポートします。
 
-## Network devices
+## ネットワークデバイス
 
-To grant direct network access to an instance, you must assign it at least one network device, also called {abbr}`NIC (Network Interface Controller)`.
-You can configure the network device in one of the following ways:
+インスタンスへの直接のネットワークアクセスを許可するには、 {abbr}`NIC (Network Interface Controller)` とも呼ばれるネットワークデバイスを最低 1 つ割り当てる必要があります
+ネットワークデバイスは以下のどれかの方法で設定できます:
 
-- Use the default network bridge that you set up during the Incus initialization.
-  Check the default profile to see the default configuration:
+- Incus の初期化中にセットアップしたデフォルトのネットワークブリッジを使用する。
+  デフォルトの設定を表示するにはデフォルトのプロファイルを確認します:
 
         incus profile show default
 
-  This method is used if you do not specify a network device for your instance.
-- Use an existing network interface by adding it as a network device to your instance.
-  This network interface is outside of Incus control.
-  Therefore, you must specify all information that Incus needs to use the network interface.
+  この方法はインスタンスのネットワークを指定しない場合に使用します。
+- 既存のネットワークインターフェースをインスタンスにネットワークデバイスとして追加して使用する。
+  このネットワークインターフェースは Incus の制御外です。
+  そのため、ネットワークインターフェースを使用するために必要なすべての情報を Incus に指定する必要があります。
 
-  Use a command similar to the following:
+  以下のようなコマンドを使用します:
 
         incus config device add <instance_name> <device_name> nic nictype=<nic_type> ...
 
-  See [Type: `nic`](devices-nic) for a list of available NIC types and their configuration properties.
+  指定可能な NIC タイプの一覧とそれらの設定プロパティについては [タイプ: `nic`](devices-nic) を参照してください。
 
-  For example, you could add a pre-existing Linux bridge (`br0`) with the following command:
+  たとえば、既存の Linux ブリッジ (`br0`) を追加するには以下のコマンドを使えます:
 
         incus config device add <instance_name> eth0 nic nictype=bridged parent=br0
-- {doc}`Create a managed network </howto/network_create>` and add it as a network device to your instance.
-  With this method, Incus has all required information about the configured network, and you can directly attach it to your instance as a device:
+- {doc}`マネージドネットワークを作成 </howto/network_create>` し、それをインスタンスにネットワークデバイスとして追加する。
+  この方法では Incus は設定されるネットワークについてのすべての必要な情報を持っていますので、デバイスとしてインスタンスに直接アタッチできます:
 
         incus network attach <network_name> <instance_name> <device_name>
 
-  See {ref}`network-attach` for more information.
+  詳細は{ref}`network-attach`を参照してください。
 
 (managed-networks)=
-## Managed networks
+## マネージドネットワーク
 
-Managed networks in Incus are created and configured with the `incus network [create|edit|set]` command.
+Incus でマネージドネットワークは `incus network [create|edit|set]` コマンドで作成と設定をします。
 
-Depending on the network type, Incus either fully controls the network or just manages an external network interface.
+ネットワークタイプによって、 Incus はネットワークを完全に制御するか、単に外部のネットワークインターフェースを管理するかのどちらかになります。
 
-Note that not all {ref}`NIC types <devices-nic>` are supported as network types.
-Incus can only set up some of the types as managed networks.
+すべての {ref}`NIC タイプ <devices-nic>` がネットワークタイプとしてサポートされているわけではないことに注意してください。
+Incus はいくつかのタイプのみマネージドネットワークとしてセットアップできます。
 
-### Fully controlled networks
+### 完全に制御されるネットワーク
 
-Fully controlled networks create network interfaces and provide most functionality, including, for example, the ability to do IP management.
+完全に制御されるネットワークではネットワークインターフェースを作成し、たとえば IP を管理する機能を含むほとんどの機能を提供します。
 
-Incus supports the following network types:
+Incus は以下のネットワークタイプをサポートします:
 
 {ref}`network-bridge`
 : % Include content from [../reference/network_bridge.md](../reference/network_bridge.md)
@@ -57,11 +58,11 @@ Incus supports the following network types:
       :end-before: <!-- Include end bridge intro -->
   ```
 
-  In Incus context, the `bridge` network type creates an L2 bridge that connects the instances that use it together into a single network L2 segment.
-  This makes it possible to pass traffic between the instances.
-  The bridge can also provide local DHCP and DNS.
+  Incus の文脈では、 `bridge` ネットワークタイプは、ブリッジを共用するインスタンスを同一の L2 ネットワークセグメントに接続するような L2 ブリッジを作成します。
+  これによりインスタンス間のトラフィックを通すことができます。
+  ブリッジはさらにローカルの DHCP と DNS を提供することもできます。
 
-  This is the default network type.
+  これがデフォルトのネットワークタイプです。
 
 {ref}`network-ovn`
 : % Include content from [../reference/network_ovn.md](../reference/network_ovn.md)
@@ -70,17 +71,17 @@ Incus supports the following network types:
       :end-before: <!-- Include end OVN intro -->
   ```
 
-  In Incus context, the `ovn` network type creates a logical network.
-  To set it up, you must install and configure the OVN tools.
-  In addition, you must create an uplink network that provides the network connection for OVN.
-  As the uplink network, you should use one of the external network types or a managed Incus bridge.
+  Incus の文脈では、 `ovn` ネットワークタイプは論理ネットワークを作成します。
+  セットアップするには OVN ツールをインストールし設定する必要があります。
+  さらに、OVN にネットワーク接続を提供するアップリンクのネットワークを作成する必要があります。
+  アップリンクのネットワークとして、外部ネットワークタイプの 1 つかマネージドな Incus ブリッジを使う必要があります。
 
   ```{tip}
-  Unlike the other network types, you can create and manage an OVN network inside a {ref}`project <projects>`.
-  This means that you can create your own OVN network as a non-admin user, even in a restricted project.
+  他のネットワークタイプと違って、 OVN ネットワークは {ref}`プロジェクト <projects>` 内に作成・管理できます。
+  これは、制限されたプロジェクトであっても、非管理者ユーザとして自身の OVN ネットワークを作成できることを意味します。
   ```
 
-### External networks
+### 外部ネットワーク
 
 % Include content from [../reference/network_external.md](../reference/network_external.md)
 ```{include} ../reference/network_external.md
@@ -95,7 +96,7 @@ Incus supports the following network types:
       :end-before: <!-- Include end macvlan intro -->
   ```
 
-  In Incus context, the `macvlan` network type provides a preset configuration to use when connecting instances to a parent macvlan interface.
+  Incus の文脈では、 `macvlan` ネットワークタイプは親の macvlan インターフェースへインスタンスを接続する際に使用するプリセット設定を提供します。
 
 {ref}`network-sriov`
 : % Include content from [../reference/network_sriov.md](../reference/network_sriov.md)
@@ -104,7 +105,7 @@ Incus supports the following network types:
       :end-before: <!-- Include end SR-IOV intro -->
   ```
 
-  In Incus context, the `sriov` network type provides a preset configuration to use when connecting instances to a parent SR-IOV interface.
+  Incus の文脈では、 `sriov` ネットワークタイプは親の SR-IOV インターフェースへインスタンスを接続する際に使用するプリセット設定を提供します。
 
 {ref}`network-physical`
 : % Include content from [../reference/network_physical.md](../reference/network_physical.md)
@@ -113,24 +114,24 @@ Incus supports the following network types:
       :end-before: <!-- Include end physical intro -->
   ```
 
-  It provides a preset configuration to use when connecting OVN networks to a parent interface.
+  OVN ネットワークを親インターフェースに接続する際のプリセット設定を提供します。
 
-## Recommendations
+## お勧めの設定
 
-In general, if you can use a managed network, you should do so because networks are easy to configure and you can reuse the same network for several instances without repeating the configuration.
+一般に、マネージドネットワークは設定が容易で設定を繰り返すこと無く複数のインスタンスで同じネットワークを再利用できるので、マネージドネットワークが使用できる場合はこれを使用すべきです。
 
-Which network type to choose depends on your specific use case.
-If you choose a fully controlled network, it provides more functionality than using a network device.
+どのネットワークタイプを使用すべきかはあなたの固有の使い方によります。
+完全に制御されたネットワークを選ぶと、ネットワークデバイスを使用するのに比べてより多くの機能を提供します。
 
-As a general recommendation:
+一般的なお勧めとしては:
 
-- If you are running Incus on a single system or in a public cloud, use a {ref}`network-bridge`.
-- If you are running Incus in your own private cloud, use an {ref}`network-ovn`.
+- Incus を単一のシステム上かパブリッククラウドで動かしている場合は、 {ref}`network-bridge` を使用してください。
+- あなた自身のプライベートクラウドで Incus を動かしている場合は、 {ref}`network-ovn` を使用してください。
 
   ```{note}
-  OVN requires a shared L2 uplink network for proper operation.
-  Therefore, using OVN is usually not possible if you run Incus in a public cloud.
+  OVN は適切な運用には共有された L2 のアップリンクネットワークが必要です。
+  このため、パブリッククラウドで Incus を動かしている場合は通常 OVN は使用できません。
   ```
 
-- To connect an instance NIC to a managed network, use the `network` property rather than the `parent` property, if possible.
-  This way, the NIC can inherit the settings from the network and you don't need to specify the `nictype`.
+- インスタンス NIC をマネージドネットワークに接続するためには、可能であれば `parent` プロパティより `network` プロパティを使用してください。
+  こうすることで、 NIC はネットワークの設定を引き継ぎ、 `nictype` を指定する必要がなくなります。

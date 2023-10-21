@@ -1,5 +1,5 @@
 (exp-security)=
-# About security
+# セキュリティーについて
 
 % Include content from [../../README.md](../../README.md)
 ```{include} ../../README.md
@@ -7,13 +7,13 @@
     :end-before: <!-- Include end security -->
 ```
 
-See the following sections for detailed information.
+詳細な情報は以下のセクションを参照してください。
 
-If you discover a security issue, see the [Incus security policy](https://github.com/lxc/incus/blob/main/SECURITY.md) for information on how to report the issue.
+セキュリティー上の問題を発見した場合、その問題の報告方法については [Incus のセキュリティーポリシー](https://github.com/lxc-jp/incus-ja/blob/main/SECURITY.md)（原文: [Incus security policy](https://github.com/lxc/incus/blob/main/SECURITY.md)）を参照してください。
 
-## Supported versions
+## サポートされているバージョン
 
-Never use unsupported Incus versions in a production environment.
+サポートされていないバージョンの Incus は実運用環境では絶対に使用しないでください。
 
 % Include content from [../../SECURITY.md](../../SECURITY.md)
 ```{include} ../../SECURITY.md
@@ -22,18 +22,18 @@ Never use unsupported Incus versions in a production environment.
 ```
 
 (security-daemon-access)=
-## Access to the Incus daemon
+## Incus デーモンへのアクセス
 
-Incus is a daemon that can be accessed locally over a Unix socket or, if configured, remotely over a {abbr}`TLS (Transport Layer Security)` socket.
-Anyone with access to the socket can fully control Incus, which includes the ability to attach host devices and file systems or to tweak the security features for all instances.
+Incus は Unix ソケットを介してローカルにアクセスできるデーモンで、設定されていれば{abbr}`TLS(Transport Layer Security)`ソケットを介してリモートにアクセスすることもできます。
+ソケットにアクセスできる人は、ホストデバイスやファイルシステムをアタッチしたり、すべてのインスタンスのセキュリティー機能をいじったりするなど、Incus を完全に制御することができます。
 
-Therefore, make sure to restrict the access to the daemon to trusted users.
+したがって、デーモンへのアクセスを信頼できるユーザーに制限するようにしてください。
 
-### Local access to the Incus daemon
+### Incus デーモンへのローカルアクセス
 
-The Incus daemon runs as root and provides a Unix socket for local communication.
-Access control for Incus is based on group membership.
-The root user and all members of the `incus-admin` group can interact with the local daemon.
+Incus デーモンは root で動作し、ローカル通信用の Unix ソケットを提供します。
+Incus のアクセス制御は、グループメンバーシップに基づいて行われます。
+root ユーザーと `incus-admin` グループのすべてのメンバーがローカルデーモンと対話できます。
 
 ````{important}
 % Include content from [../../README.md](../../README.md)
@@ -44,105 +44,105 @@ The root user and all members of the `incus-admin` group can interact with the l
 ````
 
 (security_remote_access)=
-### Access to the remote API
+### リモート API へのアクセス
 
-By default, access to the daemon is only possible locally.
-By setting the `core.https_address` configuration option, you can expose the same API over the network on a {abbr}`TLS (Transport Layer Security)` socket.
-See {ref}`server-expose` for instructions.
-Remote clients can then connect to Incus and access any image that is marked for public use.
+デフォルトでは、デーモンへのアクセスはローカルでのみ可能です。
+`core.https_address`という設定オプションを設定することで、同じ API を{abbr}`TLS (Transport Layer Security)`ソケットでネットワーク上に公開することができます。
+手順は {ref}`server-expose` を参照してください。
+リモートクライアントは、Incus に接続して、公開用にマークされたイメージにアクセスできます。
 
-There are several ways to authenticate remote clients as trusted clients to allow them to access the API.
-See {ref}`authentication` for details.
+リモートクライアントが API にアクセスできるように、信頼できるクライアントとして認証する方法がいくつかあります。
+詳細は{ref}`authentication`を参照してください。
 
-In a production setup, you should set `core.https_address` to the single address where the server should be available (rather than any address on the host).
-In addition, you should set firewall rules to allow access to the Incus port only from authorized hosts/subnets.
+本番環境では、`core.https_address`に、（ホスト上の任意のアドレスではなく）サーバーが利用可能な単一のアドレスを設定する必要があります。
+さらに、許可されたホスト/サブネットからのみ Incus ポートへのアクセスを許可するファイアウォールルールを設定する必要があります。
 
 (container-security)=
-## Container security
+## コンテナのセキュリティー
 
-Incus containers can use a wide range of features for security.
+Incus コンテナはセキュリティーのために幅広い機能を使うことができます。
 
-By default, containers are *unprivileged*, meaning that they operate inside a user namespace, restricting the abilities of users in the container to that of regular users on the host with limited privileges on the devices that the container owns.
+デフォルトでは、コンテナは *非特権*（*unprivileged*）であり、ユーザーNamespace 内で動作することを意味し、コンテナ内のユーザーの能力を、コンテナが所有するデバイスに対する制限された権限を持つホスト上の通常のユーザーに制限します。
 
-If data sharing between containers isn't needed, you can enable {config:option}`instance-security:security.idmap.isolated`, which will use non-overlapping UID/GID maps for each container, preventing potential {abbr}`DoS (Denial of Service)` attacks on other containers.
+コンテナ間のデータ共有が必要ない場合は、{config:option}`instance-security:security.idmap.isolated`を有効にすることで、各コンテナに対して重複しない UID/GID マップを使用し、他のコンテナに対する潜在的な{abbr}`DoS (Denial of Service、サービス拒否)`攻撃を防ぐことができます。
 
-Incus can also run *privileged* containers.
-Note, however, that those aren't root safe, and a user with root access in such a container will be able to DoS the host as well as find ways to escape confinement.
+Incus はまた、*特権*（*privileged*）コンテナを実行することができます。
+しかし、これは（訳注:コンテナ内だけで）安全に root 権限を使えるわけではなく、そのようなコンテナの中でルートアクセスを持つユーザーは、閉じ込められた状態から逃れる方法を見つけるだけでなく、ホストを DoS することができてしまう点に注意してください。
 
-More details on container security and the kernel features we use can be found on the
-[LXC security page](https://linuxcontainers.org/lxc/security/).
+コンテナのセキュリティーと私たちが使っているカーネルの機能についてのより詳細な情報は
+[LXCセキュリティページ](https://linuxcontainers.org/ja/lxc/security/)にあります。
 
-### Container name leakage
+### コンテナ名の漏洩
 
-The default server configuration makes it easy to list all cgroups on a system and, by extension, all running containers.
+デフォルトの設定ではシステム上のすべての cgroup と、さらに転じて、すべての実行中のコンテナを一覧表示することが簡単にできてしまいます。
 
-You can prevent this name leakage by blocking access to `/sys/kernel/slab` and `/proc/sched_debug` before you start any containers.
-To do so, run the following commands:
+コンテナを開始する前に `/sys/kernel/slab` と `/proc/sched_debug` へのアクセスをブロックすることでコンテナ名の漏洩を防げます。
+このためには以下のコマンドを実行してください:
 
     chmod 400 /proc/sched_debug
     chmod 700 /sys/kernel/slab/
 
-## Network security
+## ネットワークセキュリティー
 
-Make sure to configure your network interfaces to be secure.
-Which aspects you should consider depends on the networking mode you decide to use.
+ネットワークインターフェースは必ず安全に設定してください。
+どのような点を考慮すべきかは、使用するネットワークモードによって異なります。
 
-### Bridged NIC security
+### ブリッジ型NICのセキュリティー
 
-The default networking mode in Incus is to provide a "managed" private network bridge that each instance connects to.
-In this mode, there is an interface on the host called `incusbr0` that acts as the bridge for the instances.
+Incus のデフォルトのネットワークモードは、各インスタンスが接続する「管理された」プライベートネットワークのブリッジを提供することです。
+このモードでは、ホスト上に`incusbr0`というインターフェースがあり、それがインスタンスのブリッジとして機能します。
 
-The host runs an instance of `dnsmasq` for each managed bridge, which is responsible for allocating IP addresses and providing both authoritative and recursive DNS services.
+ホストは、管理されたブリッジごとに`dnsmasq`のインスタンスを実行し、IP アドレスの割り当てと、権威 DNS および再帰 DNS サービスの提供を担当します。
 
-Instances using DHCPv4 will be allocated an IPv4 address, and a DNS record will be created for their instance name.
-This prevents instances from being able to spoof DNS records by providing false host name information in the DHCP request.
+DHCPv4 を使用しているインスタンスには、IPv4 アドレスが割り当てられ、インスタンス名の DNS レコードが作成されます。
+これにより、インスタンスが DHCP リクエストに偽のホスト名情報を提供して、DNS レコードを偽装することができなくなります。
 
-The `dnsmasq` service also provides IPv6 router advertisement capabilities.
-This means that instances will auto-configure their own IPv6 address using SLAAC, so no allocation is made by `dnsmasq`.
-However, instances that are also using DHCPv4 will also get an AAAA DNS record created for the equivalent SLAAC IPv6 address.
-This assumes that the instances are not using any IPv6 privacy extensions when generating IPv6 addresses.
+`dnsmasq`サービスは、IPv6 のルータ広告機能も提供します。
+つまり、インスタンスは SLAAC を使って自分の IPv6 アドレスを自動設定するので、`dnsmasq`による割り当ては行われません。
+しかし、DHCPv4 を使用しているインスタンスは、SLAAC IPv6 アドレスに相当する AAAA の DNS レコードも取得します。
+これは、インスタンスが IPv6 アドレスを生成する際に、IPv6 プライバシー拡張を使用していないことを前提としています。
 
-In this default configuration, whilst DNS names cannot not be spoofed, the instance is connected to an Ethernet bridge and can transmit any layer 2 traffic that it wishes, which means an instance that is not trusted can effectively do MAC or IP spoofing on the bridge.
+このデフォルト構成では、DNS 名を偽装することはできませんが、インスタンスはイーサネットブリッジに接続されており、希望するレイヤー2 トラフィックを送信することができます。これは、信頼されていないインスタンスがブリッジ上で MAC または IP の偽装を効果的に行うことができることを意味します。
 
-In the default configuration, it is also possible for instances connected to the bridge to modify the Incus host's IPv6 routing table by sending (potentially malicious) IPv6 router advertisements to the bridge.
-This is because the `incusbr0` interface is created with `/proc/sys/net/ipv6/conf/incusbr0/accept_ra` set to `2`, meaning that the Incus host will accept router advertisements even though `forwarding` is enabled (see [`/proc/sys/net/ipv4/*` Variables](https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt) for more information).
+デフォルトの設定では、ブリッジに接続されたインスタンスがブリッジに（潜在的に悪意のある）IPv6 ルータ広告を送信することで、Incus ホストの IPv6 ルーティングテーブルを修正することも可能です。
+これは、`incusbr0`インターフェースが`/proc/sys/net/ipv6/conf/incusbr0/accept_ra`を`2`に設定して作成されているためで、`forwarding`が有効であるにもかかわらず、Incus ホストがルーター広告を受け入れることを意味しています（詳細は[`/proc/sys/net/ipv4/*` Variables](https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt)を参照してください）。
 
-However, Incus offers several bridged {abbr}`NIC (Network interface controller)` security features that can be used to control the type of traffic that an instance is allowed to send onto the network.
-These NIC settings should be added to the profile that the instance is using, or they can be added to individual instances, as shown below.
+しかし、Incus はいくつかのブリッジ型{abbr}`NIC(Network interface controller)`セキュリティー機能を提供しており、インスタンスがネットワーク上に送信することを許可されるトラフィックの種類を制御するために使用することができます。
+これらの NIC 設定は、インスタンスが使用しているプロファイルに追加する必要がありますが、以下のように個々のインスタンスに追加することもできます。
 
-The following security features are available for bridged NICs:
+ブリッジ型 NIC には、以下のようなセキュリティー機能があります:
 
-Key                      | Type      | Default           | Required  | Description
-:--                      | :--       | :--               | :--       | :--
-`security.mac_filtering` | bool      | `false`           | no        | Prevent the instance from spoofing another instance's MAC address
-`security.ipv4_filtering`| bool      | `false`           | no        | Prevent the instance from spoofing another instance's IPv4 address (enables `mac_filtering`)
-`security.ipv6_filtering`| bool      | `false`           | no        | Prevent the instance from spoofing another instance's IPv6 address (enables `mac_filtering`)
+キー                      | タイプ | デフォルト | 必須 | 説明
+:--                       | :--    | :--        | :--  | :--
+`security.mac_filtering`  | bool   | `false`    | no   | インスタンスが他のインスタンスの MAC アドレスを詐称することを防ぐ。
+`security.ipv4_filtering` | bool   | `false`    | no   | インスタンスが他のインスタンスの IPv4 アドレスになりすますことを防ぎます(`mac_filtering` を有効にします)。
+`security.ipv6_filtering` | bool   | `false`    | no   | インスタンスが他のインスタンスの IPv6 アドレスになりすますことを防ぎます(`mac_filtering` を有効にします)。
 
-One can override the default bridged NIC settings from the profile on a per-instance basis using:
+プロファイルで設定されたデフォルトのブリッジ型 NIC の設定は、インスタンスごとに以下の方法で上書きすることができます:
 
 ```
 incus config device override <instance> <NIC> security.mac_filtering=true
 ```
 
-Used together, these features can prevent an instance connected to a bridge from spoofing MAC and IP addresses.
-These options are implemented using either `xtables` (`iptables`, `ip6tables` and `ebtables`) or `nftables`, depending on what is available on the host.
+これらの機能を併用することで、ブリッジに接続されているインスタンスが MAC アドレスや IP アドレスを詐称することを防ぐことができます。
+これらのオプションは、ホスト上で利用可能なものに応じて、`xtables`（`iptables`、`ip6tables`、`ebtables`）または`nftables`を使用して実装されます。
 
-It's worth noting that those options effectively prevent nested containers from using the parent network with a different MAC address (i.e using bridged or `macvlan` NICs).
+これらのオプションは、ネストされたコンテナが異なる MAC アドレスを持つ親ネットワークを使用すること（ブリッジされた NIC や`macvlan` NIC を使用すること）を効果的に防止することができるのは注目に値します。
 
-The IP filtering features block ARP and NDP advertisements that contain a spoofed IP, as well as blocking any packets that contain a spoofed source address.
+IP フィルタリング機能は、スプーフィングされた IP を含む ARP および NDP アドバタイジングをブロックし、スプーフィングされたソースアドレスを含むすべてのパケットをブロックします。
 
-If `security.ipv4_filtering` or `security.ipv6_filtering` is enabled and the instance cannot be allocated an IP address (because `ipvX.address=none` or there is no DHCP service enabled on the bridge), then all IP traffic for that protocol is blocked from the instance.
+`security.ipv4_filtering`または`security.ipv6_filtering`が有効で、（`ipvX.address=none`またはブリッジで DHCP サービスが有効になっていないため）インスタンスに IP アドレスが割り当てられない場合、そのプロトコルのすべての IP トラフィックがインスタンスからブロックされます。
 
-When `security.ipv6_filtering` is enabled, IPv6 router advertisements are blocked from the instance.
+`security.ipv6_filtering` が有効な場合、IPv6 のルータ広告がインスタンスからブロックされます。
 
-When `security.ipv4_filtering` or `security.ipv6_filtering` is enabled, any Ethernet frames that are not ARP, IPv4 or IPv6 are dropped.
-This prevents stacked VLAN Q-in-Q (802.1ad) frames from bypassing the IP filtering.
+`security.ipv4_filtering`または`security.ipv6_filtering`が有効な場合、ARP、IPv4 または IPv6 ではないイーサネットフレームはすべてドロップされます。
+これにより、スタックされた VLAN `Q-in-Q`（802.1ad）フレームが IP フィルタリングをバイパスすることを防ぎます。
 
-### Routed NIC security
+### ルート化されたNICのセキュリティー
 
-An alternative networking mode is available called "routed".
-It provides a virtual Ethernet device pair between container and host.
-In this networking mode, the Incus host functions as a router, and static routes are added to the host directing traffic for the container's IPs towards the container's `veth` interface.
+"routed" と呼ばれる別のネットワークモードがあります。
+このモードでは、コンテナとホストの間に仮想イーサネットデバイペアを提供します。
+このネットワークモードでは、Incus ホストがルータとして機能し、コンテナの IP 宛のトラフィックをコンテナの`veth`インターフェースに誘導するスタティックルートがホストに追加されます。
 
-By default, the `veth` interface created on the host has its `accept_ra` setting disabled to prevent router advertisements from the container modifying the IPv6 routing table on the Incus host.
-In addition to that, the `rp_filter` on the host is set to `1` to prevent source address spoofing for IPs that the host does not know the container has.
+デフォルトでは、コンテナからのルータ広告が Incus ホスト上の IPv6 ルーティングテーブルを変更するのを防ぐために、ホスト上に作成された`veth`インターフェースは、その`accept_ra`設定が無効になっています。
+それに加えて、コンテナが持っていることをホストが知らない IP に対するソースアドレスの偽装を防ぐために、ホスト上の`rp_filter`が`1`に設定されています。

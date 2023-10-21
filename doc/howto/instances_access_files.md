@@ -1,111 +1,111 @@
 (instances-access-files)=
-# How to access files in an instance
+# インスタンス内のファイルにアクセスするには
 
-You can manage files inside an instance using the Incus client without needing to access the instance through the network.
-Files can be individually edited or deleted, pushed from or pulled to the local machine.
-Alternatively, you can mount the instance's file system onto the local machine.
+Incus クライアントを使って、ネットワーク経由でインスタンスにアクセスする必要なしに、インスタンス内部のファイルを管理できます。
+ファイルを個別に編集、削除したり、ローカルマシンからプッシュ、ローカルマシンにプルできます。
+あるいは、インスタンスのファイルシステムをローカルマシン上にマウントできます。
 
-For containers, these file operations always work and are handled directly by Incus.
-For virtual machines, the `incus-agent` process must be running inside of the virtual machine for them to work.
+コンテナでは、これらの操作は必ず機能し Incus で直接処理されます。
+仮想マシンでは、これらの操作が機能するためには `incus-agent` プロセスが仮想マシン内部で稼働している必要があります。
 
-## Edit instance files
+## インスタンスのファイルを編集する
 
-To edit an instance file from your local machine, enter the following command:
+ローカルマシンからインスタンスのファイルを編集するには、以下のコマンドを入力します:
 
     incus file edit <instance_name>/<path_to_file>
 
-For example, to edit the `/etc/hosts` file in the instance, enter the following command:
+たとえば、インスタンス内の `/etc/hosts` ファイルを編集するには、以下のコマンドを入力します:
 
     incus file edit my-container/etc/hosts
 
 ```{note}
-The file must already exist on the instance.
-You cannot use the `edit` command to create a file on the instance.
+ファイルはインスタンス上に既に存在している必要があります。
+インスタンス上にファイルを作成するのに `edit` コマンドは使えません。
 ```
 
-## Delete files from the instance
+## インスタンスからファイルを削除する
 
-To delete a file from your instance, enter the following command:
+インスタンスからファイルを削除するには、以下のコマンドを入力します:
 
     incus file delete <instance_name>/<path_to_file>
 
-## Pull files from the instance to the local machine
+## インスタンスからローカルマシンにファイルをプルする
 
-To pull a file from your instance to your local machine, enter the following command:
+インスタンスからローカルマシンにファイルをプルするには、以下のコマンドを入力します:
 
     incus file pull <instance_name>/<path_to_file> <local_file_path>
 
-For example, to pull the `/etc/hosts` file to the current directory, enter the following command:
+たとえば `/etc/hosts` ファイルをカレントディレクトリーにプルするには、以下のコマンドを入力します:
 
     incus file pull my-instance/etc/hosts .
 
-Instead of pulling the instance file into a file on the local system, you can also pull it to stdout and pipe it to stdin of another command.
-This can be useful, for example, to check a log file:
+インスタンスのファイルをローカルマシンにプルする代わりに、標準出力にプルして別のコマンドの標準入力にパイプすることもできます。
+これは、たとえば、ログファイルをチェックするのに便利です:
 
     incus file pull my-instance/var/log/syslog - | less
 
-To pull a directory with all contents, enter the following command:
+ディレクトリーのすべての中身をプルするには、以下のコマンドを入力します:
 
     incus file pull -r <instance_name>/<path_to_directory> <local_location>
 
-## Push files from the local machine to the instance
+## ローカルマシンからインスタンスにファイルをプッシュする
 
-To push a file from your local machine to your instance, enter the following command:
+ローカルマシンからインスタンスにファイルをプッシュするには、以下のコマンドを入力します:
 
     incus file push <local_file_path> <instance_name>/<path_to_file>
 
-To push a directory with all contents, enter the following command:
+ディレクトリーのすべての中身をプッシュするには、以下のコマンドを入力します:
 
     incus file push -r <local_location> <instance_name>/<path_to_directory>
 
-## Mount a file system from the instance
+## インスタンスのファイルシステムをマウントする
 
-You can mount an instance file system into a local path on your client.
+インスタンスのファイルシステムをクライアントのローカルパスにマウントできます。
 
-To do so, make sure that you have `sshfs` installed.
+そうするためには、`sshfs` がインストールされていることを確認してください。
 
     incus file mount <instance_name>/<path_to_directory> <local_location>
 
-You can then access the files from your local machine.
+これでローカルマシンからファイルにアクセスできます。
 
-### Set up an SSH SFTP listener
+### SSH SFTP リスナーをセットアップする
 
-Alternatively, you can set up an SSH SFTP listener.
-This method allows you to connect with any SFTP client and with a dedicated user name.
+別の方法として、SSH SFTP リスナーをセットアップすることもできます。
+この方法では任意の SFTP クライアントで専用のユーザー名で接続できます。
 
-To do so, first set up the listener by entering the following command:
+そうするには、まず以下のコマンドを入力してリスナーをセットアップします:
 
     incus file mount <instance_name> [--listen <address>:<port>]
 
-For example, to set up the listener on a random port on the local machine (for example, `127.0.0.1:45467`):
+たとえば、ローカルマシン上のランダムなポート（たとえば、`127.0.0.1:45467`）にリスナーをセットアップするには以下のようにします:
 
     incus file mount my-instance
 
-If you want to access your instance files from outside your local network, you can pass a specific address and port:
+ローカルネットワークの外側からインスタンスのファイルにアクセスしたい場合、特定のアドレスとポートを渡せます:
 
     incus file mount my-instance --listen 192.0.2.50:2222
 
 ```{caution}
-Be careful when doing this, because it exposes your instance remotely.
+あなたのインスタンスをリモートに公開することになるので、これを実行する際には注意してください。
 ```
 
-To set up the listener on a specific address and a random port:
+特定のアドレスとランダムなポートでリスナーをセットアップするには以下のようにします:
 
     incus file mount my-instance --listen 192.0.2.50:0
 
-The command prints out the assigned port and a user name and password for the connection.
+コマンドは割り当てられたポートと接続に使用するユーザー名とパスワードを出力します。
 
 ```{tip}
-You can specify a user name by passing the `--auth-user` flag.
+`--auth-user` フラグを渡すとユーザ名を指定できます。
 ```
 
-Use this information to access the file system.
-For example, if you want to use `sshfs` to connect, enter the following command:
+この情報を使ってファイルシステムにアクセスします。
+たとえば `sshfs` で接続するには、以下のコマンドを入力します:
 
     sshfs <user_name>@<address>:<path_to_directory> <local_location> -p <port>
 
-For example:
+たとえば以下のようにします:
 
     sshfs xFn8ai8c@127.0.0.1:/home my-instance-files -p 35147
 
-You can then access the file system of your instance at the specified location on the local machine.
+これでインスタンスのファイルシステムをローカルマシン上の指定の場所でアクセスできます。

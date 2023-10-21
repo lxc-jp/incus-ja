@@ -1,11 +1,11 @@
 (ref-projects)=
-# Project configuration
+# プロジェクトの設定
 
-Projects can be configured through a set of key/value configuration options.
-See {ref}`projects-configure` for instructions on how to set these options.
+プロジェクトは、キー/値の設定オプションのセットを通じて設定することができます。
+これらのオプションを設定する方法については、{ref}`projects-configure` を参照してください。
 
-The key/value configuration is namespaced.
-The following options are available:
+キー/値の設定は名前空間化されています。
+次のオプションが利用可能です:
 
 - {ref}`project-features`
 - {ref}`project-limits`
@@ -13,17 +13,17 @@ The following options are available:
 - {ref}`project-specific-config`
 
 (project-features)=
-## Project features
+## プロジェクトの機能
 
-The project features define which entities are isolated in the project and which are inherited from the `default` project.
+プロジェクトの機能は、プロジェクト内でどのエンティティが隔離され、どのエンティティが`default`プロジェクトから継承されるかを定義します。
 
-If a `feature.*` option is set to `true`, the corresponding entity is isolated in the project.
+`feature.*` オプションが `true` に設定されている場合、対応するエンティティはプロジェクト内で隔離されます。
 
 ```{note}
-When you create a project without explicitly configuring a specific option, this option is set to the initial value given in the following table.
+特定のオプションを明示的に設定せずにプロジェクトを作成すると、このオプションは以下の表で与えられた初期値に設定されます。
 
-However, if you unset one of the `feature.*` options, it does not go back to the initial value, but to the default value.
-The default value for all `feature.*` options is `false`.
+ただし、`feature.*` オプションのいずれかを解除すると、初期値に戻るのではなく、デフォルト値に戻ります。
+すべての `feature.*` オプションのデフォルト値は `false` です。
 ```
 
 % Include content from [../config_options.txt](../config_options.txt)
@@ -33,24 +33,25 @@ The default value for all `feature.*` options is `false`.
 ```
 
 (project-limits)=
-## Project limits
+## プロジェクトの制限
 
-Project limits define a hard upper bound for the resources that can be used by the containers and VMs that belong to a project.
+プロジェクトの制限は、プロジェクトに属するコンテナや VM が使用できるリソースの上限を定義します。
 
-Depending on the `limits.*` option, the limit applies to the number of entities that are allowed in the project (for example, {config:option}`project-limits:limits.containers` or {config:option}`project-limits:limits.networks`) or to the aggregate value of resource usage for all instances in the project (for example, {config:option}`project-limits:limits.cpu` or {config:option}`project-limits:limits.processes`).
-In the latter case, the limit usually applies to the {ref}`instance-options-limits` that are configured for each instance (either directly or via a profile), and not to the resources that are actually in use.
+`limits.*` オプションによっては、プロジェクト内で許可されるエンティティの数に制限が適用されることがあります（たとえば {config:option}`project-limits:limits.containers` や {config:option}`project-limits:limits.networks`）。また、プロジェクト内のすべてのインスタンスのリソース使用量の合計値に制限が適用されることもあります（たとえば、 {config:option}`project-limits:limits.cpu` や {config:option}`project-limits:limits.processes`）。
+後者の場合、制限は通常、各インスタンスに設定されている {ref}`instance-options-limits` に適用されます（直接またはプロファイル経由で設定されている場合）、実際に使用されているリソースではありません。
 
-For example, if you set the project's {config:option}`project-limits:limits.memory` configuration to `50GiB`, the sum of the individual values of all {config:option}`instance-resource-limits:limits.memory` configuration keys defined on the project's instances will be kept under 50 GiB.
+たとえば、プロジェクトの {config:option}`project-limits:limits.memory` 設定を `50GB` に設定した場合、プロジェクトのインスタンスで定義されたすべての {config:option}`project-limits:limits.memory` 設定キーの個別の値の合計が 50GB 未満に保たれます。
+{config:option}`project-limits:limits.memory` 設定の合計が 50GB を超えるインスタンスを作成しようとすると、エラーが発生します。
 
-Similarly, setting the project's {config:option}`project-limits:limits.cpu` configuration key to `100` means that the sum of individual {config:option}`instance-resource-limits:limits.cpu` values will be kept below 100.
+同様に、プロジェクトの {config:option}`project-limits:limits.cpu` 設定キーを `100` に設定すると、個々の {config:option}`project-limits:limits.cpu` 値の合計が 100 未満に保たれます。
 
-When using project limits, the following conditions must be fulfilled:
+プロジェクトの制限を使用する場合、以下の条件を満たす必要があります:
 
-- When you set one of the `limits.*` configurations and there is a corresponding configuration for the instance, all instances in the project must have the corresponding configuration defined (either directly or via a profile).
-  See {ref}`instance-options-limits` for the instance configuration options.
-- The {config:option}`project-limits:limits.cpu` configuration cannot be used if {ref}`instance-options-limits-cpu` is enabled.
-  This means that to use {config:option}`project-limits:limits.cpu` on a project, the {config:option}`instance-resource-limits:limits.cpu` configuration of each instance in the project must be set to a number of CPUs, not a set or a range of CPUs.
-- The {config:option}`project-limits:limits.memory` configuration must be set to an absolute value, not a percentage.
+- `limits.*` 設定のいずれかを設定し、インスタンスに対応する設定がある場合、プロジェクト内のすべてのインスタンスに対応する設定が定義されている必要があります（直接またはプロファイル経由で設定）。
+  インスタンスの設定オプションについては {ref}`instance-options-limits` を参照してください。
+- {ref}`instance-options-limits-cpu` が有効になっている場合、{ref}`instance-options-limits-cpu` 設定は使用できません。
+  これは、プロジェクトで {ref}`instance-options-limits-cpu` を使用するためには、プロジェクト内の各インスタンスの {ref}`instance-options-limits-cpu` 設定を CPU の数、または CPU のセットや範囲ではなく、数値に設定する必要があることを意味します。
+- {config:option}`project-limits:limits.memory` 設定は、パーセンテージではなく絶対値で設定する必要があります。
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -59,26 +60,26 @@ When using project limits, the following conditions must be fulfilled:
 ```
 
 (project-restrictions)=
-## Project restrictions
+## プロジェクトの制約
 
-To prevent the instances of a project from accessing security-sensitive features (such as container nesting or raw LXC configuration), set the {config:option}`project-restricted:restricted` configuration option to `true`.
-You can then use the various `restricted.*` options to pick individual features that would normally be blocked by {config:option}`project-restricted:restricted` and allow them, so they can be used by the instances of the project.
+プロジェクトのインスタンスがセキュリティーに関連する機能（コンテナのネストや raw LXC 設定など）にアクセスできないようにするには、{config:option}`project-restricted:restricted` 設定オプションを `true` に設定します。
+その後、さまざまな `restricted.*` オプションを使用して、通常は {config:option}`project-restricted:restricted` によってブロックされる個々の機能を選択し、プロジェクトのインスタンスで使用できるように許可できます。
 
-For example, to restrict a project and block all security-sensitive features, but allow container nesting, enter the following commands:
+たとえば、プロジェクトを制限し、すべてのセキュリティー関連機能をブロックしつつ、コンテナのネストを許可するには、次のコマンドを入力します:
 
     incus project set <project_name> restricted=true
     incus project set <project_name> restricted.containers.nesting=allow
 
-Each security-sensitive feature has an associated `restricted.*` project configuration option.
-If you want to allow the usage of a feature, change the value of its `restricted.*` option.
-Most `restricted.*` configurations are binary switches that can be set to either `block` (the default) or `allow`.
-However, some options support other values for more fine-grained control.
+セキュリティーに関連する各機能には、関連する `restricted.*` プロジェクト設定オプションがあります。
+機能の使用を許可する場合は、その `restricted.*` オプションの値を変更してください。
+ほとんどの `restricted.*` 設定は、`block`（デフォルト）または `allow` に設定できる二値スイッチです。
+ただし、一部のオプションは、より細かい制御のために他の値をサポートしています。
 
 ```{note}
-You must set the `restricted` configuration to `true` for any of the `restricted.*` options to be effective.
-If `restricted` is set to `false`, changing a `restricted.*` option has no effect.
+`restricted.*` オプションを有効にするには、`restricted` 設定を `true` に設定する必要があります。
+`restricted` が `false` に設定されている場合、`restricted.*` オプションを変更しても効果はありません。
 
-Setting all `restricted.*` keys to `allow` is equivalent to setting `restricted` itself to `false`.
+すべての `restricted.*` キーを `allow` に設定することは、`restricted` 自体を `false` に設定することと同等です。
 ```
 
 % Include content from [../config_options.txt](../config_options.txt)
@@ -88,10 +89,10 @@ Setting all `restricted.*` keys to `allow` is equivalent to setting `restricted`
 ```
 
 (project-specific-config)=
-## Project-specific configuration
+## プロジェクト固有の設定
 
-There are some {ref}`server` options that you can override for a project.
-In addition, you can add user metadata for a project.
+プロジェクトに対していくつかの {ref}`server` オプションを上書きできます。
+また、プロジェクトにユーザーメタデータを追加することができます。
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt

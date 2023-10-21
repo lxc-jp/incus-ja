@@ -1,114 +1,114 @@
 (devices-gpu)=
-# Type: `gpu`
+# タイプ: `gpu`
 
-GPU devices make the specified GPU device or devices appear in the instance.
+GPU デバイスは、指定の GPU デバイスをインスタンス内に出現させます。
 
 ```{note}
-For containers, a `gpu` device may match multiple GPUs at once.
-For VMs, each device can match only a single GPU.
+コンテナでは、`gpu` デバイスは同時に複数の GPU にマッチングさせることができます。
+VM では、各デバイスは1つの GPU にしかマッチできません。
 ```
 
-The following types of GPUs can be added using the `gputype` device option:
+以下のタイプの GPU が `gputype` デバイスオプションを使って追加できます:
 
-- [`physical`](gpu-physical) (container and VM): Passes an entire GPU through into the instance.
-  This value is the default if `gputype` is unspecified.
-- [`mdev`](gpu-mdev) (VM only): Creates and passes a virtual GPU through into the instance.
-- [`mig`](gpu-mig) (container only): Creates and passes a MIG (Multi-Instance GPU) through into the instance.
-- [`sriov`](gpu-sriov) (VM only): Passes a virtual function of an SR-IOV-enabled GPU into the instance.
+- [`physical`](#gpu-physical)（コンテナと VM）: GPU 全体をインスタンスにパススルーします。 
+  `gputype` が指定されない場合これがデフォルトです。
+- [`mdev`](#gpu-mdev)（VM のみ）: 仮想 GPU を作成しインスタンスにパススルーします。
+- [`mig`](#gpu-mig)（コンテナのみ）: MIG（Multi-Instance GPU）を作成しインスタンスにパススルーします。
+- [`sriov`](#gpu-sriov)（VM のみ）: SR-IOV を有効にした GPU の仮想ファンクション（virtual function）をインスタンスに与えます。
 
-The available device options depend on the GPU type and are listed in the tables in the following sections.
+利用可能なデバイスオプションは GPU タイプごとに異なり、以下のセクションの表に一覧表示されます。
 
 (gpu-physical)=
 ## `gputype`: `physical`
 
 ```{note}
-The `physical` GPU type is supported for both containers and VMs.
-It supports hotplugging only for containers, not for VMs.
+`physical` GPU タイプはコンテナと VM の両方でサポートされます。
+ホットプラグはコンテナのみでサポートし、VM ではサポートしません。
 ```
 
-A `physical` GPU device passes an entire GPU through into the instance.
+`physical` GPU デバイスは GPU 全体をインスタンスにパススルーします。
 
-### Device options
+### デバイスオプション
 
-GPU devices of type `physical` have the following device options:
+`physical` タイプのデバイスには以下のデバイスオプションがあります:
 
-Key         | Type      | Default           | Description
-:--         | :--       | :--               | :--
-`gid`       | int       | `0`               | GID of the device owner in the instance (container only)
-`id`        | string    | -                 | The DRM card ID of the GPU device
-`mode`      | int       | `0660`            | Mode of the device in the instance (container only)
-`pci`       | string    | -                 | The PCI address of the GPU device
-`productid` | string    | -                 | The product ID of the GPU device
-`uid`       | int       | `0`               | UID of the device owner in the instance (container only)
-`vendorid`  | string    | -                 | The vendor ID of the GPU device
+キー        | 型     | デフォルト値 | 説明
+:--         | :--    | :--          | :--
+`gid`       | int    | `0`          | インスタンス（コンテナのみ）内のデバイス所有者のGID
+`id`        | string | -            | GPUデバイスのDRMカードID
+`mode`      | int    | `0660`       | インスタンス（コンテナのみ）内のデバイスのモード
+`pci`       | string | -            | GPUデバイスのPCIアドレス
+`productid` | string | -            | GPUデバイスのプロダクトID
+`uid`       | int    | `0`          | インスタンス（コンテナのみ）内のデバイス所有者のUID
+`vendorid`  | string | -            | GPUデバイスのベンダーID
 
 (gpu-mdev)=
 ## `gputype`: `mdev`
 
 ```{note}
-The `mdev` GPU type is supported only for VMs.
-It does not support hotplugging.
+`mdev` GPU タイプは VM でのみサポートされます。
+ホットプラグはサポートしていません。
 ```
 
-An `mdev` GPU device creates and passes a virtual GPU through into the instance.
-You can check the list of available `mdev` profiles by running [`incus info --resources`](incus_info.md).
+`mdev` GPU デバイスは仮想 GPU を作成しインスタンスにパススルーします。
+利用可能な`mdev`プロファイルの一覧は [`incus info --resources`](incus_info.md) を実行すると確認できます。
 
-### Device options
+### デバイスオプション
 
-GPU devices of type `mdev` have the following device options:
+`mdev` タイプのデバイスには以下のデバイスオプションがあります:
 
-Key         | Type      | Default           | Description
-:--         | :--       | :--               | :--
-`id`        | string    | -                 | The DRM card ID of the GPU device
-`mdev`      | string    | -                 | The `mdev` profile to use (required - for example, `i915-GVTg_V5_4`)
-`pci`       | string    | -                 | The PCI address of the GPU device
-`productid` | string    | -                 | The product ID of the GPU device
-`vendorid`  | string    | -                 | The vendor ID of the GPU device
+キー        | 型     | デフォルト値 | 説明
+:--         | :--    | :--          | :--
+`id`        | string | -            | GPUデバイスのDRMカードID
+`mdev`      | string | -            | 使用する`mdev`プロファイル（必須 - 例:`i915-GVTg_V5_4`）
+`pci`       | string | -            | GPUデバイスのPCIアドレス
+`productid` | string | -            | GPUデバイスのプロダクトID
+`vendorid`  | string | -            | GPUデバイスのベンダーID
 
 (gpu-mig)=
 ## `gputype`: `mig`
 
 ```{note}
-The `mig` GPU type is supported only for containers.
-It does not support hotplugging.
+`mig` GPU タイプはコンテナでのみサポートされます。
+ホットプラグはサポートしていません。
 ```
 
-A `mig` GPU device creates and passes a MIG compute instance through into the instance.
-Currently, this requires NVIDIA MIG instances to be pre-created.
+`mig` GPU デバイスは MIG コンピュートインスタンスを作成しインスタンスにパススルーします。
+現状これは NVIDIA MIG を事前に作成しておく必要があります。
 
-### Device options
+### デバイスオプション
 
-GPU devices of type `mig` have the following device options:
+`mig` タイプのデバイスには以下のデバイスオプションがあります:
 
-Key         | Type      | Default           | Description
-:--         | :--       | :--               | :--
-`id`        | string    | -                 | The DRM card ID of the GPU device
-`mig.ci`    | int       | -                 | Existing MIG compute instance ID
-`mig.gi`    | int       | -                 | Existing MIG GPU instance ID
-`mig.uuid`  | string    | -                 | Existing MIG device UUID (`MIG-` prefix can be omitted)
-`pci`       | string    | -                 | The PCI address of the GPU device
-`productid` | string    | -                 | The product ID of the GPU device
-`vendorid`  | string    | -                 | The vendor ID of the GPU device
+キー        | 型     | デフォルト値 | 説明
+:--         | :--    | :--          | :--
+`id`        | string | -            | GPUデバイスのDRMカードID
+`mig.ci`    | int    | -            | 既存のMIGコンピュートインスタンスID
+`mig.gi`    | int    | -            | 既存のMIG GPUインスタンスID
+`mig.uuid`  | string | -            | 既存のMIGデバイスUUID（`MIG-`接頭辞は省略可）
+`pci`       | string | -            | GPUデバイスのPCIアドレス
+`productid` | string | -            | GPUデバイスのプロダクトID
+`vendorid`  | string | -            | GPUデバイスのベンダーID
 
-You must set either `mig.uuid` (NVIDIA drivers 470+) or both `mig.ci` and `mig.gi` (old NVIDIA drivers).
+`mig.uuid`（NVIDIA drivers 470+）か、`mig.ci`と`mig.gi`（古い NVIDIA ドライバー）の両方を設定する必要があります。
 
 (gpu-sriov)=
 ## `gputype`: `sriov`
 
 ```{note}
-The `sriov` GPU type is supported only for VMs.
-It does not support hotplugging.
+`sriov` GPU タイプは VM でのみサポートされます。
+ホットプラグはサポートしていません。
 ```
 
-An `sriov` GPU device passes a virtual function of an SR-IOV-enabled GPU into the instance.
+`sriov` GPU デバイスは SR-IOV が有効な GPU の仮想ファンクション（virtual function）をインスタンスにパススルーします。
 
-### Device options
+### デバイスオプション
 
-GPU devices of type `sriov` have the following device options:
+`sriov`タイプのデバイスには以下のデバイスオプションがあります:
 
-Key         | Type      | Default           | Description
-:--         | :--       | :--               | :--
-`id`         | string   | -                 | The DRM card ID of the parent GPU device
-`pci`        | string   | -                 | The PCI address of the parent GPU device
-`productid`  | string   | -                 | The product ID of the parent GPU device
-`vendorid`   | string   | -                 | The vendor ID of the parent GPU device
+キー        | 型     | デフォルト値 | 説明
+:--         | :--    | :--          | :--
+`id`        | string | -            | GPUデバイスのDRMカードID
+`pci`       | string | -            | 親GPUデバイスのPCIアドレス
+`productid` | string | -            | 親GPUデバイスのプロダクトID
+`vendorid`  | string | -            | 親GPUデバイスのベンダーID

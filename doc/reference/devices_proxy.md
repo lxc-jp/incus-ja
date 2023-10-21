@@ -1,18 +1,18 @@
 (devices-proxy)=
-# Type: `proxy`
+# タイプ: `proxy`
 
 ```{note}
-The `proxy` device type is supported for both containers (NAT and non-NAT modes) and VMs (NAT mode only).
-It supports hotplugging for both containers and VMs.
+`proxy`デバイスタイプはコンテナ（NAT と非 NAT モード）と VM（NAT モードのみ）でサポートされます。
+コンテナと VM の両方でホットプラグをサポートします。
 ```
 
-Proxy devices allow forwarding network connections between host and instance.
-This method makes it possible to forward traffic hitting one of the host's addresses to an address inside the instance, or to do the reverse and have an address in the instance connect through the host.
+プロキシデバイスにより、ホストとインスタンス間のネットワーク接続を転送できます。
+この方法で、ホストのアドレスの一つに到達したトラフィックをインスタンス内のアドレスに転送したり、その逆でインスタンス内にアドレスを持ちホストを通して接続することができます。
 
-In {ref}`devices-proxy-nat-mode`, a proxy device can be used for TCP and UDP proxying.
-In non-NAT mode, you can also proxy traffic between Unix sockets (which can be useful to, for example, forward graphical GUI or audio traffic from the container to the host system) or even across protocols (for example, you can have a TCP listener on the host system and forward its traffic to a Unix socket inside a container).
+{ref}`devices-proxy-nat-mode`では、プロキシデバイスを TCP と UDP のプロキシに使用することができます。
+NAT モードではない場合、Unix ソケット間のトラフィックをプロキシすることもできます（これはたとえば、コンテナからホストシステムへのグラフィカルな GUI やオーディオトラフィックを転送するのに便利です）。また、プロトコル間でもプロキシすることができます（たとえば、ホストシステム上に TCP リスナーを設置し、そのトラフィックをコンテナ内の Unix ソケットに転送することができます）。
 
-The supported connection types are:
+利用できる接続タイプは次の通りです:
 
 - `tcp <-> tcp`
 - `udp <-> udp`
@@ -24,57 +24,57 @@ The supported connection types are:
 - `udp <-> unix`
 - `unix <-> udp`
 
-To add a `proxy` device, use the following command:
+`proxy`デバイスを追加するには、以下のコマンドを使用します:
 
     incus config device add <instance_name> <device_name> proxy listen=<type>:<addr>:<port>[-<port>][,<port>] connect=<type>:<addr>:<port> bind=<host/instance_name>
 
 (devices-proxy-nat-mode)=
-## NAT mode
+## NATモード
 
-The proxy device also supports a NAT mode (`nat=true`), where packets are forwarded using NAT rather than being proxied through a separate connection.
-This mode has the benefit that the client address is maintained without the need for the target destination to support the HAProxy PROXY protocol (which is the only way to pass the client address through when using the proxy device in non-NAT mode).
+プロキシデバイスは NAT モード（`nat=true`）もサポートします。NAT モードではパケットは別の接続を通してプロキシされるのではなく NAT を使ってフォワードされます。
+これはターゲットの送り先が HAProxy の PROXY プロトコル（非 NAT モードでプロキシデバイスを使う場合はこれはクライアントアドレスを渡す唯一の方法です）をサポートする必要なく、クライアントのアドレスを維持できるという利点があります。
 
-However, NAT mode is supported only if the host that the instance is running on is the gateway (which is the case if you're using `incusbr0`, for example).
+しかし、NAT モードはインスタンスが稼働しているホストがゲートウェイの場合（たとえば `incusbr0`を使用しているケース）のみサポートされます。
 
-In NAT mode, the supported connection types are:
+NAT モードでサポートされる接続のタイプは以下の通りです:
 
 - `tcp <-> tcp`
 - `udp <-> udp`
 
-When configuring a proxy device with `nat=true`, you must ensure that the target instance has a static IP configured on its NIC device.
+プロキシデバイスを`nat=true`に設定する際は、以下のようにターゲットのインスタンスが NIC デバイス上に静的 IP を持つようにする必要があります。
 
-## Specifying IP addresses
+## IPアドレスを指定する
 
-Use the following command to configure a static IP for an instance NIC:
+インスタンス NIC に静的 IP を設定するには、以下のコマンドを使用します:
 
     incus config device set <instance_name> <nic_name> ipv4.address=<ipv4_address> ipv6.address=<ipv6_address>
 
-To define a static IPv6 address, the parent managed network must have `ipv6.dhcp.stateful` enabled.
+静的な IPv6 アドレスを設定するためには、親のマネージドネットワークは`ipv6.dhcp.stateful`を有効にする必要があります。
 
-When defining IPv6 addresses, use the square bracket notation, for example:
+IPv6 アドレスを設定する場合は以下のような角括弧の記法を使います。たとえば以下のようにします:
 
     connect=tcp:[2001:db8::1]:80
 
-You can specify that the connect address should be the IP of the instance by setting the connect IP to the wildcard address (`0.0.0.0` for IPv4 and `[::]` for IPv6).
+connect のアドレスをワイルドカード（IPv4 では 0.0.0.0、IPv6 では[::]にします）に設定することで、接続アドレスをインスタンスの IP アドレスになるように指定できます。
 
 ```{note}
-The listen address can also use wildcard addresses when using non-NAT mode.
-However, when using NAT mode, you must specify an IP address on the Incus host.
+listen のアドレスも非 NAT モードではワイルドカードのアドレスが使用できます。
+しかし、NAT モードを使う際は Incus ホスト上の IP アドレスを指定する必要があります。
 ```
 
-## Device options
+## デバイスオプション
 
-`proxy` devices have the following device options:
+`proxy` デバイスには以下のデバイスオプションがあります:
 
-Key             | Type      | Default       | Required  | Description
-:--             | :--       | :--           | :--       | :--
-`bind`          | string    | `host`        | no        | Which side to bind on (`host`/`instance`)
-`connect`       | string    | -             | yes       | The address and port to connect to (`<type>:<addr>:<port>[-<port>][,<port>]`)
-`gid`           | int       | `0`           | no        | GID of the owner of the listening Unix socket
-`listen`        | string    | -             | yes       | The address and port to bind and listen (`<type>:<addr>:<port>[-<port>][,<port>]`)
-`mode`          | int       | `0644`        | no        | Mode for the listening Unix socket
-`nat`           | bool      | `false`       | no        | Whether to optimize proxying via NAT (requires that the instance NIC has a static IP address)
-`proxy_protocol`| bool      | `false`       | no        | Whether to use the HAProxy PROXY protocol to transmit sender information
-`security.gid`  | int       | `0`           | no        | What GID to drop privilege to
-`security.uid`  | int       | `0`           | no        | What UID to drop privilege to
-`uid`           | int       | `0`           | no        | UID of the owner of the listening Unix socket
+キー             | 型     | デフォルト値 | 必須 | 説明
+:--              | :--    | :--          | :--  | :--
+`bind`           | string | `host`       | no   | どちら側にバインドするか（`host`/`instance`）
+`connect`        | string | -            | yes  | 接続するアドレスとポート（`<type>:<addr>:<port>[-<port>][,<port>]`）
+`gid`            | int    | `0`          | no   | listenするUnixソケットの所有者のGID
+`listen`         | string | -            | yes  | バインドし、接続を待ち受けるアドレスとポート（`<type>:<addr>:<port>[-<port>][,<port>]`）
+`mode`           | int    | `0644`       | no   | listenするUnixソケットのモード
+`nat`            | bool   | `false`      | no   | NAT経由でプロキシを最適化するかどうか（インスタンスのNICが静的IPを持つ必要あり）
+`proxy_protocol` | bool   | `false`      | no   | 送信者情報を送信するのに HAProxy の PROXY プロトコルを使用するかどうか
+`security.gid`   | int    | `0`          | no   | 特権を落とすGID
+`security.uid`   | int    | `0`          | no   | 特権を落とすUID
+`uid`            | int    | `0`          | no   | listenするUnixソケットの所有者のUID

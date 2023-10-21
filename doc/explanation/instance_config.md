@@ -1,37 +1,37 @@
 (instance-config)=
-# Instance configuration
+# インスタンスの設定
 
-The instance configuration consists of different categories:
+インスタンス設定は以下の異なるカテゴリから構成されます:
 
-Instance properties
-: Instance properties are specified when the instance is created.
-  They include, for example, the instance name and architecture.
-  Some of the properties are read-only and cannot be changed after creation, while others can be updated by {ref}`setting their property value <instances-configure-properties>` or {ref}`editing the full instance configuration <instances-configure-edit>`.
+インスタンスプロパティ
+: インスタンスプロパティはインスタンスが作成されるときに指定されます。
+  これには、たとえば、インスタンス名やアーキテクチャが含まれます。
+  いくつかのプロパティは読み取り専用で作成後は変更できませんが、他のプロパティは{ref}`プロパティの値を設定する <instances-configure-properties>` または {ref}`インスタンス設定全体を編集する <instances-configure-edit>` で更新できます。
 
-  In the YAML configuration, properties are on the top level.
+  YAML 設定内では、プロパティはトップレベルにあります。
 
-  See {ref}`instance-properties` for a reference of available instance properties.
+  利用可能なインスタンスプロパティのレファレンスは {ref}`instance-properties` を参照してください。
 
-Instance options
-: Instance options are configuration options that are related directly to the instance.
-  They include, for example, startup options, security settings, hardware limits, kernel modules, snapshots and user keys.
-  These options can be specified as key/value pairs during instance creation (through the `--config key=value` flag).
-  After creation, they can be configured with the [`incus config set`](incus_config_set.md) and [`incus config unset`](incus_config_unset.md) commands.
+インスタンスオプション
+: インスタンスオプションはインスタンスに直接関連する設定オプションです。
+  これには、たとえば、起動時のオプション、セキュリティー設定、ハードウェアのリミット、カーネルモジュール、スナップショット、そしてユーザーの鍵を含みます。
+  これらのオプションはインスタンスの作成時に (`--config key=value` フラグを使って) キー/バリューペアで指定できます。
+  作成後は [`incus config set`](incus_config_set.md) や [`incus config unset`](incus_config_unset.md) コマンドで変更できます。
 
-  In the YAML configuration, options are located under the `config` entry.
+  YAML 設定内では、オプションは `config` エントリの下に配置されます。
 
-  See {ref}`instance-options` for a reference of available instance options, and {ref}`instances-configure-options` for instructions on how to configure the options.
+  利用可能なインスタンスオプションのレファレンスは {ref}`instance-options`、オプションをどのように設定するかの手順は {ref}`instances-configure-options` を参照してください。
 
-Instance devices
-: Instance devices are attached to an instance.
-  They include, for example, network interfaces, mount points, USB and GPU devices.
-  Devices are usually added after an instance is created with the [`incus config device add`](incus_config_device_add.md) command, but they can also be added to a profile or a YAML configuration file that is used to create an instance.
+インスタンスデバイス
+: インスタンスデバイスはインスタンスにアタッチされます。
+  これらは、たとえば、ネットワークインターフェース、マウントポイント、USB そして GPU デバイスが含まれます。
+  通常、デバイスはインスタンスを作成した後に [`incus config device add`](incus_config_device_add.md) コマンドで追加しますが、プロファイルやインスタンスを作成するのに使用する YAML 設定ファイルに追加することもできます。
 
-  Each type of device has its own specific set of options, referred to as *instance device options*.
+  各デバイスタイプには固有のオプションのセットがあり、*インスタンスデバイスオプション*として参照されます。
 
-  In the YAML configuration, devices are located under the `devices` entry.
+  YAML 設定内では、デバイスは `devices` エントリの下に配置されます。
 
-  See {ref}`devices` for a reference of available devices and the corresponding instance device options, and {ref}`instances-configure-devices` for instructions on how to add and configure instance devices.
+  利用可能なデバイスと対応するインスタンスデバイスオプションのレファレンスについては {ref}`devices`、インスタンスデバイスをどのように追加し設定するかの手順は {ref}`instances-configure-devices` を参照してください。
 
 ```{toctree}
 :maxdepth: 1

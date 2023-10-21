@@ -1,38 +1,38 @@
 (server-configure)=
-# How to configure the Incus server
+# Incusサーバーを設定するには
 
-See {ref}`server` for all configuration options that are available for the Incus server.
+Incus サーバーで利用可能なすべて設定オプションについては{ref}`server`を参照してください。
 
-If the Incus server is part of a cluster, some of the options apply to the cluster, while others apply only to the local server, thus the cluster member.
-In the {ref}`server` option tables, options that apply to the cluster are marked with a `global` scope, while options that apply to the local server are marked with a `local` scope.
+Incus サーバーがクラスタの一部の場合、一部のオプションはクラスタに適用され、また別のオプションはローカルサーバー、つまりクラスタメンバーにのみ適用されます。
+{ref}`server`オプションの表で、クラスタに適用されるオプションは`global`スコープと表記され、ローカルサーバーのみに適用されるオプションは`local`スコープと表記されます。
 
-## Configure server options
+## サーバーオプションを設定する
 
-You can configure a server option with the following command:
+以下のコマンドでサーバーオプションを設定できます:
 
     incus config set <key> <value>
 
-For example, to allow remote access to the Incus server on port 8443, enter the following command:
+たとえば、ポート 8443 で Incus サーバーにリモートからのアクセスを許可するには、以下のコマンドを入力します:
 
     incus config set core.https_address :8443
 
-In a cluster setup, to configure a server option for a cluster member only, add the `--target` flag.
-For example, to configure where to store image tarballs on a specific cluster member, enter a command similar to the following:
+クラスタ構成では、クラスタメンバーだけにサーバー設定を行うには`--target`フラグを追加してください。
+たとえば、特定のクラスタメンバーでイメージの tarball を保管する場所を設定するには、以下のようなコマンドを入力してください:
 
     incus config set storage.images_volume my-pool/my-volume --target member02
 
-## Display the server configuration
+## サーバー設定を表示する
 
-To display the current server configuration, enter the following command:
+現在のサーバー設定を表示するには、以下のコマンドを入力します:
 
     incus config show
 
-In a cluster setup, to show the local configuration for a specific cluster member, add the `--target` flag.
+クラスタ構成では、クラスタメンバーだけにサーバー設定を行うには`--target`フラグを追加してください。
 
-## Edit the full server configuration
+## サーバー設定全体を編集する
 
-To edit the full server configuration as a YAML file, enter the following command:
+サーバー設定全体を YAML ファイルとして編集するには、以下のコマンドを入力します:
 
     incus config edit
 
-In a cluster setup, to edit the local configuration for a specific cluster member, add the `--target` flag.
+クラスタ構成では、クラスタメンバーだけにサーバー設定を行うには`--target`フラグを追加してください。

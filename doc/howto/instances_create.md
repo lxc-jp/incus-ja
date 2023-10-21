@@ -1,131 +1,132 @@
 (instances-create)=
-# How to create instances
+# インスタンスを作成するには
 
-To create an instance, you can use either the [`incus init`](incus_create.md) or the [`incus launch`](incus_launch.md) command.
-The [`incus init`](incus_create.md) command only creates the instance, while the [`incus launch`](incus_launch.md) command creates and starts it.
+インスタンスを作成するには、[`incus init`](incus_create.md)か[`incus launch`](incus_launch.md)をコマンドを使用できます。
+[`incus init`](incus_create.md)はインスタンスを作成するだけですが、[`incus launch`](incus_launch.md)は作成して起動します。
 
-## Usage
+## 使い方
 
-Enter the following command to create a container:
+コンテナを作成するには以下のコマンドを入力します:
 
     incus launch|init <image_server>:<image_name> <instance_name> [flags]
 
-Image
-: Images contain a basic operating system (for example, a Linux distribution) and some Incus-related information.
-  Images for various operating systems are available on the built-in remote image servers.
-  See {ref}`images` for more information.
+イメージ
+: イメージは必要最小限のオペレーティングシステム（たとえば、Linux ディストリビューション）と Incus 関連の情報を含みます。
+  さまざまなオペレーティングシステムのイメージがビルトインのリモートイメージサーバーで利用できます。
+  詳細は {ref}`images` を参照してください。
 
-  Unless the image is available locally, you must specify the name of the image server and the name of the image (for example, `images:ubuntu/22.04` for the official 22.04 Ubuntu image).
+  イメージがローカルにない場合、イメージサーバーとイメージの名前を指定（たとえば、公式の 22.04 Ubuntu イメージなら `images:ubuntu/22.04`）する必要があります。
 
-Instance name
-: Instance names must be unique within a Incus deployment (also within a cluster).
-  See {ref}`instance-properties` for additional requirements.
+インスタンス名
+: インスタンス名は Incus の運用環境（そしてクラスタ内）でユニークである必要があります。
+  追加の要件については {ref}`instance-properties` を参照してください。
 
-Flags
-: See [`incus launch --help`](incus_launch.md) or [`incus init --help`](incus_create.md) for a full list of flags.
-  The most common flags are:
+フラグ
+: フラグの完全なリストについては [`incus launch --help`](incus_launch.md) か [`incus init --help`](incus_create.md) を参照してください。
+  よく使うフラグは以下のとおりです。
 
-  - `--config` to specify a configuration option for the new instance
-  - `--device` to override {ref}`device options <devices>` for a device provided through a profile
-  - `--profile` to specify a {ref}`profile <profiles>` to use for the new instance
-  - `--network` or `--storage` to make the new instance use a specific network or storage pool
-  - `--target` to create the instance on a specific cluster member
-  - `--vm` to create a virtual machine instead of a container
+  - `--config` は新しいインスタンスの設定オプションを指定します
+  - `--device` はプロファイルを通して提供されるデバイスの {ref}`デバイスオプション <devices>` を上書きします
+  - `--profile` は新しいインスタンスに使用する {ref}`プロファイル <profiles>` を指定します
+  - `--network` や `--storage` は新しいインスタンスに指定のネットワークやストレージプールを使用させます
+  - `--target` は指定のクラスタメンバー上にインスタンスを作成します
+  - `--vm` はコンテナではなく仮想マシンを作成します
 
-## Pass a configuration file
+## 設定ファイルを渡す
 
-Instead of specifying the instance configuration as flags, you can pass it to the command as a YAML file.
+インスタンス設定をフラグとして指定する代わりに、YAML ファイルでコマンドに渡すことができます。
 
-For example, to launch a container with the configuration from `config.yaml`, enter the following command:
+たとえば、`config.yaml` の設定でコンテナを起動するには、以下のコマンドを入力します:
+
+    lxc launch images:ubuntu/22.04 ubuntu-config < config.yaml
 
     incus launch images:ubuntu/22.04 ubuntu-config < config.yaml
 
 ```{tip}
-Check the contents of an existing instance configuration ([`incus config show <instance_name> --expanded`](incus_config_show.md)) to see the required syntax of the YAML file.
+YAML ファイルの必要な文法を見るには既存のインスタンス設定の中身を確認（[`incus config show <instance_name> --expanded`](incus_config_show.md)）してください。
 ```
 
-## Examples
+##  例
 
-The following examples use [`incus launch`](incus_launch.md), but you can use [`incus init`](incus_create.md) in the same way.
+以下の例では [`incus launch`](incus_launch.md) を使用しますが、同じように [`incus init`](incus_create.md) も使用できます。
 
-### Launch a container
+### コンテナを起動する
 
-To launch a container with an Ubuntu 22.04 image from the `images` server using the instance name `ubuntu-container`, enter the following command:
+`images` サーバーの Ubuntu 22.04 のイメージで `ubuntu-container` というインスタンス名でコンテナを起動するには、以下のコマンドを入力します:
 
     incus launch images:ubuntu/22.04 ubuntu-container
 
-### Launch a virtual machine
+### 仮想マシンを起動する
 
-To launch a virtual machine with an Ubuntu 22.04 image from the `images` server using the instance name `ubuntu-vm`, enter the following command:
+`images` サーバーの Ubuntu 22.04 のイメージで `ubuntu-vm` というインスタンス名で仮想マシンを起動するには、以下のコマンドを入力します:
 
     incus launch images:ubuntu/22.04 ubuntu-vm --vm
 
-Or with a bigger disk:
+より大きいディスクサイズで起動する場合は:
 
     incus launch images:ubuntu/22.04 ubuntu-vm-big --vm --device root,size=30GiB
 
-### Launch a container with specific configuration options
+### コンテナを指定の設定で起動する
 
-To launch a container and limit its resources to one vCPU and 192 MiB of RAM, enter the following command:
+コンテナを起動しリソースを 1 つの vCPU と 192MiB の RAM に限定するには、以下のコマンドを入力します:
 
     incus launch images:ubuntu/22.04 ubuntu-limited --config limits.cpu=1 --config limits.memory=192MiB
 
-### Launch a VM on a specific cluster member
+### 指定のクラスタメンバー上で仮想マシンを起動する
 
-To launch a virtual machine on the cluster member `server2`, enter the following command:
+クラスタメンバー `server2` 上で仮想マシンを起動するには、以下のコマンドを入力します:
 
     incus launch images:ubuntu/22.04 ubuntu-container --vm --target server2
 
-### Launch a container with a specific instance type
+### 指定のインスタンスタイプでコンテナを起動する
 
-Incus supports simple instance types for clouds.
-Those are represented as a string that can be passed at instance creation time.
+Incus ではクラウドのシンプルなインスタンスタイプが使えます。これは、インスタンスの作成時に指定できる文字列で表されます。
 
-The syntax allows the three following forms:
+以下の 3 つの指定方法があります:
 
 - `<instance type>`
 - `<cloud>:<instance type>`
 - `c<CPU>-m<RAM in GiB>`
 
-For example, the following three instance types are equivalent:
+たとえば、次の 3 つのインスタンスタイプは同じです:
 
 - `t2.micro`
 - `aws:t2.micro`
 - `c1-m1`
 
-To launch a container with this instance type, enter the following command:
+コマンドラインでは、インスタンスタイプは次のように指定します:
 
     incus launch images:ubuntu/22.04 my-instance --type t2.micro
 
-The list of supported clouds and instance types can be found at [`https://github.com/dustinkirkland/instance-type`](https://github.com/dustinkirkland/instance-type).
+使えるクラウドとインスタンスタイプのリストは [`https://github.com/dustinkirkland/instance-type`](https://github.com/dustinkirkland/instance-type) で確認できます。
 
-### Launch a VM that boots from an ISO
+### ISOからブートする仮想マシンを起動する
 
-To launch a VM that boots from an ISO, you must first create a VM.
-Let's assume that we want to create a VM and install it from the ISO image.
-In this scenario, use the following command to create an empty VM:
+ISO からブートする仮想マシンを起動するには、まず仮想マシンを作成する必要があります。
+ISO イメージから仮想マシンを作成しインストールしたいとしましょう。
+このシナリオでは、まず以下のコマンドで空の仮想マシンを作成します:
 
     incus init iso-vm --empty --vm
 
-The second step is to import an ISO image that can later be attached to the VM as a storage volume:
+次のステップは ISO イメージをインポートし、後で仮想マシンにストレージボリュームとしてアタッチできるようにします:
 
     incus storage volume import <path-to-image.iso> iso-volume --type=iso
 
-Lastly, you need to attach the custom ISO volume to the VM using the following command:
+最後に、以下のコマンドでカスタム ISO ボリュームを仮想マシンにアタッチする必要があります:
 
     incus config device add iso-vm iso-volume disk pool=default source=iso-volume boot.priority=10
 
-The `boot.priority` configuration key ensures that the VM will boot from the ISO first.
-Start the VM and connect to the console as there might be a menu you need to interact with:
+`boot.priority` 設定キーは仮想マシンの起動順が確実に ISO が最初になるようにします。
+仮想マシンを起動し、コンソールに接続してメニューを操作できるようにします:
 
     incus start iso-vm --console
 
-Once you're done in the serial console, you need to disconnect from the console using `ctrl+a-q`, and connect to the VGA console using the following command:
+シリアルコンソールでの操作が完了したら、`ctrl+a-q` を使ってコンソールから切断する必要があります。そして以下のコマンドで VGA コンソールに接続します:
 
     incus console iso-vm --type=vga
 
-You should now see the installer. After the installation is done, you need to detach the custom ISO volume:
+これでインストーラが見えるようになります。インストールが終わったら、カスタム ISO ボリュームを切り離す必要があります:
 
     incus storage volume detach default iso-volume iso-vm
 
-Now the VM can be rebooted, and it will boot from disk.
+これで仮想マシンはリブートでき、リブートするとディスクから起動します。

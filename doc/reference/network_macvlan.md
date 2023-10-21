@@ -1,36 +1,37 @@
 (network-macvlan)=
-# Macvlan network
+# macvlan ネットワーク
 
 <!-- Include start macvlan intro -->
-Macvlan is a virtual {abbr}`LAN (Local Area Network)` that you can use if you want to assign several IP addresses to the same network interface, basically splitting up the network interface into several sub-interfaces with their own IP addresses.
-You can then assign IP addresses based on the randomly generated MAC addresses.
+macvlan は仮想的な {abbr}`LAN (Local Area Network)` で同じネットワークインターフェースに複数の IP アドレスを割り当てたい場合に使用できます。
+基本的にはネットワークインターフェースをそれぞれの IP アドレスを持つ複数のサブインターフェースに分割することになります。
+その後ランダムに生成された MAC アドレスに基づいて IP アドレスを設定できます。
 <!-- Include end macvlan intro -->
 
-The `macvlan` network type allows to specify presets to use when connecting instances to a parent interface.
-In this case, the instance NICs can simply set the `network` option to the network they connect to without knowing any of the underlying configuration details.
+`macvlan` ネットワークタイプは親のインターフェースにインスタンスを接続する際に使用するプリセットを指定できます。
+この場合、接続先のネットワークについて基本的な設定詳細を一切知る必要なしに単に `network` オプションをインスタンス NIC に設定できます。
 
 ```{note}
-If you are using a `macvlan` network, communication between the Incus host and the instances is not possible.
-Both the host and the instances can talk to the gateway, but they cannot communicate directly.
+`macvlan` NIC を使う場合、Incus ホストとインスタンス間の通信はできません。
+ホストとインスタンスの両方がゲートウェイと通信できますが、それらが直接通信はできません。
 ```
 
 (network-macvlan-options)=
-## Configuration options
+## 設定オプション
 
-The following configuration key namespaces are currently supported for the `macvlan` network type:
+`macvlan` ネットワークタイプでは現在以下の設定キーNamespace がサポートされています:
 
-- `user` (free-form key/value for user metadata)
+- `user`（key/value の自由形式のユーザーメタデータ）
 
 ```{note}
 {{note_ip_addresses_CIDR}}
 ```
 
-The following configuration options are available for the `macvlan` network type:
+`macvlan` ネットワークタイプでは以下の設定オプションが使用できます:
 
-Key                             | Type      | Condition             | Default                   | Description
-:--                             | :--       | :--                   | :--                       | :--
-`gvrp`                          | bool      | -                     | `false`                   | Register VLAN using GARP VLAN Registration Protocol
-`mtu`                           | integer   | -                     | -                         | The MTU of the new interface
-`parent`                        | string    | -                     | -                         | Parent interface to create `macvlan` NICs on
-`vlan`                          | integer   | -                     | -                         | The VLAN ID to attach to
-`user.*`                        | string    | -                     | -                         | User-provided free-form key/value pairs
+キー     | 型      | 条件 | デフォルト | 説明
+:--      | :--     | :--  | :--        | :--
+`gvrp`   | bool    | -    | `false`    | GARP VLAN Registration Protocol を使って VLAN を登録する
+`mtu`    | integer | -    | -          | 作成するインターフェースの MTU
+`parent` | string  | -    | -          | `macvlan` NIC を作成する親のインターフェース
+`vlan`   | integer | -    | -          | アタッチする先の VLAN ID
+`user.*` | string  | -    | -          | ユーザー指定の自由形式のキー／バリューペア

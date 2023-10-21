@@ -1,34 +1,29 @@
-# Security policy
+# セキュリティーポリシー
 
-## Supported versions
+## サポートされるバージョン
 <!-- Include start supported versions -->
 
-Incus has two types of releases:
+Incus には 2 種類のリリースがあります:
 
-- Feature releases
-- LTS releases
+- 機能リリース
+- LTS （長期サポート）リリース
 
-For feature releases, only the latest one is supported, and we usually
-don't do point releases. Instead, users are expected to wait until the
-next release.
+機能リリースは、最新の 1 つのみがサポートされ、通常ポイントリリースは行いません。
+代わりにユーザーは次のリリースを待つことが期待されます。
 
-For LTS releases, we do periodic bugfix releases that include an
-accumulation of bugfixes from the feature releases. Such bugfix releases
-do not include new features.
+長期リリースは、機能リリースからの積み重なったバグ修正を含む定期的なバグ修正リリースを行います。
+このバグ修正リリースは新機能は含みません。
 
 <!-- Include end supported versions -->
 
-## What qualifies as a security issue
+## セキュリティー問題として認められるもの
 
-We don't consider privileged containers to be root safe, so any exploit
-allowing someone to escape them will not qualify as a security issue.
-This doesn't mean that we're not interested in preventing such escapes,
-but we simply do not consider such containers to be root safe.
+私たちは、特権コンテナがルートセーフであるとは考えていません。したがって、誰かが特権コンテナから脱出できるようなエクスプロイトは、セキュリティー上の問題とはみなされません。
+これは、そのような脱出を防ぐことに興味がないということではなく、単にそのようなコンテナがルートセーフであるとは考えていないということです。
 
-Unprivileged container escapes are certainly something we'd consider a
-security issue, especially if somehow facilitated by Incus.
+非特権コンテナのエスケープは確かに私たちがセキュリティー問題と考えるもので、特に Incus によって促進されている場合はそうです。
 
-## Reporting security issues
+## 脆弱性の報告
 
-Security issues can be reported by e-mail to security@linuxcontainers.org.
-Alternatively security issues can also be reported through Github at: https://github.com/lxc/incus/security/advisories/new
+セキュリティーの問題は、security@linuxcontainers.org へ e-mail を送ることで報告できます。
+代わりに GitHub で https://github.com/lxc/incus/security/advisories/new に報告することもできます。

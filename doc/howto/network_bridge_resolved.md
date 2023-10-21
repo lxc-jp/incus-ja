@@ -1,72 +1,72 @@
 (network-bridge-resolved)=
-# How to integrate with `systemd-resolved`
+# `systemd-resolved` と統合するには
 
-If the system that runs Incus uses `systemd-resolved` to perform DNS lookups, you should notify `resolved` of the domains that Incus can resolve.
-To do so, add the DNS servers and domains provided by a Incus network bridge to the `resolved` configuration.
+Incus を実行するシステムが DNS ルックアップの実行に `systemd-resolved` を使用する場合、 `resolved` に Incus が名前解決できるドメインを通知するべきです。
+そうするには、 Incus ネットワークブリッジにより提供される DNS サーバーとドメインを `resolved` の設定に追加してください。
 
 ```{note}
-The `dns.mode` option (see {ref}`network-bridge-options`) must be set to `managed` or `dynamic` if you want to use this feature.
+この機能を使いたい場合、 `dns.mode` オプション ({ref}`network-bridge-options` 参照) を `managed` か `dynamic` に設定する必要があります。
 
-Depending on the configured `dns.domain`, you might need to disable DNSSEC in `resolved` to allow for DNS resolution.
-This can be done through the `DNSSEC` option in `resolved.conf`.
+`dns.domain` の設定によっては、 DNS 名前解決を許可するため `resolved` の DNSSEC を無効化する必要があるかもしれません。
+これは `resolved.conf` 内の `DNSSEC` オプションにより実現できます。
 ```
 
 (network-bridge-resolved-configure)=
-## Configure resolved
+## resolved を設定する
 
-To add a network bridge to the `resolved` configuration, specify the DNS addresses and domains for the respective bridge.
+ネットワークブリッジを `resolved` 設定に追加するには、対応するブリッジの DNS アドレスとドメインを指定します。
 
-DNS address
-: You can use the IPv4 address, the IPv6 address or both.
-  The address must be specified without the subnet netmask.
+DNS アドレス
+: IPv4 アドレス、 IPv6 アドレス、あるいは両方を使用できます。
+  アドレスはサブネットのネットマスク無しで指定する必要があります。
 
-  To retrieve the IPv4 address for the bridge, use the following command:
+  ブリッジの IPv4 アドレスを取得するには以下のコマンドを使用します:
 
       incus network get <network_bridge> ipv4.address
 
-  To retrieve the IPv6 address for the bridge, use the following command:
+  ブリッジの IPv6 アドレスを取得するには以下のコマンドを使用します:
 
       incus network get <network_bridge> ipv6.address
 
-DNS domain
-: To retrieve the DNS domain name for the bridge, use the following command:
+DNS ドメイン
+: ブリッジの DNS ドメイン名を取得するには以下のコマンドを使用します:
 
       incus network get <network_bridge> dns.domain
 
-  If this option is not set, the default domain name is `incus`.
+  このオプションが設定されていない場合、デフォルトのドメイン名は `incus` です。
 
-Use the following commands to configure `resolved`:
+`resolved` を設定するには以下のコマンドを使用します:
 
     resolvectl dns <network_bridge> <dns_address>
     resolvectl domain <network_bridge> ~<dns_domain>
 
 ```{note}
-When configuring `resolved` with the DNS domain name, you should prefix the name with `~`.
-The `~` tells `resolved` to use the respective name server to look up only this domain.
+`resolved`でDNSドメインを指定する場合、ドメイン名に `~` の接頭辞をつけてください。
+`~` により `resolved` がこのドメインをルックアップするためだけに対応するネームサーバーを使うようになります。
 
-Depending on which shell you use, you might need to include the DNS domain in quotes to prevent the `~` from being expanded.
+ご利用のシェルによっては `~` が展開されるのを防ぐために DNS ドメインを引用符で囲む必要があるかもしれません。
 ```
 
-For example:
+たとえば:
 
     resolvectl dns incusbr0 192.0.2.10
     resolvectl domain incusbr0 '~incus'
 
 ```{note}
-Alternatively, you can use the `systemd-resolve` command.
-This command has been deprecated in newer releases of `systemd`, but it is still provided for backwards compatibility.
+別の方法として、 `systemd-resolve` コマンドを使用することもできます。
+このコマンドは `systemd` の新しいリリースでは廃止予定となっていますが、後方互換性のため引き続き提供されています。
 
     systemd-resolve --interface <network_bridge> --set-domain ~<dns_domain> --set-dns <dns_address>
 ```
 
-The `resolved` configuration persists as long as the bridge exists.
-You must repeat the commands after each reboot and after Incus is restarted, or make it persistent as described below.
+`resolved` の設定はブリッジが存在する限り残ります。
+リブートのたびに Incus が再起動した後に上記のコマンドを実行するか、下記のように設定を永続的にする必要があります。
 
-## Make the `resolved` configuration persistent
+## `resolved` の設定を永続的にする
 
-You can automate the `systemd-resolved` DNS configuration, so that it is applied on system start and takes effect when Incus creates the network interface.
+システムの起動時に適用され Incus がネットワークインターフェースを作成したときに有効になるように `systemd-resolved` の DNS 設定を自動化できます。
 
-To do so, create a `systemd` unit file named `/etc/systemd/system/incus-dns-<network_bridge>.service` with the following content:
+そうするには、 `/etc/systemd/system/lxd-dns-<network_bridge>.service` という名前の `systemd` ユニットファイルを以下の内容で作成してください:
 
 ```
 [Unit]
@@ -85,19 +85,19 @@ RemainAfterExit=yes
 WantedBy=sys-subsystem-net-devices-<network_bridge>.device
 ```
 
-Replace `<network_bridge>` in the file name and content with the name of your bridge (for example, `incusbr0`).
-Also replace `<dns_address>` and `<dns_domain>` as described in {ref}`network-bridge-resolved-configure`.
+ファイル名と内容で `<network_bridge>` をブリッジの名前（たとえば `incusbr0`）に置き換えてください。
+さらに `<dns_address>` と `<dns_domain>` を {ref}`network-bridge-resolved-configure` に書かれているように置き換えてください。
 
-Then enable and start the service with the following commands:
+次に以下のコマンドでサービスの自動起動を有効にし起動します:
 
     sudo systemctl daemon-reload
     sudo systemctl enable --now incus-dns-<network_bridge>
 
-If the respective bridge already exists (because Incus is already running), you can use the following command to check that the new service has started:
+（Incus が既に実行中のため）対応するブリッジが既に存在する場合、以下のコマンドでサービスが起動したかを確認できます:
 
     sudo systemctl status incus-dns-<network_bridge>.service
 
-You should see output similar to the following:
+以下のような出力になるはずです:
 
 ```{terminal}
 :input: sudo systemctl status incus-dns-incusbr0.service
@@ -110,7 +110,7 @@ You should see output similar to the following:
    Main PID: 9434 (code=exited, status=0/SUCCESS)
 ```
 
-To check that `resolved` has applied the settings, use `resolvectl status <network_bridge>`:
+`resolved` に設定が反映されたか確認するには、 `resolvectl status <network_bridge>` を実行します:
 
 ```{terminal}
 :input: resolvectl status incusbr0

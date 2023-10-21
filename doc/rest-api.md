@@ -1,196 +1,195 @@
 # REST API
 
-All communication between Incus and its clients happens using a RESTful API over HTTP.
-This API is encapsulated over either TLS (for remote operations) or a Unix socket (for local operations).
+Incus とクライアント間のすべての通信は HTTP 上の RESTful API を使用します。
+この API や（リモートの通信では）TLS あるいは（ローカルの操作では）Unix ソケットで通信します。
 
-See {ref}`authentication` for information about how to access the API remotely.
+どのようにリモートの API にアクセスするかについての情報は{ref}`authentication`を参照してください。
 
 ```{tip}
-- For examples on how the API is used, run any command of the Incus client ([`incus`](incus.md)) with the `--debug` flag.
-The debug information displays the API calls and the return values.
-- For quickly querying the API, the Incus client provides a [`incus query`](incus_query.md) command.
+- どのように API が使われるかの例を見るにはLXDクライアント（[`incus`](incus.md)）で`--debug`フラグを追加してコマンドを実行してください。
+デバッグ情報がAPIの呼び出しと戻り値を表示します。
+- 手軽にに API を呼び出せるように、Incus クライアントは [`incus query`](incus_query.md) コマンドを提供しています。
 ```
 
-## API versioning
+## API のバージョニング
 
-The list of supported major API versions can be retrieved using `GET /`.
+サポートされている API のメジャーバージョンのリストは `GET /` を使って取得できます。
 
-The reason for a major API bump is if the API breaks backward compatibility.
+後方互換性を壊す場合は API のメジャーバージョンが上がります。
 
-Feature additions done without breaking backward compatibility only
-result in addition to `api_extensions` which can be used by the client
-to check if a given feature is supported by the server.
+後方互換性を壊さずに追加される機能は `api_extensions` の追加という形になり、
+特定の機能がサーバーでサポートされているかクライアントがチェックすることで
+利用できます。
 
-## Return values
+## 戻り値
 
-There are three standard return types:
+次の 3 つの標準的な戻り値の型があります。
 
-* Standard return value
-* Background operation
-* Error
+* 標準の戻り値
+* バックグラウンド操作
+* エラー
 
-### Standard return value
+### 標準の戻り値
 
-For a standard synchronous operation, the following JSON object is returned:
-
+標準の同期的な操作に対しては以下のような dict が返されます:
 ```js
 {
     "type": "sync",
     "status": "Success",
     "status_code": 200,
-    "metadata": {}                          // Extra resource/action specific metadata
+    "metadata": {}                          // リソースやアクションに固有な追加のメタデータ
 }
 ```
 
-HTTP code must be 200.
+HTTP ステータスコードは必ず 200 です。
 
-### Background operation
+### バックグラウンド操作
 
-When a request results in a background operation, the HTTP code is set to 202 (Accepted)
-and the Location HTTP header is set to the operation URL.
+リクエストの結果がバックグラウンド操作になる場合、 HTTP ステータスコードは 202（Accepted）
+になり、操作の URL を指す HTTP の Location ヘッダが返されます。
 
-The body is a JSON object with the following structure:
+レスポンスボディは以下のような構造を持つ dict です:
 
 ```js
 {
     "type": "async",
     "status": "OK",
     "status_code": 100,
-    "operation": "/1.0/instances/<id>",                     // URL to the background operation
-    "metadata": {}                                          // Operation metadata (see below)
+    "operation": "/1.0/instances/<id>",                     // バックグラウンド操作の URL
+    "metadata": {}                                          // 操作のメタデータ（下記参照）
 }
 ```
 
-The operation metadata structure looks like:
+操作のメタデータの構造は以下のようになります:
 
 ```js
 {
-    "id": "a40f5541-5e98-454f-b3b6-8a51ef5dbd3c",           // UUID of the operation
-    "class": "websocket",                                   // Class of the operation (task, websocket or token)
-    "created_at": "2015-11-17T22:32:02.226176091-05:00",    // When the operation was created
-    "updated_at": "2015-11-17T22:32:02.226176091-05:00",    // Last time the operation was updated
-    "status": "Running",                                    // String version of the operation's status
-    "status_code": 103,                                     // Integer version of the operation's status (use this rather than status)
-    "resources": {                                          // Dictionary of resource types (container, snapshots, images) and affected resources
+    "id": "a40f5541-5e98-454f-b3b6-8a51ef5dbd3c",           // 操作の UUID
+    "class": "websocket",                                   // 操作の種別（task, websocket, token のいずれか）
+    "created_at": "2015-11-17T22:32:02.226176091-05:00",    // 操作の作成日時
+    "updated_at": "2015-11-17T22:32:02.226176091-05:00",    // 操作の最終更新日時
+    "status": "Running",                                    // 文字列表記での操作の状態
+    "status_code": 103,                                     // 整数表記での操作の状態（status ではなくこちらを利用してください。訳注: 詳しくは下記のステータスコードの項を参照）
+    "resources": {                                          // リソース種別（container, snapshots, images のいずれか）の dict を影響を受けるリソース
       "containers": [
         "/1.0/instances/test"
       ]
     },
-    "metadata": {                                           // Metadata specific to the operation in question (in this case, exec)
+    "metadata": {                                           // 対象となっている（この例では exec）操作に固有なメタデータ
       "fds": {
         "0": "2a4a97af81529f6608dca31f03a7b7e47acc0b8dc6514496eb25e325f9e4fa6a",
         "control": "5b64c661ef313b423b5317ba9cb6410e40b705806c28255f601c0ef603f079a7"
       }
     },
-    "may_cancel": false,                                    // Whether the operation can be canceled (DELETE over REST)
-    "err": ""                                               // The error string should the operation have failed
+    "may_cancel": false,                                    //（REST で DELETE を使用して）操作がキャンセル可能かどうか
+    "err": ""                                               // 操作が失敗した場合にエラー文字列が設定されます
 }
 ```
 
-The body is mostly provided as a user friendly way of seeing what's
-going on without having to pull the target operation, all information in
-the body can also be retrieved from the background operation URL.
+対象の操作に対して追加のリクエストを送って情報を取り出さなくても、
+何が起こっているかユーザーにとってわかりやすい形でボディは構成されています。
+ボディに含まれるすべての情報はバックグラウンド操作の URL から取得する
+こともできます。
 
-### Error
+### エラー
 
-There are various situations in which something may immediately go
-wrong, in those cases, the following return value is used:
+さまざまな状況によっては操作を行う前に直ぐに問題が起きる場合があり、
+そういう場合には以下のような値が返されます:
 
 ```js
 {
     "type": "error",
     "error": "Failure",
     "error_code": 400,
-    "metadata": {}                      // More details about the error
+    "metadata": {}                      // エラーについてのさらなる詳細
 }
 ```
 
-HTTP code must be one of of 400, 401, 403, 404, 409, 412 or 500.
+HTTP ステータスコードは 400、401、403、404、409、412、500 のいずれかです。
 
-## Status codes
+## ステータスコード
+Incus REST API はステータス情報を返す必要があります。それはエラーの理由だったり、
+操作の現在の状態だったり、 Incus が提供する様々なリソースの状態だったりします。
 
-The Incus REST API often has to return status information, be that the
-reason for an error, the current state of an operation or the state of
-the various resources it exports.
+デバッグをシンプルにするため、ステータスは常に文字列表記と整数表記で
+重複して返されます。ステータスの整数表記の値は将来に渡って不変なので
+API クライアントが個々の値に依存できます。文字列表記のステータスは
+人間が API を手動で実行したときに何が起きているかをより簡単に判断
+できるように用意されています。
 
-To make it simple to debug, all of those are always doubled. There is a
-numeric representation of the state which is guaranteed never to change
-and can be relied on by API clients. Then there is a text version meant
-to make it easier for people manually using the API to figure out what's
-happening.
+ほとんどのケースでこれらは `status` と `status_code` と呼ばれ、前者は
+ユーザーフレンドリーな文字列表記で後者は固定の数値です。
 
-In most cases, those will be called status and `status_code`, the former
-being the user-friendly string representation and the latter the fixed
-numeric value.
+整数表記のコードは常に 3 桁の数字で以下の範囲の値となっています。
 
-The codes are always 3 digits, with the following ranges:
+* 100 to 199: リソースの状態（started、stopped、ready、…）
+* 200 to 399: 成功したアクションの結果
+* 400 to 599: 失敗したアクションの結果
+* 600 to 999: 将来使用するために予約されている番号の範囲
 
-* 100 to 199: resource state (started, stopped, ready, ...)
-* 200 to 399: positive action result
-* 400 to 599: negative action result
-* 600 to 999: future use
+### 現在使用されているステータスコード一覧
 
-### List of current status codes
-
-Code  | Meaning
-:---  | :------
-100   | Operation created
-101   | Started
-102   | Stopped
-103   | Running
-104   | Canceling
-105   | Pending
-106   | Starting
-107   | Stopping
-108   | Aborting
-109   | Freezing
-110   | Frozen
-111   | Thawed
-112   | Error
-113   | Ready
-200   | Success
-400   | Failure
-401   | Canceled
+コード | 意味
+:---   | :------
+100    | 操作が作成された
+101    | 開始された
+102    | 停止された
+103    | 実行中
+104    | キャンセル中
+105    | ペンディング
+106    | 開始中
+107    | 停止中
+108    | 中断中
+109    | 凍結中
+110    | 凍結された
+111    | 解凍された
+112    | エラー
+113    | 準備完了
+200    | 成功
+400    | 失敗
+401    | キャンセルされた
 
 (rest-api-recursion)=
-## Recursion
+## 再帰
 
-To optimize queries of large lists, recursion is implemented for collections.
-A `recursion` argument can be passed to a GET query against a collection.
+巨大な一覧のクエリを最適化するために、コレクションに対して再帰が実装されています。
+コレクションに対するクエリの GET リクエストに `recursion` パラメーターを指定できます。
 
-The default value is 0 which means that collection member URLs are
-returned. Setting it to 1 will have those URLs be replaced by the object
-they point to (typically another JSON object).
+デフォルト値は 0 でコレクションのメンバーの URL が返されることを意味します。
+1 を指定するとこれらの URL がそれが指すオブジェクト（通常は dict 形式）で
+置き換えられます。
 
-Recursion is implemented by simply replacing any pointer to an job (URL)
-by the object itself.
+再帰はジョブへのポインタ（URL）をオブジェクトそのもので単に置き換えるように
+実装されています。
 
 (rest-api-filtering)=
-## Filtering
+## フィルタ
 
-To filter your results on certain values, filter is implemented for collections.
-A `filter` argument can be passed to a GET query against a collection.
+検索結果をある値でフィルタするために、コレクションにフィルタが実装されています。
+コレクションに対する GET クエリに `filter` 引数を渡せます。
 
-Filtering is available for the instance, image and storage volume endpoints.
+フィルタはインスタンス、イメージ、ストレージボリュームのエンドポイントに提供されています。
 
-There is no default value for filter which means that all results found will
-be returned. The following is the language used for the filter argument:
+フィルタにはデフォルト値はありません。これは見つかったすべての結果が返されることを意味します。
+フィルタの引数には以下のような言語を設定します。
 
     ?filter=field_name eq desired_field_assignment
 
-The language follows the OData conventions for structuring REST API filtering
-logic. Logical operators are also supported for filtering: not (`not`), equals (`eq`),
-not equals (`ne`), and (`and`), or (`or`). Filters are evaluated with left associativity.
-Values with spaces can be surrounded with quotes. Nesting filtering is also supported.
-For instance, to filter on a field in a configuration you would pass:
+この言語は REST API のフィルタロジックを構成するための OData の慣習に従います。
+フィルタは下記の論理演算子もサポートします。
+not（`not`）、equals（`eq`）、not equals（`ne`）、and（`and`）、or（`or`）
+フィルタは左結合で評価されます。
+空白を含む値はクォートで囲むことができます。
+ネストしたフィルタもサポートされます。
+たとえば設定内のフィールドに対してフィルタするには以下のように指定します:
 
     ?filter=config.field_name eq desired_field_assignment
 
-For filtering on device attributes you would pass:
+device の属性についてフィルタするには以下のように指定します:
 
     ?filter=devices.device_name.field_name eq desired_field_assignment
 
-Here are a few GET query examples of the different filtering methods mentioned above:
+以下に上記の異なるフィルタの方法を含む GET クエリをいくつか示します:
 
     containers?filter=name eq "my container" and status eq Running
 
@@ -198,53 +197,40 @@ Here are a few GET query examples of the different filtering methods mentioned a
 
     images?filter=Properties.os eq Centos and not UpdateSource.Protocol eq simplestreams
 
-## Asynchronous operations
+## 非同期操作
 
-Any operation which may take more than a second to be done must be done
-in the background, returning a background operation ID to the client.
+完了までに 1 秒以上かかるかもしれない操作はバックグラウンドで実行しなければ
+なりません。そしてクライアントにはバックグラウンド操作 ID を返します。
 
-The client will then be able to either poll for a status update or wait
-for a notification using the long-poll API.
+クライアントは操作のステータス更新をポーリングするか long-poll API を使って
+通知を待つことが出来ます。
 
-## Notifications
+## 通知
 
-A WebSocket-based API is available for notifications, different notification
-types exist to limit the traffic going to the client.
+通知のために WebSocket ベースの API が利用できます。クライアントへ送られる
+トラフィックを制限するためにいくつかの異なる通知種別が存在します。
 
-It's recommended that the client always subscribes to the operations
-notification type before triggering remote operations so that it doesn't
-have to then poll for their status.
+リモート操作の状態をポーリングしなくて済むように、リモート操作を開始する
+前に操作の通知をクライアントが常に購読しておくのがお勧めです。
 
-## PUT vs PATCH
+## PUT と PATCH の使い分け
 
-The Incus API supports both PUT and PATCH to modify existing objects.
+Incus API は既存のオブジェクトを変更するのに PUT と PATCH の両方をサポートします。
 
-PUT replaces the entire object with a new definition, it's typically
-called after the current object state was retrieved through GET.
+PUT はオブジェクト全体を新しい定義で置き換えます。典型的には GET で現在の
+オブジェクトの状態を取得した後に PUT が呼ばれます。
 
-To avoid race conditions, the ETag header should be read from the GET
-response and sent as If-Match for the PUT request. This will cause Incus
-to fail the request if the object was modified between GET and PUT.
+レースコンディションを避けるため、 GET のレスポンスから ETag ヘッダを読み取り
+PUT リクエストの If-Match ヘッダに設定するべきです。こうしておけば GET と
+PUT の間にオブジェクトが他から変更されていた場合は更新が失敗するようになります。
 
-PATCH can be used to modify a single field inside an object by only
-specifying the property that you want to change. To unset a key, setting
-it to empty will usually do the trick, but there are cases where PATCH
-won't work and PUT needs to be used instead.
+PATCH は変更したいプロパティだけを指定することでオブジェクト内の単一の
+フィールドを変更するのに用いられます。キーを削除するには通常は空の値を
+設定すれば良いようになっていますが、 PATCH ではキーの削除は出来ず、代わりに
+PUT を使う必要がある場合もあります。
 
-## Instances, containers and virtual-machines
+## API 構造
 
-The documentation shows paths such as `/1.0/instances/...`, which were introduced with Incus 3.19.
-Older releases that supported only containers and not virtual machines supply the exact same API at `/1.0/containers/...`.
-
-For backward compatibility reasons, Incus does still expose and support
-that `/1.0/containers` API, though for the sake of brevity, we decided
-not to double-document everything.
-
-An additional endpoint at `/1.0/virtual-machines` is also present and
-much like `/1.0/containers` will only show you instances of that type.
-
-## API structure
-
-Incus has an auto-generated [Swagger](https://swagger.io/) specification describing its API endpoints.
-The YAML version of this API specification can be found in [`rest-api.yaml`](https://github.com/lxc/incus/blob/main/doc/rest-api.yaml).
-See {doc}`api` for a convenient web rendering of it.
+Incus は API エンドポイントを記述する [Swagger](https://swagger.io/) 仕様を自動生成しています。
+この API 仕様の YAML 版が [`rest-api.yaml`](https://github.com/lxc/incus/blob/main/doc/rest-api.yaml) にあります。
+手軽にウェブで見る場合は {doc}`api` を参照してください。

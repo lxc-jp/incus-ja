@@ -1,40 +1,40 @@
 (disaster-recovery)=
-# How to recover instances in case of disaster
+# 災害時にインスタンスを復旧するには
 
-Incus provides a tool for disaster recovery in case the {ref}`Incus database <database>` is corrupted or otherwise lost.
+Incus は{ref}`Incus データベース <database>`が壊れたり失われたりといったディザスタリカバリのためのツールを提供しています。
 
-The tool scans the storage pools for instances and imports the instances that it finds back into the database.
-You need to re-create the required entities that are missing (usually profiles, projects, and networks).
+ツールはインスタンスのストレージプールをスキャンし、見つけたインスタンスをデータベースにインポートします。
+失われた必要なエンティティ（通常はプロファイル、プロジェクトとネットワーク）をあなたが再作成する必要があります。
 
 ```{important}
-This tool should be used for disaster recovery only.
-Do not rely on this tool as an alternative to proper backups; you will lose data like profiles, network definitions, or server configuration.
+このツールはディザスタリカバリのみに使うべきです。
+適切なバックアップの代替手段としてこのツールに依存しないでください。プロファイル、ネットワークの定義、サーバ設定のようなデータは失われてしまうからです。
 
-The tool must be run interactively and cannot be used in automated scripts.
+ツールはインタラクティブに実行する必要があり、自動化したスクリプト内では使用できません。
 ```
 
-## Recovery process
+## リカバリプロセス
 
-When you run the tool, it scans all storage pools that still exist in the database, looking for missing volumes that can be recovered.
-You can also specify the details of any unknown storage pools (those that exist on disk but do not exist in the database), and the tool attempts to scan those too.
+ツールを実行すると、データベースにまだ残っているすべてのストレージプールをスキャンし、復旧できる失われたボリュームを探します。
+（ディスク上に存在するがデータベース内には存在しない）未知のストレージプールの詳細を指定することもでき、するとツールはそれらもスキャンを試みます。
 
-After mounting the specified storage pools (if not already mounted), the tool scans them for unknown volumes that look like they are associated with Incus.
-Incus maintains a `backup.yaml` file in each instance's storage volume, which contains all necessary information to recover a given instance (including instance configuration, attached devices, storage volume, and pool configuration).
-This data can be used to rebuild the instance, storage volume, and storage pool database records.
-Before recovering an instance, the tool performs some consistency checks to compare what is in the `backup.yaml` file with what is actually on disk (such as matching snapshots).
-If all checks out, the database records are re-created.
+（まだマウントされていなければ）指定されたストレージプールをマウントした後、ツールは Incus に関連付けられていたと思われる未知のボリュームのストレージボリュームをスキャンします。
+Incus は各インスタンスのストレージボリュームに`backup.yaml`を保管していて、そこにインスタンスを復旧するために必要なすべての（インスタンス設定、アタッチしたデバイス、ストレージボリューム、プール設定も含めた）情報を保管しています。
+このデータはインスタンス、ストレージボリューム、そしてストレージプールのデータベースレコードをリビルドするのに使用できます。
+インスタンスを復旧する前に、ツールは`backup.yaml` ファイルの内容と（対応するスナップショットなど）ディスク上に実際に存在するものとを比較してある程度の整合性チェックを行います。
+問題なければデータベースのレコードが再生成されます。
 
-If the storage pool database record also needs to be created, the tool uses the information from an instance's `backup.yaml` file as the basis of its configuration, rather than what the user provided during the discovery phase.
-However, if this information is not available, the tool falls back to restoring the pool's database record with what was provided by the user.
+ストレージプールのデータベースレコードも作成が必要な場合、ディスカバリーフェーズにユーザーが入力した情報よりも、インスタンスの `backup.yaml` ファイルを設定のベースとして優先して使用します。
+ただし、それが無い場合はユーザーが入力した情報をもとにプールのデータベースレコードを復元するようにフォールバックします。
 
-The tool asks you to re-create missing entities like networks.
-However, the tool does not know how the instance was configured.
-That means that if some configuration was specified through the `default` profile, you must also re-add the required configuration to the profile.
-For example, if the `incusbr0` bridge is used in an instance and you are prompted to re-create it, you must add it back to the `default` profile so that the recovered instance uses it.
+ツールはネットワークなど失われたエンティティを再生成するためにあなたに質問します。
+しかし、ツールはどのようにインスタンスが設定されていたかを知りません。
+これはつまり一部の設定が`default`プロファイル経由で指定されていた場合、プロファイルに必要な設定をあなたが再度追加する必要があることを意味します。
+たとえば、インスタンスで`incusbr0`ブリッジが使われていてそれを再生成するようプロンプトが出た場合、復旧されるインスタンスがそれを使うようにあなたはそれを`default`プロファイルに追加し直す必要があります。
 
-## Example
+## 例
 
-This is how a recovery process could look:
+リカバリプロセスの例を示します:
 
 ```{terminal}
 :input: incus admin recover

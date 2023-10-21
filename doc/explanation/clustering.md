@@ -1,213 +1,212 @@
 (exp-clustering)=
-# About clustering
+# クラスタリングについて
 
-To spread the total workload over several servers, Incus can be run in clustering mode.
-In this scenario, any number of Incus servers share the same distributed database that holds the configuration for the cluster members and their instances.
-The Incus cluster can be managed uniformly using the [`incus`](incus.md) client or the REST API.
-
-This feature was introduced as part of the [`clustering`](../api-extensions.md#clustering) API extension and is available since Incus 3.0.
+全体のワークロードを複数のサーバーに分散するため、 Incus はクラスタリングモードで動かせます。
+このシナリオでは、クラスタメンバーとそのインスタンスの設定を保持する同じ分散データベースを任意の台数の Incus サーバーで共有します。
+Incus クラスタは [`incus`](incus.md) クライアントまたは REST API を使って管理できます。
 
 ```{tip}
-If you want to quickly set up a basic Incus cluster, check out [MicroCloud](https://microcloud.is).
+ベーシックな Incus クラスタを素早くセットアップしたい場合、[MicroCloud](https://microcloud.is)をチェックしてみてください。
 ```
 
 (clustering-members)=
-## Cluster members
+## クラスタメンバー
 
-A Incus cluster consists of one bootstrap server and at least two further cluster members.
-It stores its state in a [distributed database](../database.md), which is a [Cowsql](https://github.com/cowsql/cowsql/) database replicated using the Raft algorithm.
+Incus クラスタは 1 台のブートストラップサーバーと少なくともさらに 2 台のクラスタメンバーから構成されます。
+クラスタは状態を [分散データベース](../database.md) に保管します。これは Raft アルゴリズムを使用して複製される[Cowsql](https://github.com/cowsql/cowsql/) データベースです。
 
-While you could create a cluster with only two members, it is strongly recommended that the number of cluster members be at least three.
-With this setup, the cluster can survive the loss of at least one member and still be able to establish quorum for its distributed state.
+2 台のメンバーだけでもクラスタを作成することは出来なくはないですが、少なくとも 3 台のクラスタメンバーを強く推奨します。
+このセットアップでは、クラスタは少なくとも 1 台のメンバーの消失に耐えることができ、分散状態の過半数を確立できます。
 
-When you create the cluster, the Cowsql database runs on only the bootstrap server until a third member joins the cluster.
-Then both the second and the third server receive a replica of the database.
+クラスタを作成する際、 Cowsql データベースは 3 番目のメンバーがクラスタにジョインするまではブートストラップサーバー上でのみ稼働します。
+そして 2 番目と 3 番目のサーバーはデータベースの複製を受信します。
 
-See {ref}`cluster-form` for more information.
+詳細は {ref}`cluster-form` を参照してください。
 
 (clustering-member-roles)=
-### Member roles
+### メンバーロール
 
-In a cluster with three members, all members replicate the distributed database that stores the state of the cluster.
-If the cluster has more members, only some of them replicate the database.
-The remaining members have access to the database, but don't replicate it.
+3 台のメンバーのクラスタでは、すべてのメンバーがクラスタの状態を保管する分散データベースを複製します。
+クラスタのメンバーがさらに増えると、一部のメンバーだけがデータベースを複製します。
+残りのメンバーはデータベースへアクセスしますが、複製はしません。
 
-At each time, there is an elected cluster leader that monitors the health of the other members.
+任意の時点で、選出されたリーダーが 1 つ存在し、他のメンバーの健康状態をモニターします。
 
-Each member that replicates the database has either the role of a *voter* or of a *stand-by*.
-If the cluster leader goes offline, one of the voters is elected as the new leader.
-If a voter member goes offline, a stand-by member is automatically promoted to voter.
-The database (and hence the cluster) remains available as long as a majority of voters is online.
+データベースを複製する各メンバーは *voter* か *stand-by* のロールを持ちます。
+クラスタリーダーがオフラインになると voter の 1 つが新しいリーダーに選出されます。
+voter のメンバーがオフラインになると stand-by メンバーが自動的に voter に昇格します。
+データベース (そしてクラスタ) は voter の過半数がオンラインである限り利用可能です。
 
-The following roles can be assigned to Incus cluster members.
-Automatic roles are assigned by Incus itself and cannot be modified by the user.
+以下のロールが Incus クラスタメンバーに割り当て可能です。
+自動のロールは Incus 自身によって割り当てられユーザーによる変更は出来ません。
 
-| Role                  | Automatic     | Description |
+| ロール                  | 自動     | 説明 |
 | :---                  | :--------     | :---------- |
-| `database`            | yes           | Voting member of the distributed database |
-| `database-leader`     | yes           | Current leader of the distributed database |
-| `database-standby`    | yes           | Stand-by (non-voting) member of the distributed database |
-| `event-hub`           | no            | Exchange point (hub) for the internal Incus events (requires at least two) |
-| `ovn-chassis`         | no            | Uplink gateway candidate for OVN networks |
+| `database`            | yes           | 分散データベースの voter メンバー |
+| `database-leader`     | yes           | 分散データベースの現在のリーダー |
+| `database-standby`    | yes           | 分散データベースの stand-by（voter ではない）メンバー |
+| `event-hub`           | no            | 内部 Incus イベントへの交換ポイント（hub）（最低 2 つは必要）|
+| `ovn-chassis`         | no            | OVN ネットワークのアップリンクゲートウェイの候補 |
 
-The default number of voter members ({config:option}`server-cluster:cluster.max_voters`) is three.
-The default number of stand-by members ({config:option}`server-cluster:cluster.max_standby`) is two.
-With this configuration, your cluster will remain operational as long as you switch off at most one voting member at a time.
 
-See {ref}`cluster-manage` for more information.
+voter メンバーのデフォルトの数（{config:option}`server-cluster:cluster.max_voters`）は 3 です。
+stand-by メンバーのデフォルトの数（{config:option}`server-cluster:cluster.max_standby`）は 2 です。
+この設定では、クラスタを稼働したまま一度に最大で 1 つの voter メンバーの電源を切ることができます。
+
+詳細は {ref}`cluster-manage` を参照してください。
 
 (clustering-offline-members)=
-#### Offline members and fault tolerance
+#### オフラインメンバーと障害耐性
 
-If a cluster member is down for more than the configured offline threshold, its status is marked as offline.
-In this case, no operations are possible on this member, and neither are operations that require a state change across all members.
+クラスタメンバーがダウンして設定されたオフラインの閾値を超えると、ステータスはオフラインと記録されます。
+この場合、このメンバーに対する操作はできなくなり、すべてのメンバーの状態変更を必要とする操作もできなくなります。
 
-As soon as the offline member comes back online, operations are available again.
+オフラインのメンバーがオンラインに戻るとすぐに操作が再びできるようになります。
 
-If the member that goes offline is the leader itself, the other members will elect a new leader.
+オフラインになったメンバーがリーダーそのものだった場合、他のメンバーは新しいリーダーを選出します。
 
-If you can't or don't want to bring the server back online, you can [delete it from the cluster](cluster-manage-delete-members).
+サーバーを再びオンラインに復旧できないあるいはしたくない場合、[クラスタからメンバーを削除](cluster-manage-delete-members) できます。
 
-You can tweak the amount of seconds after which a non-responding member is considered offline by setting the {config:option}`server-cluster:cluster.offline_threshold` configuration.
-The default value is 20 seconds.
-The minimum value is 10 seconds.
+応答しないメンバーをオフラインと判断する秒数は[`cluster.offline_threshold`](server-options-cluster)設定で調整できます。
+デフォルト値は 20 秒です。
+最小値は 10 秒です。
 
-To automatically {ref}`evacuate <cluster-evacuate>` instances from an offline member, set the {config:option}`server-cluster:cluster.healing_threshold` configuration to a non-zero value.
+オフラインのメンバーからインスタンスを自動的に{ref}`退避 <cluster-evacuate>`するには、{config:option}`server-cluster:cluster.offline_threshold`設定をゼロでない値に設定してください。
 
-See {ref}`cluster-recover` for more information.
+詳細は{ref}`cluster-recover`を参照してください。
 
 #### Failure domains
 
-You can use failure domains to indicate which cluster members should be given preference when assigning roles to a cluster member that has gone offline.
-For example, if a cluster member that currently has the database role gets shut down, Incus tries to assign its database role to another cluster member in the same failure domain, if one is available.
+オフラインになったメンバーにロールを割り当てる際に、どのクラスタメンバーを優先するかを指示するために failure domain を使用できます。
+たとえば、現在データベースロールを持つクラスタメンバーがシャットダウンした場合、 Incus はデータベースロールを同じ failure domain 内の別のクラスタメンバーがあればそれに割り当てようとします。
 
-To update the failure domain of a cluster member, use the [`incus cluster edit <member>`](incus_cluster_edit.md) command and change the `failure_domain` property from `default` to another string.
+クラスタメンバーの failure domain を更新するには、[`incus cluster edit <member>`](incus_cluster_edit.md) コマンドを使って `failure_domain` プロパティを `default` から他の文字列に変更します。
 
 (clustering-member-config)=
-### Member configuration
+### メンバー設定
 
-Incus cluster members are generally assumed to be identical systems.
-This means that all Incus servers joining a cluster must have an identical configuration to the bootstrap server, in terms of storage pools and networks.
+Incus クラスタメンバーは一般的に同一のシステムと想定されています。
+それはクラスタにジョインするすべての Incus サーバーはブートストラップサーバーとストレージプールとネットワークについて同一の設定を持つ必要があるということです。
 
-To accommodate things like slightly different disk ordering or network interface naming, there is an exception for some configuration options related to storage and networks, which are member-specific.
+少し異なるディスクの順序やネットワークインターフェースの名前付けのようなことに対応するため、ストレージとネットワークに関連してメンバー固有のいくつかの設定が例外的に用意されています。
 
-When such settings are present in a cluster, any server that is being added must provide a value for them.
-Most often, this is done through the interactive `incus admin init` command, which asks the user for the value for a number of configuration keys related to storage or networks.
+クラスタ内にそのような設定が存在する場合、追加するサーバーにはそれらの設定に対する値を提供する必要があります。
+たいていの場合、これはインタラクティブな `incus admin init` コマンドで実行され、ユーザーにストレージやネットワークに関連する設定の値の入力を求めます。
 
-Those settings typically include:
+通常これらの設定には以下のものが含まれます:
 
-- The source device and size for a storage pool
-- The name for a ZFS zpool, LVM thin pool or LVM volume group
-- External interfaces and BGP next-hop for a bridged network
-- The name of the parent network device for managed `physical` or `macvlan` networks
+- ストレージプールのソースデバイスとサイズ
+- ZFS プール、 LVM thin pool、または LVM ボリュームグループの名前
+- ブリッジネットワークの外部インターフェースと BGP の next-hop
+- 管理された `physical` または `macvlan` ネットワークの親のネットワークデバイス名
 
-See {ref}`cluster-config-storage` and {ref}`cluster-config-networks` for more information.
+詳細は {ref}`cluster-config-storage` と {ref}`cluster-config-networks` を参照してください。
 
-If you want to look up the questions ahead of time (which can be useful for scripting), query the `/1.0/cluster` API endpoint.
-This can be done through `incus query /1.0/cluster` or through other API clients.
+事前に質問を調べたい（スクリプトでの自動化に有用）場合、 `/1.0/cluster` API エンドポイントをクエリしてください。
+これは `incus query /1.0/cluster` あるいは他の API クライアントを使って実行できます。
 
-## Images
+## イメージ
 
-By default, Incus replicates images on as many cluster members as there are database members.
-This typically means up to three copies within the cluster.
+デフォルトでは、 Incus はデータベースメンバーと同じ数のクラスタメンバーにイメージを複製します。
+通常これはクラスタ内で最大 3 つのコピーを持つことを意味します。
 
-You can increase that number to improve fault tolerance and the likelihood of the image being locally available.
-To do so, set the {config:option}`server-cluster:cluster.images_minimal_replica` configuration.
-The special value of `-1` can be used to have the image copied to all cluster members.
+障害耐性とイメージがローカルで利用できる確率を改善するためこの数を増やすことができます。
+そのためには、{config:option}`server-cluster:cluster.images_minimal_replica` 設定を変更してください。
+すべてのクラスタメンバーにイメージをコピーするには`-1`という特別な値を使用できます。
 
 (cluster-groups)=
-## Cluster groups
+## クラスタグループ
 
-In a Incus cluster, you can add members to cluster groups.
-You can use these cluster groups to launch instances on a cluster member that belongs to a subset of all available members.
-For example, you could create a cluster group for all members that have a GPU and then launch all instances that require a GPU on this cluster group.
+Incus のクラスタではクラスタグループにメンバーを追加できます。
+これらのクラスタグループは、すべての利用可能なメンバーのサブセットに属するクラスタメンバー上で、インスタンスを起動するのに使用できます。
+たとえば、GPU を持つすべてのメンバーからなるクラスタメンバーを作って、GPU が必要なすべてのインスタンスをこのクラスタグループ上で起動できます。
 
-By default, all cluster members belong to the `default` group.
+デフォルトでは、すべてのクラスタメンバーは `default` グループに属します。
 
-See {ref}`howto-cluster-groups` and {ref}`cluster-target-instance` for more information.
+詳細は {ref}`howto-cluster-groups` と {ref}`cluster-target-instance` を参照してください。
 
 (clustering-instance-placement)=
-## Automatic placement of instances
+## インスタンスの自動配置
 
-In a cluster setup, each instance lives on one of the cluster members.
-When you launch an instance, you can target it to a specific cluster member, to a cluster group or have Incus automatically assign it to a cluster member.
+クラスタのセットアップでは各インスタンスはクラスタメンバーの 1 つの上で稼働します。
+インスタンスを起動する際、特定のクラスタメンバー、クラスタグループをターゲットにするか、あるいは Incus に自動的にどれかのクラスタメンバーに割り当てさせることもできます。
 
-By default, the automatic assignment picks the cluster member that has the lowest number of instances.
-If several members have the same amount of instances, one of the members is chosen at random.
+デフォルトでは、自動的な割り当てはインスタンス数が一番少ないクラスタメンバーを選択します。
+複数のメンバーが同じインスタンス数の場合は、それらの 1 つがランダムで選ばれます。
 
-However, you can control this behavior with the {config:option}`cluster-cluster:scheduler.instance` configuration option:
+しかし、この挙動を {config:option}`cluster-cluster:scheduler.instance` 設定で制御することもできます:
 
-- If `scheduler.instance` is set to `all` for a cluster member, this cluster member is selected for an instance if:
+- クラスタメンバーの `scheduler.instance` が `all` に設定されると、以下の条件でこのクラスタメンバーが選ばれます:
 
-   - The instance is created without `--target` and the cluster member has the lowest number of instances.
-   - The instance is targeted to live on this cluster member.
-   - The instance is targeted to live on a member of a cluster group that the cluster member is a part of, and the cluster member has the lowest number of instances compared to the other members of the cluster group.
+  - インスタンスが `--target` を指定せずに作成され、かつクラスタメンバーのインスタンス数が最小である。
+   - インスタンスがこのクラスタメンバー上で稼働するようにターゲットされた。
+   - インスタンスがこのクラスタメンバーが所属するクラスタグループのメンバー上で稼働するようにターゲットされ、かつクラスタメンバーがそのクラスタグループの他のメンバーと比べてインスタンス数が最小である。
 
-- If `scheduler.instance` is set to `manual` for a cluster member, this cluster member is selected for an instance if:
+- クラスタメンバーの `scheduler.instance` が `manual` に設定されると、以下の条件でこのクラスタメンバーが選ばれる:
 
-   - The instance is targeted to live on this cluster member.
+   - インスタンスがこのクラスタメンバー上で稼働するようにターゲットされた。
 
-- If `scheduler.instance` is set to `group` for a cluster member, this cluster member is selected for an instance if:
+- クラスタメンバーの `scheduler.instance` が `group` に設定されると、以下の条件でこのクラスタメンバーが選ばれる:
 
-   - The instance is targeted to live on this cluster member.
-   - The instance is targeted to live on a member of a cluster group that the cluster member is a part of, and the cluster member has the lowest number of instances compared to the other members of the cluster group.
+   - インスタンスがこのクラスタメンバー上で稼働するようにターゲットされた。
+   - インスタンスがこのクラスタメンバーが所属するクラスタグループのメンバー上で稼働するようにターゲットされ、かつクラスタメンバーがそのクラスタグループの他のメンバーと比べてインスタンス数が最小である。
 
 (clustering-instance-placement-scriptlet)=
-### Instance placement scriptlet
+### インスタンス配置スクリプトレット
 
-Incus supports using custom logic to control automatic instance placement by using an embedded script (scriptlet).
-This method provides more flexibility than the built-in instance placement functionality.
+Incus では埋め込まれたスクリプト(スクリプトレット)を使って自動的なインスタンス配置を制御するカスタムロジックを使用できます。
+この方法は、組み込みのインスタンス配置機能よりも柔軟性が高いです。
 
-The instance placement scriptlet must be written in the [Starlark language](https://github.com/bazelbuild/starlark) (which is a subset of Python).
-The scriptlet is invoked each time Incus needs to know where to place an instance.
-The scriptlet receives information about the instance that is being placed and the candidate cluster members that could host the instance.
-It is also possible for the scriptlet to request information about each candidate cluster member's state and the hardware resources available.
+インスタンス配置スクリプトレットは[Starlark言語](https://github.com/bazelbuild/starlark) (Python のサブセット)で記述する必要があります。
+スクリプトレットは、Incus がインスタンスをどこに配置するかを知る必要があるたびに呼び出されます。
+スクリプトレットは、配置されるインスタンスに関する情報と、インスタンスをホストできる候補のクラスタメンバーに関する情報を受け取ります。
+スクリプトレットからクラスタメンバー候補の状態と利用可能なハードウェアリソースについての情報を要求することもできます。
 
-An instance placement scriptlet must implement the `instance_placement` function with the following signature:
+インスタンス配置スクリプトレットは`instance_placement`関数を以下のシグネチャで実装する必要があります:
 
    `instance_placement(request, candidate_members)`:
 
-- `request` is an object that contains an expanded representation of [`scriptlet.InstancePlacement`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstancePlacement). This request includes `project` and `reason` fields. The `reason` can be `new`, `evacuation` or `relocation`.
-- `candidate_members` is a `list` of cluster member objects representing [`api.ClusterMember`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMember) entries.
+- `request`は、[`scriptlet.InstancePlacement`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstancePlacement) の展開された表現を含むオブジェクトである。このリクエストには、`project`および`reason`フィールドが含まれています。`reason`は、`new`、`evacuation`、または`relocation`のいずれかである。
+- `candidate_members`は、[`api.ClusterMember`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMember) エントリを表すクラスタメンバーオブジェクトの`list`である。
 
-For example:
+たとえば:
 
 ```python
 def instance_placement(request, candidate_members):
-    # Example of logging info, this will appear in Incus' log.
+    # 情報ログ出力の例。これは Incus のログに出力されます。
     log_info("instance placement started: ", request)
 
-    # Example of applying logic based on the instance request.
+    # インスタンスのリクエストに基づいてロジックを適用する例。
     if request.name == "foo":
-        # Example of logging an error, this will appear in Incus' log.
+        # エラーログ出力の例。これは Incus のログに出力されます。
         log_error("Invalid name supplied: ", request.name)
 
-        fail("Invalid name") # Exit with an error to reject instance placement.
+        fail("Invalid name") # エラーで終了してインスタンス配置を拒否します。
 
-    # Place the instance on the first candidate server provided.
+    # 提供された第1候補のサーバーにインスタンスを配置する。
     set_target(candidate_members[0].server_name)
 
-    return # Return empty to allow instance placement to proceed.
+    return # インスタンス配置を進めるために空を返す。
 ```
 
-The scriptlet must be applied to Incus by storing it in the `instances.placement.scriptlet` global configuration setting.
+スクリプトレットは Incus に適用するためには`instances.placement.scriptlet`グローバル設定に設定する必要があります。
 
-For example, if the scriptlet is saved inside a file called `instance_placement.star`, then it can be applied to Incus with the following command:
+たとえばスクリプトレットが`instance_placement.star`というファイルに保存されている場合、Incus には以下のように適用できます:
 
     cat instance_placement.star | incus config set instances.placement.scriptlet=-
 
-To see the current scriptlet applied to Incus, use the `incus config get instances.placement.scriptlet` command.
+Incus に現在適用されているスクリプトレットを見るには`lxc config get instances.placement.scriptlet`コマンドを使用してください。
 
-The following functions are available to the scriptlet (in addition to those provided by Starlark):
+スクリプトレットでは（Starlark で提供される関数に加えて）以下の関数が利用できます:
 
-- `log_info(*messages)`: Add a log entry to Incus' log at `info` level. `messages` is one or more message arguments.
-- `log_warn(*messages)`: Add a log entry to Incus' log at `warn` level. `messages` is one or more message arguments.
-- `log_error(*messages)`: Add a log entry to Incus' log at `error` level. `messages` is one or more message arguments.
-- `set_cluster_member_target(member_name)`: Set the cluster member where the instance should be created. `member_name` is the name of the cluster member the instance should be created on. If this function is not called, then Incus will use its built-in instance placement logic.
-- `get_cluster_member_state(member_name)`: Get the cluster member's state. Returns an object with the cluster member's state in the form of [`api.ClusterMemberState`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMemberState). `member_name` is the name of the cluster member to get the state for.
-- `get_cluster_member_resources(member_name)`: Get information about resources on the cluster member. Returns an object with the resource information in the form of [`api.Resources`](https://pkg.go.dev/github.com/lxc/incus/shared/api#Resources). `member_name` is the name of the cluster member to get the resource information for.
-- `get_instance_resources()`: Get information about the resources the instance will require. Returns an object with the resource information in the form of [`scriptlet.InstanceResources`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstanceResources).
+- `log_info(*messages)`: `info`レベルで Incus のログにログエントリを追加する。`messages`は 1 つ以上のメッセージの引数。
+- `log_warn(*messages)`: `warn`レベルで Incus のログにログエントリを追加する。`messages`は 1 つ以上のメッセージの引数。
+- `log_error(*messages)`: `error`レベルで Incus のログにログエントリを追加する。`messages`は 1 つ以上のメッセージの引数。
+- `set_cluster_member_target(member_name)`: インスタンスが作成されるべきクラスタメンバーを設定する。`member_name`はインスタンスが作成されるべきクラスタメンバーの名前。この関数が呼ばれなければ、Incus は組み込みのインスタンス配置ロジックを使用する。
+- `get_cluster_member_state(member_name)`: クラスタメンバーの状態を取得する。[`api.ClusterMemberState`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMemberState)の形式でクラスタメンバーの状態を含むオブジェクトを返す。`member_name`は状態を取得する対象のクラスタメンバーの名前。
+- `get_cluster_member_resources(member_name)`: クラスタメンバーのリソースについての情報を取得する。[`api.Resources`](https://pkg.go.dev/github.com/lxc/incus/shared/api#Resources)の形式でリソースについての情報を含むオブジェクトを返す。`member_name`はリソース情報を取得する対象のクラスタメンバーの名前。
+- `get_instance_resources()`: インスタンスが必要とするリソースについての情報を取得する。[`scriptlet.InstanceResources`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstanceResources)の形式でリソース情報を含むオブジェクトを返す。
 
 ```{note}
-Field names in the object types are equivalent to the JSON field names in the associated Go types.
+オブジェクト内のフィールド名は対応する Go の型の JSON フィールド名と同じです。
 ```

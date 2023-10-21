@@ -3,79 +3,78 @@ relatedlinks: https://cloudinit.readthedocs.org/
 ---
 
 (cloud-init)=
-# How to use `cloud-init`
+# `cloud-init`を使用するには
 
-[`cloud-init`](https://cloud-init.io/) is a tool for automatically initializing and customizing an instance of a Linux distribution.
+[`cloud-init`](https://cloud-init.io/)は Linux ディストリビューションのインスタンスの自動的な初期化とカスタマイズのためのツールです。
 
-By adding `cloud-init` configuration to your instance, you can instruct `cloud-init` to execute specific actions at the first start of an instance.
-Possible actions include, for example:
+インスタンスに`cloud-init`設定を追加することで、インスタンスの最初の起動時に`cloud-init`に特定のアクションを実行させることができます。
+可能なアクションには、たとえば以下のようなものがあります:
 
-* Updating and installing packages
-* Applying certain configurations
-* Adding users
-* Enabling services
-* Running commands or scripts
-* Automatically growing the file system of a VM to the size of the disk
+* パッケージの更新とインストール
+* 特定の設定の適用
+* ユーザーの追加
+* サービスの有効化
+* コマンドやスクリプトの実行
+* 仮想マシンのファイルシステムをディスクのサイズに自動的に拡張する
 
-See the {ref}`cloud-init:index` for detailed information.
+詳細な情報は{ref}`cloud-init:index`を参照してください。
 
 ```{note}
-The `cloud-init` actions are run only once on the first start of the instance.
-Rebooting the instance does not re-trigger the actions.
+`cloud-init`アクションはインスタンスの最初の起動時に一度だけ実行されます。
+インスタンスの再起動ではアクションは再実行されません。
 ```
 
-## `cloud-init` support in images
+## イメージ内の`cloud-init`サポート
 
-To use `cloud-init`, you must base your instance on an image that has `cloud-init` installed:
+`cloud-init`を使用するには、`cloud-init`がインストールされたイメージをベースにインスタンスを作る必要があります:
 
-* All images from the `ubuntu` and `ubuntu-daily` {ref}`image servers <remote-image-servers>` have `cloud-init` support.
-* Images from the [`images` remote](https://images.linuxcontainers.org/) have `cloud-init`-enabled variants, which are usually bigger in size than the default variant.
-  The cloud variants use the `/cloud` suffix, for example, `images:ubuntu/22.04/cloud`.
+* `ubuntu`および`ubuntu-daily` {ref}`イメージサーバー <remote-image-servers>`からのすべてのイメージは`cloud-init`をサポートしています。
+* [`images`リモート](https://images.linuxcontainers.org/)からのイメージには`cloud-init`が有効化されたバリアントがあり、通常デフォルトバリアントよりもサイズが大きくなります。
+  クラウドバリアントは`/cloud`接尾辞を使用します。たとえば、`images:ubuntu/22.04/cloud`。
 
-## Configuration options
+## 設定オプション
 
-Incus supports two different sets of configuration options for configuring `cloud-init`: `cloud-init.*` and `user.*`.
-Which of these sets you must use depends on the `cloud-init` support in the image that you use.
-As a rule of thumb, newer images support the `cloud-init.*` configuration options, while older images support `user.*`.
-However, there might be exceptions to that rule.
+Incus は、`cloud-init`の設定に対して`cloud-init.*`と`user.*`の 2 つの異なる設定オプションセットをサポートしています。
+どちらのセットを使用する必要があるかは、使用するイメージの`cloud-init`サポートによって異なります。
+一般的には、新しいイメージは`cloud-init.*`設定オプションをサポートし、古いイメージは`user.*`をサポートしていますが、例外も存在する可能性があります。
 
-The following configuration options are supported:
+以下の設定オプションがサポートされています。
 
-* `cloud-init.vendor-data` or `user.vendor-data` (see {ref}`cloud-init:vendordata`)
-* `cloud-init.user-data` or `user.user-data` (see {ref}`cloud-init:user_data_formats`)
-* `cloud-init.network-config` or `user.network-config` (see {ref}`cloud-init:network_config`)
+* `cloud-init.vendor-data`または`user.vendor-data` （{ref}`cloud-init:vendordata`を参照）
+* `cloud-init.user-data`または`user.user-data` （{ref}`cloud-init:user_data_formats`を参照）
+* `cloud-init.network-config`または`user.network-config` （{ref}`cloud-init:network_config`を参照）
 
-For more information about the configuration options, see the [`cloud-init` instance options](instance-options-cloud-init), and the documentation for the {ref}`LXD data source <cloud-init:datasource_lxd>` in the `cloud-init` documentation.
+設定オプションの詳細については、[`cloud-init`インスタンスオプション](instance-options-cloud-init)と、`cloud-init`ドキュメント内の{ref}`LXD データソース <cloud-init:datasource_lxd>`を参照してください。
 
-### Vendor data and user data
+### ベンダーデータとユーザーデータ
 
-Both `vendor-data` and `user-data` are used to provide {ref}`cloud configuration data <explanation/format:cloud config data>` to `cloud-init`.
+`vendor-data`と`user-data`の両方が、`cloud-init`に{ref}`クラウド構成データ <explanation/format:cloud config data>`を提供するために使用されます。
 
-The main idea is that `vendor-data` is used for the general default configuration, while `user-data` is used for instance-specific configuration.
-This means that you should specify `vendor-data` in a profile and `user-data` in the instance configuration.
-Incus does not enforce this method, but allows using both `vendor-data` and `user-data` in profiles and in the instance configuration.
+主な考え方は、`vendor-data`は一般的なデフォルト構成に使用され、`user-data`はインスタンス固有の構成に使用されることです。
+これは、プロファイルで`vendor-data`を指定し、インスタンス構成で`user-data`を指定する必要があることを意味します。
+Incus はこの方法を強制しませんが、プロファイルとインスタンス構成の両方で`vendor-data`と`user-data`を使用することができます。
 
-If both `vendor-data` and `user-data` are supplied for an instance, `cloud-init` merges the two configurations.
-However, if you use the same keys in both configurations, merging might not be possible.
-In this case, configure how `cloud-init` should merge the provided data.
-See {ref}`cloud-init:merging_user_data` for instructions.
+インスタンスに対して`vendor-data`と`user-data`の両方が提供される場合、`cloud-init`は 2 つの構成をマージします。
+しかし、両方の設定で同じキーを使った場合、マージは不可能になるかもしれません。
+この場合、指定されたデータをどのようにマージするべきかを`clout-init`に指定してください。
+{ref}`cloud-init:merging_user_data`を参照して手順を確認してください。
 
-## How to configure `cloud-init`
+## `cloud-init`の設定方法
 
-To configure `cloud-init` for an instance, add the corresponding configuration options to a {ref}`profile <profiles>` that the instance uses or directly to the {ref}`instance configuration <instances-configure>`.
+インスタンスの`cloud-init`を設定するには、対応する設定オプションをインスタンスが使用する{ref}`プロファイル <profiles>`または{ref}`インスタンス構成 <instances-configure>`に直接追加します。
 
-When configuring `cloud-init` directly for an instance, keep in mind that `cloud-init` runs only on the first start of the instance.
-That means that you must configure `cloud-init` before you start the instance.
-To do so, create the instance with [`incus init`](incus_create.md) instead of [`incus launch`](incus_launch.md), and then start it after completing the configuration.
+インスタンスに直接`cloud-init`を設定する場合、`cloud-init`はインスタンスの最初の起動時にのみ実行されることに注意してください。
+つまり、インスタンスを起動する前に`cloud-init`を設定する必要があります。
+これを行うには、`lxc launch`の代わりに`lxc init`でインスタンスを作成し、設定が完了した後に起動します。
 
-### YAML format for `cloud-init` configuration
+### `cloud-init`設定のYAMLフォーマット
 
-The `cloud-init` options require YAML's [literal style format](https://yaml.org/spec/1.2.2/#812-literal-style).
-You use a pipe symbol (`|`) to indicate that all indented text after the pipe should be passed to `cloud-init` as a single string, with new lines and indentation preserved.
+`cloud-init`のオプションでは、YAML の[literalスタイルフォーマット](https://yaml.org/spec/1.2.2/#812-literal-style)が必要です。
+パイプ記号（`|`）を使用して、パイプの後にインデントされたテキスト全体を、改行とインデントを保持したまま`cloud-init`に単一の文字列として渡すことを示します。
 
-The `vendor-data` and `user-data` options usually start with `#cloud-config`.
+`vendor-data`および`user-data`のオプションは通常、`#cloud-config`で始まります。
 
-For example:
+例:
 
 ```yaml
 config:
@@ -88,21 +87,21 @@ config:
 ```
 
 ```{tip}
-See {doc}`cloud-init:howto/debug_user_data` for information on how to check whether the syntax is correct.
+構文が正しいかどうかを確認する方法については、{doc}`cloud-init:howto/debug_user_data`を参照してください。
 ```
 
-## How to check the `cloud-init` status
+##  `cloud-init`のステータスを確認する方法
 
-`cloud-init` runs automatically on the first start of an instance.
-Depending on the configured actions, it might take a while until it finishes.
+`cloud-init`はインスタンスの最初の起動時に自動的に実行されます。
+設定されたアクションによっては、完了するまでに時間がかかる場合があります。
 
-To check the `cloud-init` status, log on to the instance and enter the following command:
+`cloud-init`のステータスを確認するには、インスタンスにログインして以下のコマンドを入力します。
 
     cloud-init status
 
-If the result is `status: running`, `cloud-init` is still working. If the result is `status: done`, it has finished.
+結果が`status: running`の場合、`cloud-init`はまだ実行中です。結果が`status: done`の場合、完了しています。
 
-Alternatively, use the `--wait` flag to be notified only when `cloud-init` is finished:
+また、`--wait`フラグを使用して、`cloud-init`が完了したときにのみ通知を受け取ることができます:
 
 ```{terminal}
 :input: cloud-init status --wait
@@ -113,27 +112,27 @@ Alternatively, use the `--wait` flag to be notified only when `cloud-init` is fi
 status: done
 ```
 
-## How to specify user or vendor data
+## ユーザーデータやベンダーデータを指定する方法
 
-The `user-data` and `vendor-data` configuration can be used to, for example, upgrade or install packages, add users, or run commands.
+`user-data`と`vendor-data`の設定は、たとえば、パッケージのアップグレードやインストール、ユーザーの追加、コマンドの実行などに使用することができます。
 
-The provided values must have a first line that indicates what type of {ref}`user data format <cloud-init:user_data_formats>` is being passed to `cloud-init`.
-For activities like upgrading packages or setting up a user, `#cloud-config` is the data format to use.
+提供される値は、最初の行で`cloud-init`に渡される{ref}`ユーザーデータ形式 <cloud-init:user_data_formats>`のタイプを示す必要があります。
+パッケージのアップグレードやユーザーの設定などのアクティビティには、`#cloud-config`が使用するデータ形式です。
 
-The configuration data is stored in the following files in the instance's root file system:
+構成データは、インスタンスのルートファイルシステム内の以下のファイルに保存されます:
 
 * `/var/lib/cloud/instance/cloud-config.txt`
 * `/var/lib/cloud/instance/user-data.txt`
 
-### Examples
+### 例
 
-See the following sections for the user data (or vendor data) configuration for different example use cases.
+以下のセクションでは、さまざまな例のユースケースに対するユーザーデータ（またはベンダーデータ）の設定を参照してください。
 
-You can find more advanced {ref}`examples <cloud-init:yaml_examples>` in the `cloud-init` documentation.
+より高度な{ref}`例 <cloud-init:yaml_examples>`は、`cloud-init`ドキュメントで見つけることができます。
 
-#### Upgrade packages
+#### パッケージのアップグレード
 
-To trigger a package upgrade from the repositories for the instance right after the instance is created, use the `package_upgrade` key:
+インスタンスが作成された直後に、インスタンスのリポジトリからパッケージをアップグレードするためには、`package_upgrade`キーを使用します:
 
 ```yaml
 config:
@@ -142,9 +141,9 @@ config:
     package_upgrade: true
 ```
 
-#### Install packages
+#### パッケージのインストール
 
-To install specific packages when the instance is set up, use the `packages` key and specify the package names as a list:
+インスタンスのセットアップ時に特定のパッケージをインストールするには、`packages`キーを使用し、パッケージ名をリストとして指定します:
 
 ```yaml
 config:
@@ -155,9 +154,9 @@ config:
       - openssh-server
 ```
 
-#### Set the time zone
+#### タイムゾーンの設定
 
-To set the time zone for the instance on instance creation, use the `timezone` key:
+インスタンス作成時にインスタンスのタイムゾーンを設定するには、`timezone`キーを使用します:
 
 ```yaml
 config:
@@ -166,9 +165,9 @@ config:
     timezone: Europe/Rome
 ```
 
-#### Run commands
+#### コマンドの実行
 
-To run a command (such as writing a marker file), use the `runcmd` key and specify the commands as a list:
+コマンド（マーカーファイルの書き込みなど）を実行するには、`runcmd`キーを使用し、コマンドをリストとして指定します:
 
 ```yaml
 config:
@@ -178,10 +177,10 @@ config:
       - [touch, /run/cloud.init.ran]
 ```
 
-#### Add a user account
+#### ユーザーアカウントの追加
 
-To add a user account, use the `user` key.
-See the {ref}`cloud-init:reference/examples:including users and groups` example in the `cloud-init` documentation for details about default users and which keys are supported.
+ユーザーアカウントを追加するには、`user`キーを使用します。
+デフォルトユーザーやサポートされているキーに関する詳細は、`cloud-init`ドキュメント内の{ref}`cloud-init:reference/examples:including users and groups`の例を参照してください。
 
 ```yaml
 config:
@@ -191,22 +190,22 @@ config:
       - name: documentation_example
 ```
 
-## How to specify network configuration data
+## ネットワーク構成データを指定する方法
 
-By default, `cloud-init` configures a DHCP client on an instance's `eth0` interface.
-You can define your own network configuration using the `network-config` option to override the default configuration (this is due to how the template is structured).
+デフォルトでは、`cloud-init`はインスタンスの`eth0`インターフェースに DHCP クライアントを設定します。
+デフォルトの構成を上書きするために、`network-config`オプションを使用して独自のネットワーク構成を定義することができます（これはテンプレートの構造によるものです）。
 
-`cloud-init` then renders the relevant network configuration on the system using either `ifupdown` or `netplan`, depending on the Ubuntu release.
+その後、`cloud-init`は Ubuntu リリースに応じて`ifupdown`か`netplan`を使用して、システム上の関連するネットワーク構成をレンダリングします。
 
-The configuration data is stored in the following files in the instance's root file system:
+構成データは、インスタンスのルートファイルシステム内の以下のファイルに保存されます:
 
 * `/var/lib/cloud/seed/nocloud-net/network-config`
-* `/etc/network/interfaces.d/50-cloud-init.cfg` (if using `ifupdown`)
-* `/etc/netplan/50-cloud-init.yaml` (if using `netplan`)
+* `/etc/network/interfaces.d/50-cloud-init.cfg` （`ifupdown`を使用している場合）
+* `/etc/netplan/50-cloud-init.yaml` （`netplan`を使用している場合）
 
-### Example
+### 例
 
-To configure a specific network interface with a static IPv4 address and also use a custom name server, use the following configuration:
+特定のネットワークインターフェースに静的な IPv4 アドレスを設定し、カスタム名前サーバーを使用するための次の設定を使用します:
 
 ```yaml
 config:

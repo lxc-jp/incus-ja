@@ -1,25 +1,25 @@
 (container-runtime-environment)=
-# Container runtime environment
+# コンテナ実行環境
 
-Incus attempts to present a consistent environment to all containers it runs.
+Incus は実行するすべてのコンテナに一貫性のある環境を提供しようとします。
 
-The exact environment will differ slightly based on kernel features and user configuration, but otherwise, it is identical for all containers.
+正確な環境はカーネルの機能やユーザーの設定によって若干異なりますが、それ以外はすべてのコンテナに対して同一です。
 
-## File system
+## ファイルシステム
 
-Incus assumes that any image it uses to create a new container comes with at least the following root-level directories:
+Incus は使用するどのイメージから生成する新規のコンテナは少なくとも以下のルートレベルのディレクトリーが存在することを前提とします:
 
-- `/dev` (empty)
-- `/proc` (empty)
-- `/sbin/init` (executable)
-- `/sys` (empty)
+ - `/dev` (空のディレクトリー)
+ - `/proc` (空のディレクトリー)
+ - `/sbin/init` (実行ファイル)
+ - `/sys` (空のディレクトリー)
 
-## Devices
+## デバイス
 
-Incus containers have a minimal and ephemeral `/dev` based on a `tmpfs` file system.
-Since this is a `tmpfs` and not a `devtmpfs` file system, device nodes appear only if manually created.
+Incus のコンテナは`tmpfs`ファイルシステムをベースとする最低限で一時的な`/dev`を持ちます。
+これは`tmpfs`であって`devtmpfs`ファイルシステムではないので、デバイスノードは手動で作成されたときのみ現れます。
 
-The following standard set of device nodes is set up automatically:
+デバイスノードの標準セットでは以下のデバイスが自動的にセットアップされます:
 
 - `/dev/console`
 - `/dev/fd`
@@ -35,32 +35,32 @@ The following standard set of device nodes is set up automatically:
 - `/dev/urandom`
 - `/dev/zero`
 
-In addition to the standard set of devices, the following devices are also set up for convenience:
+標準セットのデバイスに加えて、以下のデバイスも利便性のためにセットアップされます:
 
 - `/dev/fuse`
 - `/dev/net/tun`
 - `/dev/mqueue`
 
-### Network
+### ネットワーク
 
-Incus containers may have any number of network devices attached to them.
-The naming for those (unless overridden by the user) is `ethX`, where `X` is an incrementing number.
+Incus コンテナはネットワークデバイスをいくつでもアタッチできます。
+これらの名前はユーザーにオーバーライドされない限りは`ethX`で`X`は連番です。
 
-### Container-to-host communication
+## コンテナからホストへのコミュニケーション
 
-Incus sets up a socket at `/dev/incus/sock` that the root user in the container can use to communicate with Incus on the host.
+Incus は`/dev/incus/sock`にソケットをセットアップし、コンテナ内の root ユーザーはこれを使ってホストの Incus とコミュニケーションできます。
 
-See {doc}`dev-incus` for the API documentation.
+API ドキュメントは{doc}`dev-incus`を参照してください。
 
-## Mounts
+## マウント
 
-The following mounts are set up by default:
+以下のマウントがデフォルトでセットアップされます。
 
-- `/proc` ({spellexception}`proc`)
-- `/sys` (`sysfs`)
-- `/sys/fs/cgroup/*` (`cgroupfs`) (only on kernels that lack cgroup namespace support)
+ - `/proc` (`proc`)
+ - `/sys` (`sysfs`)
+ - `/sys/fs/cgroup/*` (`cgroupfs`)（cgroup namespace サポートを欠くカーネルの場合のみ）
 
-If they are present on the host, the following paths will also automatically be mounted:
+以下のパスがホスト上に存在する場合は自動的にマウントされます:
 
 - `/proc/sys/fs/binfmt_misc`
 - `/sys/firmware/efi/efivars`
@@ -69,28 +69,28 @@ If they are present on the host, the following paths will also automatically be 
 - `/sys/kernel/debug`
 - `/sys/kernel/security`
 
-The reason for passing all of those paths is that legacy init systems require them to be mounted, or be mountable, inside the container.
+これらのパスを引き渡す理由は、これらがマウントされているか、コンテナ内でマウント可能であることが必要とされているレガシーな init システムのためです。
 
-The majority of those paths will not be writable (or even readable) from inside an unprivileged container.
-In privileged containers, they will be blocked by the AppArmor policy.
+これらのパスほとんどは非特権コンテナ内からは書き込み可能ではなく（あるいは読み取り可能ですらなく）、特権コンテナ内では AppArmor ポリシーによってブロックされます。
 
 ### LXCFS
 
-If LXCFS is present on the host, it is automatically set up for the container.
+ホストに LXCFS がある場合は、コンテナ用に自動的にセットアップされます。
 
-This normally results in a number of `/proc` files being overridden through bind-mounts.
-On older kernels, a virtual version of `/sys/fs/cgroup` might also be set up by LXCFS.
+これは通常いくつかの`/proc`ファイルになり、それらは bind mount を通してオーバーライドされます。
+古いカーネルでは`/sys/fs/cgroup`の仮想バージョンも LXCFS によりセットアップされるかもしれません。
 
 ## PID1
 
-Incus spawns whatever is located at `/sbin/init` as the initial process of the container (PID 1).
-This binary should act as a proper init system, including handling re-parented processes.
+Incus は何であれ`/sbin/init`に置かれているものをコンテナの初期プロセス（PID 1）として起動します。
+このバイナリは親が変更されたプロセス（訳注: ゾンビプロセスなど）の処理を含めて適切な init システムとして振る舞う必要があります。
 
-Incus' communication with PID1 in the container is limited to two signals:
+Incus がコンテナの PID1 とコミュニケーションするのは以下の 2 つのシグナルだけです。
 
-- `SIGINT` to trigger a reboot of the container
-- `SIGPWR` (or alternatively `SIGRTMIN`+3) to trigger a clean shutdown of the container
+ - `SIGINT` コンテナのリブートをトリガーする
+ - `SIGPWR` （あるいは `SIGRTMIN`+3）コンテナのクリーンなシャットダウンをトリガーする
 
-The initial environment of PID1 is blank except for `container=lxc`, which can be used by the init system to detect the runtime.
+PID1 の初期環境は`container=lxc`以外は空です。
+init システムは`container=lxc`をランタイムの検出(訳注: lxc で動いていることを知る)に使用できます。
 
-All file descriptors above the default three are closed prior to PID1 being spawned.
+デフォルトの 3 個（訳注: stdin, stdout, stderr）より上のすべてのファイルディスクリプターは PID1 が起動される前に閉じられます。

@@ -1,68 +1,61 @@
-# Contributing
+# コントリビュート
 
 <!-- Include start contributing -->
 
-The Incus team appreciates contributions to the project, through pull requests, issues on the [GitHub repository](https://github.com/lxc/incus/issues), or discussions or questions on the [forum](https://discuss.linuxcontainers.org).
+Pull Request、[GitHubレポジトリ](https://github.com/lxc/incus/issues)でのイシュー、[f フォーラム](https://discuss.linuxcontainers.org)での議論や質問を通してプロジェクトに貢献していただけることをIncusチームは感謝します。
 
-Check the following guidelines before contributing to the project.
+プロジェクトへ貢献する前に、以下のガイドラインを確認してください。
 
 ## Code of Conduct
 
-When contributing, you must adhere to the Code of Conduct, which is available at: [`https://github.com/lxc/incus/blob/main/CODE_OF_CONDUCT.md`](https://github.com/lxc/incus/blob/main/CODE_OF_CONDUCT.md)
+コントリビュートする際には、行動規範を遵守しなければなりません。行動規範は、以下のサイトから入手できます。[`https://github.com/lxc/incus/blob/main/CODE_OF_CONDUCT.md`](https://github.com/lxc/incus/blob/main/CODE_OF_CONDUCT.md)
 
-## License and copyright
+## ライセンスと著作権
 
-By default, any contribution to this project is made under the Apache
-2.0 license.
+デフォルトで、このプロジェクトに対するいかなる貢献も Apache 2.0 ライセンスの下で行われます。
 
-The author of a change remains the copyright holder of their code
-(no copyright assignment).
+変更の著者は、そのコードに対する著作権を保持します (著作権の譲渡はありません)。
 
-## Pull requests
+## Pull Request
 
-Changes to this project should be proposed as pull requests on GitHub
-at: [`https://github.com/lxc/incus`](https://github.com/lxc/incus)
+このプロジェクトへの変更は、GitHubの[`https://github.com/lxc/incus`](https://github.com/lxc/incus)でPull Requestとして提案してください。
 
-Proposed changes will then go through review there and once approved,
-be merged in the main branch.
+提案された変更はそこでコードレビューを受け、承認されればメインブランチにマージされます。
 
-### Commit structure
+### コミット構成
 
-Separate commits should be used for:
+コミットを次のように分類する必要があります。
 
-- API extension (`api: Add XYZ extension`, contains `doc/api-extensions.md` and `internal/version/api.go`)
-- Documentation (`doc: Update XYZ` for files in `doc/`)
-- API structure (`shared/api: Add XYZ` for changes to `shared/api/`)
-- Go client package (`client: Add XYZ` for changes to `client/`)
-- CLI (`lxc/<command>: Change XYZ` for changes to `lxc/`)
-- Scripts (`scripts: Update bash completion for XYZ` for changes to `scripts/`)
-- Incus daemon (`incus/<package>: Add support for XYZ` for changes to `incus/`)
-- Tests (`tests: Add test for XYZ` for changes to `tests/`)
+- API拡張（`doc/api-extensions.md`と`internal/version/api.go`を含む変更に対して`api: Add XYZ extension`）
+- ドキュメント（`doc/`内のファイルに対して`doc: Update XYZ`）
+- API構造（`shared/api/`の変更に対して`shared/api: Add XYZ`）
+- Goクライアントパッケージ（`client/`の変更に対して`client: Add XYZ`）
+- CLI（`cmd/`の変更に対して`cmd/<command>: Change XYZ`）
+- スクリプト（`scripts/`の変更に対して`scripts: Update bash completion for XYZ`）
+- Incusデーモン（`incus/`の変更に対して`incus/<package>: Add support for XYZ`）
+- テスト（`tests/`の変更に対して`tests: Add test for XYZ`）
 
-The same kind of pattern extends to the other tools in the Incus code tree
-and depending on complexity, things may be split into even smaller chunks.
+同様のパターンがIncusコードツリーのほかのツールにも適用されます。
+そして複雑さによっては、さらに小さな単位に分けられるかもしれません。
 
-When updating strings in the CLI tool (`lxc/`), you may need a commit to update the templates:
+CLIツール（`cmd/`）内の文字列を更新する際は、テンプレートを更新してコミットする必要があります。
 
     make i18n
     git commit -a -s -m "i18n: Update translation templates" po/
 
-When updating API (`shared/api`), you may need a commit to update the swagger YAML:
+API（`shared/api`）を更新する際は、swagger YAMLも更新してコミットする必要があります。
 
     make update-api
     git commit -s -m "doc/rest-api: Refresh swagger YAML" doc/rest-api.yaml
 
-This structure makes it easier for contributions to be reviewed and also
-greatly simplifies the process of back-porting fixes to stable branches.
+このようにすることで、コントリビューションに対するレビューが容易になり、安定ブランチへバックポートするプロセスが大幅に簡素化されます。
 
-### Developer Certificate of Origin
+### 開発者の起源の証明
 
-To improve tracking of contributions to this project we use the DCO 1.1
-and use a "sign-off" procedure for all changes going into the branch.
+このプロジェクトへの貢献の追跡を改善するために、DCO 1.1を使用しており、ブランチに入るすべての変更に対して「サインオフ」手順を使用しています。
 
-The sign-off is a simple line at the end of the explanation for the
-commit which certifies that you wrote it or otherwise have the right
-to pass it on as an open-source contribution.
+サインオフとは、あなたがそのコミットを書いたことを証明する、そのコミットの説明の最後にある単純な行です。
+この行は、自分が書いたものであることを証明したり、オープンソースとして渡す権利があることを証明したりします。
 
 ```
 Developer Certificate of Origin
@@ -102,20 +95,20 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-An example of a valid sign-off line is:
+有効なサインオフラインの例は以下の通りです。
 
 ```
 Signed-off-by: Random J Developer <random@developer.org>
 ```
 
-Use a known identity and a valid e-mail address.
-Sorry, no anonymous contributions are allowed.
+実名と有効な電子メールアドレスを使用してください。
+残念ながら、ペンネームや匿名での投稿はできません。
 
-We also require each commit be individually signed-off by their author,
-even when part of a larger set. You may find `git commit -s` useful.
+また、それぞれのコミットには作者が個別に署名する必要があります。
+大きなセットの一部であってもです。`git commit -s`が役に立つでしょう。
 
 <!-- Include end contributing -->
 
-## More information
+## そのほかの情報
 
-For more information, see [Contributing](https://linuxcontainers.org/incus/doc/main/contributing/) in the documentation.
+より詳しい情報は、ドキュメントの[Contributing](doc/contributing.md)をご覧ください。

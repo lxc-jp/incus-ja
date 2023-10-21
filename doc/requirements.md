@@ -1,56 +1,55 @@
-# Requirements
+# 動作環境
 
 ## Go
 
-Incus requires Go 1.18 or higher and is only tested with the Golang compiler.
+Incus は Go 1.18 以上を必要とし、Golang のコンパイラのみでテストされています。
+（訳注：以前は gccgo もサポートされていましたが Golang のみになりました）
 
-We recommend having at least 2GiB of RAM to allow the build to complete.
+ビルドには最低 2GB の RAM を推奨します。
 
-## Kernel requirements
+## 必要なカーネルバージョン
 
-The minimum supported kernel version is 5.4.
+される最小のカーネルバージョンは 5.4 です。
 
-Incus requires a kernel with support for:
+Incus には以下の機能をサポートするカーネルが必要です。
 
-* Namespaces (`pid`, `net`, `uts`, `ipc` and `mount`)
+* Namespaces （`pid`、`net`、`uts`、`ipc`と`mount`）
 * Seccomp
 * Native Linux AIO
-  ([`io_setup(2)`](https://man7.org/linux/man-pages/man2/io_setup.2.html), etc.)
+  （[`io_setup(2)`](https://man7.org/linux/man-pages/man2/io_setup.2.html)など）
 
-The following optional features also require extra kernel options:
+以下のオプションの機能はさらなるカーネルオプションを必要とします。
 
-* Namespaces (`user` and `cgroup`)
-* AppArmor (including Ubuntu patch for mount mediation)
-* Control Groups (`blkio`, `cpuset`, `devices`, `memory`, `pids` and `net_prio`)
-* CRIU (exact details to be found with CRIU upstream)
+* Namespaces （`user`と`cgroup`）
+* AppArmor （mount mediation に対する Ubuntu パッチを含む）
+* Control Groups （`blkio`、`cpuset`、`devices`、`memory`、`pids`と`net_prio`）
+* CRIU (正確な詳細は CRIU のアップストリームを参照のこと)
 
-As well as any other kernel feature required by the LXC version in use.
+さらに使用している Incus のバージョンで必要とされるほかのカーネルの機能も必要です。
 
 ## LXC
 
-Incus requires LXC 4.0.0 or higher with the following build options:
+Incus は以下のビルドオプションでビルドされた LXC 4.0.0 以上を必要とします。
 
-* `apparmor` (if using Incus' AppArmor support)
+* `apparmor` （もし Incus の AppArmor サポートを使用するのであれば）
 * `seccomp`
 
-To run recent version of various distributions, including Ubuntu, LXCFS
-should also be installed.
+Ubuntu を含むさまざまなディストリビューションの最近のバージョンを動かすためには、LXCFS もインストールする必要があります。
 
 ## QEMU
 
-For virtual machines, QEMU 6.0 or higher is required.
+仮想マシンを利用するには QEMU 6.0 以降が必要です。
 
-## Additional libraries (and development headers)
+## 追加のライブラリ（と開発用のヘッダ）
 
-Incus uses `cowsql` for its database, to build and set it up, you can
-run `make deps`.
+Incus はデータベースとして`cowsql`を使用しています。
+ビルドしセットアップするためには`make deps`を実行してください。
 
-Incus itself also uses a number of (usually packaged) C libraries:
+Incus はほかにもいくつかの (たいていはパッケージ化されている)C ライブラリを使用しています。
 
 * `libacl1`
 * `libcap2`
-* `libuv1` (for `cowsql`)
-* `libsqlite3` >= 3.25.0 (for `cowsql`)
+* `libuv1`（`cowsql`で使用）
+* `libsqlite3` >= 3.25.0（`cowsql`で使用）
 
-Make sure you have all these libraries themselves and their development
-headers (`-dev` packages) installed.
+ライブラリそのものとライブラリの開発用ヘッダ (`-dev` パッケージ)のすべてをインストールしたことを確認してください。
