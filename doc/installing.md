@@ -111,6 +111,11 @@ sudo apt update
 sudo apt install acl attr autoconf automake dnsmasq-base git golang libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
 ```
 
+```{note}
+`liblxc-dev` パッケージを使って `go-lxc` モジュールのビルド時にコンパイルエラーが出た場合、`liblxc` のビルド時に `INC_DEVEL` の値に `0` を指定したか確認してください。確認するためには、`/usr/include/lxc/version.h` を見てください。
+もし `INC_DEVEL` の値が `1` なら、`0` に置き換えると問題を回避できます。これは Ubuntu 22.04/22.10 のパッケージのバグです。Ubuntu 23.04/23.10 ではこの問題はありません。
+```
+
 デフォルトのストレージドライバーである`dir`ドライバーに加えて、Incus ではいくつかのストレージドライバーが使えます。
 これらのツールをインストールすると、initramfs への追加が行われ、ホストのブートが少しだけ遅くなるかもしれませんが、特定のドライバーを使いたい場合には必要です。
 

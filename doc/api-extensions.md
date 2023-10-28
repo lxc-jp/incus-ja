@@ -2256,3 +2256,12 @@ syslog 形式のログメッセージを受信できる syslog ソケットを�
 
 この拡張は `requirements.privileged` というイメージの制限を追加します。
 `false` に設定すると特権コンテナでイメージが使用できなくなります。
+
+## `cluster_internal_custom_volume_copy`
+
+この拡張は単一の API 呼び出しでクラスタ内でカスタムストレージボリュームをコピーや移動できるようにします。
+`POST /1.0/storage-pools/<pool>/custom?target=<target>` を呼ぶとリクエストの `source` 部分で指定されたカスタムボリュームをコピーします。
+`POST /1.0/storage-pools/<pool>/custom/<volume>?target=<target>` をリクエストの `source` 部分で指定されたかステムボリュームを `source` から `target` に移動します。
+
+## `disk_io_bus`
+これはディスクデバイスに `io.bus` プロパティを追加します。ディスクがアタッチするバスを上書きするのに使えます。
