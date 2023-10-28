@@ -58,14 +58,12 @@ Incus のファイアウォールルールをどのように無効化し、 `fir
     sudo firewall-cmd --zone=trusted --change-interface=incusbr0 --permanent
     sudo firewall-cmd --reload
 
-<!-- Include start warning -->
-
 ```{warning}
+<!-- Include start warning -->
 上に示したコマンドはシンプルな例です。
 あなたの使い方に応じて、より高度なルールが必要な場合があり、その場合上の例をそのまま実行するとうっかりセキュリティリスクを引き起こす可能性があります。
-```
-
 <!-- Include end warning -->
+```
 
 ### UFW でブリッジにルールを追加する
 
@@ -84,11 +82,30 @@ UFW で認識不能なトラフィックをすべてドロップするルール�
     sudo ufw route allow in on incusbr0
     sudo ufw route allow out on incusbr0
 
+````{warning}
 % Repeat warning from above
 ```{include} network_bridge_firewalld.md
     :start-after: <!-- Include start warning -->
     :end-before: <!-- Include end warning -->
 ```
+
+以下はより制限の強いファイアウォールの例で、ゲストからホストへのアクセスは DHCP と DNS のみに限定し、外向きの通信は全て許可します:
+
+```
+# ゲストが Incus ホストから IP を取得できるようにする
+sudo ufw allow in on incusbr0 to any port 67 proto udp
+sudo ufw allow in on incusbr0 to any port 547 proto udp
+
+# ゲストが Incus ホストからホスト名を解決できるようにする
+sudo ufw allow in on incusbr0 to any port 53
+
+# ゲストが外向きの通信にアクセスできるようにする
+CIDR4="$(incus network get incusbr0 ipv4.address | sed 's|\.[0-9]\+/|.0/|')"
+CIDR6="$(incus network get incusbr0 ipv6.address | sed 's|:[0-9]\+/|:/|')"
+sudo ufw route allow in on incusbr0 from "${CIDR4}"
+sudo ufw route allow in on incusbr0 from "${CIDR6}"
+```
+````
 
 (network-incus-docker)=
 ## Incus と Docker の接続の問題を回避する
