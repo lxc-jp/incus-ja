@@ -47,7 +47,7 @@ Incus はすべてのインスタンス、ネットワークゲートウェイ�
 
 特定のゾーンに対して`dig`リクエストが許可されるようにするためには、そのゾーンの`peers.NAME.address`設定オプションを設定する必要があります。`NAME`はランダムなもので構いません。値は、`dig`が呼び出される IP アドレスと一致しなければなりません。同じランダムな`NAME`の`peers.NAME.key`は未設定のままにしておく必要があります。
 
-例: `lxc network zone set incus.example.net peers.whatever.address=192.0.2.1`
+例: `incus network zone set incus.example.net peers.whatever.address=192.0.2.1`
 
 ```{note}
 `dig`が呼び出し元の同じマシンのアドレスであるだけでは十分ではありません。それは、`incus`内のDNSサーバーが正確なリモートアドレスと考えるものと文字列で一致する必要があります。`dig`は`0.0.0.0`にバインドするため、必要なアドレスはおそらく、あなたが`core.dns_address`に提供したものと同じです。

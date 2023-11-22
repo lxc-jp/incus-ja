@@ -195,7 +195,7 @@ def instance_placement(request, candidate_members):
 
     cat instance_placement.star | incus config set instances.placement.scriptlet=-
 
-Incus に現在適用されているスクリプトレットを見るには`lxc config get instances.placement.scriptlet`コマンドを使用してください。
+Incus に現在適用されているスクリプトレットを見るには`incus config get instances.placement.scriptlet`コマンドを使用してください。
 
 スクリプトレットでは（Starlark で提供される関数に加えて）以下の関数が利用できます:
 

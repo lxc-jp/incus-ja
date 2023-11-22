@@ -43,7 +43,7 @@ Incus はイメージベースです。そしてさまざまなイメージサ�
 
 このイメージサーバーで利用可能なすべてのイメージを一覧表示するには以下のようにします。
 
-    lxc image list images:
+    incus image list images:
 
 Incus が使用するイメージについてのより詳細情報は{ref}`images`を参照してください。
 
