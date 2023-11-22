@@ -38,7 +38,7 @@
 
 たとえば、`config.yaml` の設定でコンテナを起動するには、以下のコマンドを入力します:
 
-    lxc launch images:ubuntu/22.04 ubuntu-config < config.yaml
+    incus launch images:ubuntu/22.04 ubuntu-config < config.yaml
 
     incus launch images:ubuntu/22.04 ubuntu-config < config.yaml
 

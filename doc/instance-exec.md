@@ -52,7 +52,7 @@ Incus はインスタンス内のデータを読まない、あるいはその�
 インスタンスオプションとして環境変数を渡す
 : インスタンス内で`ENVVAR`環境変数を`VALUE`に設定するには、`environment.ENVVAR`インスタンスオプション を設定します（{config:option}`instance-miscellaneous:environment.*`参照）:
 
-      lxc config set <instance_name> environment.ENVVAR=VALUE
+      incus config set <instance_name> environment.ENVVAR=VALUE
 
 exec コマンドに環境変数を渡す
 : exec コマンドに環境変数を渡すには、`--env`フラグを使います。
@@ -95,12 +95,12 @@ exec コマンドに環境変数を渡す
 インスタンス内で直接コマンドを実行したい場合、インスタンス内でシェルコマンドを実行します。
 たとえば、以下のコマンド（インスタンス内に`/bin/bash`コマンドが存在する想定）を入力します。
 
-    lxc exec <instance_name> -- /bin/bash
+    incus exec <instance_name> -- /bin/bash
 
 デフォルトでは`root`ユーザーでログインします。
 別のユーザーでログインしたい場合は、以下のコマンドを入力します:
 
-    lxc exec <instance_name> -- su --login <user_name>
+    incus exec <instance_name> -- su --login <user_name>
 
 ```{note}
 インスタンス内で稼働しているオペレーティングシステムによっては、先にユーザを作成する必要があるかもしれません。

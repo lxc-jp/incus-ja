@@ -65,7 +65,7 @@ Incus はこの方法を強制しませんが、プロファイルとインス�
 
 インスタンスに直接`cloud-init`を設定する場合、`cloud-init`はインスタンスの最初の起動時にのみ実行されることに注意してください。
 つまり、インスタンスを起動する前に`cloud-init`を設定する必要があります。
-これを行うには、`lxc launch`の代わりに`lxc init`でインスタンスを作成し、設定が完了した後に起動します。
+これを行うには、[`incus launch`](incus_launch.md)の代わりに[`incus init`](incus_create.md)でインスタンスを作成し、設定が完了した後に起動します。
 
 ### `cloud-init`設定のYAMLフォーマット
 
