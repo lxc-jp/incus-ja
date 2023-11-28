@@ -27,6 +27,7 @@ import (
 	"github.com/lxc/incus/internal/idmap"
 	internalIO "github.com/lxc/incus/internal/io"
 	"github.com/lxc/incus/internal/linux"
+	"github.com/lxc/incus/internal/revert"
 	"github.com/lxc/incus/internal/rsync"
 	"github.com/lxc/incus/internal/server/acme"
 	"github.com/lxc/incus/internal/server/apparmor"
@@ -39,6 +40,7 @@ import (
 	"github.com/lxc/incus/internal/server/daemon"
 	"github.com/lxc/incus/internal/server/db"
 	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
+	"github.com/lxc/incus/internal/server/db/query"
 	"github.com/lxc/incus/internal/server/db/warningtype"
 	"github.com/lxc/incus/internal/server/dns"
 	"github.com/lxc/incus/internal/server/endpoints"
@@ -67,6 +69,7 @@ import (
 	"github.com/lxc/incus/internal/server/warnings"
 	internalUtil "github.com/lxc/incus/internal/util"
 	"github.com/lxc/incus/internal/version"
+	"github.com/lxc/incus/shared/api"
 	"github.com/lxc/incus/shared/archive"
 	"github.com/lxc/incus/shared/cancel"
 	"github.com/lxc/incus/shared/logger"
@@ -231,30 +234,34 @@ type APIEndpointAction struct {
 	AllowUntrusted bool
 }
 
-// allowAuthenticated is an AccessHandler which allows all requests.
-// This function doesn't do anything itself, except return the EmptySyncResponse that allows the request to
-// proceed. However in order to access any API route you must be authenticated, unless the handler's AllowUntrusted
-// property is set to true or you are an admin.
+// allowAuthenticated is an AccessHandler which allows only authenticated requests. This should be used in conjunction
+// with further access control within the handler (e.g. to filter resources the user is able to view/edit).
 func allowAuthenticated(d *Daemon, r *http.Request) response.Response {
+	err := d.checkTrustedClient(r)
+	if err != nil {
+		return response.SmartError(err)
+	}
+
 	return response.EmptySyncResponse
 }
 
-// allowProjectPermission is a wrapper to check access against the project.
-func allowProjectPermission() func(d *Daemon, r *http.Request) response.Response {
+// allowPermission is a wrapper to check access against a given object, an object being an image, instance, network, etc.
+// Mux vars should be passed in so that the object we are checking can be created. For example, a certificate object requires
+// a fingerprint, the mux var for certificate fingerprints is "fingerprint", so that string should be passed in.
+// Mux vars should always be passed in with the same order they appear in the API route.
+func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, muxVars ...string) func(d *Daemon, r *http.Request) response.Response {
 	return func(d *Daemon, r *http.Request) response.Response {
-		s := d.State()
-
-		// Shortcut for speed
-		if s.Authorizer.UserIsAdmin(r) {
-			return response.EmptySyncResponse
+		objectName, err := auth.ObjectFromRequest(r, objectType, muxVars...)
+		if err != nil {
+			return response.InternalError(fmt.Errorf("Failed to create authentication object: %w", err))
 		}
 
-		// Get the project
-		projectName := projectParam(r)
+		s := d.State()
 
-		// Validate whether the user access to the project.
-		if !s.Authorizer.UserHasPermission(r, projectName, "") {
-			return response.Forbidden(nil)
+		// Validate whether the user has the needed permission
+		err = s.Authorizer.CheckPermission(r.Context(), r, objectName, entitlement)
+		if err != nil {
+			return response.SmartError(err)
 		}
 
 		return response.EmptySyncResponse
@@ -340,7 +347,7 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 			return false, "", "", err
 		}
 
-		return true, userName, "oidc", nil
+		return true, userName, api.AuthenticationMethodOIDC, nil
 	}
 
 	// Validate normal TLS access.
@@ -351,7 +358,7 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 		for _, i := range r.TLS.PeerCertificates {
 			trusted, username := localUtil.CheckTrustState(*i, trustedCerts[certificate.TypeMetrics], d.endpoints.NetworkCert(), trustCACertificates)
 			if trusted {
-				return true, username, "tls", nil
+				return true, username, api.AuthenticationMethodTLS, nil
 			}
 		}
 	}
@@ -359,7 +366,7 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 	for _, i := range r.TLS.PeerCertificates {
 		trusted, username := localUtil.CheckTrustState(*i, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert(), trustCACertificates)
 		if trusted {
-			return true, username, "tls", nil
+			return true, username, api.AuthenticationMethodTLS, nil
 		}
 	}
 
@@ -462,7 +469,7 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 		// Reject internal queries to remote, non-cluster, clients
 		if version == "internal" && !util.ValueInSlice(protocol, []string{"unix", "cluster"}) {
 			// Except for the initial cluster accept request (done over trusted TLS)
-			if !trusted || c.Path != "cluster/accept" || protocol != "tls" {
+			if !trusted || c.Path != "cluster/accept" || protocol != api.AuthenticationMethodTLS {
 				logger.Warn("Rejecting remote internal API request", logger.Ctx{"ip": r.RemoteAddr})
 				_ = response.Forbidden(nil).Render(w)
 				return
@@ -480,50 +487,9 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 		if trusted {
 			logger.Debug("Handling API request", logCtx)
 
-			// Get user access data.
-			userAccess, err := func() (*auth.UserAccess, error) {
-				ua := &auth.UserAccess{}
-				ua.Admin = true
-
-				// Internal cluster communications.
-				if protocol == "cluster" {
-					return ua, nil
-				}
-
-				// Regular TLS clients.
-				if protocol == "tls" {
-					certProjects := d.clientCerts.GetProjects()
-
-					// Check if we have restrictions on the key.
-					if certProjects != nil {
-						projects, ok := certProjects[username]
-						if ok {
-							ua.Admin = false
-							projectMap := map[string][]string{}
-							for _, projectName := range projects {
-								projectMap[projectName] = nil
-							}
-
-							ua.Projects = projectMap
-						}
-					}
-
-					return ua, nil
-				}
-
-				return ua, nil
-			}()
-			if err != nil {
-				logCtx["err"] = err
-				logger.Warn("Rejecting remote API request", logCtx)
-				_ = response.Forbidden(nil).Render(w)
-				return
-			}
-
 			// Add authentication/authorization context data.
 			ctx := context.WithValue(r.Context(), request.CtxUsername, username)
 			ctx = context.WithValue(ctx, request.CtxProtocol, protocol)
-			ctx = context.WithValue(ctx, request.CtxAccess, userAccess)
 
 			// Add forwarded requestor data.
 			if protocol == "cluster" {
@@ -597,16 +563,21 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 				return response.NotImplemented(nil)
 			}
 
+			// All APIEndpointActions should have an access handler or should allow untrusted requests.
+			if action.AccessHandler == nil && !action.AllowUntrusted {
+				return response.InternalError(fmt.Errorf("Access handler not defined for %s %s", r.Method, r.URL.RequestURI()))
+			}
+
+			// If the request is not trusted, only call the handler if the action allows it.
+			if !trusted && !action.AllowUntrusted {
+				return response.Forbidden(errors.New("You must be authenticated"))
+			}
+
+			// Call the access handler if there is one.
 			if action.AccessHandler != nil {
-				// Defer access control to custom handler
 				resp := action.AccessHandler(d, r)
 				if resp != response.EmptySyncResponse {
 					return resp
-				}
-			} else if !action.AllowUntrusted {
-				// Require admin privileges
-				if !d.authorizer.UserIsAdmin(r) {
-					return response.Forbidden(nil)
 				}
 			}
 
@@ -730,7 +701,7 @@ func (d *Daemon) init() error {
 	var dbWarnings []dbCluster.Warning
 
 	// Set default authorizer.
-	d.authorizer, err = auth.LoadAuthorizer("tls", nil, logger.Log, nil)
+	d.authorizer, err = auth.LoadAuthorizer(d.shutdownCtx, auth.DriverTLS, logger.Log, d.clientCerts)
 	if err != nil {
 		return err
 	}
@@ -1277,6 +1248,7 @@ func (d *Daemon) init() error {
 	lokiURL, lokiUsername, lokiPassword, lokiCACert, lokiLabels, lokiLoglevel, lokiTypes := d.globalConfig.LokiServer()
 	oidcIssuer, oidcClientID, oidcAudience := d.globalConfig.OIDCServer()
 	syslogSocketEnabled := d.localConfig.SyslogSocket()
+	openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openFGAAuthorizationModelID := d.globalConfig.OpenFGA()
 	instancePlacementScriptlet := d.globalConfig.InstancesPlacementScriptlet()
 
 	d.endpoints.NetworkUpdateTrustedProxy(d.globalConfig.HTTPSTrustedProxy())
@@ -1300,7 +1272,24 @@ func (d *Daemon) init() error {
 
 	// Setup OIDC authentication.
 	if oidcIssuer != "" && oidcClientID != "" {
-		d.oidcVerifier = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience)
+		d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Setup OpenFGA authorization.
+	if openfgaAPIURL != "" && openfgaStoreID != "" && openfgaAPIToken != "" {
+		if openFGAAuthorizationModelID == "" {
+			// We should never be missing the model ID at start up if we have other connection details (this means
+			// something went wrong the last time we tried to set it up).
+			logger.Warn("OpenFGA authorization driver is misconfigured, skipping...")
+		} else {
+			err = d.setupOpenFGA(openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openFGAAuthorizationModelID)
+			if err != nil {
+				logger.Error("Failed to configure OpenFGA. Reverting to default TLS authorization", logger.Ctx{"error": err})
+			}
+		}
 	}
 
 	// Setup BGP listener.
@@ -1738,6 +1727,246 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 	}
 
 	return err
+}
+
+// Setup OpenFGA.
+func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string, authorizationModelID string) error {
+	var err error
+
+	if d.authorizer != nil {
+		err := d.authorizer.StopService(d.shutdownCtx)
+		if err != nil {
+			logger.Error("Failed to stop authorizer service", logger.Ctx{"error": err})
+		}
+	}
+
+	if apiURL == "" || apiToken == "" || storeID == "" || authorizationModelID == "" {
+		// Reset to default authorizer.
+		d.authorizer, err = auth.LoadAuthorizer(d.shutdownCtx, auth.DriverTLS, logger.Log, d.clientCerts)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	config := map[string]any{
+		"openfga.api.url":        apiURL,
+		"openfga.api.token":      apiToken,
+		"openfga.store.id":       storeID,
+		"openfga.store.model_id": authorizationModelID,
+	}
+
+	revert := revert.New()
+	defer revert.Fail()
+
+	revert.Add(func() {
+		// Reset to default authorizer.
+		d.authorizer, _ = auth.LoadAuthorizer(d.shutdownCtx, auth.DriverTLS, logger.Log, d.clientCerts)
+	})
+
+	var resources auth.Resources
+	err = d.db.Cluster.Transaction(d.shutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
+		err := query.Scan(ctx, tx.Tx(), "SELECT certificates.fingerprint from certificates", func(scan func(dest ...any) error) error {
+			var fingerprint string
+			err := scan(&fingerprint)
+			if err != nil {
+				return err
+			}
+
+			resources.CertificateObjects = append(resources.CertificateObjects, auth.ObjectCertificate(fingerprint))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT name from storage_pools", func(scan func(dest ...any) error) error {
+			var storagePoolName string
+			err := scan(&storagePoolName)
+			if err != nil {
+				return err
+			}
+
+			resources.StoragePoolObjects = append(resources.StoragePoolObjects, auth.ObjectStoragePool(storagePoolName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT name from projects", func(scan func(dest ...any) error) error {
+			var projectName string
+			err := scan(&projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.ProjectObjects = append(resources.ProjectObjects, auth.ObjectProject(projectName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT images.fingerprint, projects.name from images JOIN projects ON projects.id=images.project_id", func(scan func(dest ...any) error) error {
+			var imageFingerprint string
+			var projectName string
+			err := scan(&imageFingerprint, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.ImageObjects = append(resources.ImageObjects, auth.ObjectImage(projectName, imageFingerprint))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT images_aliases.name, projects.name from images_aliases JOIN projects ON projects.id=images_aliases.project_id", func(scan func(dest ...any) error) error {
+			var imageAliasName string
+			var projectName string
+			err := scan(&imageAliasName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.ImageAliasObjects = append(resources.ImageAliasObjects, auth.ObjectImageAlias(projectName, imageAliasName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT instances.name, projects.name from instances JOIN projects ON projects.id=instances.project_id", func(scan func(dest ...any) error) error {
+			var instanceName string
+			var projectName string
+			err := scan(&instanceName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.InstanceObjects = append(resources.InstanceObjects, auth.ObjectInstance(projectName, instanceName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT networks.name, projects.name FROM networks JOIN projects ON projects.id=networks.project_id", func(scan func(dest ...any) error) error {
+			var networkName string
+			var projectName string
+			err := scan(&networkName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.NetworkObjects = append(resources.NetworkObjects, auth.ObjectNetwork(projectName, networkName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT networks_acls.name, projects.name FROM networks_acls JOIN projects ON projects.id=networks_acls.project_id", func(scan func(dest ...any) error) error {
+			var networkACLName string
+			var projectName string
+			err := scan(&networkACLName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.NetworkACLObjects = append(resources.NetworkACLObjects, auth.ObjectNetworkACL(projectName, networkACLName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT networks_zones.name, projects.name FROM networks_zones JOIN projects ON projects.id=networks_zones.project_id", func(scan func(dest ...any) error) error {
+			var networkZoneName string
+			var projectName string
+			err := scan(&networkZoneName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.NetworkZoneObjects = append(resources.NetworkZoneObjects, auth.ObjectNetworkZone(projectName, networkZoneName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT profiles.name, projects.name FROM profiles JOIN projects ON projects.id=profiles.project_id", func(scan func(dest ...any) error) error {
+			var profileName string
+			var projectName string
+			err := scan(&profileName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.ProfileObjects = append(resources.ProfileObjects, auth.ObjectProfile(projectName, profileName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT storage_volumes.name, storage_volumes.type, storage_pools.name, projects.name FROM storage_volumes JOIN projects ON projects.id=storage_volumes.project_id JOIN storage_pools ON storage_pools.id=storage_volumes.storage_pool_id", func(scan func(dest ...any) error) error {
+			var storageVolumeName string
+			var storageVolumeType int
+			var storagePoolName string
+			var projectName string
+			err := scan(&storageVolumeName, &storageVolumeType, &storagePoolName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			storageVolumeTypeName, err := db.StoragePoolVolumeTypeToName(storageVolumeType)
+			if err != nil {
+				return err
+			}
+
+			resources.StoragePoolVolumeObjects = append(resources.StoragePoolVolumeObjects, auth.ObjectStorageVolume(projectName, storagePoolName, storageVolumeTypeName, storageVolumeName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		err = query.Scan(ctx, tx.Tx(), "SELECT storage_buckets.name, storage_pools.name, projects.name FROM storage_buckets JOIN projects ON projects.id=storage_buckets.project_id JOIN storage_pools ON storage_pools.id=storage_buckets.storage_pool_id", func(scan func(dest ...any) error) error {
+			var storageBucketName string
+			var storagePoolName string
+			var projectName string
+			err := scan(&storageBucketName, &storagePoolName, &projectName)
+			if err != nil {
+				return err
+			}
+
+			resources.StorageBucketObjects = append(resources.StorageBucketObjects, auth.ObjectStorageBucket(projectName, storagePoolName, storageBucketName))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	openfgaAuthorizer, err := auth.LoadAuthorizer(d.shutdownCtx, auth.DriverOpenFGA, logger.Log, d.clientCerts, auth.WithConfig(config), auth.WithResources(resources))
+	if err != nil {
+		return err
+	}
+
+	d.authorizer = openfgaAuthorizer
+
+	revert.Success()
+	return nil
 }
 
 // Syslog listener.

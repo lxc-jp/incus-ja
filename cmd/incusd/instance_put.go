@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/pborman/uuid"
 
 	internalInstance "github.com/lxc/incus/internal/instance"
 	"github.com/lxc/incus/internal/revert"
@@ -20,6 +20,7 @@ import (
 	"github.com/lxc/incus/internal/server/instance/instancetype"
 	"github.com/lxc/incus/internal/server/operations"
 	projecthelpers "github.com/lxc/incus/internal/server/project"
+	"github.com/lxc/incus/internal/server/request"
 	"github.com/lxc/incus/internal/server/response"
 	"github.com/lxc/incus/internal/server/state"
 	localUtil "github.com/lxc/incus/internal/server/util"
@@ -70,7 +71,7 @@ func instancePut(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	projectName := projectParam(r)
+	projectName := request.ProjectParam(r)
 
 	// Get the container
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -225,7 +226,7 @@ func instanceSnapRestore(s *state.State, projectName string, name string, snap s
 	}
 
 	// Generate a new `volatile.uuid.generation` to differentiate this instance restored from a snapshot from the original instance.
-	source.LocalConfig()["volatile.uuid.generation"] = uuid.New()
+	source.LocalConfig()["volatile.uuid.generation"] = uuid.New().String()
 
 	err = inst.Restore(source, stateful)
 	if err != nil {

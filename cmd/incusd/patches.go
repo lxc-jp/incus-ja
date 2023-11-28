@@ -703,8 +703,8 @@ func patchClusteringDropDatabaseRole(name string, d *Daemon) error {
 
 // patchNetworkClearBridgeVolatileHwaddr removes the unsupported `volatile.bridge.hwaddr` config key from networks.
 func patchNetworkClearBridgeVolatileHwaddr(name string, d *Daemon) error {
-	// Use project.Default, as bridge networks don't support projects.
-	projectName := project.Default
+	// Use api.ProjectDefaultName, as bridge networks don't support projects.
+	projectName := api.ProjectDefaultName
 
 	// Get the list of networks.
 	networks, err := d.db.Cluster.GetNetworks(projectName)
@@ -746,6 +746,30 @@ func patchStorageRenameCustomISOBlockVolumes(name string, d *Daemon) error {
 		return fmt.Errorf("Failed getting storage pool names: %w", err)
 	}
 
+	// Only apply patch on leader.
+	var localConfig *node.Config
+	isLeader := false
+
+	err = d.db.Node.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.NodeTx) error {
+		localConfig, err = node.ConfigLoad(ctx, tx)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	leaderAddress, err := d.gateway.LeaderAddress()
+	if err != nil {
+		// If we're not clustered, we're the leader.
+		if errors.Is(err, cluster.ErrNodeIsNotClustered) {
+			isLeader = true
+		} else {
+			return err
+		}
+	} else if localConfig.ClusterAddress() == leaderAddress {
+		isLeader = true
+	}
+
 	volTypeCustom := db.StoragePoolVolumeTypeCustom
 	customPoolVolumes := make(map[string][]*db.StorageVolume, 0)
 
@@ -783,7 +807,17 @@ func patchStorageRenameCustomISOBlockVolumes(name string, d *Daemon) error {
 			return fmt.Errorf("Failed loading pool %q: %w", poolName, err)
 		}
 
+		// Ensure the renaming is done only on the cluster leader for remote storage pools.
+		if p.Driver().Info().Remote && !isLeader {
+			continue
+		}
+
 		for _, vol := range volumes {
+			// In a non-clusted environment ServerName will be empty.
+			if s.ServerName != "" && vol.Location != s.ServerName {
+				continue
+			}
+
 			// Exclude non-ISO custom volumes.
 			if vol.ContentType != db.StoragePoolVolumeContentTypeNameISO {
 				continue
@@ -859,6 +893,11 @@ func patchZfsSetContentTypeUserProperty(name string, d *Daemon) error {
 		}
 
 		for _, vol := range volumes {
+			// In a non-clusted environment ServerName will be empty.
+			if s.ServerName != "" && vol.Location != s.ServerName {
+				continue
+			}
+
 			zfsPoolName := p.Driver().Config()["zfs.pool_name"]
 			if zfsPoolName != "" {
 				poolName = zfsPoolName
@@ -946,7 +985,8 @@ func patchStorageZfsUnsetInvalidBlockSettings(_ string, d *Daemon) error {
 
 	for pool, volumes := range poolVolumes {
 		for _, vol := range volumes {
-			if vol.Location != s.ServerName {
+			// In a non-clusted environment ServerName will be empty.
+			if s.ServerName != "" && vol.Location != s.ServerName {
 				continue
 			}
 

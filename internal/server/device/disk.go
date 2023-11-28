@@ -121,9 +121,9 @@ func (d *disk) CanHotPlug() bool {
 		return true
 	}
 
-	// A mount path indicates a filesystem disk being attached, which cannot be hot-plugged for VMs due to
-	// limitations with virtiofs.
-	if d.config["path"] != "" {
+	// Only VirtioFS works with path hotplug.
+	// As migration.stateful turns off VirtioFS, this also turns off hotplugging of paths.
+	if util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) {
 		return false
 	}
 
@@ -198,11 +198,16 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		"boot.priority":     validate.Optional(validate.IsUint32),
 		"path":              validate.IsAny,
 		"io.cache":          validate.Optional(validate.IsOneOf("none", "writeback", "unsafe")),
+		"io.bus":            validate.Optional(validate.IsOneOf("virtio-scsi", "nvme")),
 	}
 
 	err := d.config.Validate(rules)
 	if err != nil {
 		return err
+	}
+
+	if instConf.Type() == instancetype.Container && d.config["io.bus"] != "" {
+		return fmt.Errorf("IO bus configuration cannot be applied to containers")
 	}
 
 	if instConf.Type() == instancetype.Container && d.config["io.cache"] != "" {
@@ -424,7 +429,7 @@ func (d *disk) validateEnvironmentSourcePath() error {
 	// If project not default then check if using restricted disk paths.
 	// Default project cannot be restricted, so don't bother loading the project config in that case.
 	instProject := d.inst.Project()
-	if instProject.Name != project.Default {
+	if instProject.Name != api.ProjectDefaultName {
 		// If restricted disk paths are in force, then check the disk's source is allowed, and record the
 		// allowed parent path for later user during device start up sequence.
 		if util.IsTrue(instProject.Config["restricted"]) && instProject.Config["restricted.devices.disk.paths"] != "" {
@@ -739,11 +744,6 @@ func (d *disk) detectVMPoolMountOpts() []string {
 		opts = append(opts, DiskIOUring)
 	}
 
-	// Allow the user to override the caching mode.
-	if d.config["io.cache"] != "" {
-		opts = append(opts, fmt.Sprintf("cache=%s", d.config["io.cache"]))
-	}
-
 	return opts
 }
 
@@ -754,6 +754,19 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 	revert := revert.New()
 	defer revert.Fail()
 
+	// Handle user overrides.
+	opts := []string{}
+
+	// Allow the user to override the bus.
+	if d.config["io.bus"] != "" {
+		opts = append(opts, fmt.Sprintf("bus=%s", d.config["io.bus"]))
+	}
+
+	// Allow the user to override the caching mode.
+	if d.config["io.cache"] != "" {
+		opts = append(opts, fmt.Sprintf("cache=%s", d.config["io.cache"]))
+	}
+
 	if internalInstance.IsRootDiskDevice(d.config) {
 		// Handle previous requests for setting new quotas.
 		err := d.applyDeferredQuota()
@@ -761,11 +774,13 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 			return nil, err
 		}
 
+		opts = append(opts, d.detectVMPoolMountOpts()...)
+
 		runConf.Mounts = []deviceConfig.MountEntryItem{
 			{
 				TargetPath: d.config["path"], // Indicator used that this is the root device.
 				DevName:    d.name,
-				Opts:       d.detectVMPoolMountOpts(),
+				Opts:       opts,
 			},
 		}
 
@@ -793,6 +808,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				DevPath: fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
 				DevName: d.name,
 				FSType:  "iso9660",
+				Opts:    opts,
 			},
 		}
 
@@ -808,6 +824,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				{
 					DevPath: DiskGetRBDFormat(clusterName, userName, fields[0], fields[1]),
 					DevName: d.name,
+					Opts:    opts,
 				},
 			}
 		} else {
@@ -817,6 +834,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 			mount := deviceConfig.MountEntryItem{
 				DevPath: d.config["source"],
 				DevName: d.name,
+				Opts:    opts,
 			}
 
 			// Mount the pool volume and update srcPath to mount path so it can be recognised as dir
@@ -869,6 +887,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					mount := deviceConfig.MountEntryItem{
 						DevPath: DiskGetRBDFormat(clusterName, userName, poolName, d.config["source"]),
 						DevName: d.name,
+						Opts:    opts,
 					}
 
 					if contentType == db.StoragePoolVolumeContentTypeISO {
@@ -887,7 +906,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 
 				revert.Add(revertFunc)
 
-				mount.Opts = d.detectVMPoolMountOpts()
+				mount.Opts = append(mount.Opts, d.detectVMPoolMountOpts()...)
 			}
 
 			if util.IsTrue(d.config["readonly"]) {
@@ -980,26 +999,29 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					return nil, fmt.Errorf("Failed to setup virtiofsd for device %q: %w", d.name, err)
 				}
 
-				// Start virtfs-proxy-helper for 9p share (this will rewrite mount.DevPath with
-				// socket FD number so must come after starting virtiofsd).
-				err = func() error {
-					sockFile, cleanup, err := DiskVMVirtfsProxyStart(d.state.OS.ExecPath, d.vmVirtfsProxyHelperPaths(), mount.DevPath, rawIDMaps)
+				// We can't hotplug 9p shares, so only do 9p for stopped instances.
+				if !d.inst.IsRunning() {
+					// Start virtfs-proxy-helper for 9p share (this will rewrite mount.DevPath with
+					// socket FD number so must come after starting virtiofsd).
+					err = func() error {
+						sockFile, cleanup, err := DiskVMVirtfsProxyStart(d.state.OS.ExecPath, d.vmVirtfsProxyHelperPaths(), mount.DevPath, rawIDMaps)
+						if err != nil {
+							return err
+						}
+
+						revert.Add(cleanup)
+
+						// Request the unix socket is closed after QEMU has connected on startup.
+						runConf.PostHooks = append(runConf.PostHooks, sockFile.Close)
+
+						// Use 9p socket FD number as dev path so qemu can connect to the proxy.
+						mount.DevPath = fmt.Sprintf("%d", sockFile.Fd())
+
+						return nil
+					}()
 					if err != nil {
-						return err
+						return nil, fmt.Errorf("Failed to setup virtfs-proxy-helper for device %q: %w", d.name, err)
 					}
-
-					revert.Add(cleanup)
-
-					// Request the unix socket is closed after QEMU has connected on startup.
-					runConf.PostHooks = append(runConf.PostHooks, sockFile.Close)
-
-					// Use 9p socket FD number as dev path so qemu can connect to the proxy.
-					mount.DevPath = fmt.Sprintf("%d", sockFile.Fd())
-
-					return nil
-				}()
-				if err != nil {
-					return nil, fmt.Errorf("Failed to setup virtfs-proxy-helper for device %q: %w", d.name, err)
 				}
 			} else {
 				f, err := d.localSourceOpen(mount.DevPath)

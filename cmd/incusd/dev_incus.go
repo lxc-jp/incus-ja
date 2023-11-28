@@ -21,7 +21,6 @@ import (
 	"github.com/lxc/incus/internal/server/instance"
 	"github.com/lxc/incus/internal/server/instance/instancetype"
 	"github.com/lxc/incus/internal/server/lifecycle"
-	"github.com/lxc/incus/internal/server/project"
 	"github.com/lxc/incus/internal/server/request"
 	"github.com/lxc/incus/internal/server/response"
 	"github.com/lxc/incus/internal/server/state"
@@ -305,7 +304,7 @@ func hoistReq(f func(*Daemon, instance.Instance, http.ResponseWriter, *http.Requ
 		}
 
 		if rootUID != cred.Uid {
-			http.Error(w, "Access denied for non-root user", 401)
+			http.Error(w, "Access denied for non-root user", http.StatusUnauthorized)
 			return
 		}
 
@@ -408,7 +407,7 @@ func findContainerForPid(pid int32, s *state.State) (instance.Container, error) 
 	 * 1. Walk up the process tree until you see something that looks like
 	 *    an lxc monitor process and extract its name from there.
 	 *
-	 * 2. If this fails, it may be that someone did an `lxc exec foo bash`,
+	 * 2. If this fails, it may be that someone did an `incus exec foo -- bash`,
 	 *    so the process isn't actually a descendant of the container's
 	 *    init. In this case we just look through all the containers until
 	 *    we find an init with a matching pid namespace. This is probably
@@ -428,7 +427,7 @@ func findContainerForPid(pid int32, s *state.State) (instance.Container, error) 
 			parts := strings.Split(string(cmdline), " ")
 			name := strings.TrimSuffix(parts[len(parts)-1], "\x00")
 
-			projectName := project.Default
+			projectName := api.ProjectDefaultName
 			if strings.Contains(name, "_") {
 				fields := strings.SplitN(name, "_", 2)
 				projectName = fields[0]

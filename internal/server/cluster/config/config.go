@@ -233,6 +233,11 @@ func (c *Config) ClusterHealingThreshold() time.Duration {
 	return healingThreshold
 }
 
+// OpenFGA returns all OpenFGA settings need to interact with an OpenFGA server.
+func (c *Config) OpenFGA() (apiURL string, apiToken string, storeID string, authorizationModelID string) {
+	return c.m.GetString("openfga.api.url"), c.m.GetString("openfga.api.token"), c.m.GetString("openfga.store.id"), c.m.GetString("openfga.store.model_id")
+}
+
 // Dump current configuration keys and their values. Keys with values matching
 // their defaults are omitted.
 func (c *Config) Dump() map[string]string {
@@ -280,7 +285,7 @@ var ConfigSchema = config.Schema{
 	//  type: string
 	//  scope: global
 	//  defaultdesc: `https://acme-v02.api.letsencrypt.org/directory`
-	//  shortdesc: Agree to ACME terms of service
+	//  shortdesc: URL to the directory resource of the ACME service
 	"acme.ca_url": {},
 
 	// gendoc:generate(entity=server, group=acme, key=acme.domain)
@@ -422,7 +427,7 @@ var ConfigSchema = config.Schema{
 	//  type: bool
 	//  scope: global
 	//  shortdesc: Whether to set `Access-Control-Allow-Credentials`
-	"core.https_allowed_credentials": {Type: config.Bool},
+	"core.https_allowed_credentials": {Type: config.Bool, Default: "false"},
 
 	// gendoc:generate(entity=server, group=core, key=core.https_trusted_proxy)
 	// Specify a comma-separated list of IP addresses of trusted servers that provide the client's address through the proxy connection header.
@@ -482,7 +487,7 @@ var ConfigSchema = config.Schema{
 	//  type: bool
 	//  scope: global
 	//  shortdesc: Whether to automatically trust clients signed by the CA
-	"core.trust_ca_certificates": {Type: config.Bool},
+	"core.trust_ca_certificates": {Type: config.Bool, Default: "false"},
 
 	// gendoc:generate(entity=server, group=images, key=images.auto_update_cached)
 	//
@@ -607,6 +612,38 @@ var ConfigSchema = config.Schema{
 	//  defaultdesc: `lifecycle,logging`
 	//  shortdesc: Events to send to the Loki server
 	"loki.types": {Validator: validate.Optional(validate.IsListOf(validate.IsOneOf("lifecycle", "logging", "network-acl"))), Default: "lifecycle,logging"},
+
+	// gendoc:generate(entity=server, group=openfga, key=openfga.api.token)
+	//
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: API token of the OpenFGA server
+	"openfga.api.token": {},
+
+	// gendoc:generate(entity=server, group=openfga, key=openfga.api.url)
+	//
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: URL of the OpenFGA server
+	"openfga.api.url": {},
+
+	// gendoc:generate(entity=server, group=openfga, key=openfga.store.id)
+	//
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: ID of the OpenFGA permission store
+	"openfga.store.id": {},
+
+	// gendoc:generate(entity=server, group=openfga, key=openfga.store.model_id)
+	//
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: ID of the OpenFGA authorization model
+	"openfga.store.model_id": {},
 
 	// gendoc:generate(entity=server, group=oidc, key=oidc.client.id)
 	//

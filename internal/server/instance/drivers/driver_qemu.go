@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
@@ -28,10 +28,10 @@ import (
 	"unsafe"
 
 	"github.com/flosch/pongo2"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/kballard/go-shellquote"
 	"github.com/mdlayher/vsock"
-	"github.com/pborman/uuid"
 	"github.com/pkg/sftp"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
@@ -339,6 +339,11 @@ func qemuCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.I
 	if d.isSnapshot {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceSnapshotCreated.Event(d, nil))
 	} else {
+		err = d.state.Authorizer.AddInstance(d.state.ShutdownCtx, d.project.Name, d.Name())
+		if err != nil {
+			logger.Error("Failed to add instance to authorizer", logger.Ctx{"name": d.Name(), "project": d.project.Name, "error": err})
+		}
+
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceCreated.Event(d, map[string]any{
 			"type":         api.InstanceTypeVM,
 			"storage-pool": d.storagePool.Name(),
@@ -1187,7 +1192,7 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	// Generate UUID if not present (do this before UpdateBackupFile() call).
 	instUUID := d.localConfig["volatile.uuid"]
 	if instUUID == "" {
-		instUUID = uuid.New()
+		instUUID = uuid.New().String()
 		volatileSet["volatile.uuid"] = instUUID
 	}
 
@@ -1928,15 +1933,9 @@ func (d *qemu) architectureSupportsUEFI(arch int) bool {
 }
 
 func (d *qemu) setupNvram() error {
+	var err error
+
 	d.logger.Debug("Generating NVRAM")
-
-	// Mount the instance's config volume.
-	_, err := d.mount()
-	if err != nil {
-		return err
-	}
-
-	defer func() { _ = d.unmount() }()
 
 	// Cleanup existing variables.
 	for _, firmwares := range [][]ovmfFirmware{ovmfGenericFirmwares, ovmfSecurebootFirmwares, ovmfCSMFirmwares} {
@@ -2098,9 +2097,16 @@ func (d *qemu) deviceStart(dev device.Device, instanceRunning bool) (*deviceConf
 			}
 
 			for _, mount := range runConf.Mounts {
-				err = d.deviceAttachBlockDevice(dev.Name(), configCopy, mount)
-				if err != nil {
-					return nil, err
+				if mount.FSType == "9p" {
+					err = d.deviceAttachPath(dev.Name(), configCopy, mount)
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					err = d.deviceAttachBlockDevice(dev.Name(), configCopy, mount)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 
@@ -2124,6 +2130,106 @@ func (d *qemu) deviceStart(dev device.Device, instanceRunning bool) (*deviceConf
 	return runConf, nil
 }
 
+func (d *qemu) deviceAttachPath(deviceName string, configCopy map[string]string, mount deviceConfig.MountEntryItem) error {
+	escapedDeviceName := linux.PathNameEncode(deviceName)
+	deviceID := fmt.Sprintf("%s%s", qemuDeviceIDPrefix, escapedDeviceName)
+	mountTag := fmt.Sprintf("incus_%s", deviceName)
+
+	// Detect virtiofsd path.
+	virtiofsdSockPath := filepath.Join(d.DevicesPath(), fmt.Sprintf("virtio-fs.%s.sock", deviceName))
+	if !util.PathExists(virtiofsdSockPath) {
+		return fmt.Errorf("Virtiofsd isn't running")
+	}
+
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	// Check if the agent is running.
+	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
+	if err != nil {
+		return fmt.Errorf("Failed to connect to QMP monitor: %w", err)
+	}
+
+	addr, err := net.ResolveUnixAddr("unix", virtiofsdSockPath)
+	if err != nil {
+		return err
+	}
+
+	virtiofsSock, err := net.DialUnix("unix", nil, addr)
+	if err != nil {
+		return fmt.Errorf("Error connecting to virtiofs socket %q: %w", virtiofsdSockPath, err)
+	}
+
+	defer func() { _ = virtiofsSock.Close() }() // Close file after device has been added.
+
+	virtiofsFile, err := virtiofsSock.File()
+	if err != nil {
+		return fmt.Errorf("Error opening virtiofs socket %q: %w", virtiofsdSockPath, err)
+	}
+
+	err = monitor.SendFile(virtiofsdSockPath, virtiofsFile)
+	if err != nil {
+		return fmt.Errorf("Failed to send virtiofs file descriptor: %w", err)
+	}
+
+	reverter.Add(func() { _ = monitor.CloseFile(virtiofsdSockPath) })
+
+	err = monitor.AddCharDevice(map[string]any{
+		"id": mountTag,
+		"backend": map[string]any{
+			"type": "socket",
+			"data": map[string]any{
+				"addr": map[string]any{
+					"type": "fd",
+					"data": map[string]any{
+						"str": virtiofsdSockPath,
+					},
+				},
+				"server": false,
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to add the character device: %w", err)
+	}
+
+	reverter.Add(func() { _ = monitor.RemoveCharDevice(mountTag) })
+
+	// Figure out a hotplug slot.
+	pciDevID := qemuPCIDeviceIDStart
+
+	// Iterate through all the instance devices in the same sorted order as is used when allocating the
+	// boot time devices in order to find the PCI bus slot device we would have used at boot time.
+	// Then attempt to use that same device, assuming it is available.
+	for _, dev := range d.expandedDevices.Sorted() {
+		if dev.Name == deviceName {
+			break // Found our device.
+		}
+
+		pciDevID++
+	}
+
+	pciDeviceName := fmt.Sprintf("%s%d", busDevicePortPrefix, pciDevID)
+	d.logger.Debug("Using PCI bus device to hotplug virtiofs into", logger.Ctx{"device": deviceName, "port": pciDeviceName})
+
+	qemuDev := map[string]string{
+		"driver":  "vhost-user-fs-pci",
+		"bus":     pciDeviceName,
+		"addr":    "00.0",
+		"tag":     mountTag,
+		"chardev": mountTag,
+		"id":      deviceID,
+	}
+
+	err = monitor.AddDevice(qemuDev)
+	if err != nil {
+		return fmt.Errorf("Failed to add the virtiofs device: %w", err)
+	}
+
+	reverter.Success()
+	return nil
+}
+
 func (d *qemu) deviceAttachBlockDevice(deviceName string, configCopy map[string]string, mount deviceConfig.MountEntryItem) error {
 	// Check if the agent is running.
 	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
@@ -2131,7 +2237,7 @@ func (d *qemu) deviceAttachBlockDevice(deviceName string, configCopy map[string]
 		return fmt.Errorf("Failed to connect to QMP monitor: %w", err)
 	}
 
-	monHook, err := d.addDriveConfig(nil, mount)
+	monHook, err := d.addDriveConfig(nil, nil, mount)
 	if err != nil {
 		return fmt.Errorf("Failed to add drive config: %w", err)
 	}
@@ -2139,6 +2245,43 @@ func (d *qemu) deviceAttachBlockDevice(deviceName string, configCopy map[string]
 	err = monHook(monitor)
 	if err != nil {
 		return fmt.Errorf("Failed to call monitor hook for block device: %w", err)
+	}
+
+	return nil
+}
+
+func (d *qemu) deviceDetachPath(deviceName string, rawConfig deviceConfig.Device) error {
+	escapedDeviceName := linux.PathNameEncode(deviceName)
+	deviceID := fmt.Sprintf("%s%s", qemuDeviceIDPrefix, escapedDeviceName)
+	mountTag := fmt.Sprintf("incus_%s", deviceName)
+
+	// Check if the agent is running.
+	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
+	if err != nil {
+		return err
+	}
+
+	err = monitor.RemoveDevice(deviceID)
+	if err != nil {
+		return err
+	}
+
+	waitDuration := time.Duration(time.Second * time.Duration(10))
+	waitUntil := time.Now().Add(waitDuration)
+	for {
+		err = monitor.RemoveCharDevice(mountTag)
+		if err == nil {
+			break
+		}
+
+		if api.StatusErrorCheck(err, http.StatusLocked) {
+			time.Sleep(time.Second * time.Duration(2))
+			continue
+		}
+
+		if time.Now().After(waitUntil) {
+			return fmt.Errorf("Failed to detach path device after %v: %w", waitDuration, err)
+		}
 	}
 
 	return nil
@@ -2283,9 +2426,16 @@ func (d *qemu) deviceStop(dev device.Device, instanceRunning bool, _ string) err
 
 		// Detach disk from running instance.
 		if configCopy["type"] == "disk" {
-			err = d.deviceDetachBlockDevice(dev.Name(), configCopy)
-			if err != nil {
-				return err
+			if configCopy["path"] != "" {
+				err = d.deviceDetachPath(dev.Name(), configCopy)
+				if err != nil {
+					return err
+				}
+			} else {
+				err = d.deviceDetachBlockDevice(dev.Name(), configCopy)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -3128,12 +3278,38 @@ func (d *qemu) generateQemuConfigFile(cpuInfo *cpuTopology, mountInfo *storagePo
 			for _, drive := range runConf.Mounts {
 				var monHook monitorHook
 
+				// Check if the user has overridden the bus.
+				busName := "virtio-scsi"
+				for _, opt := range drive.Opts {
+					if !strings.HasPrefix(opt, "bus=") {
+						continue
+					}
+
+					busName = strings.TrimPrefix(opt, "bus=")
+					break
+				}
+
+				qemuDev := make(map[string]string)
+				if busName == "nvme" {
+					// Allocate a PCI(e) port and write it to the config file so QMP can "hotplug" the
+					// NVME drive into it later.
+					devBus, devAddr, multi := bus.allocate(busFunctionGroupNone)
+
+					// Populate the qemu device with port info.
+					qemuDev["bus"] = devBus
+					qemuDev["addr"] = devAddr
+
+					if multi {
+						qemuDev["multifunction"] = "on"
+					}
+				}
+
 				if drive.TargetPath == "/" {
-					monHook, err = d.addRootDriveConfig(mountInfo, bootIndexes, drive)
+					monHook, err = d.addRootDriveConfig(qemuDev, mountInfo, bootIndexes, drive)
 				} else if drive.FSType == "9p" {
 					err = d.addDriveDirConfig(&cfg, bus, fdFiles, &agentMounts, drive)
 				} else {
-					monHook, err = d.addDriveConfig(bootIndexes, drive)
+					monHook, err = d.addDriveConfig(qemuDev, bootIndexes, drive)
 				}
 
 				if err != nil {
@@ -3365,7 +3541,7 @@ func (d *qemu) addFileDescriptor(fdFiles *[]*os.File, file *os.File) int {
 }
 
 // addRootDriveConfig adds the qemu config required for adding the root drive.
-func (d *qemu) addRootDriveConfig(mountInfo *storagePools.MountInfo, bootIndexes map[string]int, rootDriveConf deviceConfig.MountEntryItem) (monitorHook, error) {
+func (d *qemu) addRootDriveConfig(qemuDev map[string]string, mountInfo *storagePools.MountInfo, bootIndexes map[string]int, rootDriveConf deviceConfig.MountEntryItem) (monitorHook, error) {
 	if rootDriveConf.TargetPath != "/" {
 		return nil, fmt.Errorf("Non-root drive config supplied")
 	}
@@ -3400,7 +3576,7 @@ func (d *qemu) addRootDriveConfig(mountInfo *storagePools.MountInfo, bootIndexes
 		driveConf.DevPath = device.DiskGetRBDFormat(clusterName, userName, config["ceph.osd.pool_name"], vol.Name())
 	}
 
-	return d.addDriveConfig(bootIndexes, driveConf)
+	return d.addDriveConfig(qemuDev, bootIndexes, driveConf)
 }
 
 // addDriveDirConfig adds the qemu config required for adding a supplementary drive directory share.
@@ -3492,7 +3668,7 @@ func (d *qemu) addDriveDirConfig(cfg *[]cfgSection, bus *qemuBus, fdFiles *[]*os
 }
 
 // addDriveConfig adds the qemu config required for adding a supplementary drive.
-func (d *qemu) addDriveConfig(bootIndexes map[string]int, driveConf deviceConfig.MountEntryItem) (monitorHook, error) {
+func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]int, driveConf deviceConfig.MountEntryItem) (monitorHook, error) {
 	aioMode := "native" // Use native kernel async IO and O_DIRECT by default.
 	cacheMode := "none" // Bypass host cache, use O_DIRECT semantics by default.
 	media := "disk"
@@ -3587,6 +3763,17 @@ func (d *qemu) addDriveConfig(bootIndexes map[string]int, driveConf deviceConfig
 		if driveConf.FSType == "iso9660" {
 			media = "cdrom"
 		}
+	}
+
+	// Check if the user has overridden the bus.
+	bus := "virtio-scsi"
+	for _, opt := range driveConf.Opts {
+		if !strings.HasPrefix(opt, "bus=") {
+			continue
+		}
+
+		bus = strings.TrimPrefix(opt, "bus=")
+		break
 	}
 
 	// Check if the user has overridden the cache mode.
@@ -3718,23 +3905,51 @@ func (d *qemu) addDriveConfig(bootIndexes map[string]int, driveConf deviceConfig
 		blockDev["locking"] = "off"
 	}
 
-	device := map[string]string{
-		"id":      fmt.Sprintf("%s%s", qemuDeviceIDPrefix, escapedDeviceName),
-		"drive":   blockDev["node-name"].(string),
-		"bus":     "qemu_scsi.0",
-		"channel": "0",
-		"lun":     "1",
-		"serial":  fmt.Sprintf("%s%s", qemuBlockDevIDPrefix, escapedDeviceName),
+	if qemuDev == nil {
+		qemuDev = map[string]string{}
+	}
+
+	qemuDev["id"] = fmt.Sprintf("%s%s", qemuDeviceIDPrefix, escapedDeviceName)
+	qemuDev["drive"] = blockDev["node-name"].(string)
+	qemuDev["serial"] = fmt.Sprintf("%s%s", qemuBlockDevIDPrefix, escapedDeviceName)
+
+	if bus == "virtio-scsi" {
+		qemuDev["channel"] = "0"
+		qemuDev["lun"] = "1"
+		qemuDev["bus"] = "qemu_scsi.0"
+
+		if media == "disk" {
+			qemuDev["driver"] = "scsi-hd"
+		} else if media == "cdrom" {
+			qemuDev["driver"] = "scsi-cd"
+		}
+	} else if bus == "nvme" {
+		if qemuDev["bus"] == "" {
+			// Figure out a hotplug slot.
+			pciDevID := qemuPCIDeviceIDStart
+
+			// Iterate through all the instance devices in the same sorted order as is used when allocating the
+			// boot time devices in order to find the PCI bus slot device we would have used at boot time.
+			// Then attempt to use that same device, assuming it is available.
+			for _, dev := range d.expandedDevices.Sorted() {
+				if dev.Name == driveConf.DevName {
+					break // Found our device.
+				}
+
+				pciDevID++
+			}
+
+			pciDeviceName := fmt.Sprintf("%s%d", busDevicePortPrefix, pciDevID)
+			d.logger.Debug("Using PCI bus device to hotplug NVME into", logger.Ctx{"device": driveConf.DevName, "port": pciDeviceName})
+			qemuDev["bus"] = pciDeviceName
+			qemuDev["addr"] = "00.0"
+		}
+
+		qemuDev["driver"] = "nvme"
 	}
 
 	if bootIndexes != nil {
-		device["bootindex"] = strconv.Itoa(bootIndexes[driveConf.DevName])
-	}
-
-	if media == "disk" {
-		device["driver"] = "scsi-hd"
-	} else if media == "cdrom" {
-		device["driver"] = "scsi-cd"
+		qemuDev["bootindex"] = strconv.Itoa(bootIndexes[driveConf.DevName])
 	}
 
 	monHook := func(m *qmp.Monitor) error {
@@ -3778,7 +3993,7 @@ func (d *qemu) addDriveConfig(bootIndexes map[string]int, driveConf deviceConfig
 			blockDev["filename"] = fmt.Sprintf("/dev/fdset/%d", info.ID)
 		}
 
-		err := m.AddBlockDevice(blockDev, device)
+		err := m.AddBlockDevice(blockDev, qemuDev)
 		if err != nil {
 			return fmt.Errorf("Failed adding block device for disk device %q: %w", driveConf.DevName, err)
 		}
@@ -4892,6 +5107,11 @@ func (d *qemu) Rename(newName string, applyTemplateTrigger bool) error {
 	if d.isSnapshot {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceSnapshotRenamed.Event(d, map[string]any{"old_name": oldName}))
 	} else {
+		err = d.state.Authorizer.RenameInstance(d.state.ShutdownCtx, d.project.Name, oldName, newName)
+		if err != nil {
+			logger.Error("Failed to rename instance in authorizer", logger.Ctx{"old_name": oldName, "new_name": newName, "project": d.project.Name, "error": err})
+		}
+
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceRenamed.Event(d, map[string]any{"old_name": oldName}))
 	}
 
@@ -4922,7 +5142,7 @@ func (d *qemu) Update(args db.InstanceArgs, userRequested bool) error {
 
 	// Set sane defaults for unset keys.
 	if args.Project == "" {
-		args.Project = project.Default
+		args.Project = api.ProjectDefaultName
 	}
 
 	if args.Architecture == 0 {
@@ -5268,6 +5488,19 @@ func (d *qemu) Update(args db.InstanceArgs, userRequested bool) error {
 	}
 
 	if d.architectureSupportsUEFI(d.architecture) && (util.ValueInSlice("security.secureboot", changedConfig) || util.ValueInSlice("security.csm", changedConfig)) {
+		// setupNvram() requires instance's config volume to be mounted.
+		// The easiest way to detect that is to check if instance is running.
+		// TODO: extend storage API to be able to check if volume is already mounted?
+		if !isRunning {
+			// Mount the instance's config volume.
+			_, err := d.mount()
+			if err != nil {
+				return err
+			}
+
+			defer func() { _ = d.unmount() }()
+		}
+
 		// Re-generate the NVRAM.
 		err = d.setupNvram()
 		if err != nil {
@@ -5353,6 +5586,46 @@ func (d *qemu) Update(args db.InstanceArgs, userRequested bool) error {
 			}
 
 			err = d.devIncusEventSend("config", msg)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Device changes
+		for k, m := range removeDevices {
+			msg := map[string]any{
+				"action": "removed",
+				"name":   k,
+				"config": m,
+			}
+
+			err = d.devIncusEventSend("device", msg)
+			if err != nil {
+				return err
+			}
+		}
+
+		for k, m := range updateDevices {
+			msg := map[string]any{
+				"action": "updated",
+				"name":   k,
+				"config": m,
+			}
+
+			err = d.devIncusEventSend("device", msg)
+			if err != nil {
+				return err
+			}
+		}
+
+		for k, m := range addDevices {
+			msg := map[string]any{
+				"action": "added",
+				"name":   k,
+				"config": m,
+			}
+
+			err = d.devIncusEventSend("device", msg)
 			if err != nil {
 				return err
 			}
@@ -5708,6 +5981,11 @@ func (d *qemu) delete(force bool) error {
 	if d.isSnapshot {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceSnapshotDeleted.Event(d, nil))
 	} else {
+		err = d.state.Authorizer.DeleteInstance(d.state.ShutdownCtx, d.project.Name, d.Name())
+		if err != nil {
+			logger.Error("Failed to remove instance from authorizer", logger.Ctx{"name": d.Name(), "project": d.project.Name, "error": err})
+		}
+
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceDeleted.Event(d, nil))
 	}
 
@@ -7556,9 +7834,9 @@ func (d *qemu) nextVsockID() (uint32, *os.File, error) {
 	}
 
 	// Ignore the error from before and start to acquire a new Context ID.
-	instanceUUID := uuid.Parse(d.localConfig["volatile.uuid"])
-	if instanceUUID == nil {
-		return 0, nil, fmt.Errorf("Failed to parse instance UUID from volatile.uuid")
+	instanceUUID, err := uuid.Parse(d.localConfig["volatile.uuid"])
+	if err != nil {
+		return 0, nil, fmt.Errorf("Failed to parse instance UUID from volatile.uuid: %w", err)
 	}
 
 	r, err := localUtil.GetStableRandomGenerator(instanceUUID.String())
@@ -8296,14 +8574,14 @@ func (d *qemu) deviceDetachUSB(usbDev deviceConfig.USBDeviceItem) error {
 // Block node names may only be up to 31 characters long, so use a hash if longer.
 func (d *qemu) blockNodeName(name string) string {
 	if len(name) > 27 {
-		// If the name is too long, hash it as SHA-1 (20 bytes).
-		// Then encode the SHA-1 binary hash as Base64 Raw URL format (maximum 27 characters).
-		// Raw URL avoids the use of "+" character and the padding "=" character which QEMU doesn't allow,
-		// and keeps the length to 27 characters.
-		hash := sha1.New()
+		// If the name is too long, hash it as SHA-256 (32 bytes).
+		// Then encode the SHA-256 binary hash as Base64 Raw URL format and trim down to 27 chars.
+		// Raw URL avoids the use of "+" character and the padding "=" character which QEMU doesn't allow.
+		hash := sha256.New()
 		hash.Write([]byte(name))
 		binaryHash := hash.Sum(nil)
 		name = base64.RawURLEncoding.EncodeToString(binaryHash)
+		name = name[0:27]
 	}
 
 	// Apply the prefix.

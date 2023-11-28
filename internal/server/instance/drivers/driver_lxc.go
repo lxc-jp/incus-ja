@@ -25,9 +25,9 @@ import (
 
 	"github.com/checkpoint-restore/go-criu/v6/crit"
 	"github.com/flosch/pongo2"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	liblxc "github.com/lxc/go-lxc"
-	"github.com/pborman/uuid"
 	"github.com/pkg/sftp"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/unix"
@@ -332,6 +332,12 @@ func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.In
 	if d.isSnapshot {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceSnapshotCreated.Event(d, nil))
 	} else {
+		// Add instance to authorizer.
+		err = d.state.Authorizer.AddInstance(d.state.ShutdownCtx, d.project.Name, d.Name())
+		if err != nil {
+			logger.Error("Failed to add instance to authorizer", logger.Ctx{"instanceName": d.Name(), "projectName": d.project.Name, "error": err})
+		}
+
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceCreated.Event(d, map[string]any{
 			"type":         api.InstanceTypeContainer,
 			"storage-pool": d.storagePool.Name(),
@@ -1148,15 +1154,22 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 					return nil, err
 				}
 			} else {
-				if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) && util.IsFalse(memorySwap) {
+				if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) {
 					err = cg.SetMemoryLimit(valueInt)
 					if err != nil {
 						return nil, err
 					}
 
-					err = cg.SetMemorySwapLimit(0)
-					if err != nil {
-						return nil, err
+					if util.IsFalse(memorySwap) {
+						err = cg.SetMemorySwapLimit(0)
+						if err != nil {
+							return nil, err
+						}
+					} else {
+						err = cg.SetMemorySwapLimit(valueInt)
+						if err != nil {
+							return nil, err
+						}
 					}
 				} else {
 					err = cg.SetMemoryLimit(valueInt)
@@ -1522,7 +1535,7 @@ func (d *lxc) deviceAddCgroupRules(cgroups []deviceConfig.RunConfigItem) error {
 		// Add the new device cgroup rule.
 		err := d.CGroupSet(rule.Key, rule.Value)
 		if err != nil {
-			return fmt.Errorf("Failed to add cgroup rule for device")
+			return fmt.Errorf("Failed to add cgroup rule for device: %w", err)
 		}
 	}
 
@@ -1745,7 +1758,10 @@ func (d *lxc) deviceHandleMounts(mounts []deviceConfig.MountEntryItem) error {
 // DeviceEventHandler actions the results of a RunConfig after an event has occurred on a device.
 func (d *lxc) DeviceEventHandler(runConf *deviceConfig.RunConfig) error {
 	// Device events can only be processed when the container is running.
-	if !d.IsRunning() {
+	// We use InitPID here rather than IsRunning because this task can be triggered during the
+	// container startup process, which is during the time that the start lock is held, which causes
+	// IsRunning to return false (because the container hasn't fully started yet).
+	if d.InitPID() <= 0 {
 		return nil
 	}
 
@@ -2021,7 +2037,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	// Generate UUID if not present (do this before UpdateBackupFile() call).
 	instUUID := d.localConfig["volatile.uuid"]
 	if instUUID == "" {
-		instUUID = uuid.New()
+		instUUID = uuid.New().String()
 		volatileSet["volatile.uuid"] = instUUID
 	}
 
@@ -3779,6 +3795,11 @@ func (d *lxc) delete(force bool) error {
 	if d.isSnapshot {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceSnapshotDeleted.Event(d, nil))
 	} else {
+		err = d.state.Authorizer.DeleteInstance(d.state.ShutdownCtx, d.project.Name, d.Name())
+		if err != nil {
+			logger.Error("Failed to remove instance from authorizer", logger.Ctx{"name": d.Name(), "project": d.project.Name, "error": err})
+		}
+
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceDeleted.Event(d, nil))
 	}
 
@@ -3945,6 +3966,11 @@ func (d *lxc) Rename(newName string, applyTemplateTrigger bool) error {
 	if d.isSnapshot {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceSnapshotRenamed.Event(d, map[string]any{"old_name": oldName}))
 	} else {
+		err = d.state.Authorizer.RenameInstance(d.state.ShutdownCtx, d.project.Name, oldName, newName)
+		if err != nil {
+			logger.Error("Failed to rename instance in authorizer", logger.Ctx{"old_name": oldName, "new_name": newName, "project": d.project.Name, "error": err})
+		}
+
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceRenamed.Event(d, map[string]any{"old_name": oldName}))
 	}
 
@@ -3960,8 +3986,12 @@ func (d *lxc) CGroupSet(key string, value string) error {
 		return err
 	}
 
-	// Make sure the container is running
-	if !d.IsRunning() {
+	// Make sure the container is running.
+	// We use InitPID here rather than IsRunning because this task can be triggered during the container's
+	// startup process, which is during the time that the start lock is held, which causes IsRunning to
+	// return false (because the container hasn't fully started yet) but it is sufficiently started to
+	// have its cgroup disk limits set.
+	if d.InitPID() <= 0 {
 		return fmt.Errorf("Can't set cgroups on a stopped container")
 	}
 
@@ -3992,7 +4022,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 	// Set sane defaults for unset keys
 	if args.Project == "" {
-		args.Project = project.Default
+		args.Project = api.ProjectDefaultName
 	}
 
 	if args.Architecture == 0 {
@@ -4505,17 +4535,25 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 						return err
 					}
 				} else {
-					if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) && util.IsFalse(memorySwap) {
+					if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) {
 						err = cg.SetMemoryLimit(memoryInt)
 						if err != nil {
 							revertMemory()
 							return err
 						}
 
-						err = cg.SetMemorySwapLimit(0)
-						if err != nil {
-							revertMemory()
-							return err
+						if util.IsFalse(memorySwap) {
+							err = cg.SetMemorySwapLimit(0)
+							if err != nil {
+								revertMemory()
+								return err
+							}
+						} else {
+							err = cg.SetMemorySwapLimit(memoryInt)
+							if err != nil {
+								revertMemory()
+								return err
+							}
 						}
 					} else {
 						err = cg.SetMemoryLimit(memoryInt)
@@ -8313,7 +8351,7 @@ func (d *lxc) getFSStats() (*metrics.MetricSet, error) {
 		FSType     string
 	}
 
-	out := metrics.NewMetricSet(map[string]string{"project": d.project.Name, "name": d.name})
+	out := metrics.NewMetricSet(nil)
 
 	mounts, err := os.ReadFile("/proc/mounts")
 	if err != nil {

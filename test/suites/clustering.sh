@@ -429,7 +429,7 @@ test_clustering_containers() {
   ! INCUS_DIR="${INCUS_ONE_DIR}" incus cluster remove node2 || false
 
   # Exec a command in the container via node1
-  INCUS_DIR="${INCUS_ONE_DIR}" incus exec foo ls / | grep -q proc
+  INCUS_DIR="${INCUS_ONE_DIR}" incus exec foo -- ls / | grep -qxF proc
 
   # Pull, push and delete files from the container via node1
   ! INCUS_DIR="${INCUS_ONE_DIR}" incus file pull foo/non-existing-file "${TEST_DIR}/non-existing-file" || false
@@ -1503,8 +1503,8 @@ used_by:
 EOF
   ) | INCUS_DIR="${INCUS_TWO_DIR}" incus profile edit web
 
-  INCUS_DIR="${INCUS_TWO_DIR}" incus exec c1 ls /mnt | grep -q hello
-  INCUS_DIR="${INCUS_TWO_DIR}" incus exec c2 ls /mnt | grep -q hello
+  INCUS_DIR="${INCUS_TWO_DIR}" incus exec c1 -- ls /mnt | grep -qxF hello
+  INCUS_DIR="${INCUS_TWO_DIR}" incus exec c2 -- ls /mnt | grep -qxF hello
 
   INCUS_DIR="${INCUS_TWO_DIR}" incus stop c1 --force
   INCUS_DIR="${INCUS_ONE_DIR}" incus stop c2 --force
@@ -3795,4 +3795,96 @@ test_clustering_uuid() {
 
   kill_incus "${INCUS_ONE_DIR}"
   kill_incus "${INCUS_TWO_DIR}"
+}
+
+test_clustering_openfga() {
+  if ! command -v openfga >/dev/null 2>&1 || ! command -v fga >/dev/null 2>&1; then
+    echo "==> SKIP: Missing OpenFGA"
+    return
+  fi
+
+  if true; then
+      echo "==> SKIP: Can't validate due to netns"
+      return
+  fi
+
+  # shellcheck disable=2039,3043
+  local INCUS_DIR
+
+  setup_clustering_bridge
+  prefix="inc$$"
+  bridge="${prefix}"
+
+  setup_clustering_netns 1
+  INCUS_ONE_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+  chmod +x "${INCUS_ONE_DIR}"
+  ns1="${prefix}1"
+  spawn_incus_and_bootstrap_cluster "${ns1}" "${bridge}" "${INCUS_ONE_DIR}"
+
+  # Run OIDC server.
+  spawn_oidc
+  set_oidc user1
+
+  INCUS_DIR="${INCUS_ONE_DIR}" incus config set "oidc.issuer=http://127.0.0.1:$(cat "${TEST_DIR}/oidc.port")/"
+  INCUS_DIR="${INCUS_ONE_DIR}" incus config set "oidc.client.id=device"
+
+  BROWSER=curl incus remote add --accept-certificate oidc-openfga "https://10.1.1.101:8443" --auth-type oidc
+  ! incus_remote info oidc-openfga: | grep -Fq 'core.https_address' || false
+
+  run_openfga
+
+  # Create store and get store ID.
+  OPENFGA_STORE_ID="$(fga store create --name "test" | jq -r '.store.id')"
+
+  # Configure OpenFGA using the oidc-openfga remote.
+  INCUS_DIR="${INCUS_ONE_DIR}" incus config set oidc-openfga: openfga.api.url "$(fga_address)"
+  INCUS_DIR="${INCUS_ONE_DIR}" incus config set oidc-openfga: openfga.api.token "$(fga_token)"
+  INCUS_DIR="${INCUS_ONE_DIR}" incus config set oidc-openfga: openfga.store.id "${OPENFGA_STORE_ID}"
+  sleep 1
+
+  # Add a newline at the end of each line. YAML as weird rules..
+  cert=$(sed ':a;N;$!ba;s/\n/\n\n/g' "${INCUS_ONE_DIR}/cluster.crt")
+
+  # Spawn a second node
+  setup_clustering_netns 2
+  INCUS_TWO_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+  chmod +x "${INCUS_TWO_DIR}"
+  ns2="${prefix}2"
+  spawn_incus_and_join_cluster "${ns2}" "${bridge}" "${cert}" 2 1 "${INCUS_TWO_DIR}"
+
+  # After the second node has joined there should exist only one authorization model.
+  [ "$(fga model list --store-id "${OPENFGA_STORE_ID}" | jq '.authorization_models | length')" = 1 ]
+
+  BROWSER=curl incus remote add --accept-certificate node2 "https://10.1.1.102:8443" --auth-type oidc
+  ! incus_remote info node2: | grep -Fq 'core.https_address' || false
+
+  # Add self as server admin. Should be able to see config now.
+  fga tuple write --store-id "${OPENFGA_STORE_ID}" user:user1 admin server:incus
+  incus_remote info node2: | grep -Fq 'core.https_address'
+
+  # Spawn a third node. Should be able to join while OpenFGA is running.
+  setup_clustering_netns 3
+  INCUS_THREE_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+  chmod +x "${INCUS_THREE_DIR}"
+  ns3="${prefix}3"
+  spawn_incus_and_join_cluster "${ns3}" "${bridge}" "${cert}" 3 1 "${INCUS_THREE_DIR}"
+
+  # cleanup
+  incus remote rm node2
+  incus remote rm oidc-openfga
+  shutdown_openfga
+  INCUS_DIR="${INCUS_ONE_DIR}" incus admin shutdown
+  INCUS_DIR="${INCUS_TWO_DIR}" incus admin shutdown
+  INCUS_DIR="${INCUS_THREE_DIR}" incus admin shutdown
+  sleep 0.5
+  rm -f "${INCUS_ONE_DIR}/unix.socket"
+  rm -f "${INCUS_TWO_DIR}/unix.socket"
+  rm -f "${INCUS_THREE_DIR}/unix.socket"
+
+  teardown_clustering_netns
+  teardown_clustering_bridge
+
+  kill_incus "${INCUS_ONE_DIR}"
+  kill_incus "${INCUS_TWO_DIR}"
+  kill_incus "${INCUS_THREE_DIR}"
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/lxc/incus/internal/server/instance"
 	"github.com/lxc/incus/internal/server/instance/instancetype"
 	"github.com/lxc/incus/internal/server/network"
-	"github.com/lxc/incus/internal/server/project"
 	"github.com/lxc/incus/shared/api"
 	"github.com/lxc/incus/shared/util"
 )
@@ -42,6 +41,7 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader) error {
 		"network",
 		"parent",
 		"hwaddr",
+		"mtu",
 		"vlan",
 		"security.mac_filtering",
 		"boot.priority",
@@ -59,9 +59,9 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader) error {
 		}
 
 		// If network property is specified, lookup network settings and apply them to the device's config.
-		// project.Default is used here as macvlan networks don't support projects.
+		// api.ProjectDefaultName is used here as macvlan networks don't support projects.
 		var err error
-		d.network, err = network.LoadByName(d.state, project.Default, d.config["network"])
+		d.network, err = network.LoadByName(d.state, api.ProjectDefaultName, d.config["network"])
 		if err != nil {
 			return fmt.Errorf("Error loading network config for %q: %w", d.config["network"], err)
 		}
@@ -90,11 +90,6 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader) error {
 	} else {
 		// If no network property supplied, then parent property is required.
 		requiredFields = append(requiredFields, "parent")
-	}
-
-	// For VMs only NIC properties that can be specified on the parent's VF settings are controllable.
-	if instConf.Type() == instancetype.Container || instConf.Type() == instancetype.Any {
-		optionalFields = append(optionalFields, "mtu")
 	}
 
 	err := d.config.Validate(nicValidationRules(requiredFields, optionalFields, instConf))

@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/lxc/incus/internal/filter"
+	"github.com/lxc/incus/internal/server/auth"
 	"github.com/lxc/incus/internal/server/cluster"
 	"github.com/lxc/incus/internal/server/db"
 	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
 	"github.com/lxc/incus/internal/server/db/query"
 	"github.com/lxc/incus/internal/server/instance"
 	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/project"
+	"github.com/lxc/incus/internal/server/request"
 	"github.com/lxc/incus/internal/server/response"
 	"github.com/lxc/incus/internal/server/state"
 	"github.com/lxc/incus/internal/version"
@@ -256,16 +257,16 @@ func doInstancesGet(s *state.State, r *http.Request) (any, error) {
 		return nil, fmt.Errorf("Invalid filter: %w", err)
 	}
 
-	mustLoadObjects := recursion > 0 || (recursion == 0 && clauses != nil)
+	mustLoadObjects := recursion > 0 || (recursion == 0 && clauses != nil && len(clauses.Clauses) > 0)
 
 	// Detect project mode.
-	projectName := queryParam(r, "project")
+	projectName := request.QueryParam(r, "project")
 	allProjects := util.IsTrue(r.FormValue("all-projects"))
 
 	if allProjects && projectName != "" {
 		return nil, api.StatusErrorf(http.StatusBadRequest, "Cannot specify a project when requesting all projects")
 	} else if !allProjects && projectName == "" {
-		projectName = project.Default
+		projectName = api.ProjectDefaultName
 	}
 
 	// Get the list and location of all instances.
@@ -280,10 +281,6 @@ func doInstancesGet(s *state.State, r *http.Request) (any, error) {
 			}
 
 			for _, project := range projects {
-				if !s.Authorizer.UserHasPermission(r, project.Name, "") {
-					continue
-				}
-
 				filteredProjects = append(filteredProjects, project.Name)
 			}
 		} else {
@@ -301,6 +298,26 @@ func doInstancesGet(s *state.State, r *http.Request) (any, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	userHasPermission, err := s.Authorizer.GetPermissionChecker(r.Context(), r, auth.EntitlementCanView, auth.ObjectTypeInstance)
+	if err != nil {
+		return nil, err
+	}
+
+	// Removes instances the user doesn't have access to.
+	for address, instances := range memberAddressInstances {
+		var filteredInstances []db.Instance
+
+		for _, inst := range instances {
+			if !userHasPermission(auth.ObjectInstance(inst.Project, inst.Name)) {
+				continue
+			}
+
+			filteredInstances = append(filteredInstances, inst)
+		}
+
+		memberAddressInstances[address] = filteredInstances
 	}
 
 	resultErrListAppend := func(inst db.Instance, err error) {
@@ -479,7 +496,7 @@ func doInstancesGet(s *state.State, r *http.Request) (any, error) {
 	})
 
 	// Filter result list if needed.
-	if clauses != nil {
+	if clauses != nil && len(clauses.Clauses) > 0 {
 		resultFullList, err = instance.FilterFull(resultFullList, *clauses)
 		if err != nil {
 			return nil, err
