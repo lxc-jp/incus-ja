@@ -6,4 +6,5 @@
 
 explanation/security
 authentication
+authorization
 Incusをネットワークに公開 <howto/server_expose>

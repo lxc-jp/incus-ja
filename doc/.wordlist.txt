@@ -161,6 +161,7 @@ NVRAM
 OData
 OIDC
 OpenID
+OpenFGA
 OpenMetrics
 OpenSSL
 OpenSUSE

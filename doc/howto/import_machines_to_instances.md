@@ -54,7 +54,7 @@ Incus は既存のディスクやイメージに基づく Incus インスタン�
 
 既存のマシンを Incus インスタンスにマイグレートするには以下の手順を実行してください:
 
-1. 最新の [Incus release](https://github.com/lxc/incus/releases) の **Assets** セクションから `bin.linux.incus-migrate` ツールをダウンロードしてください。
+1. 最新の [Incus release](https://github.com/lxc/incus/releases) の **Assets** セクションから `bin.linux.incus-migrate` ツール（[`bin.linux.incus-migrate.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus-migrate.aarch64)または[`bin.linux.incus-migrate.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus-migrate.x86_64)）をダウンロードしてください。
 1. ツールをインスタンスを作成したいマシン上に配置して
    （通常 `chmod u+x bin.linux.incus-migrate` を実行して）実行可能にしてください。
 1. マシンに `rsync` がインストールされているか確認してください。

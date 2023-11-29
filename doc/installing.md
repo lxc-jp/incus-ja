@@ -30,6 +30,12 @@ Incus デーモンは Linux でのみ稼働します。
 
 Linux で Incus をインストールする最も簡単な方法は{ref}`installing-zabbly-package`です。これは Debian と Ubuntu で利用できます。
 
+また [GitHub](https://github.com/lxc/incus/actions) に Incus クライアントのネイティブビルドがあります:
+
+- Linux 用の Incus クライアント: [`bin.linux.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.aarch64)、[`bin.linux.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.x86_64)
+- Windows 用の Incus クライアント: [`bin.windows.incus.aarch64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.aarch64.exe)、[`bin.windows.incus.x86_64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.x86_64.exe)
+- macOS 用の Incus クライアント: [`bin.macos.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.aarch64)、[`bin.macos.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.x86_64)
+
 (installing-zabbly-package)=
 #### ZabblyのDebianとUbuntuパッケージをインストールする
 現時点では Incus をインストールする最も簡単な方法は[Zabbly](https://zabbly.com)で提供される Debian または Ubuntu のパッケージを使うことです。
@@ -103,12 +109,14 @@ Windows版のIncusクライアントは[Chocolatey](https://community.chocolatey
 Incus をソースコードからビルドとインストールしたい場合、以下の手順に従ってください。
 
 Incus の開発には`liblxc`の最新バージョン（4.0.0 以上が必要）を使用することをお勧めします。
-さらに Incus が動作するためには Golang 1.18 以上が必要です。
+さらに Incus が動作するためには最近の Go 言語（{ref}`requirements-go`参照）が動作することが必要です。
 Ubuntu では次のようにインストールできます。
 
 ```bash
 sudo apt update
-sudo apt install acl attr autoconf automake dnsmasq-base git golang libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
+sudo apt install acl attr autoconf automake dnsmasq-base git libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
+command -v snap >/dev/null || sudo apt-get install snapd
+sudo snap install --classic go
 ```
 
 ```{note}
@@ -205,7 +213,7 @@ echo "root:1000000:1000000000" | sudo tee -a /etc/subuid /etc/subgid
 これでデーモンを実行できます(`sudo`グループに属する全員が Incus とやりとりできるように `--group sudo` を指定します。別に指定したいグループを作ることもできます)。
 
 ```bash
-sudo -E PATH=${PATH} LD_LIBRARY_PATH=${LD_LIBRARY_PATH} $(go env GOPATH)/bin/incus --group sudo
+sudo -E PATH=${PATH} LD_LIBRARY_PATH=${LD_LIBRARY_PATH} $(go env GOPATH)/bin/incusd --group sudo
 ```
 
 ```{note}
