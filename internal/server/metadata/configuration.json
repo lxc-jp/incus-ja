@@ -903,7 +903,7 @@
 						"volatile.apply_nvram": {
 							"longdesc": "",
 							"shortdesc": "Whether to regenerate VM NVRAM the next time the instance starts",
-							"type": "string"
+							"type": "bool"
 						}
 					},
 					{
@@ -1398,7 +1398,7 @@
 							"defaultdesc": "`https://acme-v02.api.letsencrypt.org/directory`",
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "Agree to ACME terms of service",
+							"shortdesc": "URL to the directory resource of the ACME service",
 							"type": "string"
 						}
 					},
@@ -1857,6 +1857,42 @@
 							"longdesc": "",
 							"scope": "global",
 							"shortdesc": "OpenID Connect Discovery URL for the provider",
+							"type": "string"
+						}
+					}
+				]
+			},
+			"openfga": {
+				"keys": [
+					{
+						"openfga.api.token": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "API token of the OpenFGA server",
+							"type": "string"
+						}
+					},
+					{
+						"openfga.api.url": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "URL of the OpenFGA server",
+							"type": "string"
+						}
+					},
+					{
+						"openfga.store.id": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "ID of the OpenFGA permission store",
+							"type": "string"
+						}
+					},
+					{
+						"openfga.store.model_id": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "ID of the OpenFGA authorization model",
 							"type": "string"
 						}
 					}

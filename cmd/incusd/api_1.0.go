@@ -10,6 +10,7 @@ import (
 
 	"github.com/lxc/incus/client"
 	"github.com/lxc/incus/internal/revert"
+	"github.com/lxc/incus/internal/server/auth"
 	"github.com/lxc/incus/internal/server/auth/oidc"
 	"github.com/lxc/incus/internal/server/cluster"
 	clusterConfig "github.com/lxc/incus/internal/server/cluster/config"
@@ -18,7 +19,6 @@ import (
 	instanceDrivers "github.com/lxc/incus/internal/server/instance/drivers"
 	"github.com/lxc/incus/internal/server/lifecycle"
 	"github.com/lxc/incus/internal/server/node"
-	"github.com/lxc/incus/internal/server/project"
 	"github.com/lxc/incus/internal/server/request"
 	"github.com/lxc/incus/internal/server/response"
 	scriptletLoad "github.com/lxc/incus/internal/server/scriptlet/load"
@@ -32,8 +32,8 @@ import (
 
 var api10Cmd = APIEndpoint{
 	Get:   APIEndpointAction{Handler: api10Get, AllowUntrusted: true},
-	Patch: APIEndpointAction{Handler: api10Patch},
-	Put:   APIEndpointAction{Handler: api10Put},
+	Patch: APIEndpointAction{Handler: api10Patch, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
+	Put:   APIEndpointAction{Handler: api10Put, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
 }
 
 var api10 = []APIEndpoint{
@@ -208,11 +208,11 @@ func api10Get(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	// Get the authentication methods.
-	authMethods := []string{"tls"}
+	authMethods := []string{api.AuthenticationMethodTLS}
 
 	oidcIssuer, oidcClientID, _ := s.GlobalConfig.OIDCServer()
 	if oidcIssuer != "" && oidcClientID != "" {
-		authMethods = append(authMethods, "oidc")
+		authMethods = append(authMethods, api.AuthenticationMethodOIDC)
 	}
 
 	srv := api.ServerUntrusted{
@@ -227,6 +227,12 @@ func api10Get(d *Daemon, r *http.Request) response.Response {
 	// If untrusted, return now
 	if d.checkTrustedClient(r) != nil {
 		return response.SyncResponseETag(true, srv, nil)
+	}
+
+	// If not authorized, return now.
+	err := s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectServer(), auth.EntitlementCanView)
+	if err != nil {
+		return response.SmartError(err)
 	}
 
 	// If a target was specified, forward the request to the relevant node.
@@ -284,7 +290,7 @@ func api10Get(d *Daemon, r *http.Request) response.Response {
 
 	projectName := r.FormValue("project")
 	if projectName == "" {
-		projectName = project.Default
+		projectName = api.ProjectDefaultName
 	}
 
 	env := api.ServerEnvironment{
@@ -368,11 +374,14 @@ func api10Get(d *Daemon, r *http.Request) response.Response {
 	fullSrv.AuthUserName = requestor.Username
 	fullSrv.AuthUserMethod = requestor.Protocol
 
-	if s.Authorizer.UserIsAdmin(r) {
+	err = s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectServer(), auth.EntitlementCanEdit)
+	if err == nil {
 		fullSrv.Config, err = daemonConfigRender(s)
 		if err != nil {
 			return response.InternalError(err)
 		}
+	} else if !api.StatusErrorCheck(err, http.StatusForbidden) {
+		return response.SmartError(err)
 	}
 
 	return response.SyncResponseETag(true, fullSrv, fullSrv.Config)
@@ -727,6 +736,11 @@ func doApi10Update(d *Daemon, r *http.Request, req api.ServerPut, patch bool) re
 		}
 	})
 
+	err = doApi10PreNotifyTriggers(d, clusterChanged, newClusterConfig)
+	if err != nil {
+		return response.InternalError(fmt.Errorf("Failed to run pre-notify triggers for cluster config update: %w", err))
+	}
+
 	// Notify the other nodes about changes
 	notifier, err := cluster.NewNotifier(s, s.Endpoints.NetworkCert(), s.ServerCert(), cluster.NotifyAlive)
 	if err != nil {
@@ -767,9 +781,53 @@ func doApi10Update(d *Daemon, r *http.Request, req api.ServerPut, patch bool) re
 
 	revert.Success()
 
-	s.Events.SendLifecycle(project.Default, lifecycle.ConfigUpdated.Event(request.CreateRequestor(r), nil))
+	s.Events.SendLifecycle(api.ProjectDefaultName, lifecycle.ConfigUpdated.Event(request.CreateRequestor(r), nil))
 
 	return response.EmptySyncResponse
+}
+
+func doApi10PreNotifyTriggers(d *Daemon, clusterChanged map[string]string, newClusterConfig *clusterConfig.Config) error {
+	openFGAChanged := false
+	for key := range clusterChanged {
+		switch key {
+		case "openfga.api.url", "openfga.api.token", "openfga.store.id":
+			openFGAChanged = true
+		}
+	}
+
+	if openFGAChanged {
+		apiURL, apiToken, storeID, modelID := newClusterConfig.OpenFGA()
+
+		// Write authorization model only if the modelID has not already been set and we have all other connection information.
+		if modelID == "" && apiURL != "" && apiToken != "" && storeID != "" {
+			var err error
+			modelID, err = auth.WriteOpenFGAAuthorizationModel(d.shutdownCtx, apiURL, apiToken, storeID)
+			if err != nil {
+				return fmt.Errorf("Failed to write OpenFGA authorization model: %w", err)
+			}
+
+			err = d.db.Cluster.Transaction(context.Background(), func(ctx context.Context, tx *db.ClusterTx) error {
+				clusterConfig, err := clusterConfig.Load(ctx, tx)
+				if err != nil {
+					return fmt.Errorf("Failed to load cluster config: %w", err)
+				}
+
+				_, err = clusterConfig.Patch(map[string]string{"openfga.store.model_id": modelID})
+				if err != nil {
+					return err
+				}
+
+				*newClusterConfig = *clusterConfig
+				clusterChanged["openfga.store.model_id"] = modelID
+				return err
+			})
+			if err != nil {
+				return fmt.Errorf("Failed to write OpenFGA authorization model ID to database")
+			}
+		}
+	}
+
+	return nil
 }
 
 func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]string, nodeConfig *node.Config, clusterConfig *clusterConfig.Config) error {
@@ -782,6 +840,7 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 	acmeCAURLChanged := false
 	oidcChanged := false
 	syslogSocketChanged := false
+	openFGAChanged := false
 
 	for key := range clusterChanged {
 		switch key {
@@ -831,6 +890,8 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 			acmeDomainChanged = true
 		case "oidc.issuer", "oidc.client.id", "oidc.audience":
 			oidcChanged = true
+		case "openfga.api.url", "openfga.api.token", "openfga.store.id", "openfga.store.model_id":
+			openFGAChanged = true
 		}
 	}
 
@@ -967,12 +1028,24 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 		if oidcIssuer == "" || oidcClientID == "" {
 			d.oidcVerifier = nil
 		} else {
-			d.oidcVerifier = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience)
+			var err error
+			d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience)
+			if err != nil {
+				return fmt.Errorf("Failed creating verifier: %w", err)
+			}
 		}
 	}
 
 	if syslogSocketChanged {
 		err := d.setupSyslogSocket(nodeConfig.SyslogSocket())
+		if err != nil {
+			return err
+		}
+	}
+
+	if openFGAChanged {
+		openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openfgaAuthorizationModelID := d.globalConfig.OpenFGA()
+		err := d.setupOpenFGA(openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openfgaAuthorizationModelID)
 		if err != nil {
 			return err
 		}

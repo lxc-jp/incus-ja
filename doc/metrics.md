@@ -83,7 +83,7 @@ incus_disk_read_bytes_total{device="loop3",name="vm",project="default",type="vir
 
 作成後、証明書を信頼済みクライアントのリストに`metrics`というタイプを指定して追加する必要があります:
 
-    incus config trust add metrics.crt --type=metrics
+    incus config trust add-certificate metrics.crt --type=metrics
 
 あなたの環境で TLS クライアント証明書を要求することができない場合、`/1.0/metrics` API エンドポイントを認証されていないクライアントで利用可能にできます。
 お勧めはしませんが、API エンドポイントに誰がアクセスできるかを別の手段で制御できるのであれば許容できるかもしれません。メトリクス API の認証を無効にするには以下のようにします:

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
 
@@ -49,7 +49,12 @@ func setReceivedUUID(path string, UUID string) error {
 
 	args := btrfsIoctlReceivedSubvolArgs{}
 
-	binUUID, err := uuid.Parse(UUID).MarshalBinary()
+	strUUID, err := uuid.Parse(UUID)
+	if err != nil {
+		return fmt.Errorf("Failed parsing UUID: %w", err)
+	}
+
+	binUUID, err := strUUID.MarshalBinary()
 	if err != nil {
 		return fmt.Errorf("Failed coverting UUID: %w", err)
 	}
@@ -88,6 +93,17 @@ func (d *btrfs) isSubvolume(path string) bool {
 	}
 
 	return true
+}
+
+func (d *btrfs) hasSubvolumes(path string) (bool, error) {
+	var stdout strings.Builder
+
+	err := subprocess.RunCommandWithFds(d.state.ShutdownCtx, nil, &stdout, "btrfs", "subvolume", "list", "-o", path)
+	if err != nil {
+		return false, err
+	}
+
+	return stdout.Len() > 0, nil
 }
 
 func (d *btrfs) getSubvolumes(path string) ([]string, error) {

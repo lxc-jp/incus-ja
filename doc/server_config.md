@@ -12,6 +12,8 @@ key/value 設定は名前空間が分けられています。
 - {ref}`server-options-images`
 - {ref}`server-options-loki`
 - {ref}`server-options-misc`
+- {ref}`server-options-oidc`
+- {ref}`server-options-openfga`
 
 設定オプションをどのように設定するかについての手順は{ref}`server-configure`を参照してください。
 
@@ -51,6 +53,17 @@ key/value 設定は名前空間が分けられています。
 ```{include} config_options.txt
     :start-after: <!-- config group server-oidc start -->
     :end-before: <!-- config group server-oidc end -->
+```
+
+(server-options-openfga)=
+## OpenFGA 設定
+
+以下のサーバーオプションは {ref}`authorization-openfga` を使った外部ユーザー認可を設定します:
+
+% Include content from [config_options.txt](config_options.txt)
+```{include} config_options.txt
+    :start-after: <!-- config group server-openfga start -->
+    :end-before: <!-- config group server-openfga end -->
 ```
 
 (server-options-cluster)=

@@ -54,14 +54,8 @@ Incus サーバーが信頼する TLS 証明書のリストは、 [`incus config
      提供されたトークンが一致した場合、クライアント証明書はサーバーのトラストストアに追加され、接続が許可されます。
      そうでない場合は、接続が拒否されます。
 
+TLS クライアントから Incus へのアクセスを{ref}`authorization-tls`で制限できます。
 クライアントへの信頼を取り消すには、[`incus config trust remove <fingerprint>`](incus_config_trust_remove.md) でそのクライアント証明書をサーバーから削除します。
-
-TLS クライアントを 1 つまたは複数のプロジェクトに制限できます。
-この場合、クライアントは、グローバルな構成変更の実行や、アクセスを許可されたプロジェクトの構成（制限、制約）の変更もできなくなります。
-
-アクセスを制限するには、[`incus config trust edit <fingerprint>`](incus_config_trust_edit.md) を使用します。
-`restricted`キーを`true`に設定し、クライアントのアクセスを制限するプロジェクトのリストを指定します。
-プロジェクトのリストが空の場合、クライアントはどのプロジェクトへのアクセスも許可されません。
 
 (authentication-add-certs)=
 #### 信頼できる証明書をサーバーに追加する
@@ -119,11 +113,11 @@ PKI モードを有効にするには、以下の手順を実行します:
 (authentication-openid)=
 ## OpenID Connect認証
 
-Incus は[OpenID Connect](https://openid.net/connect/)を使用して、{abbr}`OIDC (OpenID Connect)` アイデンティティプロバイダーを通じてユーザーを認証することをサポートしています。
+Incus は[OpenID Connect](https://openid.net/connect/)を使用して、{abbr}`OIDC (OpenID Connect)` アイデンティティ・プロバイダーを通じてユーザーを認証することをサポートしています。
 
 ```{note}
 OpenID Connect を通じた認証がサポートされていますが、まだユーザーロールの取り扱いはありません。
-設定された OIDC アイデンティティプロバイダーを通じて認証するすべてのユーザーは、Incus へのフルアクセスを得ます。
+設定された OIDC アイデンティティ・プロバイダーを通じて認証するすべてのユーザーは、Incus へのフルアクセスを得ます。
 ```
 
 Incus を OIDC 認証を使用するように設定するには、[`oidc.*`](server-options-oidc)サーバー設定オプションを設定します。
@@ -132,6 +126,12 @@ Incus を OIDC 認証を使用するように設定するには、[`oidc.*`](ser
 OIDC 認証で設定された Incus サーバーを指すリモートを追加するには、[`incus remote add <remote_name> <remote_address>`](incus_remote_add.md) を実行します。
 その後、ウェブブラウザで認証を求められ、Incus が使用するデバイスコードを確認する必要があります。
 Incus クライアントはその後、アクセストークンとリフレッシュトークンを取得し保存し、それらを Incus とのすべてのやりとりに使用します。
+
+```{important}
+設定済みの OIDC アイデンティティ・プロバイダーで認証されたユーザーは Incus へのフルアクセスを得ます。
+ユーザーアクセスを制限するには、{ref}`authorization`も設定する必要があります。
+現状では、OIDC と互換のある唯一の認可の方法は{ref}`authorization-openfga`です。
+```
 
 (authentication-server-certificate)=
 ## TLS サーバー証明書

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v2"
 
 	"github.com/lxc/incus/internal/instancewriter"
@@ -62,6 +62,14 @@ func (d *btrfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Op
 			return err
 		}
 
+		// Get underlying btrfs mount options.
+		mountinfo, err := linux.GetMountinfo(volPath)
+		if err != nil {
+			return err
+		}
+
+		mountOptions := strings.Split(d.getMountOptions(), ",")
+
 		// Enable nodatacow on the parent directory so that when the root disk file is created the setting
 		// is inherited and random writes don't cause fragmentation and old extents to be kept.
 		// BTRFS extents are immutable so when blocks are written they end up in new extents and the old
@@ -71,9 +79,13 @@ func (d *btrfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Op
 		// as when a snapshot is taken, writes that happen on the original volume necessarily create a CoW
 		// in order to track the difference between original and snapshot. This will increase the size of
 		// data being referenced.
-		_, err = subprocess.RunCommand("chattr", "+C", volPath)
-		if err != nil {
-			return fmt.Errorf("Failed setting nodatacow on %q: %w", volPath, err)
+		//
+		// An exception is made for when compression is enabled on the underlying storage.
+		if !util.ValueInSlice("datacow", mountOptions) && !strings.Contains(mountinfo[len(mountinfo)-1], "compress") {
+			_, err = subprocess.RunCommand("chattr", "+C", volPath)
+			if err != nil {
+				return fmt.Errorf("Failed setting nodatacow on %q: %w", volPath, err)
+			}
 		}
 	}
 
@@ -844,7 +856,7 @@ func (d *btrfs) RefreshVolume(vol Volume, srcVol Volume, srcSnapshots []Volume, 
 	}
 
 	// Create temporary snapshot of the source volume.
-	snapUUID := uuid.New()
+	snapUUID := uuid.New().String()
 
 	srcSnap, err := srcVol.NewSnapshot(snapUUID)
 	if err != nil {

@@ -68,7 +68,7 @@ Console log:
 これでコンテナが起動したので、確認して期待通りにうまく動作していないことがわかります:
 
 ```{terminal}
-:input: incus exec systemd bash
+:input: incus exec systemd -- bash
 
 [root@systemd ~]# ls
 [root@systemd ~]# mount

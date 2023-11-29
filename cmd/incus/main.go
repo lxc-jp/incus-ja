@@ -15,6 +15,7 @@ import (
 	"github.com/lxc/incus/internal/i18n"
 	internalUtil "github.com/lxc/incus/internal/util"
 	"github.com/lxc/incus/internal/version"
+	"github.com/lxc/incus/shared/api"
 	config "github.com/lxc/incus/shared/cliconfig"
 	"github.com/lxc/incus/shared/logger"
 	"github.com/lxc/incus/shared/util"
@@ -380,7 +381,7 @@ func (c *cmdGlobal) PreRun(cmd *cobra.Command, args []string) error {
 			// Detect usable project.
 			names, err := d.GetProjectNames()
 			if err == nil {
-				if len(names) == 1 && names[0] != "default" {
+				if len(names) == 1 && names[0] != api.ProjectDefaultName {
 					remote := c.conf.Remotes["local"]
 					remote.Project = names[0]
 					c.conf.Remotes["local"] = remote
@@ -389,12 +390,12 @@ func (c *cmdGlobal) PreRun(cmd *cobra.Command, args []string) error {
 		}
 
 		flush := false
-		if runInit {
+		if runInit && (cmd.Name() != "init" || cmd.Parent() == nil || cmd.Parent().Name() != "admin") {
 			fmt.Fprintf(os.Stderr, i18n.G("If this is your first time running Incus on this machine, you should also run: incus admin init")+"\n")
 			flush = true
 		}
 
-		if !util.ValueInSlice(cmd.Name(), []string{"init", "launch"}) {
+		if !util.ValueInSlice(cmd.Name(), []string{"admin", "create", "launch"}) && (cmd.Parent() == nil || cmd.Parent().Name() != "admin") {
 			fmt.Fprintf(os.Stderr, i18n.G(`To start your first container, try: incus launch images:ubuntu/22.04
 Or for a virtual machine: incus launch images:ubuntu/22.04 --vm`)+"\n")
 			flush = true

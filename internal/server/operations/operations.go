@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 
+	"github.com/lxc/incus/internal/server/auth"
 	"github.com/lxc/incus/internal/server/db/operationtype"
 	"github.com/lxc/incus/internal/server/events"
 	"github.com/lxc/incus/internal/server/request"
@@ -102,7 +103,8 @@ type Operation struct {
 	readonly    bool
 	canceler    *cancel.HTTPRequestCanceller
 	description string
-	permission  string
+	objectType  auth.ObjectType
+	entitlement auth.Entitlement
 	dbOpType    operationtype.Type
 	requestor   *api.EventLifecycleRequestor
 	logger      logger.Logger
@@ -133,8 +135,9 @@ func OperationCreate(s *state.State, projectName string, opClass OperationClass,
 	// Main attributes
 	op := Operation{}
 	op.projectName = projectName
-	op.id = uuid.New()
+	op.id = uuid.New().String()
 	op.description = opType.Description()
+	op.objectType, op.entitlement = opType.Permission()
 	op.dbOpType = opType
 	op.class = opClass
 	op.createdAt = time.Now()
@@ -657,9 +660,9 @@ func (op *Operation) SetCanceler(canceler *cancel.HTTPRequestCanceller) {
 	op.canceler = canceler
 }
 
-// Permission returns the operation permission.
-func (op *Operation) Permission() string {
-	return op.permission
+// Permission returns the operations auth.ObjectType and auth.Entitlement.
+func (op *Operation) Permission() (auth.ObjectType, auth.Entitlement) {
+	return op.objectType, op.entitlement
 }
 
 // Project returns the operation project.

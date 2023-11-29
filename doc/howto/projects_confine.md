@@ -25,7 +25,7 @@ Incus サーバーへの接続に使用される TLS クライアント証明書
 
 ```{group-tab} クライアント証明書を追加
 
-    incus config trust add <certificate_file> --projects <project_name> --restricted
+    incus config trust add-certificate <certificate_file> --projects <project_name> --restricted
 ```
 
 ````

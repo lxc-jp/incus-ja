@@ -69,14 +69,14 @@ testloopmounts() {
   umount -l "${TEST_DIR}/mnt"
   incus start foo
   incus config device add foo mnt disk source="${lpath}" path=/mnt
-  incus exec foo stat /mnt/hello
+  incus exec foo -- stat /mnt/hello
   # Note - we need to add a set_running_config_item to lxc
   # or work around its absence somehow.  Once that's done, we
   # can run the following two lines:
-  #incus exec foo reboot
-  #incus exec foo stat /mnt/hello
+  #incus exec foo -- reboot
+  #incus exec foo -- stat /mnt/hello
   incus restart foo --force
-  incus exec foo stat /mnt/hello
+  incus exec foo -- stat /mnt/hello
   incus config device remove foo mnt
   ensure_fs_unmounted "fs should have been hot-unmounted"
   incus restart foo --force
@@ -232,6 +232,18 @@ test_config_profiles() {
     echo "property set succeeded when it shouldn't have"
     false
   fi
+
+  # Test unsetting config keys
+  incus config set core.metrics_authentication false
+  [ "$(incus config get core.metrics_authentication)" = "false" ]
+
+  incus config unset core.metrics_authentication
+  [ -z "$(incus config get core.metrics_authentication)" ]
+
+  # Validate user.* keys
+  ! incus config set user.⍾ foo || false
+  incus config set user.foo bar
+  incus config unset user.foo
 
   testunixdevs
 

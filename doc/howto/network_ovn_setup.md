@@ -169,7 +169,7 @@ Incus と同様に、 OVN の分散データベースは奇数のメンバーで
        incus launch images:ubuntu/22.04 c3 --network my-ovn
        incus launch images:ubuntu/22.04 c4 --network my-ovn
        incus list
-       incus exec c4 bash
+       incus exec c4 -- bash
        ping <IP of c1>
        ping <nameserver>
        ping6 -n www.example.com
