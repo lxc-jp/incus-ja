@@ -87,7 +87,7 @@ config:
 ```
 
 ```{tip}
-構文が正しいかどうかを確認する方法については、{doc}`cloud-init:howto/debug_user_data`を参照してください。
+構文が正しいかどうかを確認する方法については、{ref}`How to validate user data <cloud-init:check_user_data_cloud_config>`を参照してください。
 ```
 
 ##  `cloud-init`のステータスを確認する方法

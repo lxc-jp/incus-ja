@@ -731,7 +731,7 @@
 							"defaultdesc": "`false`",
 							"liveupdate": "yes",
 							"longdesc": "",
-							"shortdesc": "Whether to mount `shiftfs` on top of file systems handled through mount syscall interception",
+							"shortdesc": "Whether to use idmapped mounts for syscall interception",
 							"type": "bool"
 						}
 					},
@@ -1538,6 +1538,7 @@
 					},
 					{
 						"core.https_allowed_credentials": {
+							"defaultdesc": "`false`",
 							"longdesc": "If enabled, the `Access-Control-Allow-Credentials` HTTP header value is set to `true`.",
 							"scope": "global",
 							"shortdesc": "Whether to set `Access-Control-Allow-Credentials`",
@@ -1645,6 +1646,7 @@
 					},
 					{
 						"core.syslog_socket": {
+							"defaultdesc": "`false`",
 							"longdesc": "Set this option to `true` to enable the syslog unixgram socket to receive log messages from external processes.",
 							"scope": "local",
 							"shortdesc": "Whether to enable the syslog unixgram socket listener",
@@ -1653,6 +1655,7 @@
 					},
 					{
 						"core.trust_ca_certificates": {
+							"defaultdesc": "`false`",
 							"longdesc": "",
 							"scope": "global",
 							"shortdesc": "Whether to automatically trust clients signed by the CA",
@@ -1795,6 +1798,33 @@
 							"longdesc": "When using custom automatic instance placement logic, this option stores the scriptlet.\nSee {ref}`clustering-instance-placement-scriptlet` for more information.",
 							"scope": "global",
 							"shortdesc": "Instance placement scriptlet for automatic instance placement",
+							"type": "string"
+						}
+					},
+					{
+						"network.ovn.ca_cert": {
+							"defaultdesc": "Content of `/etc/ovn/ovn-central.crt` if present",
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "OVN SSL certificate authority",
+							"type": "string"
+						}
+					},
+					{
+						"network.ovn.client_cert": {
+							"defaultdesc": "Content of `/etc/ovn/cert_host` if present",
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "OVN SSL client certificate",
+							"type": "string"
+						}
+					},
+					{
+						"network.ovn.client_key": {
+							"defaultdesc": "Content of `/etc/ovn/key_host` if present",
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "OVN SSL client key",
 							"type": "string"
 						}
 					},

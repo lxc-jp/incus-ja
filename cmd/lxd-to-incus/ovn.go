@@ -20,10 +20,12 @@ func ovsConvert() ([][]string, error) {
 	}
 
 	oldValue := strings.TrimSpace(strings.Replace(output, "\"", "", -1))
+	oldBridges := []string{}
 
 	values := strings.Split(oldValue, ",")
 	for i, value := range values {
 		fields := strings.Split(value, ":")
+		oldBridges = append(oldBridges, fields[1])
 		fields[1] = strings.Replace(fields[1], "lxdovn", "incusovn", -1)
 		values[i] = strings.Join(fields, ":")
 	}
@@ -34,12 +36,16 @@ func ovsConvert() ([][]string, error) {
 		commands = append(commands, []string{"ovs-vsctl", "set", "open_vswitch", ".", fmt.Sprintf("external-ids:ovn-bridge-mappings=%s", newValue)})
 	}
 
+	for _, bridge := range oldBridges {
+		commands = append(commands, []string{"ovs-vsctl", "del-br", bridge})
+	}
+
 	return commands, nil
 }
 
 func ovnBackup(nbDB string, sbDB string, target string) error {
 	// Backup the Northbound database.
-	nbStdout, err := os.Create(filepath.Join(target, "lxd-to-incus.ovn-nb.backup"))
+	nbStdout, err := os.Create(filepath.Join(target, fmt.Sprintf("lxd-to-incus.ovn-nb.%d.backup", os.Getpid())))
 	if err != nil {
 		return err
 	}
@@ -57,7 +63,7 @@ func ovnBackup(nbDB string, sbDB string, target string) error {
 	}
 
 	// Backup the Southbound database.
-	sbStdout, err := os.Create(filepath.Join(target, "lxd-to-incus.ovn-sb.backup"))
+	sbStdout, err := os.Create(filepath.Join(target, fmt.Sprintf("lxd-to-incus.ovn-sb.%d.backup", os.Getpid())))
 	if err != nil {
 		return err
 	}

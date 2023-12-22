@@ -156,12 +156,13 @@ netmask
 NFS
 NIC
 NICs
+NixOS
 NUMA
 NVRAM
 OData
 OIDC
-OpenID
 OpenFGA
+OpenID
 OpenMetrics
 OpenSSL
 OpenSUSE

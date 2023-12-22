@@ -40,7 +40,7 @@
 そうでないと、すべてのファイルはオーバーフローUID/GID（`65536:65536`）として表示され、ワールドリーダブルでないものへのアクセスは失敗します。
 必要な権限を付与するために以下の方法のいずれかを使用してください:
 
-- [`incus config device add`](incus_config_device_add.md)の実行時に`shift=true`を指定します。これはカーネルとファイルシステムが idmapped マウントあるいは shiftfs をサポートしているかに依存します（ [`incus info`](incus_info.md)参照）。
+- [`incus config device add`](incus_config_device_add.md)の実行時に`shift=true`を指定します。これはカーネルとファイルシステムが idmapped マウントをサポートしているかに依存します（ [`incus info`](incus_info.md)参照）。
 - `raw.idmap`エントリを追加します（[User Namespace の Idmap](userns-idmap.md)参照）。
 - ホームディレクトリーに再帰的な POSIX ACL を配置します。
 

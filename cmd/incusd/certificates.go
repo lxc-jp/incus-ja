@@ -719,6 +719,7 @@ func certificatesPost(d *Daemon, r *http.Request) response.Response {
 				Name:        name,
 				Certificate: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})),
 				Restricted:  req.Restricted,
+				Description: req.Description,
 			}
 
 			_, err := dbCluster.CreateCertificateWithProjects(ctx, tx.Tx(), dbCert, req.Projects)
@@ -975,6 +976,7 @@ func doCertificateUpdate(d *Daemon, dbInfo api.Certificate, req api.CertificateP
 			Restricted:  req.Restricted,
 			Name:        req.Name,
 			Type:        reqDBType,
+			Description: req.Description,
 		}
 
 		var userCanEditCertificate bool
@@ -1012,6 +1014,7 @@ func doCertificateUpdate(d *Daemon, dbInfo api.Certificate, req api.CertificateP
 				Restricted:  dbInfo.Restricted,
 				Name:        dbInfo.Name,
 				Type:        reqDBType,
+				Description: req.Description,
 			}
 
 			certProjects = dbInfo.Projects
@@ -1134,7 +1137,7 @@ func certificateDelete(d *Daemon, r *http.Request) response.Response {
 		}
 
 		var userCanEditCertificate bool
-		err = s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectCertificate(fingerprint), auth.EntitlementCanEdit)
+		err = s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectCertificate(certInfo.Fingerprint), auth.EntitlementCanEdit)
 		if err == nil {
 			userCanEditCertificate = true
 		} else if api.StatusErrorCheck(err, http.StatusForbidden) {

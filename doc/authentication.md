@@ -61,7 +61,7 @@ TLS クライアントから Incus へのアクセスを{ref}`authorization-tls`
 #### 信頼できる証明書をサーバーに追加する
 
 信頼できるクライアントを追加するには、そのクライアント証明書をサーバーのトラストストアに直接追加するのが望ましい方法です。
-これを行うには、クライアント証明書をサーバーにコピーし、[`incus config trust add <file>`](incus_config_trust_add.md) で登録します。
+これを行うには、クライアント証明書をサーバーにコピーし、[`incus config trust add-certificate <file>`](incus_config_trust_add-certificate.md) で登録します。
 
 (authentication-token)=
 #### トークンを使ったクライアント証明書の追加

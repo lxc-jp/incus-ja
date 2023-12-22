@@ -28,22 +28,15 @@ Incus デーモンは Linux でのみ稼働します。
 
 ### Linux
 
-Linux で Incus をインストールする最も簡単な方法は{ref}`installing-zabbly-package`です。これは Debian と Ubuntu で利用できます。
+いくつの Linux ディストリビューションでは、メインレポジトリまたはサードパーティレポジトリでパッケージが利用できます。
 
-また [GitHub](https://github.com/lxc/incus/actions) に Incus クライアントのネイティブビルドがあります:
+````{tabs}
 
-- Linux 用の Incus クライアント: [`bin.linux.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.aarch64)、[`bin.linux.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.x86_64)
-- Windows 用の Incus クライアント: [`bin.windows.incus.aarch64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.aarch64.exe)、[`bin.windows.incus.x86_64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.x86_64.exe)
-- macOS 用の Incus クライアント: [`bin.macos.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.aarch64)、[`bin.macos.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.x86_64)
-
-(installing-zabbly-package)=
-#### ZabblyのDebianとUbuntuパッケージをインストールする
+```{group-tab} Debian と Ubuntu
 現時点では Incus をインストールする最も簡単な方法は[Zabbly](https://zabbly.com)で提供される Debian または Ubuntu のパッケージを使うことです。
 最新の安定版リリースと（テストされていない）デイリービルドの 2 つのリポジトリがあります。
 
 インストール手順は[`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)にあります。
-
-他のインストール方法については{ref}`installing`を参照してください。
 
 1. あなたのユーザーに Incus を制御する許可を与えます。
 
@@ -65,6 +58,68 @@ Linux で Incus をインストールする最も簡単な方法は{ref}`install
 
    この手順はフォルトのオプションで最小セットアップの構成を作成します。
    初期化オプションをチューニングしたい場合、詳細は{ref}`initialize`を参照してください。
+```
+
+```{group-tab} Gentoo
+Incus の全ての依存ソフトウェアは Gentoo のメインレポジトリ内に [`app-containers/incus`](https://packages.gentoo.org/packages/app-containers/incus) として利用できます。
+
+Incus は以下のコマンドでインストールできます:
+
+    emerge -av app-containers/incus
+
+重要: Incus のアップストリームと Gentoo のレポジトリに LTS と機能リリースが利用できるときに、どちらをインストールするかは後で説明します。
+
+Incus に関連して 2 つのグループが作成されます:
+`incus` は（コンテナを起動する）基本的なユーザーアクセスで、`incus-admin` は `incus admin` の制御用です。 あなたのセットアップとユースケースに応じて、通常使用するユーザーをどちらか、あるいは両方に追加してください。
+
+インストールの後、Incus を設定できます。ですがデフォルトのままでも動くので、これは必須ではありません。
+
+- **`openrc`**: `/etc/conf.d/incus` を編集します
+- **`systemd`**: `systemctl edit --full incus.service`
+
+`/etc/subuid` と `/etc/subgid` をセットアップします:
+
+    echo "root:1000000:1000000000" | tee -a /etc/subuid /etc/subgid
+
+詳細は: {ref}`User Namespace 用の ID のマッピング <userns-idmap>`
+
+デーモンを起動します:
+
+- **`openrc`**: `rc-service incus start`
+- **`systemd`**: `systemctl start incus`
+
+Incus を初期化します。これは新規インストールの後一度だけ必要です:
+
+    incus admin init
+
+あるいは
+
+    incus admin init --minimal
+
+で後者は選択のプロンプトを出さずに単にデフォルトの設定を使います。詳細は {ref}`initialize` を参照してください。
+
+あなたのユーザーでログインして `incus` コマンドで Incus を使い始めましょう。
+```
+
+```{group-tab} NixOS
+Incus とその依存ソフトウェアは NixOS でパッケージされていて NixOS のオプションで設定できます。利用可能なオプション一式については [`virtualisation.incus`](https://search.nixos.org/options?query=virtualisation.incus) を参照してください。
+
+NixOS 設定に以下を加えるとサービスを有効化し開始できます。
+
+    virtualisation.incus.enable = true;
+
+Incus の初期化は手動で `incus admin init` を使ってもできますし、 NixOS 設定のプリシードオプションでもできます。プリシードの例は NixOS のドキュメントを参照してください。
+
+    virtualisation.incus.preseed = {};
+
+最後に、ユーザーを `incus-admin` グループに追加して、非ルートユーザーに Incus ソケットへのアクセス権を追加できます。それには NixOS 設定に以下を追加します:
+
+    users.users.YOUR_USERNAME.extraGroups = ["incus-admin"];
+
+NixOS 固有の問題については、パッケージレポジトリ内で[イシューを起票](https://github.com/NixOS/nixpkgs/issues/new/choose)してください。
+```
+
+````
 
 ### 他のOS
 
@@ -96,12 +151,11 @@ Windows版のIncusクライアントは[Chocolatey](https://community.chocolatey
 
 ````
 
-[GitHub](https://github.com/lxc/incus/actions)にも Incus クライアントのネイティブビルドがあります。
-特定のビルドをダウンロードするには以下のようにします。
+[GitHub](https://github.com/lxc/incus/actions)にも Incus クライアントのネイティブビルドがあります:
 
-1. GitHub アカウントにログインします。
-1. 興味のあるブランチやタグ(たとえば、最新のリリースタグあるいは`main`)でフィルタリングします。
-1. 最新のビルドを選択し、適切なアーティファクトをダウンロードします。
+- Linux 用 Incus クライアント: [`bin.linux.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.aarch64)、[`bin.linux.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.x86_64)
+- Windows 用 Incus クライアント: [`bin.windows.incus.aarch64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.aarch64.exe)、[`bin.windows.incus.x86_64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.x86_64.exe)
+- macOS 用 Incus クライアント: [`bin.macos.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.aarch64)、[`bin.macos.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.x86_64)
 
 (installing_from_source)=
 ## Incusをソースからインストールする
@@ -110,33 +164,61 @@ Incus をソースコードからビルドとインストールしたい場合�
 
 Incus の開発には`liblxc`の最新バージョン（4.0.0 以上が必要）を使用することをお勧めします。
 さらに Incus が動作するためには最近の Go 言語（{ref}`requirements-go`参照）が動作することが必要です。
-Ubuntu では次のようにインストールできます。
 
-```bash
-sudo apt update
-sudo apt install acl attr autoconf automake dnsmasq-base git libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
-command -v snap >/dev/null || sudo apt-get install snapd
-sudo snap install --classic go
-```
+````{tabs}
 
-```{note}
-`liblxc-dev` パッケージを使って `go-lxc` モジュールのビルド時にコンパイルエラーが出た場合、`liblxc` のビルド時に `INC_DEVEL` の値に `0` を指定したか確認してください。確認するためには、`/usr/include/lxc/version.h` を見てください。
-もし `INC_DEVEL` の値が `1` なら、`0` に置き換えると問題を回避できます。これは Ubuntu 22.04/22.10 のパッケージのバグです。Ubuntu 23.04/23.10 ではこの問題はありません。
-```
+```{group-tab} Debian と Ubuntu
+ビルドと実行時の依存ソフトウェアをインストールします:
+
+    sudo apt update
+    sudo apt install acl attr autoconf automake dnsmasq-base git golang-go libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
 
 デフォルトのストレージドライバーである`dir`ドライバーに加えて、Incus ではいくつかのストレージドライバーが使えます。
 これらのツールをインストールすると、initramfs への追加が行われ、ホストのブートが少しだけ遅くなるかもしれませんが、特定のドライバーを使いたい場合には必要です。
 
-```bash
-sudo apt install lvm2 thin-provisioning-tools
-sudo apt install btrfs-progs
-```
+    sudo apt install btrfs-progs
+    sudo apt install ceph-common
+    sudo apt install lvm2 thin-provisioning-tools
+    sudo apt install zfsutils-linux
 
 テストスイートを実行するには、次のパッケージも必要です。
 
-```bash
-sudo apt install busybox-static curl gettext jq sqlite3 socat bind9-dnsutils
+    sudo apt install busybox-static curl gettext jq sqlite3 socat bind9-dnsutils
+
+****重要:**** `liblxc-dev` パッケージを使って `go-lxc` モジュールのビルド時にコンパイルエラーが出た場合、`liblxc` のビルド時に `INC_DEVEL` の値に `0` を指定したか確認してください。確認するためには、`/usr/include/lxc/version.h` を見てください。
+もし `INC_DEVEL` の値が `1` なら、`0` に置き換えると問題を回避できます。これは Ubuntu 22.04/22.10 のパッケージのバグです。Ubuntu 23.04/23.10 ではこの問題はありません。
+
 ```
+
+
+```{group-tab} Alpine Linux
+以下のコマンドで Alpine Linux 上で Incus をビルドするのに必要な開発リソースを取得できます:
+
+    apk add acl-dev autoconf automake eudev-dev gettext-dev go intltool libcap-dev libtool libuv-dev linux-headers lz4-dev tcl-dev sqlite-dev lxc-dev make xz
+
+Incus の必要な機能をすべて使えるようにするには、さらにパッケージをインストールする必要があります。
+[Alpine Linux レポジトリの LXD パッケージの定義](https://gitlab.alpinelinux.org/alpine/infra/aports/-/blob/master/community/lxd/APKBUILD) から特有の関数を使う必要のあるパッケージのリストを参照できます。<!-- wokeignore:rule=master -->
+また [Alpine Linux パッケージコンテンツフィルター](https://pkgs.alpinelinux.org/contents) から実行ファイル名でパッケージを見つけることができます。
+
+メインの依存ソフトウェアをインストールします:
+
+    apk add acl attr ca-certificates cgmanager dbus dnsmasq lxc libintl iproute2 iptables netcat-openbsd rsync squashfs-tools shadow-uidmap tar xz
+
+仮想マシンを動かすのに必要な追加の依存ソフトウェアをインストールします:
+
+    apk add qemu-system-x86_64 qemu-chardev-spice qemu-hw-usb-redirect qemu-hw-display-virtio-vga qemu-img qemu-ui-spice-core ovmf sgdisk util-linux-misc virtiofsd
+
+リリース tarball あるいは git レポジトリからソースを準備した後、ビルド中の既知のバグを回避するため、以下の手順に従う必要があります:
+
+
+****重要:**** システムに `/usr/local/include` が存在しない場合、ビルドエラーが出るかもしれません。
+また、[`gettext` の問題](https://github.com/gosexy/gettext/issues/1)のため、以下の追加の環境変数を設定する必要があるかもしれません:
+
+    export CGO_LDFLAGS="$CGO_LDFLAGS -L/usr/lib -lintl"
+    export CGO_CPPFLAGS="-I/usr/include"
+```
+
+````
 
 ### ソースから最新版をビルドする
 

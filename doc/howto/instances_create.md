@@ -110,11 +110,11 @@ ISO イメージから仮想マシンを作成しインストールしたいと�
 
 次のステップは ISO イメージをインポートし、後で仮想マシンにストレージボリュームとしてアタッチできるようにします:
 
-    incus storage volume import <path-to-image.iso> iso-volume --type=iso
+    incus storage volume import <pool> <path-to-image.iso> iso-volume --type=iso
 
 最後に、以下のコマンドでカスタム ISO ボリュームを仮想マシンにアタッチする必要があります:
 
-    incus config device add iso-vm iso-volume disk pool=default source=iso-volume boot.priority=10
+    incus config device add iso-vm iso-volume disk pool=<pool> source=iso-volume boot.priority=10
 
 `boot.priority` 設定キーは仮想マシンの起動順が確実に ISO が最初になるようにします。
 仮想マシンを起動し、コンソールに接続してメニューを操作できるようにします:
@@ -127,6 +127,6 @@ ISO イメージから仮想マシンを作成しインストールしたいと�
 
 これでインストーラが見えるようになります。インストールが終わったら、カスタム ISO ボリュームを切り離す必要があります:
 
-    incus storage volume detach default iso-volume iso-vm
+    incus storage volume detach <pool> iso-volume iso-vm
 
 これで仮想マシンはリブートでき、リブートするとディスクから起動します。

@@ -80,12 +80,12 @@ type Authorizer interface {
 	DeleteProfile(ctx context.Context, projectName string, profileName string) error
 	RenameProfile(ctx context.Context, projectName string, oldProfileName string, newProfileName string) error
 
-	AddStoragePoolVolume(ctx context.Context, projectName string, storagePoolName string, storageVolumeType string, storageVolumeName string) error
-	DeleteStoragePoolVolume(ctx context.Context, projectName string, storagePoolName string, storageVolumeType string, storageVolumeName string) error
-	RenameStoragePoolVolume(ctx context.Context, projectName string, storagePoolName string, storageVolumeType string, oldStorageVolumeName string, newStorageVolumeName string) error
+	AddStoragePoolVolume(ctx context.Context, projectName string, storagePoolName string, storageVolumeType string, storageVolumeName string, storageVolumeLocation string) error
+	DeleteStoragePoolVolume(ctx context.Context, projectName string, storagePoolName string, storageVolumeType string, storageVolumeName string, storageVolumeLocation string) error
+	RenameStoragePoolVolume(ctx context.Context, projectName string, storagePoolName string, storageVolumeType string, oldStorageVolumeName string, newStorageVolumeName string, storageVolumeLocation string) error
 
-	AddStorageBucket(ctx context.Context, projectName string, storagePoolName string, storageBucketName string) error
-	DeleteStorageBucket(ctx context.Context, projectName string, storagePoolName string, storageBucketName string) error
+	AddStorageBucket(ctx context.Context, projectName string, storagePoolName string, storageBucketName string, storageBucketLocation string) error
+	DeleteStorageBucket(ctx context.Context, projectName string, storagePoolName string, storageBucketName string, storageBucketLocation string) error
 }
 
 // Opts is used as part of the LoadAuthorizer function so that only the relevant configuration fields are passed into a
@@ -93,7 +93,7 @@ type Authorizer interface {
 type Opts struct {
 	config          map[string]any
 	projectsGetFunc func(ctx context.Context) (map[int64]string, error)
-	resources       *Resources
+	resourcesFunc   func() (*Resources, error)
 }
 
 // Resources represents a set of current API resources as Object slices for use when loading an Authorizer.
@@ -126,10 +126,10 @@ func WithProjectsGetFunc(f func(ctx context.Context) (map[int64]string, error)) 
 	}
 }
 
-// WithResources should be passed into LoadAuthorizer when DriverOpenFGA is used.
-func WithResources(r Resources) func(*Opts) {
+// WithResourcesFunc should be passed into LoadAuthorizer when DriverOpenFGA is used.
+func WithResourcesFunc(f func() (*Resources, error)) func(*Opts) {
 	return func(o *Opts) {
-		o.resources = &r
+		o.resourcesFunc = f
 	}
 }
 
