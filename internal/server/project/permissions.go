@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lxc/incus/internal/idmap"
 	"github.com/lxc/incus/internal/instance"
 	"github.com/lxc/incus/internal/server/auth"
 	"github.com/lxc/incus/internal/server/db"
@@ -16,6 +15,7 @@ import (
 	deviceconfig "github.com/lxc/incus/internal/server/device/config"
 	"github.com/lxc/incus/internal/server/instance/instancetype"
 	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/shared/idmap"
 	"github.com/lxc/incus/shared/units"
 	"github.com/lxc/incus/shared/util"
 	"github.com/lxc/incus/shared/validate"
@@ -1251,7 +1251,7 @@ func expandInstancesConfigAndDevices(instances []api.Instance, profiles []api.Pr
 }
 
 // Sum of the effective values for the given limits across all project
-// enties (instances and custom volumes).
+// entities (instances and custom volumes).
 func getTotalsAcrossProjectEntities(info *projectInfo, keys []string, skipUnset bool) (map[string]int64, error) {
 	totals := map[string]int64{}
 
@@ -1329,6 +1329,8 @@ func getInstanceLimits(inst api.Instance, keys []string, skipUnset bool) (map[st
 			if inst.Type == instancetype.VM.String() {
 				sizeStateValue, ok := device["size.state"]
 				if !ok {
+					// TODO: In case the VMs storage drivers config drive size isn't the default,
+					// the limits accounting will be incorrect.
 					sizeStateValue = deviceconfig.DefaultVMBlockFilesystemSize
 				}
 
@@ -1422,7 +1424,7 @@ func FilterUsedBy(authorizer auth.Authorizer, r *http.Request, entries []string)
 	// Filter the entries.
 	usedBy := []string{}
 	for _, entry := range entries {
-		entityType, projectName, pathArgs, err := cluster.URLToEntityType(entry)
+		entityType, projectName, location, pathArgs, err := cluster.URLToEntityType(entry)
 		if err != nil {
 			continue
 		}
@@ -1440,9 +1442,9 @@ func FilterUsedBy(authorizer auth.Authorizer, r *http.Request, entries []string)
 		case cluster.TypeStoragePool:
 			object = auth.ObjectStoragePool(pathArgs[0])
 		case cluster.TypeStorageVolume:
-			object = auth.ObjectStorageVolume(projectName, pathArgs[0], pathArgs[1], pathArgs[2])
+			object = auth.ObjectStorageVolume(projectName, pathArgs[0], pathArgs[1], pathArgs[2], location)
 		case cluster.TypeStorageBucket:
-			object = auth.ObjectStorageBucket(projectName, pathArgs[0], pathArgs[1])
+			object = auth.ObjectStorageBucket(projectName, pathArgs[0], pathArgs[1], location)
 		default:
 			continue
 		}

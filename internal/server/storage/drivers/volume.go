@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	internalInstance "github.com/lxc/incus/internal/instance"
 	"github.com/lxc/incus/internal/revert"
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
 	"github.com/lxc/incus/internal/server/locking"
 	"github.com/lxc/incus/internal/server/operations"
 	"github.com/lxc/incus/internal/server/refcount"
@@ -45,6 +45,11 @@ func (t VolumeType) IsInstance() bool {
 	}
 
 	return false
+}
+
+// Singular returns the singular version of the type name.
+func (t VolumeType) Singular() string {
+	return strings.TrimSuffix(string(t), "s")
 }
 
 // VolumeTypeBucket represents a bucket storage volume.
@@ -417,7 +422,7 @@ func (v Volume) NewVMBlockFilesystemVolume() Volume {
 		newConf["size"] = v.config["size.state"]
 	} else {
 		// Fallback to the default VM filesystem size.
-		newConf["size"] = deviceConfig.DefaultVMBlockFilesystemSize
+		newConf["size"] = v.driver.Info().DefaultVMBlockFilesystemSize
 	}
 
 	vol := NewVolume(v.driver, v.pool, v.volType, ContentTypeFS, v.name, newConf, v.poolConfig)

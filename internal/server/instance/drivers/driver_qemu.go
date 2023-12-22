@@ -344,6 +344,8 @@ func qemuCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.I
 			logger.Error("Failed to add instance to authorizer", logger.Ctx{"name": d.Name(), "project": d.project.Name, "error": err})
 		}
 
+		revert.Add(func() { d.state.Authorizer.DeleteInstance(d.state.ShutdownCtx, d.project.Name, d.Name()) })
+
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceCreated.Event(d, map[string]any{
 			"type":         api.InstanceTypeVM,
 			"storage-pool": d.storagePool.Name(),
@@ -1044,7 +1046,13 @@ func (d *qemu) validateStartup(stateful bool, statusCode api.StatusCode) error {
 			return err
 		}
 
-		stateDiskSizeStr := deviceConfig.DefaultVMBlockFilesystemSize
+		// Don't access d.storagePool directly since it isn't populated at this stage.
+		pool, err := d.getStoragePool()
+		if err != nil {
+			return err
+		}
+
+		stateDiskSizeStr := pool.Driver().Info().DefaultVMBlockFilesystemSize
 		if rootDiskDevice["size.state"] != "" {
 			stateDiskSizeStr = rootDiskDevice["size.state"]
 		}
@@ -2649,6 +2657,9 @@ func (d *qemu) generateConfigShare() error {
 		return err
 	}
 
+	// Systemd unit for incus-agent. It ensures the incus-agent is copied from the shared filesystem before it is
+	// started. The service is triggered dynamically via udev rules when certain virtio-ports are detected,
+	// rather than being enabled at boot.
 	agentServiceUnit := `[Unit]
 Description=Incus - agent
 Documentation=https://linuxcontainers.org/incus/docs/main/
@@ -2671,18 +2682,21 @@ StartLimitBurst=10
 		return err
 	}
 
+	// Setup script for incus-agent that is executed by the incus-agent systemd unit before incus-agent is started.
+	// The script sets up a temporary mount point, copies data from the mount (including incus-agent binary),
+	// and then unmounts it. It also ensures appropriate permissions for the Incus agent's runtime directory.
 	agentSetupScript := `#!/bin/sh
 set -eu
 PREFIX="/run/incus_agent"
 
 # Functions.
 mount_virtiofs() {
-    mount -t virtiofs config "${PREFIX}/.mnt" >/dev/null 2>&1
+    mount -t virtiofs config "${PREFIX}/.mnt" -o ro >/dev/null 2>&1
 }
 
 mount_9p() {
-    /sbin/modprobe 9pnet_virtio >/dev/null 2>&1 || true
-    /bin/mount -t 9p config "${PREFIX}/.mnt" -o access=0,trans=virtio,size=1048576 >/dev/null 2>&1
+    modprobe 9pnet_virtio >/dev/null 2>&1 || true
+    mount -t 9p config "${PREFIX}/.mnt" -o ro,access=0,trans=virtio,size=1048576 >/dev/null 2>&1
 }
 
 fail() {
@@ -2695,21 +2709,18 @@ fail() {
 # Setup the mount target.
 umount -l "${PREFIX}" >/dev/null 2>&1 || true
 mkdir -p "${PREFIX}"
-mount -t tmpfs tmpfs "${PREFIX}" -o mode=0700,size=50M
+mount -t tmpfs tmpfs "${PREFIX}" -o mode=0700,nodev,nosuid,noatime,size=25M
 mkdir -p "${PREFIX}/.mnt"
 
 # Try virtiofs first.
 mount_virtiofs || mount_9p || fail "Couldn't mount virtiofs or 9p, failing."
 
 # Copy the data.
-cp -Ra "${PREFIX}/.mnt/"* "${PREFIX}"
+cp -Ra --no-preserve=ownership "${PREFIX}/.mnt/"* "${PREFIX}"
 
 # Unmount the temporary mount.
 umount "${PREFIX}/.mnt"
 rmdir "${PREFIX}/.mnt"
-
-# Fix up permissions.
-chown -R root:root "${PREFIX}"
 `
 
 	err = os.WriteFile(filepath.Join(configDrivePath, "systemd", "incus-agent-setup"), []byte(agentSetupScript), 0500)
@@ -2717,17 +2728,13 @@ chown -R root:root "${PREFIX}"
 		return err
 	}
 
-	// Udev rules
 	err = os.MkdirAll(filepath.Join(configDrivePath, "udev"), 0500)
 	if err != nil {
 		return err
 	}
 
-	agentRules := `SYMLINK=="virtio-ports/org.linuxcontainers.incus", TAG+="systemd", ENV{SYSTEMD_WANTS}+="incus-agent.service"
-
-# Legacy.
-SYMLINK=="virtio-ports/org.linuxcontainers.lxd", TAG+="systemd", ENV{SYSTEMD_WANTS}+="incus-agent.service"
-`
+	// Udev rules to start the incus-agent.service when QEMU serial devices (symlinks in virtio-ports) appear.
+	agentRules := `SYMLINK=="virtio-ports/org.linuxcontainers.incus", TAG+="systemd", ENV{SYSTEMD_WANTS}+="incus-agent.service"\n`
 	err = os.WriteFile(filepath.Join(configDrivePath, "udev", "99-incus-agent.rules"), []byte(agentRules), 0400)
 	if err != nil {
 		return err
@@ -2749,7 +2756,8 @@ fi
 rm -f /lib/systemd/system/incus-agent-9p.service \
     /lib/systemd/system/incus-agent-virtiofs.service \
     /etc/systemd/system/multi-user.target.wants/incus-agent-9p.service \
-    /etc/systemd/system/multi-user.target.wants/incus-agent-virtiofs.service
+    /etc/systemd/system/multi-user.target.wants/incus-agent-virtiofs.service \
+    /etc/systemd/system/multi-user.target.wants/incus-agent.service
 
 # Install the units.
 cp udev/99-incus-agent.rules /lib/udev/rules.d/
@@ -3561,19 +3569,21 @@ func (d *qemu) addRootDriveConfig(qemuDev map[string]string, mountInfo *storageP
 	if d.storagePool.Driver().Info().Remote {
 		vol := d.storagePool.GetVolume(storageDrivers.VolumeTypeVM, storageDrivers.ContentTypeBlock, project.Instance(d.project.Name, d.name), nil)
 
-		config := d.storagePool.ToAPI().Config
+		if util.ValueInSlice(d.storagePool.Driver().Info().Name, []string{"ceph", "cephfs"}) {
+			config := d.storagePool.ToAPI().Config
 
-		userName := config["ceph.user.name"]
-		if userName == "" {
-			userName = storageDrivers.CephDefaultUser
+			userName := config["ceph.user.name"]
+			if userName == "" {
+				userName = storageDrivers.CephDefaultUser
+			}
+
+			clusterName := config["ceph.cluster_name"]
+			if clusterName == "" {
+				clusterName = storageDrivers.CephDefaultUser
+			}
+
+			driveConf.DevPath = device.DiskGetRBDFormat(clusterName, userName, config["ceph.osd.pool_name"], vol.Name())
 		}
-
-		clusterName := config["ceph.cluster_name"]
-		if clusterName == "" {
-			clusterName = storageDrivers.CephDefaultUser
-		}
-
-		driveConf.DevPath = device.DiskGetRBDFormat(clusterName, userName, config["ceph.osd.pool_name"], vol.Name())
 	}
 
 	return d.addDriveConfig(qemuDev, bootIndexes, driveConf)
@@ -3758,11 +3768,11 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 			aioMode = "threads"
 			cacheMode = "unsafe" // Use host cache, but ignore all sync requests from guest.
 		}
+	}
 
-		// Special case ISO images as cdroms.
-		if driveConf.FSType == "iso9660" {
-			media = "cdrom"
-		}
+	// Special case ISO images as cdroms.
+	if driveConf.FSType == "iso9660" {
+		media = "cdrom"
 	}
 
 	// Check if the user has overridden the bus.
@@ -3835,8 +3845,14 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 			volumeName = volName
 		}
 
+		// Identify the right content type.
+		rbdContentType := storageDrivers.ContentTypeBlock
+		if driveConf.FSType == "iso9660" {
+			rbdContentType = storageDrivers.ContentTypeISO
+		}
+
 		// Get the RBD image name.
-		vol := storageDrivers.NewVolume(nil, "", volumeType, storageDrivers.ContentTypeBlock, volumeName, nil, nil)
+		vol := storageDrivers.NewVolume(nil, "", volumeType, rbdContentType, volumeName, nil, nil)
 		rbdImageName := storageDrivers.CephGetRBDImageName(vol, "", false)
 
 		// Parse the options (ceph credentials).

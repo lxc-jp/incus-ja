@@ -64,8 +64,9 @@ func main() {
 type cmdMigrate struct {
 	global cmdGlobal
 
-	flagYes           bool
-	flagClusterMember bool
+	flagYes                bool
+	flagClusterMember      bool
+	flagIgnoreVersionCheck bool
 }
 
 func (c *cmdMigrate) Command() *cobra.Command {
@@ -74,6 +75,7 @@ func (c *cmdMigrate) Command() *cobra.Command {
 	cmd.RunE = c.Run
 	cmd.PersistentFlags().BoolVar(&c.flagYes, "yes", false, "Migrate without prompting")
 	cmd.PersistentFlags().BoolVar(&c.flagClusterMember, "cluster-member", false, "Used internally for cluster migrations")
+	cmd.PersistentFlags().BoolVar(&c.flagIgnoreVersionCheck, "ignore-version-check", false, "Bypass source version check")
 
 	return cmd
 }
@@ -89,7 +91,7 @@ func (c *cmdMigrate) Run(app *cobra.Command, args []string) error {
 	}
 
 	// Create log file.
-	logFile, err := os.Create("/var/log/lxd-to-incus.log")
+	logFile, err := os.Create(fmt.Sprintf("/var/log/lxd-to-incus.%d.log", os.Getpid()))
 	if err != nil {
 		return fmt.Errorf("Failed to create log file: %w", err)
 	}
@@ -312,6 +314,12 @@ func (c *cmdMigrate) Run(app *cobra.Command, args []string) error {
 				}
 			}
 		}
+	}
+
+	// Mangle profiles and projects.
+	if !c.flagClusterMember {
+		rewriteStatements = append(rewriteStatements, fmt.Sprintf("UPDATE profiles SET description='Default Incus profile' WHERE description='Default LXD profile';"))
+		rewriteStatements = append(rewriteStatements, fmt.Sprintf("UPDATE projects SET description='Default Incus project' WHERE description='Default LXD project';"))
 	}
 
 	// Log rewrite actions.
@@ -538,14 +546,22 @@ Instead this tool will be providing specific commands for each of the servers.
 		fmt.Println("=> Running data migration commands")
 		_, _ = logFile.WriteString("Running data migration commands:\n")
 
+		failures := 0
 		for _, cmd := range rewriteCommands {
 			_, _ = logFile.WriteString(fmt.Sprintf(" - %+v\n", cmd))
 
 			_, err := subprocess.RunCommand(cmd[0], cmd[1:]...)
 			if err != nil {
 				_, _ = logFile.WriteString(fmt.Sprintf("Failed to run command: %v\n", err))
-				fmt.Fprintf(os.Stderr, "Failed to run command: %v\n", err)
+				failures++
 			}
+		}
+
+		if failures > 0 {
+			fmt.Printf("==> WARNING: %d commands out of %d succeeded (%d failures)\n", len(rewriteCommands)-failures, len(rewriteCommands), failures)
+			fmt.Println("    Please review the log file for details.")
+			fmt.Println("    Note that in OVN environments, it's normal to see some failures")
+			fmt.Println("    related to Flow Rules and Switch Ports as those often change during the migration.")
 		}
 	}
 
@@ -563,6 +579,7 @@ Instead this tool will be providing specific commands for each of the servers.
 	for _, dir := range []string{"devices", "devlxd", "security", "shmounts"} {
 		_, _ = logFile.WriteString(fmt.Sprintf("Cleaning up path %q\n", filepath.Join(targetPaths.Daemon, dir)))
 
+		_ = unix.Unmount(filepath.Join(targetPaths.Daemon, dir), unix.MNT_DETACH)
 		err = os.RemoveAll(filepath.Join(targetPaths.Daemon, dir))
 		if err != nil && !os.IsNotExist(err) {
 			_, _ = logFile.WriteString(fmt.Sprintf("ERROR: %v\n", err))
