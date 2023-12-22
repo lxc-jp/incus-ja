@@ -124,8 +124,7 @@ Incus は初期化中にストレージプールを作成します。
 ````{group-tab} CephFS
 
 ```{note}
-CephFS ドライバを使用する際は、事前に CephFS ファイルシステムを作成する必要があります。
-このファイルシステムは 2 つの OSD ストレージプールからなります。そのうち 1 つは実際のデータ、もう 1 つはファイルメタデータに使用されます。
+CephFS ファイルシステムは 2 つの OSD ストレージプールからなります。そのうち 1 つは実際のデータ、もう 1 つはファイルメタデータに使用されます。
 ```
 
 既存の CephFS ファイルシステム `my-filesystem` を使って `pool1` を作成する:
@@ -135,6 +134,10 @@ CephFS ドライバを使用する際は、事前に CephFS ファイルシス�
 `my-filesystem` ファイルシステムからサブディレクトリ `my-directory` を使って `pool2` を作成する:
 
     incus storage create pool2 cephfs source=my-filesystem/my-directory
+
+`my-data` という名前のデータプールと`my-metadata`という名前のメタデータプールを持つ CephFS ファイルシステム `my-filesystem` を使用して `pool3` を作成する:
+
+    incus storage create pool3 cephfs source=my-filesystem cephfs.create_missing=true cephfs.data_pool=my-data cephfs.meta_pool=my-metadata
 
 ````
 ````{group-tab} Ceph Object
@@ -146,6 +149,7 @@ Ceph Object ドライバを使用する場合、事前に稼働中の Ceph Objec
 既存の Ceph Object Gateway `https://www.example.com/radosgw` を使用して `pool1` を作成する:
 
     incus storage create pool1 cephobject cephobject.radosgw.endpoint=https://www.example.com/radosgw
+
 ````
 `````
 

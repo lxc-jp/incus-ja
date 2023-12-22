@@ -36,5 +36,4 @@
 `INCUS_LXC_TEMPLATE_CONFIG`     | LXCテンプレート設定ディレクトリー
 `INCUS_OVMF_PATH`               | `OVMF_CODE.fd`と`OVMF_VARS.ms.fd`を含むOVMFビルドへのパス
 `INCUS_SECURITY_APPARMOR`       | `false`に設定するとAppArmorを無効にします
-`INCUS_SHIFTFS_DISABLE`         | `shiftfs`のサポートを無効にする（従来のUIDシフトを試す際に有用です）
 `INCUS_UI`                      | ウェブサーバーを配信する web UI のパス

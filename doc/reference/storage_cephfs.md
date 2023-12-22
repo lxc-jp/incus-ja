@@ -27,6 +27,8 @@
 
 他のストレージボリュームには {ref}`Ceph <storage-ceph>` ドライバを使用してください。
 そのドライバはコンテントタイプ `filesystem` のカスタムストレージボリュームにも使用できますが、 Ceph RBD イメージを使って実装しています。
+
+使用したい CephFS ファイルシステムを事前に作成しておいて [`source`](storage-cephfs-pool-config) に指定するか、ファイルシステムと（[`cephfs.data_pool`](storage-cephfs-pool-config) と [`cephfs.meta_pool`](storage-cephfs-pool-config) で指定される名前で）データとメタデータ OSD プールを自動的に作成する[`cephfs.create_missing`](storage-cephfs-pool-config) オプションを指定します。
 ```
 
 % Include content from [storage_ceph.md](storage_ceph.md)
@@ -61,7 +63,11 @@ Incus の `cephfs` ドライバーはサーバー側でスナップショット�
 キー                     | 型     | デフォルト値 | 説明
 :--                      | :---   | :------      | :----------
 `cephfs.cluster_name`    | string | `ceph`       | CephFS ファイルシステムを含む Ceph クラスタの名前
+`cephfs.create_missing`  | bool   | `false`      | データとメタデータ OSD プールが存在しない場合は作成しつつファイルシステムを作成
+`cephfs.data_pool`       | string | -            | ファイルシステム用に作成するデータ OSD プール名
 `cephfs.fscache`         | bool   | `false`      | カーネルの `fscache` と `cachefilesd` を使用するか
+`cephfs.meta_pool`       | string | -            | ファイルシステム用に作成するメタデータ OSD プール名
+`cephfs.osd_pg_num`      | string | -            | 存在しない OSD プールを作成する際に使用する OSD プールの `pg_num`
 `cephfs.path`            | string | `/`          | CephFS をマウントするベースのパス
 `cephfs.user.name`       | string | `admin`      | 使用する Ceph のユーザー
 `source`                 | string | -            | 使用する既存の CephFS ファイルシステムかファイルシステムパス

@@ -834,7 +834,7 @@ idmap のトラッキングとボリューム上のリマッピングを防ぎ�
 * `volatile.idmap.next` => 次のディスク上の idmap
 
 これはディスク上の map が変更されていないがカーネルマップは変更されている
-（例: `shiftfs`）ような環境を実装するために必要です。
+（例: `idmapped mounts`）ような環境を実装するために必要です。
 
 ## `event_location`
 
@@ -922,7 +922,7 @@ CephFS ではなく Ceph（RBD）上に構築する必要があります。
 
 ## `container_disk_shift`
 
-`disk` デバイスに `shift` プロパティを追加します。これは `shiftfs` のオーバーレイの使用を制御します。
+`disk` デバイスに `shift` プロパティを追加します。これは `idmapped mounts` のオーバーレイの使用を制御します。
 
 ## `storage_shifted`
 
@@ -931,7 +931,7 @@ CephFS ではなく Ceph（RBD）上に構築する必要があります。
 これを `true` に設定すると複数の隔離されたコンテナが、それらすべてがファイルシステムに
 書き込み可能にしたまま、同じストレージボリュームにアタッチするのを許可します。
 
-これは `shiftfs` をオーバーレイファイルシステムとして使用します。
+これは `idmapped mounts` をオーバーレイファイルシステムとして使用します。
 
 ## `resources_infiniband`
 
@@ -2265,3 +2265,18 @@ syslog 形式のログメッセージを受信できる syslog ソケットを�
 
 ## `disk_io_bus`
 これはディスクデバイスに `io.bus` プロパティを追加します。ディスクがアタッチするバスを上書きするのに使えます。
+
+## `storage_cephfs_create_missing`
+これは`cephfs`ストレージプールを追加する際に Incus にストレージプールに必要なエンティティが存在しない場合に作成するように指示するのに使える`cephfs.create_missing`、`cephfs.osd_pg_num`、`cephfs.meta_pool`、`cephfs.osd_pool`構成キーを追加します。
+
+## `instance_move_config`
+
+このAPI拡張はインスタンスをプロジェクト間やストレージプール間で移動する際に`--profile`、`--no-profile`、`--device`、`--config`フラグを使えるようにします。
+
+## `ovn_ssl_config`
+これは OVN データベースにアクセスするために SSL CA とクライアントキーのペアを提供する新しい設定キーを追加します。
+新しい設定キーは`network.ovn.ca_cert`、`network.ovn.client_cert`、`network.ovn.client_key`です。
+
+## `certificate_description`
+
+証明書に`description`フィールドを追加します。

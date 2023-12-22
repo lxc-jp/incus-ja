@@ -1,3 +1,4 @@
+(userns-idmap)=
 # User Namespace 用の ID のマッピング
 
 Incus は安全なコンテナを実行します。これは主に User Namespace の使用
