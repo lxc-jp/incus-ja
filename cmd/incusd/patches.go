@@ -17,6 +17,7 @@ import (
 	"github.com/lxc/incus/internal/server/db"
 	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
 	"github.com/lxc/incus/internal/server/db/query"
+	"github.com/lxc/incus/internal/server/instance"
 	"github.com/lxc/incus/internal/server/instance/instancetype"
 	"github.com/lxc/incus/internal/server/network"
 	"github.com/lxc/incus/internal/server/node"
@@ -81,6 +82,7 @@ var patches = []patch{
 	{name: "snapshots_rename", stage: patchPreDaemonStorage, run: patchSnapshotsRename},
 	{name: "storage_zfs_unset_invalid_block_settings", stage: patchPostDaemonStorage, run: patchStorageZfsUnsetInvalidBlockSettings},
 	{name: "storage_zfs_unset_invalid_block_settings_v2", stage: patchPostDaemonStorage, run: patchStorageZfsUnsetInvalidBlockSettingsV2},
+	{name: "runtime_directory", stage: patchPostDaemonStorage, run: patchRuntimeDirectory},
 }
 
 type patch struct {
@@ -290,42 +292,49 @@ func patchNetworkACLRemoveDefaults(name string, d *Daemon) error {
 		return err
 	}
 
-	// Get ACLs in projects.
-	for _, projectName := range projectNames {
-		aclNames, err := d.db.Cluster.GetNetworkACLs(projectName)
-		if err != nil {
-			return err
-		}
-
-		for _, aclName := range aclNames {
-			aclID, acl, err := d.db.Cluster.GetNetworkACL(projectName, aclName)
+	err = d.db.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		// Get ACLs in projects.
+		for _, projectName := range projectNames {
+			aclNames, err := tx.GetNetworkACLs(ctx, projectName)
 			if err != nil {
 				return err
 			}
 
-			modified := false
-
-			// Remove the offending keys if found.
-			_, found := acl.Config["default.action"]
-			if found {
-				delete(acl.Config, "default.action")
-				modified = true
-			}
-
-			_, found = acl.Config["default.logged"]
-			if found {
-				delete(acl.Config, "default.logged")
-				modified = true
-			}
-
-			// Write back modified config if needed.
-			if modified {
-				err = d.db.Cluster.UpdateNetworkACL(aclID, &acl.NetworkACLPut)
+			for _, aclName := range aclNames {
+				aclID, acl, err := tx.GetNetworkACL(ctx, projectName, aclName)
 				if err != nil {
-					return fmt.Errorf("Failed updating network ACL %d: %w", aclID, err)
+					return err
+				}
+
+				modified := false
+
+				// Remove the offending keys if found.
+				_, found := acl.Config["default.action"]
+				if found {
+					delete(acl.Config, "default.action")
+					modified = true
+				}
+
+				_, found = acl.Config["default.logged"]
+				if found {
+					delete(acl.Config, "default.logged")
+					modified = true
+				}
+
+				// Write back modified config if needed.
+				if modified {
+					err = tx.UpdateNetworkACL(ctx, aclID, &acl.NetworkACLPut)
+					if err != nil {
+						return fmt.Errorf("Failed updating network ACL %d: %w", aclID, err)
+					}
 				}
 			}
 		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -413,12 +422,14 @@ func patchVMRenameUUIDKey(name string, d *Daemon) error {
 	oldUUIDKey := "volatile.vm.uuid"
 	newUUIDKey := "volatile.uuid"
 
-	return d.State().DB.Cluster.InstanceList(context.TODO(), func(inst db.InstanceArgs, p api.Project) error {
-		if inst.Type != instancetype.VM {
-			return nil
-		}
+	s := d.State()
 
-		return d.State().DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+	return s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		return tx.InstanceList(ctx, func(inst db.InstanceArgs, p api.Project) error {
+			if inst.Type != instancetype.VM {
+				return nil
+			}
+
 			uuid := inst.Config[oldUUIDKey]
 			if uuid != "" {
 				changes := map[string]string{
@@ -539,7 +550,7 @@ func patchNetworkOVNRemoveRoutes(name string, d *Daemon) error {
 			return err
 		}
 
-		for _, networks := range projectNetworks {
+		for projectName, networks := range projectNetworks {
 			for networkID, network := range networks {
 				if network.Type != "ovn" {
 					continue
@@ -561,7 +572,7 @@ func patchNetworkOVNRemoveRoutes(name string, d *Daemon) error {
 				}
 
 				if modified {
-					err = tx.UpdateNetwork(networkID, network.Description, network.Config)
+					err = tx.UpdateNetwork(ctx, projectName, network.Name, network.Description, network.Config)
 					if err != nil {
 						return fmt.Errorf("Failed removing OVN external route settings for %q (%d): %w", network.Name, networkID, err)
 					}
@@ -591,7 +602,7 @@ func patchNetworkOVNEnableNAT(name string, d *Daemon) error {
 			return err
 		}
 
-		for _, networks := range projectNetworks {
+		for projectName, networks := range projectNetworks {
 			for networkID, network := range networks {
 				if network.Type != "ovn" {
 					continue
@@ -611,7 +622,7 @@ func patchNetworkOVNEnableNAT(name string, d *Daemon) error {
 				}
 
 				if modified {
-					err = tx.UpdateNetwork(networkID, network.Description, network.Config)
+					err = tx.UpdateNetwork(ctx, projectName, network.Name, network.Description, network.Config)
 					if err != nil {
 						return fmt.Errorf("Failed saving OVN NAT settings for %q (%d): %w", network.Name, networkID, err)
 					}
@@ -702,25 +713,32 @@ func patchNetworkClearBridgeVolatileHwaddr(name string, d *Daemon) error {
 	// Use api.ProjectDefaultName, as bridge networks don't support projects.
 	projectName := api.ProjectDefaultName
 
-	// Get the list of networks.
-	networks, err := d.db.Cluster.GetNetworks(projectName)
-	if err != nil {
-		return fmt.Errorf("Failed loading networks for network_clear_bridge_volatile_hwaddr patch: %w", err)
-	}
-
-	for _, networkName := range networks {
-		_, net, _, err := d.db.Cluster.GetNetworkInAnyState(projectName, networkName)
+	err := d.db.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		// Get the list of networks.
+		networks, err := tx.GetNetworks(ctx, projectName)
 		if err != nil {
-			return fmt.Errorf("Failed loading network %q for network_clear_bridge_volatile_hwaddr patch: %w", networkName, err)
+			return fmt.Errorf("Failed loading networks for network_clear_bridge_volatile_hwaddr patch: %w", err)
 		}
 
-		if net.Config["volatile.bridge.hwaddr"] != "" {
-			delete(net.Config, "volatile.bridge.hwaddr")
-			err = d.db.Cluster.UpdateNetwork(projectName, net.Name, net.Description, net.Config)
+		for _, networkName := range networks {
+			_, net, _, err := tx.GetNetworkInAnyState(ctx, projectName, networkName)
 			if err != nil {
-				return fmt.Errorf("Failed updating network %q for network_clear_bridge_volatile_hwaddr patch: %w", networkName, err)
+				return fmt.Errorf("Failed loading network %q for network_clear_bridge_volatile_hwaddr patch: %w", networkName, err)
+			}
+
+			if net.Config["volatile.bridge.hwaddr"] != "" {
+				delete(net.Config, "volatile.bridge.hwaddr")
+				err = tx.UpdateNetwork(ctx, projectName, net.Name, net.Description, net.Config)
+				if err != nil {
+					return fmt.Errorf("Failed updating network %q for network_clear_bridge_volatile_hwaddr patch: %w", networkName, err)
+				}
 			}
 		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -731,8 +749,16 @@ func patchNetworkClearBridgeVolatileHwaddr(name string, d *Daemon) error {
 func patchStorageRenameCustomISOBlockVolumes(name string, d *Daemon) error {
 	s := d.State()
 
-	// Get all storage pool names.
-	pools, err := s.DB.Cluster.GetStoragePoolNames()
+	var pools []string
+
+	err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+
+		// Get all storage pool names.
+		pools, err = tx.GetStoragePoolNames(ctx)
+
+		return err
+	})
 	if err != nil {
 		// Skip the rest of the patch if no storage pools were found.
 		if api.StatusErrorCheck(err, http.StatusNotFound) {
@@ -836,8 +862,16 @@ func patchStorageRenameCustomISOBlockVolumes(name string, d *Daemon) error {
 func patchZfsSetContentTypeUserProperty(name string, d *Daemon) error {
 	s := d.State()
 
-	// Get all storage pool names.
-	pools, err := s.DB.Cluster.GetStoragePoolNames()
+	var pools []string
+
+	err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+
+		// Get all storage pool names.
+		pools, err = tx.GetStoragePoolNames(ctx)
+
+		return err
+	})
 	if err != nil {
 		// Skip the rest of the patch if no storage pools were found.
 		if api.StatusErrorCheck(err, http.StatusNotFound) {
@@ -923,8 +957,16 @@ func patchSnapshotsRename(name string, d *Daemon) error {
 func patchStorageZfsUnsetInvalidBlockSettings(_ string, d *Daemon) error {
 	s := d.State()
 
-	// Get all storage pool names.
-	pools, err := s.DB.Cluster.GetStoragePoolNames()
+	var pools []string
+
+	err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+
+		// Get all storage pool names.
+		pools, err = tx.GetStoragePoolNames(ctx)
+
+		return err
+	})
 	if err != nil {
 		// Skip the rest of the patch if no storage pools were found.
 		if api.StatusErrorCheck(err, http.StatusNotFound) {
@@ -1014,7 +1056,9 @@ func patchStorageZfsUnsetInvalidBlockSettings(_ string, d *Daemon) error {
 				continue
 			}
 
-			err = s.DB.Cluster.UpdateStoragePoolVolume(vol.Project, vol.Name, volType, pool, vol.Description, config)
+			err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				return tx.UpdateStoragePoolVolume(ctx, vol.Project, vol.Name, volType, pool, vol.Description, config)
+			})
 			if err != nil {
 				return fmt.Errorf("Failed updating volume %q in project %q on pool %q: %w", vol.Name, vol.Project, poolIDNameMap[pool], err)
 			}
@@ -1031,8 +1075,16 @@ func patchStorageZfsUnsetInvalidBlockSettings(_ string, d *Daemon) error {
 func patchStorageZfsUnsetInvalidBlockSettingsV2(_ string, d *Daemon) error {
 	s := d.State()
 
-	// Get all storage pool names.
-	pools, err := s.DB.Cluster.GetStoragePoolNames()
+	var pools []string
+
+	err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+
+		// Get all storage pool names.
+		pools, err = tx.GetStoragePoolNames(ctx)
+
+		return err
+	})
 	if err != nil {
 		// Skip the rest of the patch if no storage pools were found.
 		if api.StatusErrorCheck(err, http.StatusNotFound) {
@@ -1124,9 +1176,67 @@ func patchStorageZfsUnsetInvalidBlockSettingsV2(_ string, d *Daemon) error {
 				continue
 			}
 
-			err = s.DB.Cluster.UpdateStoragePoolVolume(vol.Project, vol.Name, volType, pool, vol.Description, config)
+			err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				return tx.UpdateStoragePoolVolume(ctx, vol.Project, vol.Name, volType, pool, vol.Description, config)
+			})
 			if err != nil {
 				return fmt.Errorf("Failed updating volume %q in project %q on pool %q: %w", vol.Name, vol.Project, poolIDNameMap[pool], err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func patchRuntimeDirectory(name string, d *Daemon) error {
+	s := d.State()
+
+	// Get the list of local instances.
+	instances, err := instance.LoadNodeAll(s, instancetype.Any)
+	if err != nil {
+		return fmt.Errorf("Failed loading local instances: %w", err)
+	}
+
+	for _, inst := range instances {
+		if !util.PathExists(inst.LogPath()) {
+			continue
+		}
+
+		err = os.MkdirAll(inst.RunPath(), 0700)
+		if err != nil && !os.IsExist(err) {
+			return fmt.Errorf("Failed to create runtime directory for %q in project %q: %w", inst.Name(), inst.Project(), err)
+		}
+
+		files, err := os.ReadDir(inst.LogPath())
+		if err != nil {
+			return fmt.Errorf("Failed to list log files for %q in project %q: %w", inst.Name(), inst.Project(), err)
+		}
+
+		for _, fi := range files {
+			name := fi.Name()
+
+			// Keep actual log files where they are.
+			if strings.HasSuffix(name, ".log") || strings.HasSuffix(name, ".log.old") || strings.HasSuffix(name, ".gz") {
+				continue
+			}
+
+			info, err := fi.Info()
+			if err != nil {
+				return fmt.Errorf("Failed getting file info on %q for instance %q in project %q: %w", name, inst.Name(), inst.Project(), err)
+			}
+
+			if info.Mode().IsRegular() {
+				// Relocate the file.
+				_, err := subprocess.RunCommand("mv", filepath.Join(inst.LogPath(), name), inst.RunPath())
+				if err != nil {
+					return fmt.Errorf("Failed to relocate runtime file %q for instance %q in project %q: %w", name, inst.Name(), inst.Project(), err)
+				}
+			} else {
+				// For pipes and sockets, we need to use a symlink to avoid breaking the listener.
+				err := os.Symlink(filepath.Join(inst.LogPath(), name), filepath.Join(inst.RunPath(), name))
+				if err != nil {
+					return fmt.Errorf("Failed to symlink runtime file %q for instance %q in project %q: %w", name, inst.Name(), inst.Project(), err)
+				}
 			}
 		}
 	}

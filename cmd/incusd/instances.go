@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -212,6 +213,7 @@ func instancesStart(s *state.State, instances []instance.Instance) {
 		// Get the instance config.
 		config := inst.ExpandedConfig()
 		autoStartDelay := config["boot.autostart.delay"]
+		shutdownAction := config["boot.host_shutdown_action"]
 
 		instLogger := logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
 
@@ -219,7 +221,16 @@ func instancesStart(s *state.State, instances []instance.Instance) {
 		var attempt = 0
 		for {
 			attempt++
-			err := inst.Start(false)
+
+			var err error
+			if shutdownAction == "stateful-stop" {
+				// Attempt to restore state.
+				err = inst.Start(true)
+			} else {
+				// Normal startup.
+				err = inst.Start(false)
+			}
+
 			if err != nil {
 				if api.StatusErrorCheck(err, http.StatusServiceUnavailable) {
 					break // Don't log or retry instances that are not ready to start yet.
@@ -228,8 +239,10 @@ func instancesStart(s *state.State, instances []instance.Instance) {
 				instLogger.Warn("Failed auto start instance attempt", logger.Ctx{"attempt": attempt, "maxAttempts": maxAttempts, "err": err})
 
 				if attempt >= maxAttempts {
-					// If unable to start after 3 tries, record a warning.
-					warnErr := s.DB.Cluster.UpsertWarningLocalNode(inst.Project().Name, cluster.TypeInstance, inst.ID(), warningtype.InstanceAutostartFailure, fmt.Sprintf("%v", err))
+					warnErr := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+						// If unable to start after 3 tries, record a warning.
+						return tx.UpsertWarningLocalNode(ctx, inst.Project().Name, cluster.TypeInstance, inst.ID(), warningtype.InstanceAutostartFailure, fmt.Sprintf("%v", err))
+					})
 					if warnErr != nil {
 						instLogger.Warn("Failed to create instance autostart failure warning", logger.Ctx{"err": warnErr})
 					}
@@ -376,12 +389,25 @@ func instancesShutdown(s *state.State, instances []instance.Instance) {
 					timeoutSeconds, _ = strconv.Atoi(value)
 				}
 
-				err := inst.Shutdown(time.Second * time.Duration(timeoutSeconds))
-				if err != nil {
-					logger.Warn("Failed shutting down instance, forcefully stopping", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
-					err = inst.Stop(false)
+				action := inst.ExpandedConfig()["boot.host_shutdown_action"]
+				if action == "stateful-stop" {
+					err := inst.Stop(true)
+					if err != nil {
+						logger.Warn("Failed statefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+					}
+				} else if action == "force-stop" {
+					err := inst.Stop(false)
 					if err != nil {
 						logger.Warn("Failed forcefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+					}
+				} else {
+					err := inst.Shutdown(time.Second * time.Duration(timeoutSeconds))
+					if err != nil {
+						logger.Warn("Failed shutting down instance, forcefully stopping", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+						err = inst.Stop(false)
+						if err != nil {
+							logger.Warn("Failed forcefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+						}
 					}
 				}
 

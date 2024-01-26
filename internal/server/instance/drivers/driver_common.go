@@ -2,7 +2,6 @@ package drivers
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,7 +18,6 @@ import (
 	"github.com/lxc/incus/internal/server/backup"
 	"github.com/lxc/incus/internal/server/db"
 	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/db/query"
 	"github.com/lxc/incus/internal/server/device"
 	deviceConfig "github.com/lxc/incus/internal/server/device/config"
 	"github.com/lxc/incus/internal/server/device/nictype"
@@ -210,8 +208,14 @@ func (d *common) Operation() *operations.Operation {
 
 // Backups returns a list of backups.
 func (d *common) Backups() ([]backup.InstanceBackup, error) {
+	var backupNames []string
+
 	// Get all the backups
-	backupNames, err := d.state.DB.Cluster.GetInstanceBackups(d.project.Name, d.name)
+	err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+		backupNames, err = tx.GetInstanceBackups(ctx, d.project.Name, d.name)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -380,6 +384,12 @@ func (d *common) DevicesPath() string {
 func (d *common) LogPath() string {
 	name := project.Instance(d.project.Name, d.name)
 	return internalUtil.LogPath(name)
+}
+
+// RunPath returns the instance's runtime path.
+func (d *common) RunPath() string {
+	name := project.Instance(d.project.Name, d.name)
+	return internalUtil.RunPath(name)
 }
 
 // Path returns the instance's path.
@@ -761,19 +771,19 @@ func (d *common) updateProgress(progress string) {
 // unpopulated then the insert querty is retried until it succeeds or a retry limit is reached.
 // If the insert succeeds or the key is found to have been populated then the value of the key is returned.
 func (d *common) insertConfigkey(key string, value string) (string, error) {
-	err := query.Retry(context.TODO(), func(ctx context.Context) error {
-		err := query.Transaction(ctx, d.state.DB.Cluster.DB(), func(ctx context.Context, tx *sql.Tx) error {
-			return db.CreateInstanceConfig(tx, d.id, map[string]string{key: value})
-		})
-		if err != nil {
-			// Check if something else filled it in behind our back.
-			existingValue, errCheckExists := d.state.DB.Cluster.GetInstanceConfig(d.id, key)
-			if errCheckExists != nil {
-				return err
-			}
-
-			value = existingValue
+	err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		err := tx.CreateInstanceConfig(ctx, d.id, map[string]string{key: value})
+		if err == nil {
+			return nil
 		}
+
+		// Check if something else filled it in behind our back.
+		existingValue, errCheckExists := tx.GetInstanceConfig(ctx, d.id, key)
+		if errCheckExists != nil {
+			return err
+		}
+
+		value = existingValue
 
 		return nil
 	})
@@ -904,10 +914,8 @@ func (d *common) warningsDelete() error {
 	return nil
 }
 
-// canMigrate determines if the given instance can be migrated and whether the migration
-// can be live. In "auto" mode, the function checks each attached device of the instance
-// to ensure they are all migratable.
-func (d *common) canMigrate(inst instance.Instance) (bool, bool) {
+// canMigrate determines if the given instance can be migrated and what kind of migration to attempt.
+func (d *common) canMigrate(inst instance.Instance) string {
 	// Check policy for the instance.
 	config := d.ExpandedConfig()
 	val, ok := config["cluster.evacuate"]
@@ -915,16 +923,9 @@ func (d *common) canMigrate(inst instance.Instance) (bool, bool) {
 		val = "auto"
 	}
 
-	if val == "migrate" {
-		return true, false
-	}
-
-	if val == "live-migrate" {
-		return true, true
-	}
-
-	if val == "stop" {
-		return false, false
+	// If not using auto, just return the migration type.
+	if val != "auto" {
+		return val
 	}
 
 	// Look at attached devices.
@@ -934,23 +935,22 @@ func (d *common) canMigrate(inst instance.Instance) (bool, bool) {
 		dev, err := device.New(inst, d.state, deviceName, rawConfig, volatileGet, volatileSet)
 		if err != nil {
 			logger.Warn("Instance will not be migrated due to a device error", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "device": dev.Name(), "err": err})
-			return false, false
+			return "stop"
 		}
 
 		if !dev.CanMigrate() {
 			logger.Warn("Instance will not be migrated because its device cannot be migrated", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "device": dev.Name()})
-			return false, false
+			return "stop"
 		}
 	}
 
 	// Check if set up for live migration.
 	// Limit automatic live-migration to virtual machines for now.
-	live := false
-	if inst.Type() == instancetype.VM {
-		live = util.IsTrue(config["migration.stateful"])
+	if inst.Type() == instancetype.VM && util.IsTrue(config["migration.stateful"]) {
+		return "live-migrate"
 	}
 
-	return true, live
+	return "migrate"
 }
 
 // recordLastState records last power and used time into local config and database config.
@@ -1100,7 +1100,18 @@ func (d *common) getStoragePool() (storagePools.Pool, error) {
 		return d.storagePool, nil
 	}
 
-	poolName, err := d.state.DB.Cluster.GetInstancePool(d.Project().Name, d.Name())
+	var poolName string
+
+	err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+
+		poolName, err = tx.GetInstancePool(ctx, d.Project().Name, d.Name())
+		if err != nil {
+			return fmt.Errorf("Failed getting instance pool: %w", err)
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}

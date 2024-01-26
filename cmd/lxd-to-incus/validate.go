@@ -5,24 +5,22 @@ import (
 	"os"
 	"os/exec"
 
-	lxdAPI "github.com/canonical/lxd/shared/api"
-
 	"github.com/lxc/incus/internal/linux"
 	"github.com/lxc/incus/internal/version"
-	incusAPI "github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/shared/api"
 	"github.com/lxc/incus/shared/util"
 )
 
-var minLXDVersion = &version.DottedVersion{4, 0, 0}
-var maxLXDVersion = &version.DottedVersion{5, 20, 0}
+var minLXDVersion = &version.DottedVersion{Major: 4, Minor: 0, Patch: 0}
+var maxLXDVersion = &version.DottedVersion{Major: 5, Minor: 20, Patch: 0}
 
-func (c *cmdMigrate) validate(source Source, target Target) error {
-	srcClient, err := source.Connect()
+func (c *cmdMigrate) validate(source source, target target) error {
+	srcClient, err := source.connect()
 	if err != nil {
 		return fmt.Errorf("Failed to connect to source: %v", err)
 	}
 
-	targetClient, err := target.Connect()
+	targetClient, err := target.connect()
 	if err != nil {
 		return fmt.Errorf("Failed to connect to target: %v", err)
 	}
@@ -84,7 +82,7 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 		}
 
 		// Check if any instance is persent.
-		names, err = srcClient.GetInstanceNames(lxdAPI.InstanceTypeAny)
+		names, err = srcClient.GetInstanceNames(api.InstanceTypeAny)
 		if err != nil {
 			return false, err
 		}
@@ -151,7 +149,7 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 		}
 
 		// Check if any instance is present.
-		names, err = targetClient.GetInstanceNames(incusAPI.InstanceTypeAny)
+		names, err = targetClient.GetInstanceNames(api.InstanceTypeAny)
 		if err != nil {
 			return false, err
 		}
@@ -220,7 +218,7 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 	for _, key := range deprecatedConfigs {
 		_, ok := srcServerInfo.Config[key]
 		if ok {
-			errors = append(errors, fmt.Errorf("Source server is using deprecated key %q", key))
+			errors = append(errors, fmt.Errorf("Source server is using deprecated server configuration key %q", key))
 		}
 	}
 
@@ -244,7 +242,7 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 		for _, key := range deprecatedNetworkConfigs {
 			_, ok := network.Config[key]
 			if ok {
-				errors = append(errors, fmt.Errorf("Source server has network %q using deprecated key %q", network.Name, key))
+				errors = append(errors, fmt.Errorf("Source server has network %q using deprecated configuration key %q", network.Name, key))
 			}
 		}
 	}
@@ -297,16 +295,16 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 	for _, project := range projects {
 		c := srcClient.UseProject(project.Name)
 
-		instances, err := c.GetInstances(lxdAPI.InstanceTypeAny)
+		instances, err := c.GetInstances(api.InstanceTypeAny)
 		if err != nil {
-			fmt.Errorf("Couldn't list instances in project %q: %w", err)
+			return fmt.Errorf("Couldn't list instances in project %q: %w", project.Name, err)
 		}
 
 		for _, inst := range instances {
 			for _, key := range deprecatedInstanceConfigs {
 				_, ok := inst.Config[key]
 				if ok {
-					errors = append(errors, fmt.Errorf("Source server has instance %q in project %q using deprecated key %q", inst.Name, project.Name, key))
+					errors = append(errors, fmt.Errorf("Source server has instance %q in project %q using deprecated configuration key %q", inst.Name, project.Name, key))
 				}
 			}
 
@@ -314,7 +312,7 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 				for _, key := range deprecatedInstanceDeviceConfigs {
 					_, ok := device[key]
 					if ok {
-						errors = append(errors, fmt.Errorf("Source server has device %q for instance %q in project %q using deprecated key %q", deviceName, inst.Name, project.Name, key))
+						errors = append(errors, fmt.Errorf("Source server has device %q for instance %q in project %q using deprecated configuration key %q", deviceName, inst.Name, project.Name, key))
 					}
 				}
 			}
@@ -322,14 +320,14 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 
 		profiles, err := c.GetProfiles()
 		if err != nil {
-			fmt.Errorf("Couldn't list profiles in project %q: %w", err)
+			return fmt.Errorf("Couldn't list profiles in project %q: %w", project.Name, err)
 		}
 
 		for _, profile := range profiles {
 			for _, key := range deprecatedInstanceConfigs {
 				_, ok := profile.Config[key]
 				if ok {
-					errors = append(errors, fmt.Errorf("Source server has profile %q in project %q using deprecated key %q", profile.Name, project.Name, key))
+					errors = append(errors, fmt.Errorf("Source server has profile %q in project %q using deprecated configuration key %q", profile.Name, project.Name, key))
 				}
 			}
 
@@ -337,7 +335,7 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 				for _, key := range deprecatedInstanceDeviceConfigs {
 					_, ok := device[key]
 					if ok {
-						errors = append(errors, fmt.Errorf("Source server has device %q for profile %q in project %q using deprecated key %q", deviceName, profile.Name, project.Name, key))
+						errors = append(errors, fmt.Errorf("Source server has device %q for profile %q in project %q using deprecated configuration key %q", deviceName, profile.Name, project.Name, key))
 					}
 				}
 			}
@@ -373,23 +371,32 @@ func (c *cmdMigrate) validate(source Source, target Target) error {
 	}
 
 	// Storage validation.
-	targetPaths, err := target.Paths()
+	targetPaths, err := target.paths()
 	if err != nil {
 		return fmt.Errorf("Failed to get target paths: %w", err)
 	}
 
-	if linux.IsMountPoint(targetPaths.Daemon) {
-		return fmt.Errorf("The target path %q is a mountpoint. This isn't currently supported as the target path needs to be deleted during the migration.", targetPaths.Daemon)
-	}
-
-	sourcePaths, err := source.Paths()
+	sourcePaths, err := source.paths()
 	if err != nil {
 		return fmt.Errorf("Failed to get source paths: %w", err)
 	}
 
-	srcFilesystem, _ := linux.DetectFilesystem(sourcePaths.Daemon)
-	targetFilesystem, _ := linux.DetectFilesystem(targetPaths.Daemon)
-	if srcFilesystem == "btrfs" && targetFilesystem != "btrfs" && !linux.IsMountPoint(sourcePaths.Daemon) {
+	fi, err := os.Lstat(sourcePaths.daemon)
+	if err != nil {
+		return err
+	}
+
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("The source path %q is a symlink. Incus does not support its daemon directory being a symlink, please switch to a bind-mount.", sourcePaths.daemon)
+	}
+
+	if linux.IsMountPoint(targetPaths.daemon) {
+		return fmt.Errorf("The target path %q is a mountpoint. This isn't currently supported as the target path needs to be deleted during the migration.", targetPaths.daemon)
+	}
+
+	srcFilesystem, _ := linux.DetectFilesystem(sourcePaths.daemon)
+	targetFilesystem, _ := linux.DetectFilesystem(targetPaths.daemon)
+	if srcFilesystem == "btrfs" && targetFilesystem != "btrfs" && !linux.IsMountPoint(sourcePaths.daemon) {
 		return fmt.Errorf("Source daemon running on btrfs but being moved to non-btrfs target")
 	}
 

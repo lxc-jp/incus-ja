@@ -85,10 +85,12 @@ func main() {
 		`Command line client for Incus
 
 All of Incus's features can be driven through the various commands below.
-For help with any of those, simply call them with --help.`))
+For help with any of those, simply call them with --help.
+
+Custom commands can be defined through aliases, use "incus alias" to control those.`))
 	app.SilenceUsage = true
 	app.SilenceErrors = true
-	app.CompletionOptions = cobra.CompletionOptions{DisableDefaultCmd: true}
+	app.CompletionOptions = cobra.CompletionOptions{HiddenDefaultCmd: true}
 
 	// Global flags
 	globalCmd := cmdGlobal{cmd: app, asker: cli.NewAsker(bufio.NewReader(os.Stdin))}
@@ -230,6 +232,10 @@ For help with any of those, simply call them with --help.`))
 	remoteCmd := cmdRemote{global: &globalCmd}
 	app.AddCommand(remoteCmd.Command())
 
+	// resume sub-command
+	resumeCmd := cmdResume{global: &globalCmd}
+	app.AddCommand(resumeCmd.Command())
+
 	// snapshot sub-command
 	snapshotCmd := cmdSnapshot{global: &globalCmd}
 	app.AddCommand(snapshotCmd.Command())
@@ -274,9 +280,14 @@ For help with any of those, simply call them with --help.`))
 		if globalCmd.flagHelpAll {
 			// Show all commands
 			for _, cmd := range app.Commands() {
+				if cmd.Name() == "completion" {
+					continue
+				}
+
 				cmd.Hidden = false
 			}
 		}
+
 		if globalCmd.flagSubCmds {
 			app.SetUsageTemplate(usageTemplateSubCmds())
 		}
@@ -320,7 +331,7 @@ func (c *cmdGlobal) PreRun(cmd *cobra.Command, args []string) error {
 	var configDir string
 	if os.Getenv("INCUS_CONF") != "" {
 		configDir = os.Getenv("INCUS_CONF")
-	} else if os.Getenv("HOME") != "" {
+	} else if os.Getenv("HOME") != "" && util.PathExists(os.Getenv("HOME")) {
 		configDir = path.Join(os.Getenv("HOME"), ".config", "incus")
 	} else {
 		user, err := user.Current()
@@ -328,7 +339,14 @@ func (c *cmdGlobal) PreRun(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		configDir = path.Join(user.HomeDir, ".config", "incus")
+		if util.PathExists(user.HomeDir) {
+			configDir = path.Join(user.HomeDir, ".config", "incus")
+		}
+	}
+
+	// If no homedir could be found, treat as if --force-local was passed.
+	if configDir == "" {
+		c.flagForceLocal = true
 	}
 
 	c.confPath = os.ExpandEnv(path.Join(configDir, "config.yml"))
@@ -361,48 +379,51 @@ func (c *cmdGlobal) PreRun(cmd *cobra.Command, args []string) error {
 	// and this is the first time the client has been run by the user, then check to see
 	// if the server has been properly configured.  Don't display the message if the var path
 	// does not exist (server missing), as the user may be targeting a remote daemon.
-	if !c.flagForceLocal && util.PathExists(internalUtil.VarPath("")) && !util.PathExists(c.confPath) {
+	if !c.flagForceLocal && !util.PathExists(c.confPath) {
 		// Create the config dir so that we don't get in here again for this user.
 		err = os.MkdirAll(c.conf.ConfigDir, 0750)
 		if err != nil {
 			return err
 		}
 
-		// Attempt to connect to the local server
-		runInit := true
-		d, err := incus.ConnectIncusUnix("", nil)
-		if err == nil {
-			// Check if server is initialized.
-			info, _, err := d.GetServer()
-			if err == nil && info.Environment.Storage != "" {
-				runInit = false
-			}
-
-			// Detect usable project.
-			names, err := d.GetProjectNames()
+		// Handle local servers.
+		if util.PathExists(internalUtil.VarPath("")) {
+			// Attempt to connect to the local server
+			runInit := true
+			d, err := incus.ConnectIncusUnix("", nil)
 			if err == nil {
-				if len(names) == 1 && names[0] != api.ProjectDefaultName {
-					remote := c.conf.Remotes["local"]
-					remote.Project = names[0]
-					c.conf.Remotes["local"] = remote
+				// Check if server is initialized.
+				info, _, err := d.GetServer()
+				if err == nil && info.Environment.Storage != "" {
+					runInit = false
+				}
+
+				// Detect usable project.
+				names, err := d.GetProjectNames()
+				if err == nil {
+					if len(names) == 1 && names[0] != api.ProjectDefaultName {
+						remote := c.conf.Remotes["local"]
+						remote.Project = names[0]
+						c.conf.Remotes["local"] = remote
+					}
 				}
 			}
-		}
 
-		flush := false
-		if runInit && (cmd.Name() != "init" || cmd.Parent() == nil || cmd.Parent().Name() != "admin") {
-			fmt.Fprintf(os.Stderr, i18n.G("If this is your first time running Incus on this machine, you should also run: incus admin init")+"\n")
-			flush = true
-		}
+			flush := false
+			if runInit && (cmd.Name() != "init" || cmd.Parent() == nil || cmd.Parent().Name() != "admin") {
+				fmt.Fprintf(os.Stderr, i18n.G("If this is your first time running Incus on this machine, you should also run: incus admin init")+"\n")
+				flush = true
+			}
 
-		if !util.ValueInSlice(cmd.Name(), []string{"admin", "create", "launch"}) && (cmd.Parent() == nil || cmd.Parent().Name() != "admin") {
-			fmt.Fprintf(os.Stderr, i18n.G(`To start your first container, try: incus launch images:ubuntu/22.04
+			if !util.ValueInSlice(cmd.Name(), []string{"admin", "create", "launch"}) && (cmd.Parent() == nil || cmd.Parent().Name() != "admin") {
+				fmt.Fprintf(os.Stderr, i18n.G(`To start your first container, try: incus launch images:ubuntu/22.04
 Or for a virtual machine: incus launch images:ubuntu/22.04 --vm`)+"\n")
-			flush = true
-		}
+				flush = true
+			}
 
-		if flush {
-			fmt.Fprintf(os.Stderr, "\n")
+			if flush {
+				fmt.Fprintf(os.Stderr, "\n")
+			}
 		}
 
 		// And save the initial configuration

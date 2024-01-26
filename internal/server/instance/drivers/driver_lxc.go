@@ -259,11 +259,11 @@ func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.In
 		return nil, nil, fmt.Errorf("Storage pool does not support instance type")
 	}
 
-	// Setup initial idmap config
-	var idmap *idmap.IdmapSet
+	// Setup the initial idmap config.
+	var idmapSet *idmap.Set
 	base := int64(0)
 	if !d.IsPrivileged() {
-		idmap, base, err = findIdmap(
+		idmapSet, base, err = findIdmap(
 			s,
 			args.Name,
 			d.expandedConfig["security.idmap.isolated"],
@@ -277,24 +277,17 @@ func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.In
 		}
 	}
 
-	var jsonIdmap string
-	if idmap != nil {
-		idmapBytes, err := json.Marshal(idmap.Idmap)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		jsonIdmap = string(idmapBytes)
-	} else {
-		jsonIdmap = "[]"
+	idmapSetJSON, err := idmapSet.ToJSON()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to encode ID map: %w", err)
 	}
 
 	v := map[string]string{
-		"volatile.idmap.next": jsonIdmap,
+		"volatile.idmap.next": idmapSetJSON,
 		"volatile.idmap.base": fmt.Sprintf("%v", base),
 	}
 
-	// Invalid idmap cache.
+	// Invalidate the idmap cache.
 	d.idmapset = nil
 
 	// Set last_state if not currently set.
@@ -444,7 +437,7 @@ type lxc struct {
 	c *liblxc.Container // Use d.initLXC() instead of accessing this directly.
 
 	cConfig  bool
-	idmapset *idmap.IdmapSet
+	idmapset *idmap.Set
 }
 
 func idmapSize(state *state.State, isolatedStr string, size string) (int64, error) {
@@ -458,11 +451,11 @@ func idmapSize(state *state.State, isolatedStr string, size string) (int64, erro
 		if isolated {
 			idMapSize = 65536
 		} else {
-			if len(state.OS.IdmapSet.Idmap) != 2 {
-				return 0, fmt.Errorf("bad initial idmap: %v", state.OS.IdmapSet)
+			if len(state.OS.IdmapSet.Entries) != 2 {
+				return 0, fmt.Errorf("Bad initial idmap: %v", state.OS.IdmapSet)
 			}
 
-			idMapSize = state.OS.IdmapSet.Idmap[0].Maprange
+			idMapSize = state.OS.IdmapSet.Entries[0].MapRange
 		}
 	} else {
 		size, err := strconv.ParseInt(size, 10, 64)
@@ -478,24 +471,24 @@ func idmapSize(state *state.State, isolatedStr string, size string) (int64, erro
 
 var idmapLock sync.Mutex
 
-func findIdmap(state *state.State, cName string, isolatedStr string, configBase string, configSize string, rawIdmap string) (*idmap.IdmapSet, int64, error) {
+func findIdmap(s *state.State, cName string, isolatedStr string, configBase string, configSize string, rawIdmap string) (*idmap.Set, int64, error) {
 	isolated := false
 	if util.IsTrue(isolatedStr) {
 		isolated = true
 	}
 
-	rawMaps, err := idmap.ParseRawIdmap(rawIdmap)
+	rawMaps, err := idmap.NewSetFromIncusIDMap(rawIdmap)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	if !isolated {
-		newIdmapset := idmap.IdmapSet{Idmap: make([]idmap.IdmapEntry, len(state.OS.IdmapSet.Idmap))}
-		copy(newIdmapset.Idmap, state.OS.IdmapSet.Idmap)
+		newIdmapset := idmap.Set{Entries: make([]idmap.Entry, len(s.OS.IdmapSet.Entries))}
+		copy(newIdmapset.Entries, s.OS.IdmapSet.Entries)
 
-		for _, ent := range rawMaps {
+		for _, ent := range rawMaps.Entries {
 			err := newIdmapset.AddSafe(ent)
-			if err != nil && err == idmap.ErrHostIdIsSubId {
+			if err != nil && err == idmap.ErrHostIDIsSubID {
 				return nil, 0, err
 			}
 		}
@@ -503,20 +496,20 @@ func findIdmap(state *state.State, cName string, isolatedStr string, configBase 
 		return &newIdmapset, 0, nil
 	}
 
-	size, err := idmapSize(state, isolatedStr, configSize)
+	size, err := idmapSize(s, isolatedStr, configSize)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	mkIdmap := func(offset int64, size int64) (*idmap.IdmapSet, error) {
-		set := &idmap.IdmapSet{Idmap: []idmap.IdmapEntry{
-			{Isuid: true, Nsid: 0, Hostid: offset, Maprange: size},
-			{Isgid: true, Nsid: 0, Hostid: offset, Maprange: size},
+	mkIdmap := func(offset int64, size int64) (*idmap.Set, error) {
+		set := &idmap.Set{Entries: []idmap.Entry{
+			{IsUID: true, NSID: 0, HostID: offset, MapRange: size},
+			{IsGID: true, NSID: 0, HostID: offset, MapRange: size},
 		}}
 
-		for _, ent := range rawMaps {
+		for _, ent := range rawMaps.Entries {
 			err := set.AddSafe(ent)
-			if err != nil && err == idmap.ErrHostIdIsSubId {
+			if err != nil && err == idmap.ErrHostIDIsSubID {
 				return nil, err
 			}
 		}
@@ -531,7 +524,7 @@ func findIdmap(state *state.State, cName string, isolatedStr string, configBase 
 		}
 
 		set, err := mkIdmap(offset, size)
-		if err != nil && err == idmap.ErrHostIdIsSubId {
+		if err != nil && err == idmap.ErrHostIDIsSubID {
 			return nil, 0, err
 		}
 
@@ -541,14 +534,14 @@ func findIdmap(state *state.State, cName string, isolatedStr string, configBase 
 	idmapLock.Lock()
 	defer idmapLock.Unlock()
 
-	cts, err := instance.LoadNodeAll(state, instancetype.Container)
+	cts, err := instance.LoadNodeAll(s, instancetype.Container)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	offset := state.OS.IdmapSet.Idmap[0].Hostid + 65536
+	offset := s.OS.IdmapSet.Entries[0].HostID + 65536
 
-	mapentries := idmap.ByHostid{}
+	mapentries := idmap.ByHostID{}
 	for _, container := range cts {
 		if container.Type() != instancetype.Container {
 			continue
@@ -577,52 +570,52 @@ func findIdmap(state *state.State, cName string, isolatedStr string, configBase 
 			}
 		}
 
-		cSize, err := idmapSize(state, container.ExpandedConfig()["security.idmap.isolated"], container.ExpandedConfig()["security.idmap.size"])
+		cSize, err := idmapSize(s, container.ExpandedConfig()["security.idmap.isolated"], container.ExpandedConfig()["security.idmap.size"])
 		if err != nil {
 			return nil, 0, err
 		}
 
-		mapentries = append(mapentries, &idmap.IdmapEntry{Hostid: int64(cBase), Maprange: cSize})
+		mapentries.Entries = append(mapentries.Entries, idmap.Entry{HostID: int64(cBase), MapRange: cSize})
 	}
 
 	sort.Sort(mapentries)
 
-	for i := range mapentries {
+	for i := range mapentries.Entries {
 		if i == 0 {
-			if mapentries[0].Hostid < offset+size {
-				offset = mapentries[0].Hostid + mapentries[0].Maprange
+			if mapentries.Entries[0].HostID < offset+size {
+				offset = mapentries.Entries[0].HostID + mapentries.Entries[0].MapRange
 				continue
 			}
 
 			set, err := mkIdmap(offset, size)
-			if err != nil && err == idmap.ErrHostIdIsSubId {
+			if err != nil && err == idmap.ErrHostIDIsSubID {
 				return nil, 0, err
 			}
 
 			return set, offset, nil
 		}
 
-		if mapentries[i-1].Hostid+mapentries[i-1].Maprange > offset {
-			offset = mapentries[i-1].Hostid + mapentries[i-1].Maprange
+		if mapentries.Entries[i-1].HostID+mapentries.Entries[i-1].MapRange > offset {
+			offset = mapentries.Entries[i-1].HostID + mapentries.Entries[i-1].MapRange
 			continue
 		}
 
-		offset = mapentries[i-1].Hostid + mapentries[i-1].Maprange
-		if offset+size < mapentries[i].Hostid {
+		offset = mapentries.Entries[i-1].HostID + mapentries.Entries[i-1].MapRange
+		if offset+size < mapentries.Entries[i].HostID {
 			set, err := mkIdmap(offset, size)
-			if err != nil && err == idmap.ErrHostIdIsSubId {
+			if err != nil && err == idmap.ErrHostIDIsSubID {
 				return nil, 0, err
 			}
 
 			return set, offset, nil
 		}
 
-		offset = mapentries[i].Hostid + mapentries[i].Maprange
+		offset = mapentries.Entries[i].HostID + mapentries.Entries[i].MapRange
 	}
 
-	if offset+size < state.OS.IdmapSet.Idmap[0].Hostid+state.OS.IdmapSet.Idmap[0].Maprange {
+	if offset+size < s.OS.IdmapSet.Entries[0].HostID+s.OS.IdmapSet.Entries[0].MapRange {
 		set, err := mkIdmap(offset, size)
-		if err != nil && err == idmap.ErrHostIdIsSubId {
+		if err != nil && err == idmap.ErrHostIDIsSubID {
 			return nil, 0, err
 		}
 
@@ -1024,7 +1017,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		// System requirement errors are handled during policy generation instead of here
 		ok, err := seccomp.InstanceNeedsIntercept(d.state, d)
 		if err == nil && ok {
-			err = lxcSetConfigItem(cc, "lxc.seccomp.notify.proxy", fmt.Sprintf("unix:%s", internalUtil.VarPath("seccomp.socket")))
+			err = lxcSetConfigItem(cc, "lxc.seccomp.notify.proxy", fmt.Sprintf("unix:%s", internalUtil.RunPath("seccomp.socket")))
 			if err != nil {
 				return nil, err
 			}
@@ -1038,7 +1031,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 	}
 
 	if idmapset != nil {
-		lines := idmapset.ToLxcString()
+		lines := idmapset.ToLXCString()
 		for _, line := range lines {
 			err := lxcSetConfigItem(cc, "lxc.idmap", line)
 			if err != nil {
@@ -1505,7 +1498,7 @@ func (d *lxc) deviceStaticShiftMounts(mounts []deviceConfig.MountEntryItem) erro
 				continue
 			}
 
-			err := idmapSet.ShiftFile(mount.DevPath)
+			err := idmapSet.ShiftPath(mount.DevPath, nil)
 			if err != nil {
 				// uidshift failing is weird, but not a big problem. Log and proceed.
 				d.logger.Debug("Failed to uidshift device", logger.Ctx{"mountDevPath": mount.DevPath, "err": err})
@@ -1829,7 +1822,7 @@ func (d *lxc) DeviceEventHandler(runConf *deviceConfig.RunConfig) error {
 	return nil
 }
 
-func (d *lxc) handleIdmappedStorage() (idmap.IdmapStorageType, *idmap.IdmapSet, error) {
+func (d *lxc) handleIdmappedStorage() (idmap.IdmapStorageType, *idmap.Set, error) {
 	diskIdmap, err := d.DiskIdmap()
 	if err != nil {
 		return idmap.IdmapStorageNone, nil, fmt.Errorf("Set last ID map: %w", err)
@@ -1869,11 +1862,11 @@ func (d *lxc) handleIdmappedStorage() (idmap.IdmapStorageType, *idmap.IdmapSet, 
 	// Revert the currently applied on-disk idmap.
 	if diskIdmap != nil {
 		if storageType == "zfs" {
-			err = diskIdmap.UnshiftRootfs(d.RootfsPath(), storageDrivers.ShiftZFSSkipper)
+			err = diskIdmap.UnshiftPath(d.RootfsPath(), storageDrivers.ShiftZFSSkipper)
 		} else if storageType == "btrfs" {
 			err = storageDrivers.UnshiftBtrfsRootfs(d.RootfsPath(), diskIdmap)
 		} else {
-			err = diskIdmap.UnshiftRootfs(d.RootfsPath(), nil)
+			err = diskIdmap.UnshiftPath(d.RootfsPath(), nil)
 		}
 
 		if err != nil {
@@ -1888,23 +1881,23 @@ func (d *lxc) handleIdmappedStorage() (idmap.IdmapStorageType, *idmap.IdmapSet, 
 	// make use of idmapped storage.
 	if nextIdmap != nil && idmapType == idmap.IdmapStorageNone {
 		if storageType == "zfs" {
-			err = nextIdmap.ShiftRootfs(d.RootfsPath(), storageDrivers.ShiftZFSSkipper)
+			err = nextIdmap.ShiftPath(d.RootfsPath(), storageDrivers.ShiftZFSSkipper)
 		} else if storageType == "btrfs" {
 			err = storageDrivers.ShiftBtrfsRootfs(d.RootfsPath(), nextIdmap)
 		} else {
-			err = nextIdmap.ShiftRootfs(d.RootfsPath(), nil)
+			err = nextIdmap.ShiftPath(d.RootfsPath(), nil)
 		}
 
 		if err != nil {
 			return idmap.IdmapStorageNone, nil, err
 		}
 
-		idmapBytes, err := json.Marshal(nextIdmap.Idmap)
+		idmapJSON, err := nextIdmap.ToJSON()
 		if err != nil {
 			return idmap.IdmapStorageNone, nil, err
 		}
 
-		jsonDiskIdmap = string(idmapBytes)
+		jsonDiskIdmap = idmapJSON
 	}
 
 	err = d.VolatileSet(map[string]string{"volatile.last_state.idmap": jsonDiskIdmap})
@@ -1922,6 +1915,46 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 
 	revert := revert.New()
 	defer revert.Fail()
+
+	// Check if idmap needs changing.
+	if !d.IsPrivileged() {
+		nextMap, err := d.NextIdmap()
+		if err != nil {
+			return "", nil, err
+		}
+
+		// Check if we need to change idmap.
+		if nextMap != nil && d.state.OS.IdmapSet != nil && !d.state.OS.IdmapSet.Includes(nextMap) {
+			// Update the idmap.
+			idmapSet, base, err := findIdmap(
+				d.state,
+				d.Name(),
+				d.expandedConfig["security.idmap.isolated"],
+				d.expandedConfig["security.idmap.base"],
+				d.expandedConfig["security.idmap.size"],
+				d.expandedConfig["raw.idmap"],
+			)
+			if err != nil {
+				return "", nil, fmt.Errorf("Failed to get ID map: %w", err)
+			}
+
+			idmapSetJSON, err := idmapSet.ToJSON()
+			if err != nil {
+				return "", nil, fmt.Errorf("Failed to encode ID map: %w", err)
+			}
+
+			err = d.VolatileSet(map[string]string{
+				"volatile.idmap.next": idmapSetJSON,
+				"volatile.idmap.base": fmt.Sprintf("%v", base),
+			})
+			if err != nil {
+				return "", nil, fmt.Errorf("Failed to update volatile idmap: %w", err)
+			}
+
+			// Invalidate the idmap cache.
+			d.idmapset = nil
+		}
+	}
 
 	// Load the go-lxc struct
 	cc, err := d.initLXC(true)
@@ -1991,18 +2024,13 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 		return "", nil, fmt.Errorf("Failed to handle idmapped storage: %w", err)
 	}
 
-	var idmapBytes []byte
-	if nextIdmap == nil {
-		idmapBytes = []byte("[]")
-	} else {
-		idmapBytes, err = json.Marshal(nextIdmap.Idmap)
-		if err != nil {
-			return "", nil, err
-		}
+	nextIdmapJSON, err := nextIdmap.ToJSON()
+	if err != nil {
+		return "", nil, fmt.Errorf("Failed to encode ID map: %w", err)
 	}
 
-	if d.localConfig["volatile.idmap.current"] != string(idmapBytes) {
-		err = d.VolatileSet(map[string]string{"volatile.idmap.current": string(idmapBytes)})
+	if d.localConfig["volatile.idmap.current"] != nextIdmapJSON {
+		err = d.VolatileSet(map[string]string{"volatile.idmap.current": nextIdmapJSON})
 		if err != nil {
 			return "", nil, fmt.Errorf("Set volatile.idmap.current config key on container %q (id %d): %w", d.name, d.id, err)
 		}
@@ -2020,6 +2048,11 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 
 	// Create any missing directories.
 	err = os.MkdirAll(d.LogPath(), 0700)
+	if err != nil {
+		return "", nil, err
+	}
+
+	err = os.MkdirAll(d.RunPath(), 0700)
 	if err != nil {
 		return "", nil, err
 	}
@@ -2257,7 +2290,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	}
 
 	// Generate the LXC config
-	configPath := filepath.Join(d.LogPath(), "lxc.conf")
+	configPath := filepath.Join(d.RunPath(), "lxc.conf")
 	err = cc.SaveConfigFile(configPath)
 	if err != nil {
 		_ = os.Remove(configPath)
@@ -2272,7 +2305,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 
 	uid := int64(0)
 	if currentIdmapset != nil {
-		uid, _ = currentIdmapset.ShiftFromNs(0, 0)
+		uid, _ = currentIdmapset.ShiftFromNS(0, 0)
 	}
 
 	err = os.Chown(d.Path(), int(uid), 0)
@@ -2392,13 +2425,7 @@ func (d *lxc) Start(stateful bool) error {
 	}
 
 	// If stateful, restore now.
-	if stateful {
-		if !d.stateful {
-			err = fmt.Errorf("Instance has no existing state to restore")
-			op.Done(err)
-			return err
-		}
-
+	if stateful && d.stateful {
 		d.logger.Info("Restoring stateful checkpoint")
 
 		criuMigrationArgs := instance.CriuMigrationArgs{
@@ -2420,7 +2447,9 @@ func (d *lxc) Start(stateful bool) error {
 		_ = os.RemoveAll(d.StatePath())
 		d.stateful = false
 
-		err = d.state.DB.Cluster.UpdateInstanceStatefulFlag(d.id, false)
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			return tx.UpdateInstanceStatefulFlag(ctx, d.id, false)
+		})
 		if err != nil {
 			op.Done(err)
 			return fmt.Errorf("Failed clearing instance stateful flag: %w", err)
@@ -2441,7 +2470,9 @@ func (d *lxc) Start(stateful bool) error {
 		}
 
 		d.stateful = false
-		err = d.state.DB.Cluster.UpdateInstanceStatefulFlag(d.id, false)
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			return tx.UpdateInstanceStatefulFlag(ctx, d.id, false)
+		})
 		if err != nil {
 			op.Done(err)
 			return fmt.Errorf("Failed clearing instance stateful flag: %w", err)
@@ -2553,8 +2584,10 @@ func (d *lxc) onStart(_ map[string]string) error {
 			return err
 		}
 
-		// Remove the volatile key from the DB
-		err := d.state.DB.Cluster.DeleteInstanceConfigKey(d.id, key)
+		err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			// Remove the volatile key from the DB
+			return tx.DeleteInstanceConfigKey(ctx, int64(d.id), key)
+		})
 		if err != nil {
 			_ = apparmor.InstanceUnload(d.state.OS, d)
 			return err
@@ -2676,7 +2709,10 @@ func (d *lxc) Stop(stateful bool) error {
 		}
 
 		d.stateful = true
-		err = d.state.DB.Cluster.UpdateInstanceStatefulFlag(d.id, true)
+
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			return tx.UpdateInstanceStatefulFlag(ctx, d.id, true)
+		})
 		if err != nil {
 			return fmt.Errorf("Failed updating instance stateful flag: %w", err)
 		}
@@ -3781,8 +3817,10 @@ func (d *lxc) delete(force bool) error {
 		d.cleanup()
 	}
 
-	// Remove the database record of the instance or snapshot instance.
-	err = d.state.DB.Cluster.DeleteInstance(d.project.Name, d.Name())
+	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		// Remove the database record of the instance or snapshot instance.
+		return tx.DeleteInstance(ctx, d.project.Name, d.Name())
+	})
 	if err != nil {
 		d.logger.Error("Failed deleting instance entry", logger.Ctx{"err": err})
 		return err
@@ -3865,24 +3903,35 @@ func (d *lxc) Rename(newName string, applyTemplateTrigger bool) error {
 	}
 
 	if !d.IsSnapshot() {
-		// Rename all the instance snapshot database entries.
-		results, err := d.state.DB.Cluster.GetInstanceSnapshotsNames(d.project.Name, oldName)
-		if err != nil {
-			d.logger.Error("Failed to get instance snapshots", ctxMap)
-			return fmt.Errorf("Failed to get instance snapshots: %w", err)
-		}
+		var results []string
 
-		for _, sname := range results {
-			// Rename the snapshot.
-			oldSnapName := strings.SplitN(sname, internalInstance.SnapshotDelimiter, 2)[1]
-			baseSnapName := filepath.Base(sname)
-			err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-				return cluster.RenameInstanceSnapshot(ctx, tx.Tx(), d.project.Name, oldName, oldSnapName, baseSnapName)
-			})
+		err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			var err error
+
+			// Rename all the instance snapshot database entries.
+			results, err = tx.GetInstanceSnapshotsNames(ctx, d.project.Name, oldName)
 			if err != nil {
-				d.logger.Error("Failed renaming snapshot", ctxMap)
-				return fmt.Errorf("Failed renaming snapshot: %w", err)
+				d.logger.Error("Failed to get instance snapshots", ctxMap)
+
+				return fmt.Errorf("Failed to get instance snapshots: Failed getting instance snapshot names: %w", err)
 			}
+
+			for _, sname := range results {
+				// Rename the snapshot.
+				oldSnapName := strings.SplitN(sname, internalInstance.SnapshotDelimiter, 2)[1]
+				baseSnapName := filepath.Base(sname)
+
+				err := cluster.RenameInstanceSnapshot(ctx, tx.Tx(), d.project.Name, oldName, oldSnapName, baseSnapName)
+				if err != nil {
+					d.logger.Error("Failed renaming snapshot", ctxMap)
+					return fmt.Errorf("Failed renaming snapshot: %w", err)
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 
@@ -3912,6 +3961,16 @@ func (d *lxc) Rename(newName string, applyTemplateTrigger bool) error {
 		}
 	}
 
+	// Rename the runtime path.
+	newFullName = project.Instance(d.Project().Name, d.Name())
+	_ = os.RemoveAll(internalUtil.RunPath(newFullName))
+	if util.PathExists(d.RunPath()) {
+		err := os.Rename(d.RunPath(), internalUtil.RunPath(newFullName))
+		if err != nil {
+			d.logger.Error("Failed renaming instance", ctxMap)
+			return fmt.Errorf("Failed renaming instance: %w", err)
+		}
+	}
 	revert := revert.New()
 	defer revert.Fail()
 
@@ -4057,8 +4116,14 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 		}
 	}
 
-	// Validate the new profiles
-	profiles, err := d.state.DB.Cluster.GetProfileNames(args.Project)
+	var profiles []string
+
+	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		// Validate the new profiles
+		profiles, err = tx.GetProfileNames(ctx, args.Project)
+
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("Failed to get profiles: %w", err)
 	}
@@ -4315,11 +4380,11 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 	}
 
 	if util.ValueInSlice("security.idmap.isolated", changedConfig) || util.ValueInSlice("security.idmap.base", changedConfig) || util.ValueInSlice("security.idmap.size", changedConfig) || util.ValueInSlice("raw.idmap", changedConfig) || util.ValueInSlice("security.privileged", changedConfig) {
-		var idmap *idmap.IdmapSet
+		var idmapSet *idmap.Set
 		base := int64(0)
 		if !d.IsPrivileged() {
-			// update the idmap
-			idmap, base, err = findIdmap(
+			// Update the idmap.
+			idmapSet, base, err = findIdmap(
 				d.state,
 				d.Name(),
 				d.expandedConfig["security.idmap.isolated"],
@@ -4332,22 +4397,15 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 			}
 		}
 
-		var jsonIdmap string
-		if idmap != nil {
-			idmapBytes, err := json.Marshal(idmap.Idmap)
-			if err != nil {
-				return err
-			}
-
-			jsonIdmap = string(idmapBytes)
-		} else {
-			jsonIdmap = "[]"
+		jsonIdmap, err := idmapSet.ToJSON()
+		if err != nil {
+			return fmt.Errorf("Failed to encode ID map: %w", err)
 		}
 
 		d.localConfig["volatile.idmap.next"] = jsonIdmap
 		d.localConfig["volatile.idmap.base"] = fmt.Sprintf("%v", base)
 
-		// Invalid idmap cache
+		// Invalidate the idmap cache.
 		d.idmapset = nil
 	}
 
@@ -5212,14 +5270,14 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	if err != nil {
 		return fmt.Errorf("Failed getting container disk idmap: %w", err)
 	} else if idmapset != nil {
-		offerHeader.Idmap = make([]*migration.IDMapType, 0, len(idmapset.Idmap))
-		for _, ctnIdmap := range idmapset.Idmap {
+		offerHeader.Idmap = make([]*migration.IDMapType, 0, len(idmapset.Entries))
+		for _, ctnIdmap := range idmapset.Entries {
 			idmap := migration.IDMapType{
-				Isuid:    proto.Bool(ctnIdmap.Isuid),
-				Isgid:    proto.Bool(ctnIdmap.Isgid),
-				Hostid:   proto.Int32(int32(ctnIdmap.Hostid)),
-				Nsid:     proto.Int32(int32(ctnIdmap.Nsid)),
-				Maprange: proto.Int32(int32(ctnIdmap.Maprange)),
+				Isuid:    proto.Bool(ctnIdmap.IsUID),
+				Isgid:    proto.Bool(ctnIdmap.IsGID),
+				Hostid:   proto.Int32(int32(ctnIdmap.HostID)),
+				Nsid:     proto.Int32(int32(ctnIdmap.NSID)),
+				Maprange: proto.Int32(int32(ctnIdmap.MapRange)),
 			}
 
 			offerHeader.Idmap = append(offerHeader.Idmap, &idmap)
@@ -5710,31 +5768,24 @@ func (d *lxc) migrateSendPreDumpLoop(args *preDumpLoopArgs) (bool, error) {
 	return final, nil
 }
 
-func (d *lxc) resetContainerDiskIdmap(srcIdmap *idmap.IdmapSet) error {
+func (d *lxc) resetContainerDiskIdmap(srcIdmap *idmap.Set) error {
 	dstIdmap, err := d.DiskIdmap()
 	if err != nil {
 		return err
 	}
 
 	if dstIdmap == nil {
-		dstIdmap = new(idmap.IdmapSet)
+		dstIdmap = new(idmap.Set)
 	}
 
 	if !srcIdmap.Equals(dstIdmap) {
-		var jsonIdmap string
-		if srcIdmap != nil {
-			idmapBytes, err := json.Marshal(srcIdmap.Idmap)
-			if err != nil {
-				return err
-			}
-
-			jsonIdmap = string(idmapBytes)
-		} else {
-			jsonIdmap = "[]"
+		jsonIdmap, err := srcIdmap.ToJSON()
+		if err != nil {
+			return fmt.Errorf("Failed to encode ID map: %w", err)
 		}
 
 		d.logger.Debug("Setting new volatile.last_state.idmap from source instance", logger.Ctx{"sourceIdmap": srcIdmap})
-		err := d.VolatileSet(map[string]string{"volatile.last_state.idmap": jsonIdmap})
+		err = d.VolatileSet(map[string]string{"volatile.last_state.idmap": jsonIdmap})
 		if err != nil {
 			return err
 		}
@@ -5909,17 +5960,17 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 
 	d.logger.Debug("Sent migration response to source")
 
-	srcIdmap := new(idmap.IdmapSet)
+	srcIdmap := new(idmap.Set)
 	for _, idmapSet := range offerHeader.Idmap {
-		e := idmap.IdmapEntry{
-			Isuid:    *idmapSet.Isuid,
-			Isgid:    *idmapSet.Isgid,
-			Nsid:     int64(*idmapSet.Nsid),
-			Hostid:   int64(*idmapSet.Hostid),
-			Maprange: int64(*idmapSet.Maprange),
+		e := idmap.Entry{
+			IsUID:    *idmapSet.Isuid,
+			IsGID:    *idmapSet.Isgid,
+			NSID:     int64(*idmapSet.Nsid),
+			HostID:   int64(*idmapSet.Hostid),
+			MapRange: int64(*idmapSet.Maprange),
 		}
 
-		srcIdmap.Idmap = idmap.Extend(srcIdmap.Idmap, e)
+		srcIdmap.Entries = append(srcIdmap.Entries, e)
 	}
 
 	revert := revert.New()
@@ -6362,11 +6413,11 @@ func (d *lxc) migrate(args *instance.CriuMigrationArgs) error {
 			}
 
 			if storageType == "zfs" {
-				err = idmapset.ShiftRootfs(args.StateDir, storageDrivers.ShiftZFSSkipper)
+				err = idmapset.ShiftPath(args.StateDir, storageDrivers.ShiftZFSSkipper)
 			} else if storageType == "btrfs" {
 				err = storageDrivers.ShiftBtrfsRootfs(args.StateDir, idmapset)
 			} else {
-				err = idmapset.ShiftRootfs(args.StateDir, nil)
+				err = idmapset.ShiftPath(args.StateDir, nil)
 			}
 
 			if err != nil {
@@ -6511,7 +6562,7 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 
 	// Get the right uid and gid for the container
 	if idmapset != nil {
-		rootUID, rootGID = idmapset.ShiftIntoNs(0, 0)
+		rootUID, rootGID = idmapset.ShiftIntoNS(0, 0)
 	}
 
 	// Figure out the container architecture
@@ -6667,13 +6718,13 @@ func (d *lxc) FileSFTPConn() (net.Conn, error) {
 	defer spawnUnlock()
 
 	// Create any missing directories in case the instance has never been started before.
-	err = os.MkdirAll(d.LogPath(), 0700)
+	err = os.MkdirAll(d.RunPath(), 0700)
 	if err != nil {
 		return nil, err
 	}
 
 	// Trickery to handle paths > 108 chars.
-	dirFile, err := os.Open(d.LogPath())
+	dirFile, err := os.Open(d.RunPath())
 	if err != nil {
 		return nil, err
 	}
@@ -6686,7 +6737,7 @@ func (d *lxc) FileSFTPConn() (net.Conn, error) {
 	}
 
 	// Attempt to connect on existing socket.
-	forkfilePath := filepath.Join(d.LogPath(), "forkfile.sock")
+	forkfilePath := filepath.Join(d.RunPath(), "forkfile.sock")
 	forkfileConn, err := net.DialUnix("unix", nil, forkfileAddr)
 	if err == nil {
 		// Found an existing server.
@@ -6815,8 +6866,8 @@ func (d *lxc) FileSFTPConn() (net.Conn, error) {
 						Uid: uint32(0),
 						Gid: uint32(0),
 					},
-					UidMappings: idmapset.ToUidMappings(),
-					GidMappings: idmapset.ToGidMappings(),
+					UidMappings: idmapset.ToUIDMappings(),
+					GidMappings: idmapset.ToGIDMappings(),
 				}
 			}
 		}
@@ -6829,7 +6880,7 @@ func (d *lxc) FileSFTPConn() (net.Conn, error) {
 		}
 
 		// Write PID file.
-		pidFile := filepath.Join(d.LogPath(), "forkfile.pid")
+		pidFile := filepath.Join(d.RunPath(), "forkfile.pid")
 		err = os.WriteFile(pidFile, []byte(fmt.Sprintf("%d\n", forkfile.Process.Pid)), 0600)
 		if err != nil {
 			chReady <- fmt.Errorf("Failed to write forkfile PID: %w", err)
@@ -6909,7 +6960,7 @@ func (d *lxc) stopForkfile(force bool) {
 		unlock()
 	}()
 
-	content, err := os.ReadFile(filepath.Join(d.LogPath(), "forkfile.pid"))
+	content, err := os.ReadFile(filepath.Join(d.RunPath(), "forkfile.pid"))
 	if err != nil {
 		return
 	}
@@ -6943,7 +6994,7 @@ func (d *lxc) Console(protocol string) (*os.File, chan error, error) {
 		"forkconsole",
 		project.Instance(d.Project().Name, d.Name()),
 		d.state.OS.LxcPath,
-		filepath.Join(d.LogPath(), "lxc.conf"),
+		filepath.Join(d.RunPath(), "lxc.conf"),
 		"tty=0",
 		"escape=-1"}
 
@@ -6954,7 +7005,7 @@ func (d *lxc) Console(protocol string) (*os.File, chan error, error) {
 
 	var rootUID, rootGID int64
 	if idmapset != nil {
-		rootUID, rootGID = idmapset.ShiftIntoNs(0, 0)
+		rootUID, rootGID = idmapset.ShiftIntoNS(0, 0)
 	}
 
 	// Create a PTS pair.
@@ -7020,6 +7071,21 @@ func (d *lxc) ConsoleLog(opts liblxc.ConsoleLogOptions) (string, error) {
 
 // Exec executes a command inside the instance.
 func (d *lxc) Exec(req api.InstanceExecPost, stdin *os.File, stdout *os.File, stderr *os.File) (instance.Cmd, error) {
+	// Generate the LXC config if missing.
+	configPath := filepath.Join(d.RunPath(), "lxc.conf")
+	if !util.PathExists(configPath) {
+		cc, err := d.initLXC(true)
+		if err != nil {
+			return nil, fmt.Errorf("Load go-lxc struct: %w", err)
+		}
+
+		err = cc.SaveConfigFile(configPath)
+		if err != nil {
+			_ = os.Remove(configPath)
+			return nil, err
+		}
+	}
+
 	// Prepare the environment
 	envSlice := []string{}
 
@@ -7043,7 +7109,7 @@ func (d *lxc) Exec(req api.InstanceExecPost, stdin *os.File, stdout *os.File, st
 		"forkexec",
 		cname,
 		d.state.OS.LxcPath,
-		filepath.Join(d.LogPath(), "lxc.conf"),
+		filepath.Join(d.RunPath(), "lxc.conf"),
 		req.Cwd,
 		fmt.Sprintf("%d", req.User),
 		fmt.Sprintf("%d", req.Group),
@@ -7535,7 +7601,7 @@ func (d *lxc) insertMountGo(source, target, fstype string, flags int, mntnsPID i
 
 func (d *lxc) insertMountLXC(source, target, fstype string, flags int) error {
 	cname := project.Instance(d.Project().Name, d.Name())
-	configPath := filepath.Join(d.LogPath(), "lxc.conf")
+	configPath := filepath.Join(d.RunPath(), "lxc.conf")
 	if fstype == "" {
 		fstype = "none"
 	}
@@ -7631,7 +7697,7 @@ func (d *lxc) removeMount(mount string) error {
 	}
 
 	if d.state.OS.LXCFeatures["mount_injection_file"] {
-		configPath := filepath.Join(d.LogPath(), "lxc.conf")
+		configPath := filepath.Join(d.RunPath(), "lxc.conf")
 		cname := project.Instance(d.Project().Name, d.Name())
 
 		if !strings.HasPrefix(mount, "/") {
@@ -7697,7 +7763,7 @@ func (d *lxc) InsertSeccompUnixDevice(prefix string, m deviceConfig.Device, pid 
 		return err
 	}
 
-	nsuid, nsgid := idmapset.ShiftFromNs(uid, gid)
+	nsuid, nsgid := idmapset.ShiftFromNS(uid, gid)
 	m["uid"] = fmt.Sprintf("%d", nsuid)
 	m["gid"] = fmt.Sprintf("%d", nsgid)
 
@@ -7966,7 +8032,7 @@ func (d *lxc) IsRunning() bool {
 }
 
 // CanMigrate returns whether the instance can be migrated.
-func (d *lxc) CanMigrate() (bool, bool) {
+func (d *lxc) CanMigrate() string {
 	return d.canMigrate(d)
 }
 
@@ -8028,33 +8094,33 @@ func (d *lxc) DevptsFd() (*os.File, error) {
 }
 
 // CurrentIdmap returns current IDMAP.
-func (d *lxc) CurrentIdmap() (*idmap.IdmapSet, error) {
+func (d *lxc) CurrentIdmap() (*idmap.Set, error) {
 	jsonIdmap, ok := d.LocalConfig()["volatile.idmap.current"]
 	if !ok {
 		return d.DiskIdmap()
 	}
 
-	return idmap.JSONUnmarshal(jsonIdmap)
+	return idmap.NewSetFromJSON(jsonIdmap)
 }
 
 // DiskIdmap returns DISK IDMAP.
-func (d *lxc) DiskIdmap() (*idmap.IdmapSet, error) {
+func (d *lxc) DiskIdmap() (*idmap.Set, error) {
 	jsonIdmap, ok := d.LocalConfig()["volatile.last_state.idmap"]
 	if !ok {
 		return nil, nil
 	}
 
-	return idmap.JSONUnmarshal(jsonIdmap)
+	return idmap.NewSetFromJSON(jsonIdmap)
 }
 
 // NextIdmap returns next IDMAP.
-func (d *lxc) NextIdmap() (*idmap.IdmapSet, error) {
+func (d *lxc) NextIdmap() (*idmap.Set, error) {
 	jsonIdmap, ok := d.LocalConfig()["volatile.idmap.next"]
 	if !ok {
 		return d.CurrentIdmap()
 	}
 
-	return idmap.JSONUnmarshal(jsonIdmap)
+	return idmap.NewSetFromJSON(jsonIdmap)
 }
 
 // statusCode returns instance status code.

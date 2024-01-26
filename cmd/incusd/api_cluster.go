@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -54,7 +55,7 @@ import (
 	"github.com/lxc/incus/shared/validate"
 )
 
-type evacuateStopFunc func(inst instance.Instance) error
+type evacuateStopFunc func(inst instance.Instance, action string) error
 type evacuateMigrateFunc func(s *state.State, r *http.Request, inst instance.Instance, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, metadata map[string]any, op *operations.Operation) error
 
 type evacuateOpts struct {
@@ -209,6 +210,26 @@ func clusterGet(d *Daemon, r *http.Request) response.Response {
 	if err != nil {
 		return response.SmartError(err)
 	}
+
+	// Sort the member config.
+	sort.Slice(memberConfig, func(i, j int) bool {
+		left := memberConfig[i]
+		right := memberConfig[j]
+
+		if left.Entity != right.Entity {
+			return left.Entity < right.Entity
+		}
+
+		if left.Name != right.Name {
+			return left.Name < right.Name
+		}
+
+		if left.Key != right.Key {
+			return left.Key < right.Key
+		}
+
+		return left.Description < right.Description
+	})
 
 	cluster := api.Cluster{
 		ServerName:   serverName,
@@ -369,6 +390,11 @@ func clusterPutBootstrap(d *Daemon, r *http.Request, req api.ClusterPut) respons
 		d.serverName = req.ServerName
 		d.serverClustered = true
 		d.globalConfigMu.Unlock()
+
+		d.events.SetLocalLocation(d.serverName)
+
+		// Refresh the state.
+		s = d.State()
 
 		// Start clustering tasks
 		d.startClusterTasks()
@@ -580,16 +606,21 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 		defer revert.Fail()
 
 		// Update server name.
+		oldServerName := d.serverName
 		d.globalConfigMu.Lock()
 		d.serverName = req.ServerName
 		d.serverClustered = true
 		d.globalConfigMu.Unlock()
 		revert.Add(func() {
 			d.globalConfigMu.Lock()
-			d.serverName = ""
+			d.serverName = oldServerName
 			d.serverClustered = false
 			d.globalConfigMu.Unlock()
+
+			d.events.SetLocalLocation(d.serverName)
 		})
+
+		d.events.SetLocalLocation(d.serverName)
 
 		err = clusterInitMember(localClient, client, req.MemberConfig)
 		if err != nil {
@@ -598,55 +629,60 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 
 		// Get all defined storage pools and networks, so they can be compared to the ones in the cluster.
 		pools := []api.StoragePool{}
-		poolNames, err := s.DB.Cluster.GetStoragePoolNames()
-		if err != nil && !response.IsNotFoundError(err) {
-			return err
-		}
-
-		for _, name := range poolNames {
-			_, pool, _, err := s.DB.Cluster.GetStoragePoolInAnyState(name)
-			if err != nil {
-				return err
-			}
-
-			pools = append(pools, *pool)
-		}
-
-		// Get a list of projects for networks.
-		var projects []dbCluster.Project
+		networks := []api.InitNetworksProjectPost{}
 
 		err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-			projects, err = dbCluster.GetProjects(ctx, tx.Tx())
-			return err
-		})
-		if err != nil {
-			return fmt.Errorf("Failed to load projects for networks: %w", err)
-		}
-
-		networks := []api.InitNetworksProjectPost{}
-		for _, p := range projects {
-			networkNames, err := s.DB.Cluster.GetNetworks(p.Name)
+			poolNames, err := tx.GetStoragePoolNames(ctx)
 			if err != nil && !response.IsNotFoundError(err) {
 				return err
 			}
 
-			for _, name := range networkNames {
-				_, network, _, err := s.DB.Cluster.GetNetworkInAnyState(p.Name, name)
+			for _, name := range poolNames {
+				_, pool, _, err := tx.GetStoragePoolInAnyState(ctx, name)
 				if err != nil {
 					return err
 				}
 
-				internalNetwork := api.InitNetworksProjectPost{
-					NetworksPost: api.NetworksPost{
-						NetworkPut: network.NetworkPut,
-						Name:       network.Name,
-						Type:       network.Type,
-					},
-					Project: p.Name,
+				pools = append(pools, *pool)
+			}
+
+			// Get a list of projects for networks.
+			var projects []dbCluster.Project
+
+			projects, err = dbCluster.GetProjects(ctx, tx.Tx())
+			if err != nil {
+				return fmt.Errorf("Failed to load projects for networks: %w", err)
+			}
+
+			for _, p := range projects {
+				networkNames, err := tx.GetNetworks(ctx, p.Name)
+				if err != nil && !response.IsNotFoundError(err) {
+					return err
 				}
 
-				networks = append(networks, internalNetwork)
+				for _, name := range networkNames {
+					_, network, _, err := tx.GetNetworkInAnyState(ctx, p.Name, name)
+					if err != nil {
+						return err
+					}
+
+					internalNetwork := api.InitNetworksProjectPost{
+						NetworksPost: api.NetworksPost{
+							NetworkPut: network.NetworkPut,
+							Name:       network.Name,
+							Type:       network.Type,
+						},
+						Project: p.Name,
+					}
+
+					networks = append(networks, internalNetwork)
+				}
 			}
+
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 
 		// Now request for this node to be added to the list of cluster nodes.
@@ -785,6 +821,9 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 		if err != nil {
 			return err
 		}
+
+		// Refresh the state.
+		s = d.State()
 
 		// Start up networks so any post-join changes can be applied now that we have a Node ID.
 		logger.Debug("Starting networks after cluster join")
@@ -1870,6 +1909,8 @@ func clusterNodePost(d *Daemon, r *http.Request) response.Response {
 	d.serverName = req.ServerName
 	d.globalConfigMu.Unlock()
 
+	d.events.SetLocalLocation(d.serverName)
+
 	requestor := request.CreateRequestor(r)
 	s.Events.SendLifecycle(request.ProjectParam(r), lifecycle.ClusterMemberRenamed.Event(req.ServerName, requestor, logger.Ctx{"old_name": memberName}))
 
@@ -2061,7 +2102,13 @@ func clusterNodeDelete(d *Daemon, r *http.Request) response.Response {
 		}
 
 		for _, networkProjectName := range networkProjectNames {
-			networks, err := s.DB.Cluster.GetNetworks(networkProjectName)
+			var networks []string
+
+			err := s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+				networks, err = tx.GetNetworks(ctx, networkProjectName)
+
+				return err
+			})
 			if err != nil {
 				return response.SmartError(err)
 			}
@@ -2074,8 +2121,14 @@ func clusterNodeDelete(d *Daemon, r *http.Request) response.Response {
 			}
 		}
 
-		// Delete all the pools on this node
-		pools, err := s.DB.Cluster.GetStoragePoolNames()
+		var pools []string
+
+		err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			// Delete all the pools on this node
+			pools, err = tx.GetStoragePoolNames(ctx)
+
+			return err
+		})
 		if err != nil && !response.IsNotFoundError(err) {
 			return response.SmartError(err)
 		}
@@ -2207,7 +2260,9 @@ func updateClusterCertificate(ctx context.Context, s *state.State, gateway *clus
 		var err error
 
 		revert.Add(func() {
-			_ = s.DB.Cluster.UpsertWarningLocalNode("", -1, -1, warningtype.UnableToUpdateClusterCertificate, err.Error())
+			_ = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				return tx.UpsertWarningLocalNode(ctx, "", -1, -1, warningtype.UnableToUpdateClusterCertificate, err.Error())
+			})
 		})
 
 		oldCertBytes, err := os.ReadFile(internalUtil.VarPath("cluster.crt"))
@@ -2729,100 +2784,101 @@ type internalClusterPostHandoverRequest struct {
 }
 
 func clusterCheckStoragePoolsMatch(cluster *db.Cluster, reqPools []api.StoragePool) error {
-	poolNames, err := cluster.GetCreatedStoragePoolNames()
-	if err != nil && !response.IsNotFoundError(err) {
-		return err
-	}
-
-	for _, name := range poolNames {
-		found := false
-		for _, reqPool := range reqPools {
-			if reqPool.Name != name {
-				continue
-			}
-
-			found = true
-			_, pool, _, err := cluster.GetStoragePoolInAnyState(name)
-			if err != nil {
-				return err
-			}
-
-			if pool.Driver != reqPool.Driver {
-				return fmt.Errorf("Mismatching driver for storage pool %s", name)
-			}
-			// Exclude the keys which are node-specific.
-			exclude := db.NodeSpecificStorageConfig
-			err = localUtil.CompareConfigs(pool.Config, reqPool.Config, exclude)
-			if err != nil {
-				return fmt.Errorf("Mismatching config for storage pool %s: %w", name, err)
-			}
-
-			break
-		}
-
-		if !found {
-			return fmt.Errorf("Missing storage pool %s", name)
-		}
-	}
-	return nil
-}
-
-func clusterCheckNetworksMatch(cluster *db.Cluster, reqNetworks []api.InitNetworksProjectPost) error {
-	var err error
-
-	// Get a list of projects for networks.
-	var networkProjectNames []string
-
-	err = cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-		networkProjectNames, err = dbCluster.GetProjectNames(context.Background(), tx.Tx())
-		return err
-	})
-	if err != nil {
-		return fmt.Errorf("Failed to load projects for networks: %w", err)
-	}
-
-	for _, networkProjectName := range networkProjectNames {
-		networkNames, err := cluster.GetCreatedNetworks(networkProjectName)
+	return cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		poolNames, err := tx.GetCreatedStoragePoolNames(ctx)
 		if err != nil && !response.IsNotFoundError(err) {
 			return err
 		}
 
-		for _, networkName := range networkNames {
+		for _, name := range poolNames {
 			found := false
-
-			for _, reqNetwork := range reqNetworks {
-				if reqNetwork.Name != networkName || reqNetwork.Project != networkProjectName {
+			for _, reqPool := range reqPools {
+				if reqPool.Name != name {
 					continue
 				}
 
 				found = true
 
-				_, network, _, err := cluster.GetNetworkInAnyState(networkProjectName, networkName)
+				var pool *api.StoragePool
+
+				_, pool, _, err = tx.GetStoragePoolInAnyState(ctx, name)
 				if err != nil {
 					return err
 				}
 
-				if reqNetwork.Type != network.Type {
-					return fmt.Errorf("Mismatching type for network %q in project %q", networkName, networkProjectName)
+				if pool.Driver != reqPool.Driver {
+					return fmt.Errorf("Mismatching driver for storage pool %s", name)
 				}
-
 				// Exclude the keys which are node-specific.
-				exclude := db.NodeSpecificNetworkConfig
-				err = localUtil.CompareConfigs(network.Config, reqNetwork.Config, exclude)
+				exclude := db.NodeSpecificStorageConfig
+				err = localUtil.CompareConfigs(pool.Config, reqPool.Config, exclude)
 				if err != nil {
-					return fmt.Errorf("Mismatching config for network %q in project %q: %w", networkName, networkProjectName, err)
+					return fmt.Errorf("Mismatching config for storage pool %s: %w", name, err)
 				}
 
 				break
 			}
 
 			if !found {
-				return fmt.Errorf("Missing network %q in project %q", networkName, networkProjectName)
+				return fmt.Errorf("Missing storage pool %s", name)
 			}
 		}
-	}
 
-	return nil
+		return nil
+	})
+}
+
+func clusterCheckNetworksMatch(cluster *db.Cluster, reqNetworks []api.InitNetworksProjectPost) error {
+	return cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		// Get a list of projects for networks.
+		networkProjectNames, err := dbCluster.GetProjectNames(ctx, tx.Tx())
+		if err != nil {
+			return fmt.Errorf("Failed to load projects for networks: %w", err)
+		}
+
+		for _, networkProjectName := range networkProjectNames {
+			networkNames, err := tx.GetCreatedNetworkNamesByProject(ctx, networkProjectName)
+			if err != nil && !response.IsNotFoundError(err) {
+				return err
+			}
+
+			for _, networkName := range networkNames {
+				found := false
+
+				for _, reqNetwork := range reqNetworks {
+					if reqNetwork.Name != networkName || reqNetwork.Project != networkProjectName {
+						continue
+					}
+
+					found = true
+
+					_, network, _, err := tx.GetNetworkInAnyState(ctx, networkProjectName, networkName)
+					if err != nil {
+						return err
+					}
+
+					if reqNetwork.Type != network.Type {
+						return fmt.Errorf("Mismatching type for network %q in project %q", networkName, networkProjectName)
+					}
+
+					// Exclude the keys which are node-specific.
+					exclude := db.NodeSpecificNetworkConfig
+					err = localUtil.CompareConfigs(network.Config, reqNetwork.Config, exclude)
+					if err != nil {
+						return fmt.Errorf("Mismatching config for network %q in project %q: %w", network.Name, networkProjectName, err)
+					}
+
+					break
+				}
+
+				if !found {
+					return fmt.Errorf("Missing network %q in project %q", networkName, networkProjectName)
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // Used as low-level recovering helper.
@@ -2938,39 +2994,63 @@ func clusterNodeStatePost(d *Daemon, r *http.Request) response.Response {
 
 	s := d.State()
 
-	// Forward request
+	// Forward request.
 	resp := forwardedResponseToNode(s, r, name)
 	if resp != nil {
 		return resp
 	}
 
-	// Parse the request
+	// Parse the request.
 	req := api.ClusterMemberStatePost{}
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		return response.BadRequest(err)
 	}
 
+	// Validate the overrides.
+	if req.Action == "evacuate" && req.Mode != "" {
+		// Use the validator from the instance logic.
+		validator := internalInstance.InstanceConfigKeysAny["cluster.evacuate"]
+		err = validator(req.Mode)
+		if err != nil {
+			return response.BadRequest(err)
+		}
+	}
+
 	if req.Action == "evacuate" {
-		stopFunc := func(inst instance.Instance) error {
+		stopFunc := func(inst instance.Instance, action string) error {
 			l := logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
 
-			// Get the shutdown timeout for the instance.
-			timeout := inst.ExpandedConfig()["boot.host_shutdown_timeout"]
-			val, err := strconv.Atoi(timeout)
-			if err != nil {
-				val = evacuateHostShutdownDefaultTimeout
-			}
-
-			// Start with a clean shutdown.
-			err = inst.Shutdown(time.Duration(val) * time.Second)
-			if err != nil {
-				l.Warn("Failed shutting down instance, forcing stop", logger.Ctx{"err": err})
-
-				// Fallback to forced stop.
+			if action == "force-stop" {
+				// Handle forced shutdown.
 				err = inst.Stop(false)
 				if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
-					return fmt.Errorf("Failed to stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+					return fmt.Errorf("Failed to force stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+				}
+			} else if action == "stateful-stop" {
+				// Handle stateful stop.
+				err = inst.Stop(true)
+				if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
+					return fmt.Errorf("Failed to stateful stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+				}
+			} else {
+				// Get the shutdown timeout for the instance.
+				timeout := inst.ExpandedConfig()["boot.host_shutdown_timeout"]
+				val, err := strconv.Atoi(timeout)
+				if err != nil {
+					val = evacuateHostShutdownDefaultTimeout
+				}
+
+				// Start with a clean shutdown.
+				err = inst.Shutdown(time.Duration(val) * time.Second)
+				if err != nil {
+					l.Warn("Failed shutting down instance, forcing stop", logger.Ctx{"err": err})
+
+					// Fallback to forced stop.
+					err = inst.Stop(false)
+					if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
+						return fmt.Errorf("Failed to stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+					}
 				}
 			}
 
@@ -3101,7 +3181,7 @@ func internalClusterHeal(d *Daemon, r *http.Request) response.Response {
 }
 
 func evacuateClusterSetState(s *state.State, name string, state int) error {
-	err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+	return s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 		// Get the node.
 		node, err := tx.GetNodeByName(ctx, name)
 		if err != nil {
@@ -3131,11 +3211,6 @@ func evacuateClusterSetState(s *state.State, name string, state int) error {
 
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // evacuateHostShutdownDefaultTimeout default timeout (in seconds) for waiting for clean shutdown to complete.
@@ -3232,37 +3307,28 @@ func evacuateInstances(ctx context.Context, opts evacuateOpts) error {
 		l := logger.AddContext(logger.Ctx{"project": instProject.Name, "instance": inst.Name()})
 
 		// Check if migratable.
-		migrate, live := inst.CanMigrate()
+		action := inst.CanMigrate()
 
 		// Apply overrides.
-		if opts.mode != "" {
-			if opts.mode == "stop" {
-				migrate = false
-				live = false
-			} else if opts.mode == "migrate" {
-				migrate = true
-				live = false
-			} else if opts.mode == "live-migrate" {
-				migrate = true
-				live = true
-			}
+		if opts.mode != "" && opts.mode != "auto" {
+			action = opts.mode
 		}
 
 		// Stop the instance if needed.
 		isRunning := inst.IsRunning()
-		if opts.stopInstance != nil && isRunning && !(migrate && live) {
+		if opts.stopInstance != nil && isRunning && action != "live-migrate" {
 			metadata["evacuation_progress"] = fmt.Sprintf("Stopping %q in project %q", inst.Name(), instProject.Name)
 			_ = opts.op.UpdateMetadata(metadata)
 
-			err := opts.stopInstance(inst)
+			err := opts.stopInstance(inst, action)
 			if err != nil {
 				return err
 			}
-		}
 
-		// If not migratable, the instance is just stopped.
-		if !migrate {
-			continue
+			if action != "migrate" {
+				// Done with this instance.
+				continue
+			}
 		}
 
 		// Get candidate cluster members to move instances to.
@@ -3303,7 +3369,7 @@ func evacuateInstances(ctx context.Context, opts evacuateOpts) error {
 		}
 
 		start := isRunning || instanceShouldAutoStart(inst)
-		err = opts.migrateInstance(opts.s, opts.r, inst, targetMemberInfo, live, start, metadata, opts.op)
+		err = opts.migrateInstance(opts.s, opts.r, inst, targetMemberInfo, action == "live-migrate", start, metadata, opts.op)
 		if err != nil {
 			return err
 		}
@@ -3394,7 +3460,14 @@ func restoreClusterMember(d *Daemon, r *http.Request) response.Response {
 			metadata["evacuation_progress"] = fmt.Sprintf("Starting %q in project %q", inst.Name(), inst.Project().Name)
 			_ = op.UpdateMetadata(metadata)
 
-			err = inst.Start(false)
+			// If configured for stateful stop, try restoring its state.
+			action := inst.CanMigrate()
+			if action == "stateful-stop" {
+				err = inst.Start(true)
+			} else {
+				err = inst.Start(false)
+			}
+
 			if err != nil {
 				return fmt.Errorf("Failed to start instance %q: %w", inst.Name(), err)
 			}
@@ -3404,8 +3477,8 @@ func restoreClusterMember(d *Daemon, r *http.Request) response.Response {
 		for _, inst := range instances {
 			l := logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
 
-			// Check if live-migratable.
-			_, live := inst.CanMigrate()
+			// Check the action.
+			live := inst.CanMigrate() == "live-migrate"
 
 			metadata["evacuation_progress"] = fmt.Sprintf("Migrating %q in project %q from %q", inst.Name(), inst.Project().Name, inst.Location())
 			_ = op.UpdateMetadata(metadata)

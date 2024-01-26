@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -17,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/dskit/backoff"
 	"github.com/sirupsen/logrus"
 
 	"github.com/lxc/incus/shared/api"
@@ -33,17 +31,17 @@ const (
 )
 
 type config struct {
-	backoffConfig backoff.Config
-	batchSize     int
-	batchWait     time.Duration
-	caCert        string
-	username      string
-	password      string
-	labels        []string
-	logLevel      string
-	timeout       time.Duration
-	types         []string
-	url           *url.URL
+	batchSize int
+	batchWait time.Duration
+	caCert    string
+	username  string
+	password  string
+	labels    []string
+	instance  string
+	logLevel  string
+	timeout   time.Duration
+	types     []string
+	url       *url.URL
 }
 
 type entry struct {
@@ -63,24 +61,20 @@ type Client struct {
 }
 
 // NewClient returns a Client.
-func NewClient(ctx context.Context, url *url.URL, username string, password string, caCert string, labels []string, logLevel string, types []string) *Client {
+func NewClient(ctx context.Context, u *url.URL, username string, password string, caCert string, instance string, logLevel string, labels []string, types []string) *Client {
 	client := Client{
 		cfg: config{
-			backoffConfig: backoff.Config{
-				MinBackoff: 500 * time.Millisecond,
-				MaxBackoff: 5 * time.Minute,
-				MaxRetries: 10,
-			},
 			batchSize: 10 * 1024,
 			batchWait: 1 * time.Second,
 			caCert:    caCert,
 			username:  username,
 			password:  password,
+			instance:  instance,
 			labels:    labels,
 			logLevel:  logLevel,
 			timeout:   10 * time.Second,
 			types:     types,
-			url:       url,
+			url:       u,
 		},
 		client:  &http.Client{},
 		ctx:     ctx,
@@ -168,11 +162,10 @@ func (c *Client) sendBatch(batch *batch) {
 		return
 	}
 
-	backoff := backoff.New(c.ctx, c.cfg.backoffConfig)
-
 	var status int
 
-	for backoff.Ongoing() {
+	for i := 0; i < 30; i++ {
+		// Try to send the message.
 		status, err = c.send(c.ctx, buf)
 		if err == nil {
 			return
@@ -180,10 +173,11 @@ func (c *Client) sendBatch(batch *batch) {
 
 		// Only retry 429s, 500s and connection-level errors.
 		if status > 0 && status != 429 && status/100 != 5 {
-			break
+			return
 		}
 
-		backoff.Wait()
+		// Retry every 10s.
+		time.Sleep(10 * time.Second)
 	}
 }
 
@@ -234,17 +228,12 @@ func (c *Client) HandleEvent(event api.Event) {
 		return
 	}
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "none"
-	}
-
 	entry := entry{
 		labels: LabelSet{
 			"app":      "incus",
 			"type":     event.Type,
 			"location": event.Location,
-			"instance": hostname,
+			"instance": c.cfg.instance,
 		},
 		Entry: Entry{
 			Timestamp: event.Timestamp,
