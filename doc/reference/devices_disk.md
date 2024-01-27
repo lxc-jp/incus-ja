@@ -93,7 +93,7 @@ VM `cloud-init`
 `ceph.cluster_name` | string  | `ceph`        | no   | Ceph クラスタのクラスタ名（Ceph か CephFS のソースには必須）
 `ceph.user_name`    | string  | `admin`       | no   | Ceph クラスタのユーザー名（Ceph か CephFS のソースには必須）
 `initial.*`         | n/a     | -             | no   | デフォルトストレージプール設定と独立して個別の設定を許可する{ref}`devices-disk-initial-config`
-`io.bus`            | string  | `virtio-scsi` | no   | VMのみ: デバイスのバスを上書きする（`virtio-scsi`または`nvme`）
+`io.bus`            | string  | `virtio-scsi` | no   | VMのみ: デバイスのバスを上書きする（`nvme`、`virtio-blk`、または`virtio-scsi`）
 `io.cache`          | string  | `none`        | no   | VMのみ: デバイスのキャッシュモードを上書きする（`none`、`writeback`または`unsafe`）
 `limits.max`        | string  | -             | no   | 読み取りと書き込み両方のbyte/sかIOPSによるI/O制限（`limits.read`と`limits.write`の両方を設定するのと同じ）
 `limits.read`       | string  | -             | no   | byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）もしくはIOPS（あとに`iops`と付けなければなりません）で指定する読み込みのI/O制限値 - {ref}`storage-configure-IO` も参照

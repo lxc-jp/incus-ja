@@ -32,32 +32,50 @@ Incus デーモンは Linux でのみ稼働します。
 
 ````{tabs}
 
-```{group-tab} Debian と Ubuntu
-現時点では Incus をインストールする最も簡単な方法は[Zabbly](https://zabbly.com)で提供される Debian または Ubuntu のパッケージを使うことです。
-最新の安定版リリースと（テストされていない）デイリービルドの 2 つのリポジトリがあります。
+```{group-tab} Arch Linux
+Incus と全ての依存ソフトウェアは Arch Linux のメインレポジトリ内で `incus` として利用できます。
 
-インストール手順は[`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)にあります。
+Incus を以下のコマンドでインストールします:
 
-1. あなたのユーザーに Incus を制御する許可を与えます。
+    pacman -S incus
 
-   上記のパッケージに含まれる Incus へのアクセスは 2 つのグループで制御されます。
+パッケージに問題があれば[こちら](https://gitlab.archlinux.org/archlinux/packaging/packages/incus)に報告してください。
+```
 
-   - `incus`は基本的なユーザーアクセスを許可します。設定はできずすべてのアクションはユーザーごとのプロジェクトに限定されます。
-   - `incus-admin`は Incus の完全なコントロールを許可します。
+```{group-tab} Debian
+Debian ユーザーには現在 2 つの選択肢があります。
 
-   すべてのコマンドを root で実行することなく Incus を制御するには、あなた自身を`incus-admin`グループに追加してください。
+1. ネイティブの `incus` パッケージ
 
-       sudo adduser YOUR-USERNAME incus-admin
-       newgrp incus-admin
+    ネイティブの `incus` パッケージは現在 Debian の testing と unstable レポジトリ内で利用できます。
+    このパッケージは次回の Debian 13 (`trixie`) リリース内に含まれる予定です。
 
-   `newgrp`の手順はあなたの端末セッションを再起動しないままで Incus を利用する場合に必要です（訳注：端末を起動し直す場合は不要です）。
+    それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
 
-1. Incus を初期化します。
+1. Zabbly パッケージレポジトリ
 
-       incus admin init --minimal
+    [Zabbly](https://zabbly.com) は Debian の安定版リリース (11 と 12) 用の最新でありサポート対象である Incus のパッケージを提供します。
+    これらのパッケージは Incus の全ての機能を使用するために必要なすべてを含んでいます。
 
-   この手順はフォルトのオプションで最小セットアップの構成を作成します。
-   初期化オプションをチューニングしたい場合、詳細は{ref}`initialize`を参照してください。
+    最新のインストール手順はこちらを参照してください: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)
+```
+
+```{group-tab} Fedora
+Incus の RPM パッケージとその依存パッケージはまだ公式の Fedora リポジトリでは利用できませんが、[`ganto/lxc4`](https://copr.fedorainfracloud.org/coprs/ganto/lxc4/) の Community Project (COPR) リポジトリでは利用できます。
+
+`dnf` の COPR プラグインをインストールし、次に COPR レポジトリを有効にしてください:
+
+    dnf install 'dnf-command(copr)'
+    dnf copr enable ganto/lxc4
+
+Incus を以下のコマンドでインストールします:
+
+    dnf install incus
+
+追加のセットアップ手順については[Getting started with Incus on Fedora](https://github.com/ganto/copr-lxc4/wiki/Getting-Started-with-Incus-on-Fedora)を参照してください。
+
+これは Incus や Fedora の公式なプロジェクトでないことに注意してください。
+パッケージの問題は[こちら](https://github.com/ganto/copr-lxc4/issues)に報告してください。
 ```
 
 ```{group-tab} Gentoo
@@ -87,18 +105,6 @@ Incus に関連して 2 つのグループが作成されます:
 
 - **`openrc`**: `rc-service incus start`
 - **`systemd`**: `systemctl start incus`
-
-Incus を初期化します。これは新規インストールの後一度だけ必要です:
-
-    incus admin init
-
-あるいは
-
-    incus admin init --minimal
-
-で後者は選択のプロンプトを出さずに単にデフォルトの設定を使います。詳細は {ref}`initialize` を参照してください。
-
-あなたのユーザーでログインして `incus` コマンドで Incus を使い始めましょう。
 ```
 
 ```{group-tab} NixOS
@@ -117,6 +123,42 @@ Incus の初期化は手動で `incus admin init` を使ってもできますし
     users.users.YOUR_USERNAME.extraGroups = ["incus-admin"];
 
 NixOS 固有の問題については、パッケージレポジトリ内で[イシューを起票](https://github.com/NixOS/nixpkgs/issues/new/choose)してください。
+```
+
+```{group-tab} Ubuntu
+Ubuntu ユーザーには現在 2 つの選択肢があります。
+
+1. ネイティブの `incus` パッケージ
+
+    ネイティブの `incus` パッケージは現在 Ubuntu の開発用レポジトリ内で利用できます。
+    このパッケージは次回の Ubuntu 24.04 (noble) リリースに含まれる予定です。
+
+    それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
+
+1. Zabbly パッケージレポジトリ
+
+    [Zabbly](https://zabbly.com) は Ubuntu の LTS リリース (20.04 と 22.04) 用の最新でありサポート対象である Incus のパッケージを提供します。
+    これらのパッケージは Incus の全ての機能を使用するために必要なすべてを含んでいます。
+
+    最新のインストール手順はこちらを参照してください: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)
+```
+
+```{group-tab} Void Linux
+Incus と全ての依存ソフトウェアは Void Linux のレポジトリ内で `incus` として利用できます。
+
+Incus を以下のコマンドでインストールします:
+
+    xbps-install incus incus-client
+
+次に以下のコマンドでサービスを有効化し起動します:
+
+    ln -s /etc/sv/incus /var/service
+    ln -s /etc/sv/incus-user /var/service
+    sv up incus
+    sv up incus-user
+
+
+パッケージに問題があれば[こちら](https://github.com/void-linux/void-packages/issues)に報告してください。
 ```
 
 ````
@@ -140,13 +182,22 @@ IncusはmacOSのIncusクライアントのビルドを[Homebrew](https://brew.sh
 
 ```{group-tab} Windows
 
-Windows版のIncusクライアントは[Chocolatey](https://community.chocolatey.org/packages/incus)パッケージとして提供されています。
-インストールするためには以下のようにします。
+Windows版のIncusクライアントは[Chocolatey](https://community.chocolatey.org/packages/incus)と[Winget](https://github.com/microsoft/winget-cli)のパッケージとして提供されています。
+Chocolatey または Winget を使ってインストールするには、以下の手順に従ってください:
+
+**Chocolatey**
 
 1. [インストール手順](https://docs.chocolatey.org/en-us/choco/setup)に従ってChocolateyをインストールします。
-1. Incusクライアントをインストールします。
+1. Incusクライアントをインストールします:
 
         choco install incus
+
+**Winget**
+
+1. [インストール手順](https://learn.microsoft.com/en-us/windows/package-manager/winget/#install-winget)に従って Winget をインストールします。
+1. Incusクライアントをインストールします:
+
+        winget install LinuxContainers.Incus
 ```
 
 ````

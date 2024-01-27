@@ -2280,3 +2280,32 @@ syslog 形式のログメッセージを受信できる syslog ソケットを�
 ## `certificate_description`
 
 証明書に`description`フィールドを追加します。
+
+## `disk_io_bus_virtio_blk`
+
+`disk`デバイスに`virtio-blk`という値を追加し、アタッチしたディスクを`virtio-blk`バスに接続できるようにします。
+
+## `loki_config_instance`
+
+Loki イベントの`instance`フィールドをカスタマイズするための`loki.instance`設定キーを追加します。
+通常すでに`location`フィールドでカバーされるイベントを送信する個々のシステム名ではなくクラスターの名前を公開するのに使えます。
+
+## `instance_create_start`
+
+`POST /1.0/instances` APIに`start`フィールドを追加します。
+`true`に設定すると作成時にインスタンスが自動的に起動します。
+
+このシナリオでは、作成と起動は単一のバックグラウンドのオペレーションの一部になります。
+
+## `clustering_evacuation_stop_options`
+
+`cluster.evacuate` オプションに新しいオプションを追加します:
+
+* `stateful-stop` はインスタンスのレジュームやリストアの際に状態をディスクに保管します。
+* `force-stop` はインスタンスのシャットダウンを待たずに即座に停止します。
+
+## `boot_host_shutdown_action`
+
+これは`boot.host_shutdown_action`インスタンス設定キーを追加します。
+システムシャットダウンのデフォルトの`stop`の挙動をオーバーライドするのに使えます。
+`stop`、`stateful-stop`、`force-stop`の値をサポートします。
