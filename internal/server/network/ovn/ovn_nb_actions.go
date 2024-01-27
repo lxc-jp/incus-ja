@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ovsClient "github.com/ovn-org/libovsdb/client"
+	ovsModel "github.com/ovn-org/libovsdb/model"
 	"github.com/ovn-org/libovsdb/ovsdb"
 
 	"github.com/lxc/incus/internal/iprange"
@@ -1114,14 +1115,28 @@ func (o *NB) LogicalSwitchPortAdd(switchName OVNSwitch, portName OVNSwitchPort, 
 
 // LogicalSwitchPortIPs returns a list of IPs for a switch port.
 func (o *NB) LogicalSwitchPortIPs(portName OVNSwitchPort) ([]net.IP, error) {
-	addressesRaw, err := o.nbctl("--format=csv", "--no-headings", "--data=bare", "--column=addresses,dynamic_addresses", "find", "logical_switch_port", fmt.Sprintf("name=%s", string(portName)))
+	ctx := context.TODO()
+
+	lsp := ovnNB.LogicalSwitchPort{
+		Name: string(portName),
+	}
+
+	err := o.client.Get(ctx, &lsp)
 	if err != nil {
+		if err == ovsClient.ErrNotFound {
+			// Don't fail on missing port.
+			return []net.IP{}, nil
+		}
+
 		return nil, err
 	}
 
-	addresses := strings.Split(strings.Replace(strings.TrimSpace(addressesRaw), ",", " ", 1), " ")
-	ips := make([]net.IP, 0)
+	addresses := lsp.Addresses
+	if lsp.DynamicAddresses != nil {
+		addresses = append(addresses, strings.Split(*lsp.DynamicAddresses, " ")...)
+	}
 
+	ips := make([]net.IP, 0)
 	for _, address := range addresses {
 		ip := net.ParseIP(address)
 		if ip != nil {
@@ -1437,18 +1452,21 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 	operations := []ovsdb.Operation{}
 
 	// Get the chassis group.
-	haGroup := &ovnNB.HAChassisGroup{Name: string(haChassisGroupName)}
-	err := o.client.Get(ctx, haGroup)
+	haGroup := ovnNB.HAChassisGroup{
+		Name: string(haChassisGroupName),
+	}
+
+	err := o.client.Get(ctx, &haGroup)
 	if err != nil {
 		return err
 	}
 
 	// Look for the chassis in the group.
-	var haChassis *ovnNB.HAChassis
+	var haChassis ovnNB.HAChassis
 
 	for _, entry := range haGroup.HaChassis {
-		chassis := &ovnNB.HAChassis{UUID: entry}
-		err = o.client.Get(ctx, chassis)
+		chassis := ovnNB.HAChassis{UUID: entry}
+		err = o.client.Get(ctx, &chassis)
 		if err != nil {
 			return err
 		}
@@ -1459,15 +1477,15 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 		}
 	}
 
-	if haChassis == nil {
+	if haChassis.UUID == "" {
 		// No entry found, add a new one.
-		haChassis = &ovnNB.HAChassis{
+		haChassis = ovnNB.HAChassis{
 			UUID:        "chassis",
 			ChassisName: chassisID,
 			Priority:    int(priority),
 		}
 
-		createOps, err := o.client.Create(haChassis)
+		createOps, err := o.client.Create(&haChassis)
 		if err != nil {
 			return err
 		}
@@ -1475,8 +1493,11 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 		operations = append(operations, createOps...)
 
 		// Add the HA Chassis to the group.
-		haGroup.HaChassis = append(haGroup.HaChassis, "chassis")
-		updateOps, err := o.client.Where(haGroup).Update(haGroup)
+		updateOps, err := o.client.Where(&haGroup).Mutate(&haGroup, ovsModel.Mutation{
+			Field:   &haGroup.HaChassis,
+			Mutator: ovsdb.MutateOperationInsert,
+			Value:   []string{haChassis.UUID},
+		})
 		if err != nil {
 			return err
 		}
@@ -1485,7 +1506,7 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 	} else if haChassis.Priority != int(priority) {
 		// Found but wrong priority, correct it.
 		haChassis.Priority = int(priority)
-		updateOps, err := o.client.Where(haChassis).Update(haChassis)
+		updateOps, err := o.client.Where(&haChassis).Update(&haChassis)
 		if err != nil {
 			return err
 		}
@@ -1495,7 +1516,12 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 
 	// Apply the changes.
 	if len(operations) > 0 {
-		_, err := o.client.Transact(ctx, operations...)
+		resp, err := o.client.Transact(ctx, operations...)
+		if err != nil {
+			return err
+		}
+
+		_, err = ovsdb.CheckOperationResults(resp, operations)
 		if err != nil {
 			return err
 		}

@@ -23,6 +23,7 @@ type instance interface {
 	ExpandedConfig() map[string]string
 	Type() instancetype.Type
 	LogPath() string
+	RunPath() string
 	Path() string
 	DevicesPath() string
 }
@@ -199,6 +200,14 @@ func instanceProfile(sysOS *sys.OS, inst instance, extraBinaries []string) (stri
 			return "", err
 		}
 
+		agentPath := ""
+		if os.Getenv("INCUS_AGENT_PATH") != "" {
+			agentPath, err = filepath.EvalSymlinks(os.Getenv("INCUS_AGENT_PATH"))
+			if err != nil {
+				return "", err
+			}
+		}
+
 		execPath := localUtil.GetExecPath()
 		execPathFull, err := filepath.EvalSymlinks(execPath)
 		if err == nil {
@@ -211,11 +220,12 @@ func instanceProfile(sysOS *sys.OS, inst instance, extraBinaries []string) (stri
 			"extra_binaries": extraBinaries,
 			"libraryPath":    strings.Split(os.Getenv("LD_LIBRARY_PATH"), ":"),
 			"logPath":        inst.LogPath(),
+			"runPath":        inst.RunPath(),
 			"name":           InstanceProfileName(inst),
 			"path":           path,
 			"raw":            rawContent,
-			"userns":         sysOS.RunningInUserNS,
 			"ovmfPath":       ovmfPath,
+			"agentPath":      agentPath,
 		})
 		if err != nil {
 			return "", err

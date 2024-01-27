@@ -150,13 +150,14 @@ type Instance interface {
 	LogFilePath() string
 	ConsoleBufferLogPath() string
 	LogPath() string
+	RunPath() string
 	DevicesPath() string
 
 	// Storage.
 	StoragePool() (string, error)
 
 	// Migration.
-	CanMigrate() (bool, bool)
+	CanMigrate() string
 	MigrateSend(args MigrateSendArgs) error
 	MigrateReceive(args MigrateReceiveArgs) error
 
@@ -173,9 +174,9 @@ type Instance interface {
 type Container interface {
 	Instance
 
-	CurrentIdmap() (*idmap.IdmapSet, error)
-	DiskIdmap() (*idmap.IdmapSet, error)
-	NextIdmap() (*idmap.IdmapSet, error)
+	CurrentIdmap() (*idmap.Set, error)
+	DiskIdmap() (*idmap.Set, error)
+	NextIdmap() (*idmap.Set, error)
 	ConsoleLog(opts liblxc.ConsoleLogOptions) (string, error)
 	InsertSeccompUnixDevice(prefix string, m deviceConfig.Device, pid int) error
 	DevptsFd() (*os.File, error)

@@ -126,6 +126,10 @@ chown -R prometheus:prometheus /etc/prometheus/tls
 必要な設定は以下のようになります:
 
 ```yaml
+global:
+  # デフォルトでどれぐらい頻繁にターゲットからデータ収集するか。Prometheus のデフォルト値は 1m です。
+  scrape_interval: 15s
+
 scrape_configs:
   - job_name: incus
     metrics_path: '/1.0/metrics'
@@ -143,6 +147,11 @@ scrape_configs:
 
 ````{note}
 Incus サーバ証明書が`targets`リスト内で使用するのと同じホスト名を含まない場合は`server_name`の指定は必須です。
+* `scrape_interval` は Grafana Prometheus データソースではデフォルトで 15s と想定されています。
+別の`scrape_interval`の値を使う場合、Prometheus の設定と Grafana Prometheus データソースの設定の両方を変更する必要があります。
+そうしないと Grafana の`$__rate_interval`の値が正しく計算されず、それを使ったクエリで`no data`というレスポンスを生じるかもしれません。
+
+* Incus のサーバー証明書に`targets`リストで使用されるのと同じホスト名を含まない場合、`server_name`を指定する必要があります。
 これを確認するには、`server.crt`を開いて Subject Alternative Name (SAN) セクションを確認してください。
 
 例えば、`server.crt` が以下の内容を持つとします:
@@ -162,6 +171,10 @@ Subject Alternative Name (SAN) リストが `targets` リスト（`foo.example.c
 以下は複数の Incus サーバーのメトリックを収集するために複数のジョブを使用する `prometheus.yaml` の設定例です:
 
 ```yaml
+global:
+  # デフォルトでどれぐらい頻繁にターゲットからデータ収集するか。Prometheus のデフォルト値は 1m です。
+  scrape_interval: 15s
+
 scrape_configs:
   # abydos, langara, orilla は最初にabydosからブートストラップした単一クラスタで
   # (ここでは`hdc`と呼びます)、このため3ノードで`ca_file`と`server_name`を共有しています。

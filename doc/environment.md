@@ -28,6 +28,7 @@
 
 名前                            | 説明
 :---                            | :----
+`INCUS_AGENT_PATH`              | `incus-agent` のビルドを含むディレクトリのパス
 `INCUS_CLUSTER_UPDATE`          | クラスタアップデートの際に呼ぶスクリプト
 `INCUS_DEVMONITOR_DIR`          | デバイスモニターでモニターするパス。主にテスト用。
 `INCUS_DOCUMENTATION`           | ウェブサーバーで配信するドキュメントのパス

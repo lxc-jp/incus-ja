@@ -122,7 +122,13 @@ func createFromImage(s *state.State, r *http.Request, p api.Project, profiles []
 			return err
 		}
 
-		return instanceCreateFromImage(s, r, img, args, op)
+		// Actually create the instance.
+		err = instanceCreateFromImage(s, r, img, args, op)
+		if err != nil {
+			return err
+		}
+
+		return instanceCreateFinish(s, req, args)
 	}
 
 	resources := map[string][]api.URL{}
@@ -173,8 +179,13 @@ func createFromNone(s *state.State, r *http.Request, projectName string, profile
 	}
 
 	run := func(op *operations.Operation) error {
+		// Actually create the instance.
 		_, err := instanceCreateAsEmpty(s, args)
-		return err
+		if err != nil {
+			return err
+		}
+
+		return instanceCreateFinish(s, req, args)
 	}
 
 	resources := map[string][]api.URL{}
@@ -377,7 +388,8 @@ func createFromMigration(s *state.State, r *http.Request, projectName string, pr
 
 		instOp.Done(nil) // Complete operation that was created earlier, to release lock.
 		runRevert.Success()
-		return nil
+
+		return instanceCreateFinish(s, req, args)
 	}
 
 	resources := map[string][]api.URL{}
@@ -444,7 +456,13 @@ func createFromCopy(s *state.State, r *http.Request, projectName string, profile
 				return clusterCopyContainerInternal(s, r, source, projectName, profiles, req)
 			}
 
-			_, pool, _, err := s.DB.Cluster.GetStoragePoolInAnyState(sourcePoolName)
+			var pool *api.StoragePool
+
+			err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				_, pool, _, err = tx.GetStoragePoolInAnyState(ctx, sourcePoolName)
+
+				return err
+			})
 			if err != nil {
 				err = fmt.Errorf("Failed to fetch instance's pool info: %w", err)
 				return response.SmartError(err)
@@ -529,6 +547,7 @@ func createFromCopy(s *state.State, r *http.Request, projectName string, profile
 	}
 
 	run := func(op *operations.Operation) error {
+		// Actually create the instance.
 		_, err := instanceCreateAsCopy(s, instanceCreateAsCopyOpts{
 			sourceInstance:       source,
 			targetInstance:       args,
@@ -541,7 +560,7 @@ func createFromCopy(s *state.State, r *http.Request, projectName string, profile
 			return err
 		}
 
-		return nil
+		return instanceCreateFinish(s, req, args)
 	}
 
 	resources := map[string][]api.URL{}
@@ -628,8 +647,9 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 	}
 
 	// Check project permissions.
+	var req api.InstancesPost
 	err = s.DB.Cluster.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
-		req := api.InstancesPost{
+		req = api.InstancesPost{
 			InstancePut: bInfo.Config.Container.InstancePut,
 			Name:        bInfo.Name,
 			Source:      api.InstanceSource{}, // Only relevant for "copy" or "migration", but may not be nil.
@@ -664,8 +684,12 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 		"snapshots": bInfo.Snapshots,
 	})
 
-	// Check storage pool exists.
-	_, _, _, err = s.DB.Cluster.GetStoragePoolInAnyState(bInfo.Pool)
+	err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		// Check storage pool exists.
+		_, _, _, err = tx.GetStoragePoolInAnyState(ctx, bInfo.Pool)
+
+		return err
+	})
 	if response.IsNotFoundError(err) {
 		// The storage pool doesn't exist. If backup is in binary format (so we cannot alter
 		// the backup.yaml) or the pool has been specified directly from the user restoring
@@ -674,8 +698,14 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 			return response.InternalError(fmt.Errorf("Storage pool not found: %w", err))
 		}
 
-		// Otherwise try and restore to the project's default profile pool.
-		_, profile, err := s.DB.Cluster.GetProfile(bInfo.Project, "default")
+		var profile *api.Profile
+
+		err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			// Otherwise try and restore to the project's default profile pool.
+			_, profile, err = tx.GetProfile(ctx, bInfo.Project, "default")
+
+			return err
+		})
 		if err != nil {
 			return response.InternalError(fmt.Errorf("Failed to get default profile: %w", err))
 		}
@@ -743,7 +773,8 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 		}
 
 		runRevert.Success()
-		return nil
+
+		return instanceCreateFinish(s, &req, db.InstanceArgs{Name: bInfo.Name, Project: bInfo.Project})
 	}
 
 	resources := map[string][]api.URL{}
@@ -1150,7 +1181,11 @@ func instanceFindStoragePool(s *state.State, projectName string, req *api.Instan
 
 	// Handle copying/moving between two storage-api instances.
 	if storagePool != "" {
-		_, err := s.DB.Cluster.GetStoragePoolID(storagePool)
+		err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			_, err := tx.GetStoragePoolID(ctx, storagePool)
+
+			return err
+		})
 		if response.IsNotFoundError(err) {
 			storagePool = ""
 			// Unset the local root disk device storage pool if not
@@ -1161,25 +1196,41 @@ func instanceFindStoragePool(s *state.State, projectName string, req *api.Instan
 
 	// If we don't have a valid pool yet, look through profiles
 	if storagePool == "" {
-		for _, pName := range req.Profiles {
-			_, p, err := s.DB.Cluster.GetProfile(projectName, pName)
-			if err != nil {
-				return "", "", "", nil, response.SmartError(err)
+		err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			for _, pName := range req.Profiles {
+				_, p, err := tx.GetProfile(ctx, projectName, pName)
+				if err != nil {
+					return err
+				}
+
+				k, v, _ := internalInstance.GetRootDiskDevice(p.Devices)
+				if k != "" && v["pool"] != "" {
+					// Keep going as we want the last one in the profile chain
+					storagePool = v["pool"]
+					storagePoolProfile = pName
+				}
 			}
 
-			k, v, _ := internalInstance.GetRootDiskDevice(p.Devices)
-			if k != "" && v["pool"] != "" {
-				// Keep going as we want the last one in the profile chain
-				storagePool = v["pool"]
-				storagePoolProfile = pName
-			}
+			return nil
+		})
+		if err != nil {
+			return "", "", "", nil, response.SmartError(err)
 		}
 	}
 
 	// If there is just a single pool in the database, use that
 	if storagePool == "" {
 		logger.Debug("No valid storage pool in the container's local root disk device and profiles found")
-		pools, err := s.DB.Cluster.GetStoragePoolNames()
+
+		var pools []string
+
+		err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			var err error
+
+			pools, err = tx.GetStoragePoolNames(ctx)
+
+			return err
+		})
 		if err != nil {
 			if response.IsNotFoundError(err) {
 				return "", "", "", nil, response.BadRequest(fmt.Errorf("This instance does not have any storage pools configured"))
@@ -1278,4 +1329,18 @@ func clusterCopyContainerInternal(s *state.State, r *http.Request, source instan
 
 	// Run the migration
 	return createFromMigration(s, nil, projectName, profiles, req)
+}
+
+func instanceCreateFinish(s *state.State, req *api.InstancesPost, args db.InstanceArgs) error {
+	if req == nil || !req.Start {
+		return nil
+	}
+
+	// Start the instance.
+	inst, err := instance.LoadByProjectAndName(s, args.Project, args.Name)
+	if err != nil {
+		return fmt.Errorf("Failed to load the instance: %w", err)
+	}
+
+	return inst.Start(false)
 }

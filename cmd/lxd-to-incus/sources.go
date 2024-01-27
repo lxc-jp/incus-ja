@@ -1,20 +1,20 @@
 package main
 
 import (
-	"github.com/canonical/lxd/client"
+	"github.com/lxc/incus/client"
 )
 
-type Source interface {
-	Present() bool
-	Stop() error
-	Start() error
-	Purge() error
-	Connect() (lxd.InstanceServer, error)
-	Paths() (*DaemonPaths, error)
-	Name() string
+type source interface {
+	present() bool
+	stop() error
+	start() error
+	purge() error
+	connect() (incus.InstanceServer, error)
+	paths() (*daemonPaths, error)
+	name() string
 }
 
-var sources = []Source{
+var sources = []source{
 	&srcSnap{},
 	&srcDeb{},
 	&srcCOPR{},

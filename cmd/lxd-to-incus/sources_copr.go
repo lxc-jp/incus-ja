@@ -1,15 +1,14 @@
 package main
 
 import (
-	"github.com/canonical/lxd/client"
-
+	"github.com/lxc/incus/client"
 	"github.com/lxc/incus/shared/subprocess"
 	"github.com/lxc/incus/shared/util"
 )
 
 type srcCOPR struct{}
 
-func (s *srcCOPR) Present() bool {
+func (s *srcCOPR) present() bool {
 	// Validate that the RPM package is installed.
 	_, err := subprocess.RunCommand("rpm", "-q", "lxd")
 	if err != nil {
@@ -23,33 +22,33 @@ func (s *srcCOPR) Present() bool {
 	return true
 }
 
-func (s *srcCOPR) Name() string {
+func (s *srcCOPR) name() string {
 	return "COPR package"
 }
 
-func (s *srcCOPR) Stop() error {
+func (s *srcCOPR) stop() error {
 	_, err := subprocess.RunCommand("systemctl", "stop", "lxd-containers.service", "lxd.service", "lxd.socket")
 	return err
 }
 
-func (s *srcCOPR) Start() error {
+func (s *srcCOPR) start() error {
 	_, err := subprocess.RunCommand("systemctl", "start", "lxd.socket", "lxd-containers.service")
 	return err
 }
 
-func (s *srcCOPR) Purge() error {
+func (s *srcCOPR) purge() error {
 	_, err := subprocess.RunCommand("dnf", "remove", "-y", "lxd")
 	return err
 }
 
-func (s *srcCOPR) Connect() (lxd.InstanceServer, error) {
-	return lxd.ConnectLXDUnix("/run/lxd.socket", nil)
+func (s *srcCOPR) connect() (incus.InstanceServer, error) {
+	return incus.ConnectIncusUnix("/run/lxd.socket", &incus.ConnectionArgs{SkipGetServer: true})
 }
 
-func (s *srcCOPR) Paths() (*DaemonPaths, error) {
-	return &DaemonPaths{
-		Daemon: "/var/lib/lxd/",
-		Logs:   "/var/log/lxd/",
-		Cache:  "/var/cache/lxd/",
+func (s *srcCOPR) paths() (*daemonPaths, error) {
+	return &daemonPaths{
+		daemon: "/var/lib/lxd",
+		logs:   "/var/log/lxd",
+		cache:  "/var/cache/lxd",
 	}, nil
 }

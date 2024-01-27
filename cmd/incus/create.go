@@ -74,11 +74,11 @@ func (c *cmdCreate) Run(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	_, _, err = c.create(c.global.conf, args)
+	_, _, err = c.create(c.global.conf, args, false)
 	return err
 }
 
-func (c *cmdCreate) create(conf *config.Config, args []string) (incus.InstanceServer, string, error) {
+func (c *cmdCreate) create(conf *config.Config, args []string, launch bool) (incus.InstanceServer, string, error) {
 	var name string
 	var image string
 	var remote string
@@ -145,10 +145,6 @@ func (c *cmdCreate) create(conf *config.Config, args []string) (incus.InstanceSe
 		return nil, "", err
 	}
 
-	if c.flagTarget != "" {
-		d = d.UseTarget(c.flagTarget)
-	}
-
 	// Overwrite profiles.
 	if c.flagProfile != nil {
 		profiles = c.flagProfile
@@ -157,10 +153,18 @@ func (c *cmdCreate) create(conf *config.Config, args []string) (incus.InstanceSe
 	}
 
 	if !c.global.flagQuiet {
-		if name == "" {
-			fmt.Printf(i18n.G("Creating the instance") + "\n")
+		if d.HasExtension("instance_create_start") && launch {
+			if name == "" {
+				fmt.Printf(i18n.G("Launching the instance") + "\n")
+			} else {
+				fmt.Printf(i18n.G("Launching %s")+"\n", name)
+			}
 		} else {
-			fmt.Printf(i18n.G("Creating %s")+"\n", name)
+			if name == "" {
+				fmt.Printf(i18n.G("Creating the instance") + "\n")
+			} else {
+				fmt.Printf(i18n.G("Creating %s")+"\n", name)
+			}
 		}
 	}
 
@@ -240,11 +244,17 @@ func (c *cmdCreate) create(conf *config.Config, args []string) (incus.InstanceSe
 		instanceDBType = api.InstanceTypeVM
 	}
 
+	// Set the target if provided.
+	if c.flagTarget != "" {
+		d = d.UseTarget(c.flagTarget)
+	}
+
 	// Setup instance creation request
 	req := api.InstancesPost{
 		Name:         name,
 		InstanceType: c.flagType,
 		Type:         instanceDBType,
+		Start:        launch,
 	}
 
 	req.Config = configMap
