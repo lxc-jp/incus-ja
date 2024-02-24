@@ -35,14 +35,15 @@ Incus の `dir` ドライバーは完全に機能し、他のドライバーと�
 
 ## ストレージボリューム設定
 
-キー                 | 型     | 条件               | デフォルト値                                 | 説明
-:--                  | :---   | :--------          | :------                                      | :----------
-`security.shifted`   | bool   | カスタムボリューム | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
-`security.unmapped`  | bool   | カスタムボリューム | `volume.security.unmapped` と同じか `false`  | ボリュームの ID マッピングを無効にする
-`size`               | string | 適切なドライバー   | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
-`snapshots.expiry`   | string | カスタムボリューム | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
-`snapshots.pattern`  | string | カスタムボリューム | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
-`snapshots.schedule` | string | カスタムボリューム | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
+キー                 | 型     | 条件                       | デフォルト値                                 | 説明
+:--                  | :---   | :--------                  | :------                                      | :----------
+`security.shared`    | bool   | カスタムブロックボリューム | `volume.security.shared` と同じか `false`    | 複数のインスタンスでのボリュームの共有を有効にする
+`security.shifted`   | bool   | カスタムボリューム         | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
+`security.unmapped`  | bool   | カスタムボリューム         | `volume.security.unmapped` と同じか `false`  | ボリュームの ID マッピングを無効にする
+`size`               | string | 適切なドライバー           | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
+`snapshots.expiry`   | string | カスタムボリューム         | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
+`snapshots.pattern`  | string | カスタムボリューム         | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
+`snapshots.schedule` | string | カスタムボリューム         | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
 
 [^*]: {{snapshot_pattern_detail}}
 

@@ -3,7 +3,7 @@
 (requirements-go)=
 ## Go
 
-Incus は Go 1.20 以上を必要とし、Go 言語のコンパイラのみでテストされています。
+Incus は Go 1.21 以上を必要とし、Go 言語のコンパイラのみでテストされています。
 
 ビルドには最低 2GB の RAM を推奨します。
 
@@ -22,7 +22,7 @@ Incus には以下の機能をサポートするカーネルが必要です。
 
 * Namespaces （`user`と`cgroup`）
 * AppArmor （mount mediation に対する Ubuntu パッチを含む）
-* Control Groups （`blkio`、`cpuset`、`devices`、`memory`、`pids`と`net_prio`）
+* Control Groups （`blkio`、`cpuset`、`devices`、`memory`、`pids`）
 * CRIU (正確な詳細は CRIU のアップストリームを参照のこと)
 
 さらに使用している Incus のバージョンで必要とされるほかのカーネルの機能も必要です。
