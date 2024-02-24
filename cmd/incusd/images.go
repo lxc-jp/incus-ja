@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -178,7 +179,7 @@ func compressFile(compress string, infile io.Reader, outfile io.Writer) error {
 			args = append(args, fields[1:]...)
 		}
 
-		if util.ValueInSlice(fields[0], reproducible) {
+		if slices.Contains(reproducible, fields[0]) {
 			args = append(args, "-n")
 		}
 
@@ -1076,13 +1077,13 @@ func imagesPost(d *Daemon, r *http.Request) response.Response {
 		return createTokenResponse(s, r, projectName, req.Source.Fingerprint, metadata)
 	}
 
-	if !imageUpload && !util.ValueInSlice(req.Source.Type, []string{"container", "instance", "virtual-machine", "snapshot", "image", "url"}) {
+	if !imageUpload && !slices.Contains([]string{"container", "instance", "virtual-machine", "snapshot", "image", "url"}, req.Source.Type) {
 		cleanup(builddir, post)
 		return response.InternalError(fmt.Errorf("Invalid images JSON"))
 	}
 
 	/* Forward requests for containers on other nodes */
-	if !imageUpload && util.ValueInSlice(req.Source.Type, []string{"container", "instance", "virtual-machine", "snapshot"}) {
+	if !imageUpload && slices.Contains([]string{"container", "instance", "virtual-machine", "snapshot"}, req.Source.Type) {
 		name := req.Source.Name
 		if name != "" {
 			_, err = post.Seek(0, io.SeekStart)
@@ -1339,30 +1340,46 @@ func getImageMetadata(fname string) (*api.ImageMetadata, string, error) {
 	return &result, imageType, nil
 }
 
-func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectName string, public bool, clauses *filter.ClauseSet, hasPermission auth.PermissionChecker) (any, error) {
+func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectName string, public bool, clauses *filter.ClauseSet, hasPermission auth.PermissionChecker, allProjects bool) (any, error) {
 	mustLoadObjects := recursion || (clauses != nil && len(clauses.Clauses) > 0)
 
-	fingerprints, err := tx.GetImagesFingerprints(ctx, projectName, public)
-	if err != nil {
-		return err, err
+	imagesProjectsMap := map[string][]string{}
+	if allProjects {
+		var err error
+
+		imagesProjectsMap, err = tx.GetImages(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		fingerprints, err := tx.GetImagesFingerprints(ctx, projectName, public)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, fp := range fingerprints {
+			imagesProjectsMap[fp] = []string{projectName}
+		}
 	}
 
 	var resultString []string
 	var resultMap []*api.Image
 
 	if recursion {
-		resultMap = make([]*api.Image, 0, len(fingerprints))
+		resultMap = make([]*api.Image, 0, len(imagesProjectsMap))
 	} else {
-		resultString = make([]string, 0, len(fingerprints))
+		resultString = make([]string, 0, len(imagesProjectsMap))
 	}
 
-	for _, fingerprint := range fingerprints {
-		image, err := doImageGet(ctx, tx, projectName, fingerprint, public)
+	for fingerprint, projects := range imagesProjectsMap {
+		curProjectName := projects[0]
+
+		image, err := doImageGet(ctx, tx, curProjectName, fingerprint, public)
 		if err != nil {
 			continue
 		}
 
-		if !image.Public && !hasPermission(auth.ObjectImage(projectName, fingerprint)) {
+		if !image.Public && !hasPermission(auth.ObjectImage(curProjectName, fingerprint)) {
 			continue
 		}
 
@@ -1415,6 +1432,10 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //      description: Collection filter
 //      type: string
 //      example: default
+//    - in: query
+//      name: all-projects
+//      description: Retrieve images from all projects
+//      type: boolean
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -1469,6 +1490,10 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //      description: Collection filter
 //      type: string
 //      example: default
+//    - in: query
+//      name: all-projects
+//      description: Retrieve images from all projects
+//      type: boolean
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -1518,6 +1543,10 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //      description: Collection filter
 //      type: string
 //      example: default
+//    - in: query
+//      name: all-projects
+//      description: Retrieve images from all projects
+//      type: boolean
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -1572,6 +1601,11 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //	    description: Collection filter
 //	    type: string
 //	    example: default
+//	  - in: query
+//	    name: all-projects
+//	    description: Retrieve images from all projects
+//	    type: boolean
+//	    example: default
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -1602,7 +1636,13 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //	    $ref: "#/responses/InternalServerError"
 func imagesGet(d *Daemon, r *http.Request) response.Response {
 	projectName := request.ProjectParam(r)
+	allProjects := util.IsTrue(r.FormValue("all-projects"))
 	filterStr := r.FormValue("filter")
+
+	// ProjectParam returns default if not set
+	if allProjects && projectName != api.ProjectDefaultName {
+		return response.BadRequest(fmt.Errorf("Cannot specify a project when requesting all projects"))
+	}
 
 	s := d.State()
 
@@ -1620,7 +1660,7 @@ func imagesGet(d *Daemon, r *http.Request) response.Response {
 
 	var result any
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
-		result, err = doImagesGet(ctx, tx, localUtil.IsRecursionRequest(r), projectName, public, clauses, hasPermission)
+		result, err = doImagesGet(ctx, tx, localUtil.IsRecursionRequest(r), projectName, public, clauses, hasPermission, allProjects)
 		if err != nil {
 			return err
 		}
@@ -1855,7 +1895,7 @@ func distributeImage(ctx context.Context, s *state.State, nodes []string, oldFin
 
 			// Add the volume to the list if the pool is backed by remote
 			// storage as only then the volumes are shared.
-			if util.ValueInSlice(pool.Driver, db.StorageRemoteDriverNames()) {
+			if slices.Contains(db.StorageRemoteDriverNames(), pool.Driver) {
 				imageVolumes = append(imageVolumes, vol)
 			}
 		}
@@ -1947,7 +1987,7 @@ func distributeImage(ctx context.Context, s *state.State, nodes []string, oldFin
 				if err != nil {
 					logger.Error("Failed to get storage pool info", logger.Ctx{"err": err, "pool": fields[0]})
 				} else {
-					if util.ValueInSlice(pool.Driver, db.StorageRemoteDriverNames()) {
+					if slices.Contains(db.StorageRemoteDriverNames(), pool.Driver) {
 						imageVolumes = append(imageVolumes, vol)
 					}
 				}
@@ -2364,7 +2404,7 @@ func pruneLeftoverImages(s *state.State) {
 		// Check and delete leftovers
 		for _, entry := range entries {
 			fp := strings.Split(entry.Name(), ".")[0]
-			if !util.ValueInSlice(fp, images) {
+			if !slices.Contains(images, fp) {
 				err = os.RemoveAll(internalUtil.VarPath("images", entry.Name()))
 				if err != nil {
 					return fmt.Errorf("Unable to remove leftover image: %v: %w", entry.Name(), err)

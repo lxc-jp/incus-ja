@@ -41,6 +41,14 @@ incus launch images:ubuntu/22.04 v1 --vm -c limits.cpu=4 -c limits.memory=4GiB
 	cmd.Flags().StringVar(&c.flagConsole, "console", "", i18n.G("Immediately attach to the console")+"``")
 	cmd.Flags().Lookup("console").NoOptDefVal = "console"
 
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return c.global.cmpImages(toComplete)
+	}
+
 	return cmd
 }
 
@@ -61,6 +69,14 @@ func (c *cmdLaunch) Run(cmd *cobra.Command, args []string) error {
 
 	// Check if the instance was started by the server.
 	if d.HasExtension("instance_create_start") {
+		// Handle console attach
+		if c.flagConsole != "" {
+			console := cmdConsole{}
+			console.global = c.global
+			console.flagType = c.flagConsole
+			return console.Console(d, name)
+		}
+
 		return nil
 	}
 

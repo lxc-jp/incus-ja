@@ -26,8 +26,8 @@ const (
 	MissingCGroupHugetlbController
 	// MissingCGroupMemoryController represents the missing GCgroup memory controller warning.
 	MissingCGroupMemoryController
-	// MissingCGroupNetworkPriorityController represents the missing GCgroup network priority controller warning.
-	MissingCGroupNetworkPriorityController
+	// Spacer where MissingCGroupNetworkPriorityController used to be.
+	_
 	// MissingCGroupPidsController represents the missing GCgroup pids controller warning.
 	MissingCGroupPidsController
 	// MissingCGroupMemorySwapAccounting represents the missing GCgroup memory swap accounting warning.
@@ -60,31 +60,30 @@ const (
 
 // TypeNames associates a warning code to its name.
 var TypeNames = map[Type]string{
-	Undefined:                              "Undefined warning",
-	MissingCGroupBlkio:                     "Couldn't find the CGroup blkio",
-	MissingCGroupBlkioWeight:               "Couldn't find the CGroup blkio.weight",
-	MissingCGroupCPUController:             "Couldn't find the CGroup CPU controller",
-	MissingCGroupCPUsetController:          "Couldn't find the CGroup CPUset controller",
-	MissingCGroupCPUacctController:         "Couldn't find the CGroup CPUacct controller",
-	MissingCGroupDevicesController:         "Couldn't find the CGroup devices controller",
-	MissingCGroupFreezerController:         "Couldn't find the CGroup freezer controller",
-	MissingCGroupHugetlbController:         "Couldn't find the CGroup hugetlb controller",
-	MissingCGroupMemoryController:          "Couldn't find the CGroup memory controller",
-	MissingCGroupNetworkPriorityController: "Couldn't find the CGroup network priority controller",
-	MissingCGroupPidsController:            "Couldn't find the CGroup pids controller",
-	MissingCGroupMemorySwapAccounting:      "Couldn't find the CGroup memory swap accounting",
-	ClusterTimeSkew:                        "Time skew detected between leader and local",
-	AppArmorNotAvailable:                   "AppArmor support has been disabled",
-	MissingVirtiofsd:                       "Missing virtiofsd",
-	AppArmorDisabledDueToRawDnsmasq:        "Skipping AppArmor for dnsmasq due to raw.dnsmasq being set",
-	LargerIPv6PrefixThanSupported:          "IPv6 networks with a prefix larger than 64 aren't properly supported by dnsmasq",
-	ProxyBridgeNetfilterNotEnabled:         "Proxy bridge netfilter not enabled",
-	NetworkUnvailable:                      "Network unavailable",
-	OfflineClusterMember:                   "Offline cluster member",
-	InstanceAutostartFailure:               "Failed to autostart instance",
-	InstanceTypeNotOperational:             "Instance type not operational",
-	StoragePoolUnvailable:                  "Storage pool unavailable",
-	UnableToUpdateClusterCertificate:       "Unable to update cluster certificate",
+	Undefined:                         "Undefined warning",
+	MissingCGroupBlkio:                "Couldn't find the CGroup blkio",
+	MissingCGroupBlkioWeight:          "Couldn't find the CGroup blkio.weight",
+	MissingCGroupCPUController:        "Couldn't find the CGroup CPU controller",
+	MissingCGroupCPUsetController:     "Couldn't find the CGroup CPUset controller",
+	MissingCGroupCPUacctController:    "Couldn't find the CGroup CPUacct controller",
+	MissingCGroupDevicesController:    "Couldn't find the CGroup devices controller",
+	MissingCGroupFreezerController:    "Couldn't find the CGroup freezer controller",
+	MissingCGroupHugetlbController:    "Couldn't find the CGroup hugetlb controller",
+	MissingCGroupMemoryController:     "Couldn't find the CGroup memory controller",
+	MissingCGroupPidsController:       "Couldn't find the CGroup pids controller",
+	MissingCGroupMemorySwapAccounting: "Couldn't find the CGroup memory swap accounting",
+	ClusterTimeSkew:                   "Time skew detected between leader and local",
+	AppArmorNotAvailable:              "AppArmor support has been disabled",
+	MissingVirtiofsd:                  "Missing virtiofsd",
+	AppArmorDisabledDueToRawDnsmasq:   "Skipping AppArmor for dnsmasq due to raw.dnsmasq being set",
+	LargerIPv6PrefixThanSupported:     "IPv6 networks with a prefix larger than 64 aren't properly supported by dnsmasq",
+	ProxyBridgeNetfilterNotEnabled:    "Proxy bridge netfilter not enabled",
+	NetworkUnvailable:                 "Network unavailable",
+	OfflineClusterMember:              "Offline cluster member",
+	InstanceAutostartFailure:          "Failed to autostart instance",
+	InstanceTypeNotOperational:        "Instance type not operational",
+	StoragePoolUnvailable:             "Storage pool unavailable",
+	UnableToUpdateClusterCertificate:  "Unable to update cluster certificate",
 }
 
 // Severity returns the severity of the warning type.
@@ -109,8 +108,6 @@ func (t Type) Severity() Severity {
 	case MissingCGroupHugetlbController:
 		return SeverityLow
 	case MissingCGroupMemoryController:
-		return SeverityLow
-	case MissingCGroupNetworkPriorityController:
 		return SeverityLow
 	case MissingCGroupPidsController:
 		return SeverityLow

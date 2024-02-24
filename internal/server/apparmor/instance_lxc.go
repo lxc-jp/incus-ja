@@ -33,7 +33,9 @@ profile "{{ .name }}" flags=(attach_disconnected,mediate_deleted) {
 
   # Handle binfmt
   mount fstype=binfmt_misc -> /proc/sys/fs/binfmt_misc/,
+{{- if not .kernel_binfmt }}
   deny /proc/sys/fs/binfmt_misc/{,**} rwklx,
+{{- end }}
 
   # Handle cgroupfs
   mount options=(ro,nosuid,nodev,noexec,remount,strictatime) -> /sys/fs/cgroup/,
@@ -504,11 +506,12 @@ profile "{{ .name }}" flags=(attach_disconnected,mediate_deleted) {
   mount options=(rw,unbindable) -> **,
   mount options=(rw,runbindable) -> **,
 
-  # Allow all bind-mounts
-  mount options=(rw,bind) / -> /**,
-  mount options=(rw,bind) /** -> /**,
-  mount options=(rw,rbind) / -> /**,
-  mount options=(rw,rbind) /** -> /**,
+  # Allow all bind-mounts.
+  mount options=(rw,bind) -> /**,
+  mount options=(rw,rbind) -> /**,
+
+  # Allow all move-mounts.
+  mount options=(rw,move) -> /**,
 
   # Allow common combinations of bind/remount
   # NOTE: AppArmor bug effectively turns those into wildcards mount allow
