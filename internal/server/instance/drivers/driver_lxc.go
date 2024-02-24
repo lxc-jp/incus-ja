@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -795,7 +797,6 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 	bindMounts := []string{
 		"/dev/fuse",
 		"/dev/net/tun",
-		"/proc/sys/fs/binfmt_misc",
 		"/sys/firmware/efi/efivars",
 		"/sys/fs/fuse/connections",
 		"/sys/fs/pstore",
@@ -803,6 +804,11 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		"/sys/kernel/debug",
 		"/sys/kernel/security",
 		"/sys/kernel/tracing",
+	}
+
+	// Handle unprivileged binfmt_misc.
+	if d.IsPrivileged() || !d.state.OS.UnprivBinfmt {
+		bindMounts = append(bindMounts, "/proc/sys/fs/binfmt_misc")
 	}
 
 	// Pass in /dev/zfs to the container if delegation is supported on the system.
@@ -1653,7 +1659,7 @@ func (d *lxc) deviceDetachNIC(configCopy map[string]string, netIF []deviceConfig
 		}
 
 		// If interface doesn't exist inside container, cannot proceed.
-		if !util.ValueInSlice(configCopy["name"], ifaces) {
+		if !slices.Contains(ifaces, configCopy["name"]) {
 			return nil
 		}
 
@@ -2219,7 +2225,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			}
 
 			for _, mount := range runConf.Mounts {
-				if util.ValueInSlice("propagation", mount.Opts) && !liblxc.RuntimeLiblxcVersionAtLeast(liblxc.Version(), 3, 0, 0) {
+				if slices.Contains(mount.Opts, "propagation") && !liblxc.RuntimeLiblxcVersionAtLeast(liblxc.Version(), 3, 0, 0) {
 					return "", nil, fmt.Errorf("Failed to setup device mount %q: %w", dev.Name(), fmt.Errorf("liblxc 3.0 is required for mount propagation configuration"))
 				}
 
@@ -2910,7 +2916,7 @@ func (d *lxc) onStopNS(args map[string]string) error {
 	netns := args["netns"]
 
 	// Validate target.
-	if !util.ValueInSlice(target, []string{"stop", "reboot"}) {
+	if !slices.Contains([]string{"stop", "reboot"}, target) {
 		d.logger.Error("Container sent invalid target to OnStopNS", logger.Ctx{"target": target})
 		return fmt.Errorf("Invalid stop target %q", target)
 	}
@@ -2933,7 +2939,7 @@ func (d *lxc) onStop(args map[string]string) error {
 	target := args["target"]
 
 	// Validate target
-	if !util.ValueInSlice(target, []string{"stop", "reboot"}) {
+	if !slices.Contains([]string{"stop", "reboot"}, target) {
 		d.logger.Error("Container sent invalid target to OnStop", logger.Ctx{"target": target})
 		return fmt.Errorf("Invalid stop target: %s", target)
 	}
@@ -4130,11 +4136,11 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 	checkedProfiles := []string{}
 	for _, profile := range args.Profiles {
-		if !util.ValueInSlice(profile.Name, profiles) {
+		if !slices.Contains(profiles, profile.Name) {
 			return fmt.Errorf("Requested profile '%s' doesn't exist", profile.Name)
 		}
 
-		if util.ValueInSlice(profile.Name, checkedProfiles) {
+		if slices.Contains(checkedProfiles, profile.Name) {
 			return fmt.Errorf("Duplicate profile found in request")
 		}
 
@@ -4237,7 +4243,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 	changedConfig := []string{}
 	for key := range oldExpandedConfig {
 		if oldExpandedConfig[key] != d.expandedConfig[key] {
-			if !util.ValueInSlice(key, changedConfig) {
+			if !slices.Contains(changedConfig, key) {
 				changedConfig = append(changedConfig, key)
 			}
 		}
@@ -4245,7 +4251,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 	for key := range d.expandedConfig {
 		if oldExpandedConfig[key] != d.expandedConfig[key] {
-			if !util.ValueInSlice(key, changedConfig) {
+			if !slices.Contains(changedConfig, key) {
 				changedConfig = append(changedConfig, key)
 			}
 		}
@@ -4307,7 +4313,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 		}
 
 		for _, k := range changedConfig {
-			if !util.ValueInSlice(k, protectedKeys) {
+			if !slices.Contains(protectedKeys, k) {
 				continue
 			}
 
@@ -4353,7 +4359,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 	}
 
 	// If raw.lxc changed, re-validate the config.
-	if util.ValueInSlice("raw.lxc", changedConfig) && d.expandedConfig["raw.lxc"] != "" {
+	if slices.Contains(changedConfig, "raw.lxc") && d.expandedConfig["raw.lxc"] != "" {
 		// Get a new liblxc instance.
 		cc, err := liblxc.NewContainer(d.name, d.state.OS.LxcPath)
 		if err != nil {
@@ -4372,14 +4378,14 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 	}
 
 	// If apparmor changed, re-validate the apparmor profile (even if not running).
-	if util.ValueInSlice("raw.apparmor", changedConfig) || util.ValueInSlice("security.nesting", changedConfig) {
+	if slices.Contains(changedConfig, "raw.apparmor") || slices.Contains(changedConfig, "security.nesting") {
 		err = apparmor.InstanceValidate(d.state.OS, d, nil)
 		if err != nil {
 			return fmt.Errorf("Parse AppArmor profile: %w", err)
 		}
 	}
 
-	if util.ValueInSlice("security.idmap.isolated", changedConfig) || util.ValueInSlice("security.idmap.base", changedConfig) || util.ValueInSlice("security.idmap.size", changedConfig) || util.ValueInSlice("raw.idmap", changedConfig) || util.ValueInSlice("security.privileged", changedConfig) {
+	if slices.Contains(changedConfig, "security.idmap.isolated") || slices.Contains(changedConfig, "security.idmap.base") || slices.Contains(changedConfig, "security.idmap.size") || slices.Contains(changedConfig, "raw.idmap") || slices.Contains(changedConfig, "security.privileged") {
 		var idmapSet *idmap.Set
 		base := int64(0)
 		if !d.IsPrivileged() {
@@ -5344,7 +5350,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		// Ensure that only the requested snapshots are included in the migration index header.
 		volSourceArgs.Info.Config.VolumeSnapshots = make([]*api.StorageVolumeSnapshot, 0, len(volSourceArgs.Snapshots))
 		for i := range allSnapshots {
-			if util.ValueInSlice(allSnapshots[i].Name, volSourceArgs.Snapshots) {
+			if slices.Contains(volSourceArgs.Snapshots, allSnapshots[i].Name) {
 				volSourceArgs.Info.Config.VolumeSnapshots = append(volSourceArgs.Info.Config.VolumeSnapshots, allSnapshots[i])
 			}
 		}
@@ -5427,7 +5433,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 			// Setup rsync options (used for CRIU state transfers).
 			rsyncBwlimit := pool.Driver().Config()["rsync.bwlimit"]
 			rsyncFeatures := respHeader.GetRsyncFeaturesSlice()
-			if !util.ValueInSlice("bidirectional", rsyncFeatures) {
+			if !slices.Contains(rsyncFeatures, "bidirectional") {
 				// If no bi-directional support, assume 3.7 level.
 				// NOTE: Do NOT extend this list of arguments.
 				rsyncFeatures = []string{"xattrs", "delete", "compress"}
@@ -6130,7 +6136,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 					}
 
 					// Create the snapshot instance.
-					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, true)
+					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, true, true)
 					if err != nil {
 						return fmt.Errorf("Failed creating instance snapshot record %q: %w", snapArgs.Name, err)
 					}
@@ -6623,6 +6629,47 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 					return fmt.Errorf("Failed to create template file: %w", err)
 				}
 			} else {
+				// UID and GID
+				fileUID := int64(0)
+				fileGID := int64(0)
+
+				if tpl.UID != "" {
+					id, err := strconv.ParseInt(tpl.UID, 10, 64)
+					if err != nil {
+						return fmt.Errorf("Bad file UID %q for %q: %w", tpl.UID, tplPath, err)
+					}
+
+					fileUID = id
+				}
+
+				if tpl.GID != "" {
+					id, err := strconv.ParseInt(tpl.GID, 10, 64)
+					if err != nil {
+						return fmt.Errorf("Bad file GID %q for %q: %w", tpl.GID, tplPath, err)
+					}
+
+					fileGID = id
+				}
+
+				if idmapset != nil {
+					fileUID, fileGID = idmapset.ShiftIntoNS(fileUID, fileGID)
+				}
+
+				// Mode
+				fileMode := fs.FileMode(0644)
+				if tpl.Mode != "" {
+					if len(tpl.Mode) == 3 {
+						tpl.Mode = fmt.Sprintf("0%s", tpl.Mode)
+					}
+
+					mode, err := strconv.ParseInt(tpl.Mode, 0, 0)
+					if err != nil {
+						return fmt.Errorf("Bad mode %q for %q: %w", tpl.Mode, tplPath, err)
+					}
+
+					fileMode = os.FileMode(mode) & os.ModePerm
+				}
+
 				// Create the directories leading to the file
 				err = internalUtil.MkdirAllOwner(path.Dir(fullpath), 0755, int(rootUID), int(rootGID))
 				if err != nil {
@@ -6636,12 +6683,12 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 				}
 
 				// Fix ownership and mode
-				err = w.Chown(int(rootUID), int(rootGID))
+				err = w.Chown(int(fileUID), int(fileGID))
 				if err != nil {
 					return err
 				}
 
-				err = w.Chmod(0644)
+				err = w.Chmod(fileMode)
 				if err != nil {
 					return err
 				}
@@ -7840,7 +7887,7 @@ func (d *lxc) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfi
 
 		// Include all static interface names
 		for _, dev := range d.expandedDevices.Sorted() {
-			if dev.Config["name"] != "" && !util.ValueInSlice(dev.Config["name"], devNames) {
+			if dev.Config["name"] != "" && !slices.Contains(devNames, dev.Config["name"]) {
 				devNames = append(devNames, dev.Config["name"])
 			}
 		}
@@ -7856,7 +7903,7 @@ func (d *lxc) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfi
 				continue
 			}
 
-			if fields[2] != "name" || util.ValueInSlice(v, devNames) {
+			if fields[2] != "name" || slices.Contains(devNames, v) {
 				continue
 			}
 
@@ -7872,7 +7919,7 @@ func (d *lxc) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfi
 			interfaces, err := cc.Interfaces()
 			if err == nil {
 				for _, name := range interfaces {
-					if util.ValueInSlice(name, devNames) {
+					if slices.Contains(devNames, name) {
 						continue
 					}
 
@@ -7891,7 +7938,7 @@ func (d *lxc) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfi
 			}
 
 			// Find a free device name
-			if !util.ValueInSlice(name, devNames) {
+			if !slices.Contains(devNames, name) {
 				return name, nil
 			}
 
@@ -7905,7 +7952,7 @@ func (d *lxc) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfi
 	}
 
 	// Fill in the MAC address.
-	if !util.ValueInSlice(nicType, []string{"physical", "ipvlan", "sriov"}) && m["hwaddr"] == "" {
+	if !slices.Contains([]string{"physical", "ipvlan", "sriov"}, nicType) && m["hwaddr"] == "" {
 		configKey := fmt.Sprintf("volatile.%s.hwaddr", name)
 		volatileHwaddr := d.localConfig[configKey]
 		if volatileHwaddr == "" {

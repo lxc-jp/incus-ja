@@ -66,6 +66,16 @@ VM `cloud-init`
 
       incus config device add <instance_name> <device_name> disk source=cloud-init:config
 
+VM `agent`
+: エージェントの実行ファイル、設定ファイル、インストールスクリプトを含む `agent` 設定の ISO を生成できます。
+  これは `9p` が非サポートでエージェントをロードする別の方法が必要な環境で必要です。
+
+  このソースタイプは VM でのみ利用可能です。
+
+  そのようなデバイスを追加するには、以下のコマンドを使用します:
+
+      incus config device add <instance_name> <device_name> disk source=agent:config
+
 (devices-disk-initial-config)=
 ## インスタンスルートディスクデバイスの初期ボリューム設定
 

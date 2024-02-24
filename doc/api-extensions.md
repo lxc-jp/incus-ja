@@ -1872,6 +1872,10 @@ Incus が使用する CPU 時間をミリ秒ではなく秒単位で出力する
 
 コピー元とは異なるプロジェクトにイメージをコピーできるようにします。
 
+## `images_all_projects`
+
+`GET /1.0/images`API に`all-projects` パラメータを追加することで全てのプロジェクトのイメージを一覧表示できるようにします。
+
 ## `cluster_migration_inconsistent_copy`
 
 `POST /1.0/instances/<name>` に `allow_inconsistent` フィールドを追加します。 `true` に設定するとクラスタメンバー間で不整合なコピーを許します。
@@ -2309,3 +2313,44 @@ Loki イベントの`instance`フィールドをカスタマイズするため�
 これは`boot.host_shutdown_action`インスタンス設定キーを追加します。
 システムシャットダウンのデフォルトの`stop`の挙動をオーバーライドするのに使えます。
 `stop`、`stateful-stop`、`force-stop`の値をサポートします。
+
+## `agent_config_drive`
+
+`agent:config` ディスク `source` を追加します。これでエージェントとその設定を含む ISO を VM ゲストに公開できます。
+
+## `network_state_ovn_lr`
+
+`GET /1.0/networks/NAME/state` API の一部である `NetworkStateOVN` 構造体に `LogicalRouter` フィールドを追加します。
+
+OVN 論理ルーター名を取得するのに使えます。
+
+## `image_template_permissions`
+
+イメージメタデータテンプレートのエントリに `uid`、`gid`、`mode` フィールドを追加します。
+
+## `storage_bucket_backup`
+
+ストレージバケットのバックアップサポートを追加します。
+
+以下の新しいエンドポイント（詳細は[RESTful API](rest-api.md)参照）を含みます:
+
+* `GET /1.0/storage-pools/<pool>/buckets/<bucket>/backups`
+* `POST /1.0/storage-pools/<pool>/buckets/<bucket>/backups`
+
+* `GET /1.0/storage-pools/<pool>/buckets/<bucket>/backups/<name>`
+* `POST /1.0/storage-pools/<pool>/buckets/<bucket>/backups/<name>`
+* `DELETE /1.0/storage-pools/<pool>/buckets/<bucket>/backups/<name>`
+
+* `GET /1.0/storage-pools/<pool>/buckets/<bucket>/backups/<name>/export`
+
+## `storage_lvm_cluster`
+
+`lvmlockd` 経由で LVM の共有された VG を使う `lvmcluster` ストレージドライバを追加します。
+
+これを使うと、複数のサーバーが同じバッキングデバイスを参照する限りは、単一の共有された LVM プールをそれらのサーバーで使用できます。
+
+## `shared_custom_block_volumes`
+
+カスタムブロックボリュームに設定キー `security.shared` を追加します。
+未設定か `false` の場合、カスタムブロックボリュームは複数のインスタンスにアタッチできません。
+この機能はカスタムブロックボリュームを一度に複数のインスタンスにアタッチした際に発生する可能性のあるデータ消失を防ぐために追加されました。

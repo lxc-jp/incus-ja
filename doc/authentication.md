@@ -110,6 +110,28 @@ PKI モードを有効にするには、以下の手順を実行します:
 
 生成された証明書は自動的には信頼されないことに注意してください。そのため、{ref}`authentication-trusted-clients`で説明している方法のいずれかで、サーバーに追加する必要があります。
 
+### ローカルキーの暗号化
+
+`incus` クライアントは暗号化されたクライアントキーもサポートします。上記の方法で生成された鍵は以下のコマンドでパスワードを使って暗号化できます:
+
+```
+ssh-keygen -p -o -f .config/incus/client.key
+```
+
+```{note}
+[`keepalive` mode](remote-keepalive) を有効にしないと、Incus を呼び出すたびにプロンプトが表示され煩わしいかもしれません:
+
+    $ incus list remote-host:
+    Password for client.key:
+    +------+-------+------+------+------+-----------+
+    | NAME | STATE | IPV4 | IPV6 | TYPE | SNAPSHOTS |
+    +------+-------+------+------+------+-----------+
+```
+
+```{note}
+`incus` のコマンドラインは暗号化されたキーをサポートしますが、[Ansible's connection plugin](https://docs.ansible.com/ansible/latest/collections/community/general/incus_connection.html) のようなツールはサポートしません。
+```
+
 (authentication-openid)=
 ## OpenID Connect認証
 

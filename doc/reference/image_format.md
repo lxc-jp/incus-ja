@@ -87,6 +87,14 @@ templates:
       - create
     template: interfaces.tpl
     create_only: true
+  /home/foo/setup.sh:
+    when:
+      - create
+    template: setup.sh.tpl
+    create_only: true
+    uid: 1000
+    gid: 1000
+    mode: 755
 ```
 
 `when`キーは以下の 1 つ以上を指定できます:
@@ -100,6 +108,8 @@ templates:
 `properties`キーでユーザー定義のテンプレートプロパティをテンプレートファイルに渡せます。
 
 ファイルが存在しない場合にのみ Incus にファイルを作らせ、ファイルが存在する場合は上書きしてほしくない場合は、`create_only`キーをセットします。
+
+`uid`、`gid`、`mode` キーはファイルの所有者とパーミションを制御するのに使えます。
 
 #### テンプレートファイル
 

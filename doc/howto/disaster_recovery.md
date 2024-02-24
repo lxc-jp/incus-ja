@@ -42,7 +42,7 @@ Incus は各インスタンスのストレージボリュームに`backup.yaml`�
 This Incus server currently has the following storage pools:
 Would you like to recover another storage pool? (yes/no) [default=no]: yes
 Name of the storage pool: default
-Name of the storage backend (btrfs, ceph, cephfs, cephobject, dir, lvm, zfs): zfs
+Name of the storage backend (btrfs, ceph, cephfs, cephobject, dir, lvm, lvmcluster, zfs): zfs
 Source of the storage pool (block device, volume group, dataset, path, ... as applicable): /var/lib/incus/storage-pools/default/containers
 Additional storage pool configuration property (KEY=VALUE, empty when done): zfs.pool_name=default
 Additional storage pool configuration property (KEY=VALUE, empty when done):

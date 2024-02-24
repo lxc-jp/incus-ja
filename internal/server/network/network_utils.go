@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,30 +80,47 @@ func MACDevName(mac net.HardwareAddr) string {
 // UsedByInstanceDevices looks for instance NIC devices using the network and runs the supplied usageFunc for each.
 // Accepts optional filter arguments to specify a subset of instances.
 func UsedByInstanceDevices(s *state.State, networkProjectName string, networkName string, networkType string, usageFunc func(inst db.InstanceArgs, nicName string, nicConfig map[string]string) error, filters ...cluster.InstanceFilter) error {
-	return s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+	// Get the instances.
+	projects := map[string]api.Project{}
+	instances := []db.InstanceArgs{}
+
+	err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 		return tx.InstanceList(ctx, func(inst db.InstanceArgs, p api.Project) error {
-			// Get the instance's effective network project name.
-			instNetworkProject := project.NetworkProjectFromRecord(&p)
-
-			// Skip instances who's effective network project doesn't match this Network's project.
-			if instNetworkProject != networkProjectName {
-				return nil
-			}
-
-			// Look for NIC devices using this network.
-			devices := db.ExpandInstanceDevices(inst.Devices.Clone(), inst.Profiles)
-			for devName, devConfig := range devices {
-				if isInUseByDevice(networkName, networkType, devConfig) {
-					err := usageFunc(inst, devName, devConfig)
-					if err != nil {
-						return err
-					}
-				}
-			}
+			projects[inst.Project] = p
+			instances = append(instances, inst)
 
 			return nil
 		}, filters...)
 	})
+	if err != nil {
+		return err
+	}
+
+	// Go through the instances and run usageFunc.
+	for _, inst := range instances {
+		p := projects[inst.Project]
+
+		// Get the instance's effective network project name.
+		instNetworkProject := project.NetworkProjectFromRecord(&p)
+
+		// Skip instances who's effective network project doesn't match this Network's project.
+		if instNetworkProject != networkProjectName {
+			return nil
+		}
+
+		// Look for NIC devices using this network.
+		devices := db.ExpandInstanceDevices(inst.Devices.Clone(), inst.Profiles)
+		for devName, devConfig := range devices {
+			if isInUseByDevice(networkName, networkType, devConfig) {
+				err := usageFunc(inst, devName, devConfig)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // UsedBy returns list of API resources using network. Accepts firstOnly argument to indicate that only the first
@@ -425,7 +443,7 @@ func UpdateDNSMasqStatic(s *state.State, networkName string) error {
 			}
 
 			// Skip devices not connected to managed networks.
-			if !util.ValueInSlice(d["parent"], networks) {
+			if !slices.Contains(networks, d["parent"]) {
 				continue
 			}
 
@@ -1351,7 +1369,7 @@ func ProxyParseAddr(data string) (*deviceConfig.ProxyAddress, error) {
 	// Split into <protocol> and <address>.
 	fields := strings.SplitN(data, ":", 2)
 
-	if !util.ValueInSlice(fields[0], []string{"tcp", "udp", "unix"}) {
+	if !slices.Contains([]string{"tcp", "udp", "unix"}, fields[0]) {
 		return nil, fmt.Errorf("Unknown protocol type %q", fields[0])
 	}
 
@@ -1378,7 +1396,7 @@ func ProxyParseAddr(data string) (*deviceConfig.ProxyAddress, error) {
 	}
 
 	// Validate that it's a valid address.
-	if util.ValueInSlice(newProxyAddr.ConnType, []string{"udp", "tcp"}) {
+	if slices.Contains([]string{"udp", "tcp"}, newProxyAddr.ConnType) {
 		err := validate.Optional(validate.IsNetworkAddress)(address)
 		if err != nil {
 			return nil, err

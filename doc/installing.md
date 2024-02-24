@@ -105,6 +105,8 @@ Incus に関連して 2 つのグループが作成されます:
 
 - **`openrc`**: `rc-service incus start`
 - **`systemd`**: `systemctl start incus`
+
+続きは [Gentoo Wiki](https://wiki.gentoo.org/wiki/Incus) 参照。
 ```
 
 ```{group-tab} NixOS

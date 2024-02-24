@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,7 +21,6 @@ import (
 
 	"github.com/lxc/incus/shared/api"
 	localtls "github.com/lxc/incus/shared/tls"
-	"github.com/lxc/incus/shared/util"
 )
 
 // This is a modified version of https://github.com/grafana/loki/blob/v1.6.1/pkg/promtail/client/.
@@ -224,7 +224,7 @@ func (c *Client) Stop() {
 
 // HandleEvent handles the event received from the internal event listener.
 func (c *Client) HandleEvent(event api.Event) {
-	if !util.ValueInSlice(event.Type, c.cfg.types) {
+	if !slices.Contains(c.cfg.types, event.Type) {
 		return
 	}
 
@@ -273,9 +273,20 @@ func (c *Client) HandleEvent(event api.Event) {
 			context["requester-username"] = lifecycleEvent.Requestor.Username
 		}
 
+		// Get a sorted list of context keys.
+		keys := make([]string, 0, len(context))
+
+		for k := range context {
+			keys = append(keys, k)
+		}
+
+		sort.Strings(keys)
+
 		// Add key-value pairs as labels but don't override any labels.
-		for k, v := range context {
-			if util.ValueInSlice(k, c.cfg.labels) {
+		for _, k := range keys {
+			v := context[k]
+
+			if slices.Contains(c.cfg.labels, k) {
 				_, ok := entry.labels[k]
 				if !ok {
 					// Label names may not contain any hyphens.
@@ -327,7 +338,7 @@ func (c *Client) HandleEvent(event api.Event) {
 
 		// Add key-value pairs as labels but don't override any labels.
 		for k, v := range context {
-			if util.ValueInSlice(k, c.cfg.labels) {
+			if slices.Contains(c.cfg.labels, k) {
 				_, ok := entry.labels[k]
 				if !ok {
 					entry.labels[k] = v

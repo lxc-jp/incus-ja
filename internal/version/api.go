@@ -317,6 +317,7 @@ var APIExtensions = []string{
 	"projects_restricted_intercept",
 	"metrics_authentication",
 	"images_target_project",
+	"images_all_projects",
 	"cluster_migration_inconsistent_copy",
 	"cluster_ovn_chassis",
 	"container_syscall_intercept_sched_setscheduler",
@@ -393,6 +394,12 @@ var APIExtensions = []string{
 	"instance_create_start",
 	"clustering_evacuation_stop_options",
 	"boot_host_shutdown_action",
+	"agent_config_drive",
+	"network_state_ovn_lr",
+	"image_template_permissions",
+	"storage_bucket_backup",
+	"storage_lvm_cluster",
+	"shared_custom_block_volumes",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

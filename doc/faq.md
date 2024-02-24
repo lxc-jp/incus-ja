@@ -109,3 +109,10 @@ Incus が何をしているかとどんなプロセスが稼働しているか�
 
 VPN クライアントを稼働したままにする必要がある場合、 `net_cls` cgroup1 を他の場所にマウントし、 VPN クライアントを適宜再設定してください。
 Mullvad VPN 用の手順は [この Discourse の投稿](https://discuss.linuxcontainers.org/t/help-help-help-cgroup2-related-issue-on-ubuntu-jammy-with-mullvad-and-privateinternetaccess-vpn/14705/18) を参照してください。
+
+## この `incusbr0-mtu` デバイスは何ですか？
+
+Incus が管理するブリッジネットワークの `bridge.mtu` オプションを設定すると、Incus は`BRIDGE-mtu` という名前のダミーのネットワークインタフェースを作成します。<!-- wokeignore:rule=dummy -->
+このインタフェースはトラフィックを運ぶのには使用されず、設定される MTU をネットワークブリッジにブリッジするために使用されます。
+
+これによりブリッジにその MTU を強制させ、ブリッジに設定された MTU がインタフェースが追加される際に変わってしまうのを防ぐ効果があります。

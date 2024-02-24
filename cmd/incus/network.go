@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/lxc/incus/shared/api"
 	"github.com/lxc/incus/shared/termios"
 	"github.com/lxc/incus/shared/units"
-	"github.com/lxc/incus/shared/util"
 )
 
 type cmdNetwork struct {
@@ -331,7 +331,7 @@ incus network create bar network=baz --type ovn
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		return c.global.cmpRemotes()
+		return c.global.cmpRemotes(false)
 	}
 
 	return cmd
@@ -983,6 +983,9 @@ func (c *cmdNetworkInfo) Run(cmd *cobra.Command, args []string) error {
 		fmt.Println("")
 		fmt.Println(i18n.G("OVN:"))
 		fmt.Printf("  %s: %s\n", i18n.G("Chassis"), state.OVN.Chassis)
+		if client.HasExtension("network_state_ovn_lr") {
+			fmt.Printf("  %s: %s\n", i18n.G("Logical router"), state.OVN.LogicalRouter)
+		}
 	}
 
 	return nil
@@ -1012,7 +1015,7 @@ func (c *cmdNetworkList) Command() *cobra.Command {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		return c.global.cmpRemotes()
+		return c.global.cmpRemotes(false)
 	}
 
 	return cmd
@@ -1050,7 +1053,7 @@ func (c *cmdNetworkList) Run(cmd *cobra.Command, args []string) error {
 
 	data := [][]string{}
 	for _, network := range networks {
-		if util.ValueInSlice(network.Type, []string{"loopback", "unknown"}) {
+		if slices.Contains([]string{"loopback", "unknown"}, network.Type) {
 			continue
 		}
 
