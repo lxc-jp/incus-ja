@@ -38,3 +38,4 @@
 `INCUS_OVMF_PATH`               | `OVMF_CODE.fd`と`OVMF_VARS.ms.fd`を含むOVMFビルドへのパス
 `INCUS_SECURITY_APPARMOR`       | `false`に設定するとAppArmorを無効にします
 `INCUS_UI`                      | ウェブサーバーを配信する web UI のパス
+`INCUS_USBIDS_PATH`             | hwdata `usb.ids` ファイルのパス

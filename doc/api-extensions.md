@@ -2354,3 +2354,56 @@ OVN 論理ルーター名を取得するのに使えます。
 カスタムブロックボリュームに設定キー `security.shared` を追加します。
 未設定か `false` の場合、カスタムブロックボリュームは複数のインスタンスにアタッチできません。
 この機能はカスタムブロックボリュームを一度に複数のインスタンスにアタッチした際に発生する可能性のあるデータ消失を防ぐために追加されました。
+
+## `auth_tls_jwt`
+
+TLS クライアント証明書を直接使う代わりに署名された `JSON Web Token` (`JWT`) を使えるようにします。
+
+このシナリオでは、自身の TLS クライアント証明書から `JWT` を導出し、`Authorization` HTTP ヘッダーの `bearer` トークンとして提供します。
+
+`JWT` は証明書のフィンガープリントを `Subject` に設定し、クライアントの秘密鍵で署名される必要があります。
+
+## `oidc_claim`
+
+`oidc.claim` サーバー設定キーを追加します。これでどの OpenID Connect クレームをユーザー名として使うかを指定できます。
+
+## `device_usb_serial`
+
+デバイスタイプ `usb` に `serial` 設定キーを追加します。
+この機能が追加されると、同一の `vendorid` と `productid` の複数のデバイスを区別できるようになります。
+
+## `numa_cpu_balanced`
+
+`limits.cpu.nodes` の新しい値として `balanced` を追加します。
+
+`balanced` に設定すると、Incus はインスタンスの起動時に一番暇な NUMA ノードを選び、システム上の NUMA ノードで負荷が分散できるようにします。
+
+## `image_restriction_nesting`
+
+`requirements.nesting` というイメージ制限を追加します。 `true` はイメージがネストなしには実行できないことを意味します。
+
+## `network_integrations`
+
+ネットワーク統合の概念と OVN Interconnection の初期サポートを追加します。
+
+新 API:
+
+* `/1.0/network-integrations` (GET, POST)
+* `/1.0/network-integrations/NAME` (GET, PUT, PATCH, DELETE, POST)
+
+それぞれの統合は以下の項目で構成されます:
+
+* name (名前)
+* description (説明)
+* type (種別、現在は `ovn` のみ)
+* configuration (設定)
+   * `ovn.northbound_connection` (OVN Interconnection データベースの接続文字列)
+   * `ovn.ca_cert` (省略可能、OVN Interconnection データベースの SSL CA 証明書)
+   * `ovn.client_cert` (省略可能、OVN Interconnection データベースに接続するための SSL クライアント証明書)
+   * `ovn.client_key` (省略可能、OVN Interconnection データベースに接続するための SSL クライアント鍵)
+   * `ovn.transit.pattern` (transit スイッチ名を制定するための Pongo2 テンプレート)
+
+これらの統合はいくつかの新しいフィールドを通してネットワークピアにアタッチします:
+
+* `type` (現状の挙動は `local`、 統合は `remote`)
+* `target_integration` (統合への参照)

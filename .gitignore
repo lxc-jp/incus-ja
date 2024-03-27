@@ -1,7 +1,7 @@
 *.swp
 po/*.mo
 po/*.po~
-incus-*.tar.gz
+incus-*.tar.xz
 .vagrant
 *~
 tags
@@ -16,8 +16,10 @@ cmd/incus-benchmark/incus-benchmark
 cmd/incus-migrate/incus-migrate
 cmd/incus-user/incus-user
 test/dev_incus-client/dev_incus-client
-test/macaroon-identity/macaroon-identity
 test/syscall/sysinfo/sysinfo
+test/mini-oidc/mini-oidc
+test/mini-oidc/user.data
+test/tls2jwt/tls2jwt
 
 # Sphinx
 doc/html/
@@ -35,6 +37,3 @@ doc/__pycache__
 # For Atom ctags
 .tags
 .tags1
-
-# textlint
-node_modules/

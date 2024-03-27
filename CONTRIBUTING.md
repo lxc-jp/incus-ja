@@ -31,7 +31,6 @@ Pull Request、[GitHubレポジトリ](https://github.com/lxc/incus/issues)で�
 - API構造（`shared/api/`の変更に対して`shared/api: Add XYZ`）
 - Goクライアントパッケージ（`client/`の変更に対して`client: Add XYZ`）
 - CLI（`cmd/`の変更に対して`cmd/<command>: Change XYZ`）
-- スクリプト（`scripts/`の変更に対して`scripts: Update bash completion for XYZ`）
 - Incusデーモン（`incus/`の変更に対して`incus/<package>: Add support for XYZ`）
 - テスト（`tests/`の変更に対して`tests: Add test for XYZ`）
 

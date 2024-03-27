@@ -26,11 +26,10 @@ relatedlinks: https://cloudinit.readthedocs.org/
 
 ## イメージ内の`cloud-init`サポート
 
-`cloud-init`を使用するには、`cloud-init`がインストールされたイメージをベースにインスタンスを作る必要があります:
+`cloud-init`を使用するには、`cloud-init`がインストールされたイメージをベースにインスタンスを作る必要があります。
 
-* `ubuntu`および`ubuntu-daily` {ref}`イメージサーバー <remote-image-servers>`からのすべてのイメージは`cloud-init`をサポートしています。
-* [`images`リモート](https://images.linuxcontainers.org/)からのイメージには`cloud-init`が有効化されたバリアントがあり、通常デフォルトバリアントよりもサイズが大きくなります。
-  クラウドバリアントは`/cloud`接尾辞を使用します。たとえば、`images:ubuntu/22.04/cloud`。
+[`images`リモート](https://images.linuxcontainers.org/)からのイメージには`cloud-init`が有効化されたバリアントがあり、通常デフォルトバリアントよりもサイズが大きくなります。
+クラウドバリアントは`/cloud`接尾辞を使用します。たとえば、`images:ubuntu/22.04/cloud`。
 
 ## 設定オプション
 

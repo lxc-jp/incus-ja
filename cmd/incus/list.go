@@ -134,6 +134,14 @@ incus list -c ns,user.comment:comment
 	cmd.Flags().BoolVar(&c.flagFast, "fast", false, i18n.G("Fast mode (same as --columns=nsacPt)"))
 	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Display instances from all projects"))
 
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return c.global.cmpRemotes(false)
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	return cmd
 }
 
@@ -904,20 +912,16 @@ func (c *cmdList) ProfilesColumnData(cInfo api.InstanceFull) string {
 }
 
 func (c *cmdList) CreatedColumnData(cInfo api.InstanceFull) string {
-	layout := "2006/01/02 15:04 UTC"
-
-	if cInfo.CreatedAt.Unix() != 0 {
-		return cInfo.CreatedAt.UTC().Format(layout)
+	if !cInfo.CreatedAt.IsZero() {
+		return cInfo.CreatedAt.Local().Format(dateLayout)
 	}
 
 	return ""
 }
 
 func (c *cmdList) LastUsedColumnData(cInfo api.InstanceFull) string {
-	layout := "2006/01/02 15:04 UTC"
-
-	if cInfo.LastUsedAt.Unix() != 0 {
-		return cInfo.LastUsedAt.UTC().Format(layout)
+	if !cInfo.LastUsedAt.IsZero() {
+		return cInfo.LastUsedAt.Local().Format(dateLayout)
 	}
 
 	return ""

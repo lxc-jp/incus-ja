@@ -78,7 +78,7 @@ CRIU の制限のためコンテナではこの機能は完全にはサポート
 
 スナップショットを削除するには、以下のコマンドを使います:
 
-    incus delete <instance_name>/<snapshot_name>
+    incus snapshot delete <instance_name> <snapshot_name>
 
 ### インスタンスのスナップショット作成をスケジュールする
 

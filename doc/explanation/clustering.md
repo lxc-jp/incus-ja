@@ -198,9 +198,9 @@ Incus に現在適用されているスクリプトレットを見るには`incu
 - `log_info(*messages)`: `info`レベルで Incus のログにログエントリを追加する。`messages`は 1 つ以上のメッセージの引数。
 - `log_warn(*messages)`: `warn`レベルで Incus のログにログエントリを追加する。`messages`は 1 つ以上のメッセージの引数。
 - `log_error(*messages)`: `error`レベルで Incus のログにログエントリを追加する。`messages`は 1 つ以上のメッセージの引数。
-- `set_cluster_member_target(member_name)`: インスタンスが作成されるべきクラスタメンバーを設定する。`member_name`はインスタンスが作成されるべきクラスタメンバーの名前。この関数が呼ばれなければ、Incus は組み込みのインスタンス配置ロジックを使用する。
-- `get_cluster_member_state(member_name)`: クラスタメンバーの状態を取得する。[`api.ClusterMemberState`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMemberState)の形式でクラスタメンバーの状態を含むオブジェクトを返す。`member_name`は状態を取得する対象のクラスタメンバーの名前。
+- `set_target(member_name)`: インスタンスが作成されるべきクラスタメンバーを設定する。`member_name`はインスタンスが作成されるべきクラスタメンバーの名前。この関数が呼ばれなければ、Incus は組み込みのインスタンス配置ロジックを使用する。
 - `get_cluster_member_resources(member_name)`: クラスタメンバーのリソースについての情報を取得する。[`api.Resources`](https://pkg.go.dev/github.com/lxc/incus/shared/api#Resources)の形式でリソースについての情報を含むオブジェクトを返す。`member_name`はリソース情報を取得する対象のクラスタメンバーの名前。
+- `get_cluster_member_state(member_name)`: クラスタメンバーの状態を取得する。[`api.ClusterMemberState`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMemberState)の形式でクラスタメンバーの状態を含むオブジェクトを返す。`member_name`は状態を取得する対象のクラスタメンバーの名前。
 - `get_instance_resources()`: インスタンスが必要とするリソースについての情報を取得する。[`scriptlet.InstanceResources`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstanceResources)の形式でリソース情報を含むオブジェクトを返す。
 
 ```{note}

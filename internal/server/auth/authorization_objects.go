@@ -106,20 +106,21 @@ type objectValidator struct {
 }
 
 var objectValidators = map[ObjectType]objectValidator{
-	ObjectTypeUser:          {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
-	ObjectTypeServer:        {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
-	ObjectTypeCertificate:   {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
-	ObjectTypeStoragePool:   {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
-	ObjectTypeProject:       {minIdentifierElements: 0, maxIdentifierElements: 0, requireProject: true},
-	ObjectTypeImage:         {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
-	ObjectTypeImageAlias:    {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
-	ObjectTypeInstance:      {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
-	ObjectTypeNetwork:       {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
-	ObjectTypeNetworkACL:    {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
-	ObjectTypeNetworkZone:   {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
-	ObjectTypeProfile:       {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
-	ObjectTypeStorageBucket: {minIdentifierElements: 2, maxIdentifierElements: 3, requireProject: true},
-	ObjectTypeStorageVolume: {minIdentifierElements: 3, maxIdentifierElements: 4, requireProject: true},
+	ObjectTypeUser:               {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
+	ObjectTypeServer:             {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
+	ObjectTypeCertificate:        {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
+	ObjectTypeStoragePool:        {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
+	ObjectTypeProject:            {minIdentifierElements: 0, maxIdentifierElements: 0, requireProject: true},
+	ObjectTypeImage:              {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
+	ObjectTypeImageAlias:         {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
+	ObjectTypeInstance:           {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
+	ObjectTypeNetwork:            {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
+	ObjectTypeNetworkACL:         {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
+	ObjectTypeNetworkIntegration: {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: false},
+	ObjectTypeNetworkZone:        {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
+	ObjectTypeProfile:            {minIdentifierElements: 1, maxIdentifierElements: 1, requireProject: true},
+	ObjectTypeStorageBucket:      {minIdentifierElements: 2, maxIdentifierElements: 3, requireProject: true},
+	ObjectTypeStorageVolume:      {minIdentifierElements: 3, maxIdentifierElements: 4, requireProject: true},
 }
 
 // NewObject returns an Object of the given type. The passed in arguments must be in the correct
@@ -242,66 +243,85 @@ func ObjectFromString(objectstr string) (Object, error) {
 	return o, nil
 }
 
+// ObjectUser represents a user.
 func ObjectUser(userName string) Object {
 	object, _ := NewObject(ObjectTypeUser, "", userName)
 	return object
 }
 
+// ObjectServer represents a server.
 func ObjectServer() Object {
 	object, _ := NewObject(ObjectTypeServer, "", "incus")
 	return object
 }
 
+// ObjectCertificate represents a certificate.
 func ObjectCertificate(fingerprint string) Object {
 	object, _ := NewObject(ObjectTypeCertificate, "", fingerprint)
 	return object
 }
 
+// ObjectStoragePool represents a storage pool.
 func ObjectStoragePool(storagePoolName string) Object {
 	object, _ := NewObject(ObjectTypeStoragePool, "", storagePoolName)
 	return object
 }
 
+// ObjectProject represents a project.
 func ObjectProject(projectName string) Object {
 	object, _ := NewObject(ObjectTypeProject, projectName)
 	return object
 }
 
+// ObjectImage represents an image.
 func ObjectImage(projectName string, imageFingerprint string) Object {
 	object, _ := NewObject(ObjectTypeImage, projectName, imageFingerprint)
 	return object
 }
 
+// ObjectImageAlias represents an image alias.
 func ObjectImageAlias(projectName string, aliasName string) Object {
 	object, _ := NewObject(ObjectTypeImageAlias, projectName, aliasName)
 	return object
 }
 
+// ObjectInstance represents an instance.
 func ObjectInstance(projectName string, instanceName string) Object {
 	object, _ := NewObject(ObjectTypeInstance, projectName, instanceName)
 	return object
 }
 
+// ObjectNetwork represents a network.
 func ObjectNetwork(projectName string, networkName string) Object {
 	object, _ := NewObject(ObjectTypeNetwork, projectName, networkName)
 	return object
 }
 
+// ObjectNetworkACL represents a network ACL.
 func ObjectNetworkACL(projectName string, networkACLName string) Object {
 	object, _ := NewObject(ObjectTypeNetworkACL, projectName, networkACLName)
 	return object
 }
 
+// ObjectNetworkIntegration represents a network integration.
+func ObjectNetworkIntegration(networkIntegrationName string) Object {
+	object, _ := NewObject(ObjectTypeNetworkIntegration, networkIntegrationName)
+	return object
+}
+
+// ObjectNetworkZone represents a network zone.
 func ObjectNetworkZone(projectName string, networkZoneName string) Object {
 	object, _ := NewObject(ObjectTypeNetworkZone, projectName, networkZoneName)
 	return object
 }
 
+// ObjectProfile represents a profile.
 func ObjectProfile(projectName string, profileName string) Object {
 	object, _ := NewObject(ObjectTypeProfile, projectName, profileName)
 	return object
 }
 
+// ObjectStorageBucket represents a storage bucket.
 func ObjectStorageBucket(projectName string, poolName string, bucketName string, location string) Object {
 	var object Object
 	if location != "" {
@@ -313,6 +333,7 @@ func ObjectStorageBucket(projectName string, poolName string, bucketName string,
 	return object
 }
 
+// ObjectStorageVolume represents a storage volume.
 func ObjectStorageVolume(projectName string, poolName string, volumeType string, volumeName string, location string) Object {
 	var object Object
 	if location != "" {

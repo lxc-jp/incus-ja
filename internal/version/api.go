@@ -400,6 +400,12 @@ var APIExtensions = []string{
 	"storage_bucket_backup",
 	"storage_lvm_cluster",
 	"shared_custom_block_volumes",
+	"auth_tls_jwt",
+	"oidc_claim",
+	"device_usb_serial",
+	"numa_cpu_balanced",
+	"image_restriction_nesting",
+	"network_integrations",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

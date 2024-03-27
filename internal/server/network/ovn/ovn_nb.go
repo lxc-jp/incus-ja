@@ -7,15 +7,16 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 
 	"github.com/go-logr/logr"
 	ovsdbClient "github.com/ovn-org/libovsdb/client"
+	ovsdbModel "github.com/ovn-org/libovsdb/model"
 
 	"github.com/lxc/incus/internal/linux"
 	ovnNB "github.com/lxc/incus/internal/server/network/ovn/schema/ovn-nb"
-	"github.com/lxc/incus/internal/server/state"
 	"github.com/lxc/incus/shared/subprocess"
 )
 
@@ -31,10 +32,13 @@ type NB struct {
 	sslClientKey  string
 }
 
+var nb *NB
+
 // NewNB initialises new OVN client for Northbound operations.
-func NewNB(s *state.State) (*NB, error) {
-	// Get database connection string.
-	dbAddr := s.GlobalConfig.NetworkOVNNorthboundConnection()
+func NewNB(dbAddr string, sslCACert string, sslClientCert string, sslClientKey string) (*NB, error) {
+	if nb != nil {
+		return nb, nil
+	}
 
 	// Create the NB struct.
 	client := &NB{
@@ -47,6 +51,13 @@ func NewNB(s *state.State) (*NB, error) {
 		return nil, err
 	}
 
+	// Add some missing indexes.
+	dbSchema.SetIndexes(map[string][]ovsdbModel.ClientIndex{
+		"Logical_Router":      {{Columns: []ovsdbModel.ColumnKey{{Column: "name"}}}},
+		"Logical_Switch":      {{Columns: []ovsdbModel.ColumnKey{{Column: "name"}}}},
+		"Logical_Switch_Port": {{Columns: []ovsdbModel.ColumnKey{{Column: "name"}}}},
+	})
+
 	discard := logr.Discard()
 
 	options := []ovsdbClient.Option{ovsdbClient.WithLogger(&discard)}
@@ -56,49 +67,6 @@ func NewNB(s *state.State) (*NB, error) {
 
 	// Handle SSL.
 	if strings.Contains(dbAddr, "ssl:") {
-		// Get the OVN SSL keys from the daemon config.
-		sslCACert, sslClientCert, sslClientKey := s.GlobalConfig.NetworkOVNSSL()
-
-		// Fallback to filesystem keys.
-		if sslCACert == "" {
-			content, err := os.ReadFile("/etc/ovn/ovn-central.crt")
-			if err != nil {
-				if os.IsNotExist(err) {
-					return nil, fmt.Errorf("OVN configured to use SSL but no SSL CA certificate defined")
-				}
-
-				return nil, err
-			}
-
-			sslCACert = string(content)
-		}
-
-		if sslClientCert == "" {
-			content, err := os.ReadFile("/etc/ovn/cert_host")
-			if err != nil {
-				if os.IsNotExist(err) {
-					return nil, fmt.Errorf("OVN configured to use SSL but no SSL client certificate defined")
-				}
-
-				return nil, err
-			}
-
-			sslClientCert = string(content)
-		}
-
-		if sslClientKey == "" {
-			content, err := os.ReadFile("/etc/ovn/key_host")
-			if err != nil {
-				if os.IsNotExist(err) {
-					return nil, fmt.Errorf("OVN configured to use SSL but no SSL client key defined")
-				}
-
-				return nil, err
-			}
-
-			sslClientKey = string(content)
-		}
-
 		// Validation.
 		if sslClientCert == "" {
 			return nil, fmt.Errorf("OVN is configured to use SSL but no client certificate was found")
@@ -207,7 +175,54 @@ func NewNB(s *state.State) (*NB, error) {
 		ovn.Close()
 	})
 
+	nb = client
 	return client, nil
+}
+
+// get is used to perform a libovsdb Get call while also makes use of the custom defined index.
+// For some reason the main Get() function only uses the built-in indices rather than considering the user provided ones.
+// This is apparently by design but makes it much more annoying to fetch records from some tables.
+func (o *NB) get(ctx context.Context, m ovsdbModel.Model) error {
+	var collection any
+
+	// Check if one of the broken types.
+	switch m.(type) {
+	case *ovnNB.LogicalRouter:
+		s := []ovnNB.LogicalRouter{}
+		collection = &s
+	case *ovnNB.LogicalSwitch:
+		s := []ovnNB.LogicalSwitch{}
+		collection = &s
+	case *ovnNB.LogicalSwitchPort:
+		s := []ovnNB.LogicalSwitchPort{}
+		collection = &s
+	default:
+		// Fallback to normal Get.
+		return o.client.Get(ctx, m)
+	}
+
+	// Check and assign the resulting value.
+	err := o.client.Where(m).List(ctx, collection)
+	if err != nil {
+		return err
+	}
+
+	rVal := reflect.ValueOf(collection)
+	if rVal.Kind() != reflect.Pointer {
+		return fmt.Errorf("Bad collection type")
+	}
+
+	rVal = rVal.Elem()
+	if rVal.Kind() != reflect.Slice {
+		return fmt.Errorf("Bad collection type")
+	}
+
+	if rVal.Len() != 1 {
+		return ovsdbClient.ErrNotFound
+	}
+
+	reflect.ValueOf(m).Elem().Set(rVal.Index(0))
+	return nil
 }
 
 // nbctl executes ovn-nbctl with arguments to connect to wrapper's northbound database.

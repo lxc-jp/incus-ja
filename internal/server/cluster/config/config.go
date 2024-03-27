@@ -214,8 +214,8 @@ func (c *Config) RemoteTokenExpiry() string {
 }
 
 // OIDCServer returns all the OpenID Connect settings needed to connect to a server.
-func (c *Config) OIDCServer() (string, string, string) {
-	return c.m.GetString("oidc.issuer"), c.m.GetString("oidc.client.id"), c.m.GetString("oidc.audience")
+func (c *Config) OIDCServer() (string, string, string, string) {
+	return c.m.GetString("oidc.issuer"), c.m.GetString("oidc.client.id"), c.m.GetString("oidc.audience"), c.m.GetString("oidc.claim")
 }
 
 // ClusterHealingThreshold returns the configured healing threshold, i.e. the
@@ -239,8 +239,8 @@ func (c *Config) ClusterHealingThreshold() time.Duration {
 }
 
 // OpenFGA returns all OpenFGA settings need to interact with an OpenFGA server.
-func (c *Config) OpenFGA() (apiURL string, apiToken string, storeID string, authorizationModelID string) {
-	return c.m.GetString("openfga.api.url"), c.m.GetString("openfga.api.token"), c.m.GetString("openfga.store.id"), c.m.GetString("openfga.store.model_id")
+func (c *Config) OpenFGA() (apiURL string, apiToken string, storeID string) {
+	return c.m.GetString("openfga.api.url"), c.m.GetString("openfga.api.token"), c.m.GetString("openfga.store.id")
 }
 
 // Dump current configuration keys and their values. Keys with values matching
@@ -653,14 +653,6 @@ var ConfigSchema = config.Schema{
 	// shortdesc: ID of the OpenFGA permission store
 	"openfga.store.id": {},
 
-	// gendoc:generate(entity=server, group=openfga, key=openfga.store.model_id)
-	//
-	// ---
-	// type: string
-	// scope: global
-	// shortdesc: ID of the OpenFGA authorization model
-	"openfga.store.model_id": {},
-
 	// gendoc:generate(entity=server, group=oidc, key=oidc.client.id)
 	//
 	// ---
@@ -684,6 +676,14 @@ var ConfigSchema = config.Schema{
 	//  scope: global
 	//  shortdesc: Expected audience value for the application
 	"oidc.audience": {},
+
+	// gendoc:generate(entity=server, group=oidc, key=oidc.claim)
+	//
+	// ---
+	//  type: string
+	//  scope: global
+	//  shortdesc: OpenID Connect claim to use as the username
+	"oidc.claim": {},
 
 	// OVN networking global keys.
 

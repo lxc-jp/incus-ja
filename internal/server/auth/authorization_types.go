@@ -18,17 +18,18 @@ const (
 	EntitlementCanViewPrivilegedEvents             Entitlement = "can_view_privileged_events"
 
 	// Project entitlements.
-	EntitlementCanCreateImages         Entitlement = "can_create_images"
-	EntitlementCanCreateImageAliases   Entitlement = "can_create_image_aliases"
-	EntitlementCanCreateInstances      Entitlement = "can_create_instances"
-	EntitlementCanCreateNetworks       Entitlement = "can_create_networks"
-	EntitlementCanCreateNetworkACLs    Entitlement = "can_create_network_acls"
-	EntitlementCanCreateNetworkZones   Entitlement = "can_create_network_zones"
-	EntitlementCanCreateProfiles       Entitlement = "can_create_profiles"
-	EntitlementCanCreateStorageVolumes Entitlement = "can_create_storage_volumes"
-	EntitlementCanCreateStorageBuckets Entitlement = "can_create_storage_buckets"
-	EntitlementCanViewOperations       Entitlement = "can_view_operations"
-	EntitlementCanViewEvents           Entitlement = "can_view_events"
+	EntitlementCanCreateImages              Entitlement = "can_create_images"
+	EntitlementCanCreateImageAliases        Entitlement = "can_create_image_aliases"
+	EntitlementCanCreateInstances           Entitlement = "can_create_instances"
+	EntitlementCanCreateNetworks            Entitlement = "can_create_networks"
+	EntitlementCanCreateNetworkACLs         Entitlement = "can_create_network_acls"
+	EntitlementCanCreateNetworkIntegrations Entitlement = "can_create_network_integrations"
+	EntitlementCanCreateNetworkZones        Entitlement = "can_create_network_zones"
+	EntitlementCanCreateProfiles            Entitlement = "can_create_profiles"
+	EntitlementCanCreateStorageVolumes      Entitlement = "can_create_storage_volumes"
+	EntitlementCanCreateStorageBuckets      Entitlement = "can_create_storage_buckets"
+	EntitlementCanViewOperations            Entitlement = "can_view_operations"
+	EntitlementCanViewEvents                Entitlement = "can_view_events"
 
 	// Instance entitlements.
 	EntitlementCanUpdateState   Entitlement = "can_update_state"
@@ -46,35 +47,50 @@ const (
 type ObjectType string
 
 const (
-	ObjectTypeUser          ObjectType = "user"
-	ObjectTypeServer        ObjectType = "server"
-	ObjectTypeCertificate   ObjectType = "certificate"
-	ObjectTypeStoragePool   ObjectType = "storage_pool"
-	ObjectTypeProject       ObjectType = "project"
-	ObjectTypeImage         ObjectType = "image"
-	ObjectTypeImageAlias    ObjectType = "image_alias"
-	ObjectTypeInstance      ObjectType = "instance"
-	ObjectTypeNetwork       ObjectType = "network"
-	ObjectTypeNetworkACL    ObjectType = "network_acl"
-	ObjectTypeNetworkZone   ObjectType = "network_zone"
-	ObjectTypeProfile       ObjectType = "profile"
+	// ObjectTypeUser represents a user.
+	ObjectTypeUser ObjectType = "user"
+
+	// ObjectTypeServer represents a server.
+	ObjectTypeServer ObjectType = "server"
+
+	// ObjectTypeCertificate represents a certificate.
+	ObjectTypeCertificate ObjectType = "certificate"
+
+	// ObjectTypeStoragePool represents a storage pool.
+	ObjectTypeStoragePool ObjectType = "storage_pool"
+
+	// ObjectTypeProject represents a project.
+	ObjectTypeProject ObjectType = "project"
+
+	// ObjectTypeImage represents an image.
+	ObjectTypeImage ObjectType = "image"
+
+	// ObjectTypeImageAlias represents an image alias.
+	ObjectTypeImageAlias ObjectType = "image_alias"
+
+	// ObjectTypeInstance represents an instance.
+	ObjectTypeInstance ObjectType = "instance"
+
+	// ObjectTypeNetwork represents a network.
+	ObjectTypeNetwork ObjectType = "network"
+
+	// ObjectTypeNetworkACL represents a network ACL.
+	ObjectTypeNetworkACL ObjectType = "network_acl"
+
+	// ObjectTypeNetworkIntegration represents a network integration.
+	ObjectTypeNetworkIntegration ObjectType = "network_integration"
+
+	// ObjectTypeNetworkZone represents a network zone.
+	ObjectTypeNetworkZone ObjectType = "network_zone"
+
+	// ObjectTypeProfile represents a profile.
+	ObjectTypeProfile ObjectType = "profile"
+
+	// ObjectTypeStorageBucket represents a storage bucket.
 	ObjectTypeStorageBucket ObjectType = "storage_bucket"
+
+	// ObjectTypeStorageVolume represents a storage volume.
 	ObjectTypeStorageVolume ObjectType = "storage_volume"
-)
-
-// Permission is a type representation of general permission levels in Incus. Used with TLS and RBAC drivers.
-type Permission string
-
-const (
-	PermissionAdmin                Permission = "admin"
-	PermissionView                 Permission = "view"
-	PermissionManageProjects       Permission = "manage-projects"
-	PermissionManageInstances      Permission = "manage-containers"
-	PermissionManageImages         Permission = "manage-images"
-	PermissionManageNetworks       Permission = "manage-networks"
-	PermissionManageProfiles       Permission = "manage-profiles"
-	PermissionManageStorageVolumes Permission = "manage-storage-volumes"
-	PermissionOperateInstances     Permission = "operate-containers"
 )
 
 const (

@@ -9,6 +9,7 @@
 ネットワークの設定 </howto/network_configure>
 ネットワーク ACL の設定 </howto/network_acls>
 ネットワークフォワードの設定 </howto/network_forwards>
+ネットワーク統合の設定 </howto/network_integrations>
 ネットワークゾーンの設定 </howto/network_zones>
 Incus を BGP サーバーとして設定 </howto/network_bgp>
 Incus IPAM 情報を表示 </howto/network_ipam>

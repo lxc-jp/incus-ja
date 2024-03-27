@@ -589,12 +589,12 @@ func (n *bridge) setup(oldConfig map[string]string) error {
 
 			// Add and configure the interface in one operation to reduce the number of executions and
 			// to avoid systemd-udevd from applying the default MACAddressPolicy=persistent policy.
-			err = vswitch.BridgeAdd(n.name, false, bridge.Address, bridge.MTU)
+			err = vswitch.CreateBridge(context.TODO(), n.name, false, bridge.Address, bridge.MTU)
 			if err != nil {
 				return err
 			}
 
-			revert.Add(func() { _ = vswitch.BridgeDelete(n.name) })
+			revert.Add(func() { _ = vswitch.DeleteBridge(context.Background(), n.name) })
 		} else {
 			// Add and configure the interface in one operation to reduce the number of executions and
 			// to avoid systemd-udevd from applying the default MACAddressPolicy=persistent policy.
@@ -1179,11 +1179,16 @@ func (n *bridge) setup(oldConfig map[string]string) error {
 			}
 
 			vxlan := &ip.Vxlan{
-				Link: ip.Link{Name: tunName},
+				Link:  ip.Link{Name: tunName},
+				Local: tunLocal,
 			}
 
-			if tunLocal != "" && tunRemote != "" {
-				vxlan.Local = tunLocal
+			if tunRemote != "" {
+				// Skip partial configs.
+				if tunLocal == "" {
+					continue
+				}
+
 				vxlan.Remote = tunRemote
 			} else {
 				if tunGroup == "" {
@@ -1450,7 +1455,7 @@ func (n *bridge) Stop() error {
 			return err
 		}
 
-		err = vswitch.BridgeDelete(n.name)
+		err = vswitch.DeleteBridge(context.TODO(), n.name)
 		if err != nil {
 			return err
 		}

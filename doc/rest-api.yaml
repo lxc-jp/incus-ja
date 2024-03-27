@@ -2432,6 +2432,85 @@ definitions:
         title: InstancesPut represents the fields available for a mass update.
         type: object
         x-go-package: github.com/lxc/incus/shared/api
+    MetadataConfig:
+        additionalProperties:
+            additionalProperties:
+                $ref: '#/definitions/MetadataConfigGroup'
+            type: object
+        description: MetadataConfig repreents metadata about configuration keys
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
+    MetadataConfigEntityName:
+        description: |-
+            MetadataConfigEntityName represents a main API object type
+            Example: instance
+        type: string
+        x-go-package: github.com/lxc/incus/shared/api
+    MetadataConfigGroup:
+        description: MetadataConfigGroup represents a group of config keys
+        properties:
+            keys:
+                items:
+                    additionalProperties:
+                        $ref: '#/definitions/MetadataConfigKey'
+                    type: object
+                type: array
+                x-go-name: Keys
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
+    MetadataConfigGroupName:
+        description: |-
+            MetadataConfigGroupName represents the name of a group of config keys
+            Example: volatile
+        type: string
+        x-go-package: github.com/lxc/incus/shared/api
+    MetadataConfigKey:
+        description: MetadataConfigKey describe a configuration key
+        properties:
+            condition:
+                description: Condition specifies the condition that must be met for the option to be taken into account
+                example: container
+                type: string
+                x-go-name: Condition
+            defaultdesc:
+                description: DefaultDesc specify default value for configuration
+                example: '"`DHCP on eth0`"'
+                type: string
+                x-go-name: Default
+            liveupdate:
+                description: LiveUpdate specifies whether the server must be restarted for the option to be updated
+                example: '"no"'
+                type: string
+                x-go-name: LiveUpdate
+            longdesc:
+                description: LongDesc provides long description for the option
+                example: '"Specify the kernel modules as a comma-separated list."'
+                type: string
+                x-go-name: LongDescription
+            scope:
+                description: Scope defines if option apply to cluster or to the local server
+                example: global
+                type: string
+                x-go-name: Scope
+            shortdesc:
+                description: ShortDesc provides short description for the configuration
+                example: '"Kernel modules to load before starting the instance"'
+                type: string
+                x-go-name: Description
+            type:
+                description: Type specifies the type of the option
+                example: string
+                type: string
+                x-go-name: Type
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
+    MetadataConfiguration:
+        description: MetadataConfiguration represents a server's exposed configuration metadata
+        properties:
+            configs:
+                $ref: '#/definitions/MetadataConfig'
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
     Network:
         description: Network represents a network
         properties:
@@ -2819,6 +2898,100 @@ definitions:
                 x-go-name: Ports
         type: object
         x-go-package: github.com/lxc/incus/shared/api
+    NetworkIntegration:
+        properties:
+            config:
+                additionalProperties:
+                    type: string
+                description: Integration configuration map (refer to doc/network-integrations.md)
+                example:
+                    user.mykey: foo
+                type: object
+                x-go-name: Config
+            description:
+                description: Description of the network integration
+                example: OVN interconnection for region1
+                type: string
+                x-go-name: Description
+            name:
+                description: The name of the integration
+                example: region1
+                type: string
+                x-go-name: Name
+            type:
+                description: The type of integration
+                example: ovn
+                type: string
+                x-go-name: Type
+            used_by:
+                description: List of URLs of objects using this network integration
+                example:
+                    - /1.0/networks/foo
+                    - /1.0/networks/bar
+                items:
+                    type: string
+                readOnly: true
+                type: array
+                x-go-name: UsedBy
+        title: NetworkIntegration represents a network integration.
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
+    NetworkIntegrationPost:
+        description: NetworkIntegrationPost represents the fields required to rename a network integration
+        properties:
+            name:
+                description: The new name for the network integration
+                example: region2
+                type: string
+                x-go-name: Name
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
+    NetworkIntegrationPut:
+        description: NetworkIntegrationPut represents the modifiable fields of a network integration
+        properties:
+            config:
+                additionalProperties:
+                    type: string
+                description: Integration configuration map (refer to doc/network-integrations.md)
+                example:
+                    user.mykey: foo
+                type: object
+                x-go-name: Config
+            description:
+                description: Description of the network integration
+                example: OVN interconnection for region1
+                type: string
+                x-go-name: Description
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
+    NetworkIntegrationsPost:
+        description: NetworkIntegrationsPost represents the fields of a new network integration
+        properties:
+            config:
+                additionalProperties:
+                    type: string
+                description: Integration configuration map (refer to doc/network-integrations.md)
+                example:
+                    user.mykey: foo
+                type: object
+                x-go-name: Config
+            description:
+                description: Description of the network integration
+                example: OVN interconnection for region1
+                type: string
+                x-go-name: Description
+            name:
+                description: The name of the integration
+                example: region1
+                type: string
+                x-go-name: Name
+            type:
+                description: The type of integration
+                example: ovn
+                type: string
+                x-go-name: Type
+        type: object
+        x-go-package: github.com/lxc/incus/shared/api
     NetworkLease:
         description: NetworkLease represents a DHCP lease
         properties:
@@ -3035,6 +3208,11 @@ definitions:
                 readOnly: true
                 type: string
                 x-go-name: Status
+            target_integration:
+                description: Name of the target integration
+                example: ovn-ic1
+                type: string
+                x-go-name: TargetIntegration
             target_network:
                 description: Name of the target network
                 example: network1
@@ -3047,6 +3225,11 @@ definitions:
                 readOnly: true
                 type: string
                 x-go-name: TargetProject
+            type:
+                description: Type of peer
+                example: local
+                type: string
+                x-go-name: Type
             used_by:
                 description: List of URLs of objects using this network peering
                 example:
@@ -3099,6 +3282,11 @@ definitions:
                 example: project1-network1
                 type: string
                 x-go-name: Name
+            target_integration:
+                description: Name of the target integration
+                example: ovn-ic1
+                type: string
+                x-go-name: TargetIntegration
             target_network:
                 description: Name of the target network
                 example: network1
@@ -3109,6 +3297,11 @@ definitions:
                 example: project1
                 type: string
                 x-go-name: TargetProject
+            type:
+                description: Type of peer
+                example: local
+                type: string
+                x-go-name: Type
         type: object
         x-go-package: github.com/lxc/incus/shared/api
     NetworkPost:
@@ -5077,6 +5270,11 @@ definitions:
                 example: "2221"
                 type: string
                 x-go-name: ProductID
+            serial:
+                description: USB serial number
+                example: DAE005fp
+                type: string
+                x-go-name: Serial
             speed:
                 description: Transfer speed (Mbit/s)
                 example: 12
@@ -10517,6 +10715,242 @@ paths:
             summary: Get the network allocations in use (`network`, `network-forward` and `load-balancer` and `instance`)
             tags:
                 - network-allocations
+    /1.0/network-integrations:
+        get:
+            description: Returns a list of network integrations (URLs).
+            operationId: network_integrations_get
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: API endpoints
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                description: List of endpoints
+                                example: |-
+                                    [
+                                      "/1.0/network-integrations/region2",
+                                      "/1.0/network-integrations/region3"
+                                    ]
+                                items:
+                                    type: string
+                                type: array
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the network integrations
+            tags:
+                - network-integrations
+        post:
+            consumes:
+                - application/json
+            description: Creates a new network integration.
+            operationId: network_integrations_post
+            parameters:
+                - description: integration
+                  in: body
+                  name: integration
+                  required: true
+                  schema:
+                    $ref: '#/definitions/NetworkIntegrationsPost'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Add a network integration
+            tags:
+                - network-integrations
+    /1.0/network-integrations/{integration}:
+        delete:
+            description: Removes the network integration.
+            operationId: network_integration_delete
+            produces:
+                - application/json
+            responses:
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Delete the network integration
+            tags:
+                - network-integrations
+        get:
+            description: Gets a specific network integration.
+            operationId: network_integration_get
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: integration
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                $ref: '#/definitions/NetworkIntegration'
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the network integration
+            tags:
+                - network-integrations
+        patch:
+            consumes:
+                - application/json
+            description: Updates a subset of the network integration configuration.
+            operationId: network_integration_patch
+            parameters:
+                - description: integration configuration
+                  in: body
+                  name: integration
+                  required: true
+                  schema:
+                    $ref: '#/definitions/NetworkIntegrationPut'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "412":
+                    $ref: '#/responses/PreconditionFailed'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Partially update the network integration
+            tags:
+                - network-integrations
+        post:
+            description: Renames the network integration.
+            operationId: network_integration_post
+            parameters:
+                - description: integration configuration
+                  in: body
+                  name: integration
+                  required: true
+                  schema:
+                    $ref: '#/definitions/NetworkIntegrationPost'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Rename the network integration
+            tags:
+                - network-integrations
+        put:
+            consumes:
+                - application/json
+            description: Updates the entire network integration configuration.
+            operationId: network_integration_put
+            parameters:
+                - description: integration configuration
+                  in: body
+                  name: integration
+                  required: true
+                  schema:
+                    $ref: '#/definitions/NetworkIntegrationPut'
+            produces:
+                - application/json
+            responses:
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "412":
+                    $ref: '#/responses/PreconditionFailed'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Update the network integration
+            tags:
+                - network-integrations
+    /1.0/network-integrations?recursion=1:
+        get:
+            description: Returns a list of network integrations (structs).
+            operationId: network_integrations_get_recursion1
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: API endpoints
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                description: List of network integrations
+                                items:
+                                    $ref: '#/definitions/NetworkIntegration'
+                                type: array
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the network integrations
+            tags:
+                - network-integrations
     /1.0/network-zones:
         get:
             description: Returns a list of network zones (URLs).

@@ -52,6 +52,8 @@ import (
 	instanceDrivers "github.com/lxc/incus/internal/server/instance/drivers"
 	"github.com/lxc/incus/internal/server/instance/instancetype"
 	"github.com/lxc/incus/internal/server/loki"
+	"github.com/lxc/incus/internal/server/network/ovn"
+	"github.com/lxc/incus/internal/server/network/ovs"
 	networkZone "github.com/lxc/incus/internal/server/network/zone"
 	"github.com/lxc/incus/internal/server/node"
 	"github.com/lxc/incus/internal/server/project"
@@ -161,6 +163,10 @@ type Daemon struct {
 
 	// Syslog listener cancel function.
 	syslogSocketCancel context.CancelFunc
+
+	// OVN clients.
+	ovnnb *ovn.NB
+	ovnsb *ovn.SB
 }
 
 // DaemonConfig holds configuration values for Daemon.
@@ -260,7 +266,7 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 			if objectType == auth.ObjectTypeImage {
 				var imgInfo *api.Image
 
-				err := d.db.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				err := d.db.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 					var err error
 
 					_, imgInfo, err = tx.GetImage(ctx, fingerprint, dbCluster.ImageFilter{Project: &projectName})
@@ -294,7 +300,7 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 		// Expansion function to deal with project inheritance.
 		expandProject := func(projectName string) string {
 			// Object types that aren't part of projects.
-			if slices.Contains([]auth.ObjectType{auth.ObjectTypeUser, auth.ObjectTypeServer, auth.ObjectTypeCertificate, auth.ObjectTypeStoragePool}, objectType) {
+			if slices.Contains([]auth.ObjectType{auth.ObjectTypeUser, auth.ObjectTypeServer, auth.ObjectTypeCertificate, auth.ObjectTypeStoragePool, auth.ObjectTypeNetworkIntegration}, objectType) {
 				return projectName
 			}
 
@@ -458,6 +464,15 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 		}
 	}
 
+	// Check for JWT token in the request.
+	jwtOk, _, cert := localUtil.CheckJwtToken(r, trustedCerts[certificate.TypeClient])
+	if jwtOk {
+		trusted, username := localUtil.CheckTrustState(*cert, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert(), trustCACertificates)
+		if trusted {
+			return true, username, api.AuthenticationMethodTLS, nil
+		}
+	}
+
 	// Reject unauthorized.
 	return false, "", "", nil
 }
@@ -501,6 +516,8 @@ func (d *Daemon) State() *state.State {
 		ServerClustered:        d.serverClustered,
 		StartTime:              d.startTime,
 		Authorizer:             d.authorizer,
+		OVNNB:                  d.ovnnb,
+		OVNSB:                  d.ovnsb,
 	}
 }
 
@@ -907,12 +924,19 @@ func (d *Daemon) init() error {
 
 	if canUsePidFds() && d.os.LXCFeatures["pidfd"] {
 		d.os.PidFds = true
+		d.os.PidFdsThread = canUseThreadPidFds()
 	}
 
 	if d.os.PidFds {
 		logger.Info(" - pidfds: yes")
 	} else {
 		logger.Info(" - pidfds: no")
+	}
+
+	if d.os.PidFdsThread {
+		logger.Info(" - pidfds for threads: yes")
+	} else {
+		logger.Info(" - pidfds for threads: no")
 	}
 
 	if canUseCoreScheduling() {
@@ -1356,9 +1380,9 @@ func (d *Daemon) init() error {
 
 	d.gateway.HeartbeatOfflineThreshold = d.globalConfig.OfflineThreshold()
 	lokiURL, lokiUsername, lokiPassword, lokiCACert, lokiInstance, lokiLoglevel, lokiLabels, lokiTypes := d.globalConfig.LokiServer()
-	oidcIssuer, oidcClientID, oidcAudience := d.globalConfig.OIDCServer()
+	oidcIssuer, oidcClientID, oidcAudience, oidcClaim := d.globalConfig.OIDCServer()
 	syslogSocketEnabled := d.localConfig.SyslogSocket()
-	openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openFGAAuthorizationModelID := d.globalConfig.OpenFGA()
+	openfgaAPIURL, openfgaAPIToken, openfgaStoreID := d.globalConfig.OpenFGA()
 	instancePlacementScriptlet := d.globalConfig.InstancesPlacementScriptlet()
 
 	d.endpoints.NetworkUpdateTrustedProxy(d.globalConfig.HTTPSTrustedProxy())
@@ -1382,7 +1406,7 @@ func (d *Daemon) init() error {
 
 	// Setup OIDC authentication.
 	if oidcIssuer != "" && oidcClientID != "" {
-		d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience)
+		d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience, oidcClaim)
 		if err != nil {
 			return err
 		}
@@ -1390,15 +1414,9 @@ func (d *Daemon) init() error {
 
 	// Setup OpenFGA authorization.
 	if openfgaAPIURL != "" && openfgaStoreID != "" && openfgaAPIToken != "" {
-		if openFGAAuthorizationModelID == "" {
-			// We should never be missing the model ID at start up if we have other connection details (this means
-			// something went wrong the last time we tried to set it up).
-			logger.Warn("OpenFGA authorization driver is misconfigured, skipping...")
-		} else {
-			err = d.setupOpenFGA(openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openFGAAuthorizationModelID)
-			if err != nil {
-				return fmt.Errorf("Failed to configure OpenFGA: %w", err)
-			}
+		err = d.setupOpenFGA(openfgaAPIURL, openfgaAPIToken, openfgaStoreID)
+		if err != nil {
+			return fmt.Errorf("Failed to configure OpenFGA: %w", err)
 		}
 	}
 
@@ -1412,6 +1430,9 @@ func (d *Daemon) init() error {
 
 		logger.Info("Started BGP server")
 	}
+
+	// Attempt to setup OVN clients.
+	_ = d.setupOVN()
 
 	// Setup DNS listener.
 	d.dns = dns.NewServer(d.db.Cluster, func(name string, full bool) (*dns.Zone, error) {
@@ -1855,7 +1876,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 }
 
 // Setup OpenFGA.
-func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string, authorizationModelID string) error {
+func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string) error {
 	var err error
 
 	if d.authorizer != nil {
@@ -1865,7 +1886,7 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string, au
 		}
 	}
 
-	if apiURL == "" || apiToken == "" || storeID == "" || authorizationModelID == "" {
+	if apiURL == "" || apiToken == "" || storeID == "" {
 		// Reset to default authorizer.
 		d.authorizer, err = auth.LoadAuthorizer(d.shutdownCtx, auth.DriverTLS, logger.Log, d.clientCerts)
 		if err != nil {
@@ -1876,10 +1897,9 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string, au
 	}
 
 	config := map[string]any{
-		"openfga.api.url":        apiURL,
-		"openfga.api.token":      apiToken,
-		"openfga.store.id":       storeID,
-		"openfga.store.model_id": authorizationModelID,
+		"openfga.api.url":   apiURL,
+		"openfga.api.token": apiToken,
+		"openfga.store.id":  storeID,
 	}
 
 	revert := revert.New()
@@ -2424,4 +2444,68 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 	}
 
 	wg.Wait()
+}
+
+func (d *Daemon) setupOVN() error {
+	// Clear any existing clients.
+	d.ovnnb = nil
+	d.ovnsb = nil
+
+	// Connect to OpenVswitch.
+	vswitch, err := ovs.NewVSwitch()
+	if err != nil {
+		return fmt.Errorf("Failed to connect to OVS: %w", err)
+	}
+
+	// Get the OVN southbound address.
+	ovnSBAddr, err := vswitch.GetOVNSouthboundDBRemoteAddress(d.shutdownCtx)
+	if err != nil {
+		return fmt.Errorf("Failed to get OVN southbound connection string: %w", err)
+	}
+
+	// Get the OVN northbound address.
+	ovnNBAddr := d.globalConfig.NetworkOVNNorthboundConnection()
+
+	// Get the SSL certificates if needed.
+	sslCACert, sslClientCert, sslClientKey := d.globalConfig.NetworkOVNSSL()
+
+	// Fallback to filesystem keys.
+	if sslCACert == "" {
+		content, err := os.ReadFile("/etc/ovn/ovn-central.crt")
+		if err == nil {
+			sslCACert = string(content)
+		}
+	}
+
+	if sslClientCert == "" {
+		content, err := os.ReadFile("/etc/ovn/cert_host")
+		if err == nil {
+			sslClientCert = string(content)
+		}
+	}
+
+	if sslClientKey == "" {
+		content, err := os.ReadFile("/etc/ovn/key_host")
+		if err == nil {
+			sslClientKey = string(content)
+		}
+	}
+
+	// Get OVN northbound client.
+	ovnnb, err := ovn.NewNB(ovnNBAddr, sslCACert, sslClientCert, sslClientKey)
+	if err != nil {
+		return err
+	}
+
+	// Get OVN southbound client.
+	ovnsb, err := ovn.NewSB(ovnSBAddr, sslCACert, sslClientCert, sslClientKey)
+	if err != nil {
+		return err
+	}
+
+	// Set the clients.
+	d.ovnnb = ovnnb
+	d.ovnsb = ovnsb
+
+	return nil
 }

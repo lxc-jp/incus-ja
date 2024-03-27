@@ -14,7 +14,7 @@ Incus ではこの目的のためベンチマークツールを提供してい�
 あなたのインストールに`incus-benchmark`が存在しない場合は、ソースからビルドできます。
 `go`（{ref}`requirements-go`参照）がインストールされていることを確認の上、以下のコマンドでツールをインストールしてください:
 
-    go install github.com/lxc/incus/incus-benchmark@latest
+    go install github.com/lxc/incus/cmd/incus-benchmark@latest
 
 ## ツールを実行する
 

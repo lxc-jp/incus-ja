@@ -1,8 +1,8 @@
 (images-remote)=
 # リモートイメージを使用するには
 
-[`incus`](incus.md) CLI コマンドはいくつかのリモートイメージサーバーを初期設定されています。
-概要は{ref}`remote-image-servers`を参照してください。
+[`incus`](incus.md) CLI コマンドは複数のイメージサーバーをサポートでき、Incus用のサーバーが初期設定されています。
+概要は{ref}`image-servers`を参照してください。
 
 ## 設定されたリモートを一覧表示する
 
@@ -13,7 +13,7 @@
 
 [simple streams形式](https://git.launchpad.net/simplestreams/tree/)を使用するリモートサーバーは純粋なイメージサーバーです。
 `incus`形式を使用するサーバーは Incus サーバーであり、イメージサーバーだけとして稼働しているか、通常の Incus サーバーとして稼働するのに加えて追加のイメージを提供しているかのどちらかです。
-詳細は{ref}`remote-image-server-types`を参照してください。
+詳細は{ref}`image-server-types`を参照してください。
 <!-- Include end list remotes -->
 
 ## リモート上の利用可能なイメージを一覧表示する

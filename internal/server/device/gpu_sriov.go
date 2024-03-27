@@ -2,10 +2,8 @@ package device
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
+	"slices"
+	"sync"
 
 	"github.com/lxc/incus/internal/linux"
 	"github.com/lxc/incus/internal/revert"
@@ -16,6 +14,9 @@ import (
 	"github.com/lxc/incus/internal/server/resources"
 	"github.com/lxc/incus/shared/util"
 )
+
+// sriovMu is used to lock concurrent GPU allocations.
+var sriovMu sync.Mutex
 
 type gpuSRIOV struct {
 	deviceCommon
@@ -81,51 +82,20 @@ func (d *gpuSRIOV) Start() (*deviceConfig.RunConfig, error) {
 	runConf := deviceConfig.RunConfig{}
 	saveData := make(map[string]string)
 
-	// Get SRIOV parent, i.e. the actual GPU.
-	parentPCIAddresses, err := d.getParentPCIAddresses()
-	if err != nil {
-		return nil, err
-	}
-
-	var parentPCIAddress string
-	var pciParentDev pcidev.Device
-	vfID := -1
-
 	// Make sure that vfio-pci is loaded.
 	err = linux.LoadModule("vfio-pci")
 	if err != nil {
 		return nil, fmt.Errorf("Error loading %q module: %w", "vfio-pci", err)
 	}
 
-	// Since there might be multiple GPUs, we iterate through them and get the first free
-	// virtual function.
-	for _, parentPCIAddress = range parentPCIAddresses {
-		// Get PCI information about the GPU device.
-		devicePath := filepath.Join("/sys/bus/pci/devices", parentPCIAddress)
+	// Get global SR-IOV lock to prevent concurent allocations of the VF.
+	sriovMu.Lock()
+	defer sriovMu.Unlock()
 
-		pciParentDev, err = pcidev.ParseUeventFile(filepath.Join(devicePath, "uevent"))
-		if err != nil {
-			err = fmt.Errorf("Failed to get PCI device info for GPU %q: %w", parentPCIAddress, err)
-			continue
-		}
-
-		vfID, err = d.findFreeVirtualFunction(pciParentDev)
-		if err != nil {
-			err = fmt.Errorf("Failed to find free virtual function: %w", err)
-			continue
-		}
-
-		if vfID > -1 {
-			break
-		}
-	}
-
+	// Get SRIOV VF.
+	parentPCIAddress, vfID, err := d.getVF()
 	if err != nil {
 		return nil, err
-	}
-
-	if vfID == -1 {
-		return nil, fmt.Errorf("All virtual functions on parent device seem to be in use")
 	}
 
 	vfPCIDev, err := d.setupSriovParent(parentPCIAddress, vfID, saveData)
@@ -146,14 +116,84 @@ func (d *gpuSRIOV) Start() (*deviceConfig.RunConfig, error) {
 	return &runConf, nil
 }
 
-// getParentPCIAddresses returns the PCI addresses of parent GPUs.
-func (d *gpuSRIOV) getParentPCIAddresses() ([]string, error) {
+// getVF returns the parent PCI address and VF id for a matching GPU.
+func (d *gpuSRIOV) getVF() (string, int, error) {
+	// List all the GPUs.
 	gpus, err := resources.GetGPU()
 	if err != nil {
-		return nil, err
+		return "", -1, err
 	}
 
-	var parentPCIAddresses []string
+	// If NUMA restricted, build up a list of nodes.
+	var numaNodeSet []int64
+	var numaNodeSetFallback []int64
+
+	numaNodes := d.inst.ExpandedConfig()["limits.cpu.nodes"]
+	if numaNodes != "" {
+		if numaNodes == "balanced" {
+			numaNodes = d.inst.ExpandedConfig()["volatile.cpu.nodes"]
+		}
+
+		// Parse the NUMA restriction.
+		numaNodeSet, err = resources.ParseNumaNodeSet(numaNodes)
+		if err != nil {
+			return "", -1, err
+		}
+
+		// List all the CPUs.
+		cpus, err := resources.GetCPU()
+		if err != nil {
+			return "", -1, err
+		}
+
+		// Get list of socket IDs from the list of NUMA nodes.
+		numaSockets := make([]uint64, 0, len(cpus.Sockets))
+
+		for _, cpuSocket := range cpus.Sockets {
+			if slices.Contains(numaSockets, cpuSocket.Socket) {
+				continue
+			}
+
+			for _, cpuCore := range cpuSocket.Cores {
+				found := false
+				for _, cpuThread := range cpuCore.Threads {
+					if slices.Contains(numaNodeSet, int64(cpuThread.NUMANode)) {
+						numaSockets = append(numaSockets, cpuSocket.Socket)
+						found = true
+						break
+					}
+				}
+
+				if found {
+					break
+				}
+			}
+		}
+
+		// Get the list of NUMA nodes from the socket list.
+		numaNodeSetFallback = []int64{}
+
+		for _, cpuSocket := range cpus.Sockets {
+			if !slices.Contains(numaSockets, cpuSocket.Socket) {
+				continue
+			}
+
+			for _, cpuCore := range cpuSocket.Cores {
+				for _, cpuThread := range cpuCore.Threads {
+					if !slices.Contains(numaNodeSetFallback, int64(cpuThread.NUMANode)) {
+						numaNodeSetFallback = append(numaNodeSetFallback, int64(cpuThread.NUMANode))
+					}
+				}
+			}
+		}
+	}
+
+	// Locate a suitable VF from the least loaded suitable card.
+	var pciAddress string
+	var vfID int
+	var cardTotal int
+	var cardAvailable int
+	cardNUMA := -1
 
 	for _, gpu := range gpus.Cards {
 		// Skip any cards that are not selected.
@@ -161,14 +201,78 @@ func (d *gpuSRIOV) getParentPCIAddresses() ([]string, error) {
 			continue
 		}
 
-		parentPCIAddresses = append(parentPCIAddresses, gpu.PCIAddress)
+		// Skip any card without SR-IOV.
+		if gpu.SRIOV == nil {
+			continue
+		}
+
+		// Find available VFs.
+		vfs := []int{}
+
+		for id, vf := range gpu.SRIOV.VFs {
+			if vf.Driver == "" {
+				vfs = append(vfs, id)
+			}
+		}
+
+		// Skip if no available VFs.
+		if len(vfs) == 0 {
+			continue
+		}
+
+		// Handle NUMA.
+		if numaNodeSet != nil {
+			// Switch to current card if it matches our main NUMA node and existing card doesn't.
+			if !slices.Contains(numaNodeSet, int64(cardNUMA)) && slices.Contains(numaNodeSet, int64(gpu.NUMANode)) {
+				pciAddress = gpu.PCIAddress
+				vfID = vfs[0]
+				cardAvailable = len(vfs)
+				cardTotal = int(gpu.SRIOV.CurrentVFs)
+				cardNUMA = int(gpu.NUMANode)
+
+				continue
+			}
+
+			// Skip current card if we already have a card matching our main NUMA node and this card doesn't.
+			if slices.Contains(numaNodeSet, int64(cardNUMA)) && !slices.Contains(numaNodeSet, int64(gpu.NUMANode)) {
+				continue
+			}
+
+			// Switch to current card if it matches a fallback NUMA node and existing card doesn't.
+			if !slices.Contains(numaNodeSetFallback, int64(cardNUMA)) && slices.Contains(numaNodeSetFallback, int64(gpu.NUMANode)) {
+				pciAddress = gpu.PCIAddress
+				vfID = vfs[0]
+				cardAvailable = len(vfs)
+				cardTotal = int(gpu.SRIOV.CurrentVFs)
+				cardNUMA = int(gpu.NUMANode)
+
+				continue
+			}
+
+			// Skip current card if we already have a card matching a fallback NUMA node and this card isn't on the main or fallback node.
+			if slices.Contains(numaNodeSetFallback, int64(cardNUMA)) && !slices.Contains(numaNodeSetFallback, int64(gpu.NUMANode)) && !slices.Contains(numaNodeSet, int64(gpu.NUMANode)) {
+				continue
+			}
+		}
+
+		// Prioritize less busy cards.
+		if pciAddress == "" || (float64(len(vfs))/float64(gpu.SRIOV.CurrentVFs)) > (float64(cardAvailable)/float64(cardTotal)) {
+			pciAddress = gpu.PCIAddress
+			vfID = vfs[0]
+			cardAvailable = len(vfs)
+			cardTotal = int(gpu.SRIOV.CurrentVFs)
+			cardNUMA = int(gpu.NUMANode)
+
+			continue
+		}
 	}
 
-	if len(parentPCIAddresses) == 0 {
-		return nil, fmt.Errorf("Failed to detect requested GPU device")
+	// Check if any physical GPU was found to match.
+	if pciAddress == "" {
+		return "", -1, fmt.Errorf("Couldn't find a matching GPU with available VFs")
 	}
 
-	return parentPCIAddresses, nil
+	return pciAddress, vfID, nil
 }
 
 // setupSriovParent configures a SR-IOV virtual function (VF) device on parent and stores original properties of
@@ -218,39 +322,6 @@ func (d *gpuSRIOV) getVFDevicePCISlot(parentPCIAddress string, vfID string) (pci
 	}
 
 	return pciDev, nil
-}
-
-func (d *gpuSRIOV) findFreeVirtualFunction(parentDev pcidev.Device) (int, error) {
-	// Get number of currently enabled VFs.
-	sriovNumVFs := fmt.Sprintf("/sys/bus/pci/devices/%s/sriov_numvfs", parentDev.SlotName)
-
-	sriovNumVfsBuf, err := os.ReadFile(sriovNumVFs)
-	if err != nil {
-		return 0, err
-	}
-
-	sriovNumVfsStr := strings.TrimSpace(string(sriovNumVfsBuf))
-	sriovNum, err := strconv.Atoi(sriovNumVfsStr)
-	if err != nil {
-		return 0, err
-	}
-
-	vfID := -1
-
-	for i := 0; i < sriovNum; i++ {
-		pciDev, err := pcidev.ParseUeventFile(fmt.Sprintf("/sys/bus/pci/devices/%s/virtfn%d/uevent", parentDev.SlotName, i))
-		if err != nil {
-			return 0, err
-		}
-
-		// We assume the virtual function is free if there's no driver bound to it.
-		if pciDev.Driver == "" {
-			vfID = i
-			break
-		}
-	}
-
-	return vfID, nil
 }
 
 // Stop is run when the device is removed from the instance.
