@@ -28,3 +28,6 @@ USB デバイスは、指定された USB デバイスをインスタンスに�
 `required`  | bool   | `false`      | このデバイスがインスタンスの起動に必要かどうか（デフォルトは`false`で、すべてのデバイスがホットプラグ可能です）
 `uid`       | int    | `0`          | コンテナのみ: インスタンス内のデバイス所有者のUID
 `vendorid`  | string | -            | USBデバイスのベンダーID
+`serial`    | string | -            | USBデバイスのシリアルナンバー
+`busnum`    | int    | -            | USBデバイスがアタッチされている先のバスナンバー
+`devnum`    | int    | -            | USBデバイスのデバイスナンバー

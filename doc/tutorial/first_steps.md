@@ -313,6 +313,6 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
 
 1. スナップショットを削除します。
 
-       incus delete first/clean
+       incus snapshot delete first clean
 
 詳細は{ref}`instances-snapshots`を参照してください。

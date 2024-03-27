@@ -36,7 +36,7 @@
 
 - 既存のイメージをエクスポートする（{ref}`images-manage-export`参照）
 - `distrobuilder`でイメージを生成する（{ref}`images-create-build`参照）
-- {ref}`remote image server <remote-image-servers>`からイメージファイルをダウンロードする（イメージをファイルにダウンロードしてインポートするより、{ref}`リモートのイメージを使用する <images-remote>`ほうが通常は簡単なことに注意してください）
+- {ref}`remote image server <image-servers>`からイメージファイルをダウンロードする（イメージをファイルにダウンロードしてインポートするより、{ref}`リモートのイメージを使用する <images-remote>`ほうが通常は簡単なことに注意してください）
 
 ### ローカルファイルシステムからインポートする
 

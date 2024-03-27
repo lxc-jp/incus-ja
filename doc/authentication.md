@@ -57,6 +57,13 @@ Incus サーバーが信頼する TLS 証明書のリストは、 [`incus config
 TLS クライアントから Incus へのアクセスを{ref}`authorization-tls`で制限できます。
 クライアントへの信頼を取り消すには、[`incus config trust remove <fingerprint>`](incus_config_trust_remove.md) でそのクライアント証明書をサーバーから削除します。
 
+(authentication-tls-jwt)=
+#### TLS 認証の実行に `JSON Web Token` (`JWT`) を使う
+
+認証にクライアントの TLS 証明書を直接使う代わりに、Incus はユーザーが `bearer` トークンを導出し、それを  HTTP `Authorization` ヘッダー経由で使用する方法もサポートします。
+
+このためには、ユーザーはクライアント証明書の完全なフィンガープリントを設定した `Subject` フィールドを持つ署名した `JWT` を生成する必要があります。それは有効な `NotBefore` と `NotAfter` フィールドを持ち、クライアントの証明書の秘密鍵で署名する必要があります。
+
 (authentication-add-certs)=
 #### 信頼できる証明書をサーバーに追加する
 

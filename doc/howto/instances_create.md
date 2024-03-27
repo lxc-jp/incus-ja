@@ -108,6 +108,14 @@ ISO イメージから仮想マシンを作成しインストールしたいと�
 
     incus init iso-vm --empty --vm
 
+```{note}
+インストールされているオペレーティングシステムの必要に応じて、より多くの CPU、メモリやストレージを仮想マシンに割り当てたいかもしれません。
+
+例えば、2 CPU、4 GiB メモリと 50 GiB のストレージなら、以下のようにします:
+
+    incus init iso-vm --empty --vm -c limits.cpu=2 -c limits.memory=4GiB -d root,size=50GiB
+```
+
 次のステップは ISO イメージをインポートし、後で仮想マシンにストレージボリュームとしてアタッチできるようにします:
 
     incus storage volume import <pool> <path-to-image.iso> iso-volume --type=iso

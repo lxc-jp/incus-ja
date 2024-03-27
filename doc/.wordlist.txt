@@ -15,6 +15,7 @@ ASN
 AXFR
 backend
 backends
+backported
 balancer
 balancers
 benchmarking
@@ -57,6 +58,7 @@ DHCP
 DHCPv
 Diátaxis
 Diffie
+Distrobuilder
 DNS
 DNSSEC
 DoS
@@ -76,6 +78,7 @@ failover
 FQDNs
 Furo
 gapped
+GARM
 GARP
 GbE
 Gbit
@@ -84,6 +87,7 @@ GiB
 Gibit
 GID
 GIDs
+Github
 Golang
 goroutines
 GPUs
@@ -96,6 +100,7 @@ hotplug
 hotplugged
 hotplugging
 HTTPS
+hwdata
 ICMP
 idmap
 idmapped
@@ -169,6 +174,7 @@ OpenID
 OpenMetrics
 OpenSSL
 OpenSUSE
+OpenTofu
 OSD
 overcommit
 overcommitting
@@ -261,6 +267,7 @@ syslog
 Tbit
 TCP
 Telegraf
+Terraform
 TiB
 Tibit
 TLS

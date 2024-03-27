@@ -43,7 +43,7 @@ Incus を以下のコマンドでインストールします:
 ```
 
 ```{group-tab} Debian
-Debian ユーザーには現在 2 つの選択肢があります。
+Debian ユーザーには現在 3 つの選択肢があります。
 
 1. ネイティブの `incus` パッケージ
 
@@ -51,6 +51,14 @@ Debian ユーザーには現在 2 つの選択肢があります。
     このパッケージは次回の Debian 13 (`trixie`) リリース内に含まれる予定です。
 
     それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
+
+1. ネイティブの `incus` のバックポートされたパッケージ
+
+   ネイティブの `incus` のバックポートされたパッケージが現在 Debian 12 (`bookworm`) ユーザーに提供されています。
+
+   Debian 12 のシステムでは、単に `apt install incus/bookworm-backports` と実行すれば Incus がインストールされます。
+
+   ****NOTE:**** バックポートされたパッケージのユーザーは Debian Bug Tracker にはバグ報告しないでください。代わりに [Incus のフォーラム](https://discuss.linuxcontainers.org) に報告するか Debian のパッケージ作成者に直接報告してください。
 
 1. Zabbly パッケージレポジトリ
 

@@ -69,6 +69,7 @@ Incus コンテナはカーネルモジュールをロードできないため�
 - `client.crt`：クライアント証明書（要求に応じて生成されます）
 - `client.key`：クライアントキー（要求に応じて生成されます）
 - `config.yml`：設定ファイル（`remotes`、`aliases`などの情報）
+- `clientcerts/`: remote 毎のクライアント証明書のディレクトリー
 - `servercerts/`：`remotes`に関連するサーバー証明書が保存されているディレクトリー
 
 ## なぜ他のホストから Incus インスタンスに ping を送ることができないのですか？

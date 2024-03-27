@@ -8,6 +8,8 @@
 このため、 Incus では 2 つの OVN ネットワーク間でルーティング関係を作成できます。
 この方法を使うと 2 つのネットワーク間での通信がアップリンクのネットワーク経由ではなく OVN サブシステム内で完結できます。
 
+さらに、ネットワーク統合を使うと、別のクラスター上で動いている場合であっても 2 つの OVN ネットワークをピアリングできます。
+
 ## ネットワーク間にルーティング関係を作成する
 
 2 つのネットワーク間にルーティング関係を作成するには、両方のネットワークにネットワークピアを作成する必要があります。
@@ -27,6 +29,10 @@
     incus network peer create <network1> <peering_name> <project2/network2> [configuration_options] --project=<project1>
     incus network peer create <network2> <peering_name> <project1/network1> [configuration_options] --project=<project2>
 
+ネットワーク統合を使ったリモートのピアリングは以下のように作成します:
+
+    incus network peer create <network1> <peering_name> <integration name> [configuration_options] --type=remote
+
 ```{important}
 プロジェクトまたはネットワークの名前が間違っている場合、コマンドは対応するプロジェクトやネットワークが存在しないというエラーは出さず、ルーティング関係はペンディング状態のままになります。
 これは他のプロジェクトのユーザがプロジェクトやネットワークが存在するか調べられないようにするための（訳注: セキュリティ上の）仕様です。
@@ -36,14 +42,15 @@
 
 ピアのルーティング関係には以下のプロパティがあります。
 
-プロパティ       | 型         | 必須 | 説明
-:--              | :--        | :--      | :--
-`name`           | string     | yes      | ローカルネットワーク上のネットワークピアの名前
-`description`    | string     | no       | ネットワークピアの説明
-`config`         | string set | no       | 設定のキーバリューペアー（`user.*` のカスタムキーのみサポート）
-`target_project` | string     | yes      | 対象のネットワークがどのプロジェクト内に存在するか（作成時に必須）
-`target_network` | string     | yes      | どのネットワークとピアを作成するか（作成時に必須）
-`status`         | string     | --       | 作成中か作成完了（対象のネットワークと相互にピアリングした状態）かを示すステータス
+プロパティ           | 型         | 必須 | 説明
+:--                  | :--        | :--  | :--
+`name`               | string     | yes  | ローカルネットワーク上のネットワークピアの名前
+`description`        | string     | no   | ネットワークピアの説明
+`config`             | string set | no   | 設定のキーバリューペアー（`user.*` のカスタムキーのみサポート）
+`target_integration` | string     | no   | 統合の名前（リモートピアの作成時に必須）
+`target_project`     | string     | yes  | 対象のネットワークがどのプロジェクト内に存在するか（作成時に必須）
+`target_network`     | string     | yes  | どのネットワークとピアを作成するか（作成時に必須）
+`status`             | string     | --   | 作成中か作成完了（対象のネットワークと相互にピアリングした状態）かを示すステータス
 
 ## ルーティング関係の一覧を表示する
 
