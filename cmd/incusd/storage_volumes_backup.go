@@ -192,7 +192,7 @@ func storagePoolVolumeTypeCustomBackupsGet(d *Daemon, r *http.Request) response.
 
 	var poolID int64
 
-	err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		var err error
 
 		poolID, _, _, err = tx.GetStoragePool(ctx, poolName)
@@ -336,7 +336,7 @@ func storagePoolVolumeTypeCustomBackupsPost(d *Daemon, r *http.Request) response
 
 	var poolID int64
 
-	err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		var err error
 
 		poolID, _, _, err = tx.GetStoragePool(ctx, poolName)
@@ -564,12 +564,12 @@ func storagePoolVolumeTypeCustomBackupGet(d *Daemon, r *http.Request) response.R
 
 	fullName := volumeName + internalInstance.SnapshotDelimiter + backupName
 
-	backup, err := storagePoolVolumeBackupLoadByName(s, projectName, poolName, fullName)
+	entry, err := storagePoolVolumeBackupLoadByName(r.Context(), s, projectName, poolName, fullName)
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	return response.SyncResponse(true, backup.Render())
+	return response.SyncResponse(true, entry.Render())
 }
 
 // swagger:operation POST /1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}/backups/{backupName} storage storage_pool_volumes_type_backup_post
@@ -675,7 +675,7 @@ func storagePoolVolumeTypeCustomBackupPost(d *Daemon, r *http.Request) response.
 
 	oldName := volumeName + internalInstance.SnapshotDelimiter + backupName
 
-	backup, err := storagePoolVolumeBackupLoadByName(s, projectName, poolName, oldName)
+	entry, err := storagePoolVolumeBackupLoadByName(r.Context(), s, projectName, poolName, oldName)
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -683,7 +683,7 @@ func storagePoolVolumeTypeCustomBackupPost(d *Daemon, r *http.Request) response.
 	newName := volumeName + internalInstance.SnapshotDelimiter + req.Name
 
 	rename := func(op *operations.Operation) error {
-		err := backup.Rename(newName)
+		err := entry.Rename(newName)
 		if err != nil {
 			return err
 		}
@@ -791,13 +791,13 @@ func storagePoolVolumeTypeCustomBackupDelete(d *Daemon, r *http.Request) respons
 
 	fullName := volumeName + internalInstance.SnapshotDelimiter + backupName
 
-	backup, err := storagePoolVolumeBackupLoadByName(s, projectName, poolName, fullName)
+	entry, err := storagePoolVolumeBackupLoadByName(r.Context(), s, projectName, poolName, fullName)
 	if err != nil {
 		return response.SmartError(err)
 	}
 
 	remove := func(op *operations.Operation) error {
-		err := backup.Delete()
+		err := entry.Delete()
 		if err != nil {
 			return err
 		}
@@ -902,7 +902,7 @@ func storagePoolVolumeTypeCustomBackupExportGet(d *Daemon, r *http.Request) resp
 	fullName := volumeName + internalInstance.SnapshotDelimiter + backupName
 
 	// Ensure the volume exists
-	_, err = storagePoolVolumeBackupLoadByName(s, projectName, poolName, fullName)
+	_, err = storagePoolVolumeBackupLoadByName(r.Context(), s, projectName, poolName, fullName)
 	if err != nil {
 		return response.SmartError(err)
 	}

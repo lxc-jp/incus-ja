@@ -76,6 +76,11 @@ func (t *tls) CheckPermission(ctx context.Context, r *http.Request, object Objec
 		return api.StatusErrorf(http.StatusForbidden, "Certificate is restricted")
 	}
 
+	// Don't allow project modifications.
+	if object.Type() == ObjectTypeProject && entitlement == EntitlementCanEdit {
+		return api.StatusErrorf(http.StatusForbidden, "Certificate is restricted")
+	}
+
 	// Check project level permissions against the certificates project list.
 	projectName := object.Project()
 	if !slices.Contains(projectNames, projectName) {
@@ -115,13 +120,15 @@ func (t *tls) GetPermissionChecker(ctx context.Context, r *http.Request, entitle
 		return nil, err
 	}
 
-	if isNotRestricted || (certType == certificate.TypeMetrics && entitlement == EntitlementCanViewMetrics) {
+	if isNotRestricted {
 		return allowFunc(true), nil
 	}
 
-	if details.isAllProjectsRequest {
-		// Only admins (users with non-restricted certs) can use the all-projects parameter.
-		return nil, api.StatusErrorf(http.StatusForbidden, "Certificate is restricted")
+	// Handle project-restricted metrics access.
+	if certType == certificate.TypeMetrics && entitlement == EntitlementCanViewMetrics {
+		return func(o Object) bool {
+			return slices.Contains(projectNames, o.Project())
+		}, nil
 	}
 
 	// Check server level object types
@@ -141,7 +148,7 @@ func (t *tls) GetPermissionChecker(ctx context.Context, r *http.Request, entitle
 	}
 
 	// Error if user does not have access to the project (unless we're getting projects, where we want to filter the results).
-	if !slices.Contains(projectNames, details.projectName) && objectType != ObjectTypeProject {
+	if !details.isAllProjectsRequest && !slices.Contains(projectNames, details.projectName) && objectType != ObjectTypeProject {
 		return nil, api.StatusErrorf(http.StatusForbidden, "User does not have permissions for project %q", details.projectName)
 	}
 
@@ -171,7 +178,13 @@ func (t *tls) certificateDetails(fingerprint string) (certificate.Type, bool, []
 	metricCerts := certs[certificate.TypeMetrics]
 	_, ok = metricCerts[fingerprint]
 	if ok {
-		return certificate.TypeMetrics, false, nil, nil
+		projectNames, ok := projects[fingerprint]
+		if !ok {
+			// Certificate is not restricted.
+			return certificate.TypeClient, true, nil, nil
+		}
+
+		return certificate.TypeMetrics, false, projectNames, nil
 	}
 
 	// If we're in a CA environment, it's possible for a certificate to be trusted despite not being present in the trust store.

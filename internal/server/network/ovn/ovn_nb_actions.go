@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -125,6 +124,7 @@ type OVNSwitchPortOpts struct {
 	Parent       OVNSwitchPort      // Optional, if set a nested port is created.
 	VLAN         uint16             // Optional, use with Parent to request a specific VLAN for nested port.
 	Location     string             // Optional, use to indicate the name of the server this port is bound to.
+	RouterPort   OVNRouterPort      // Optional, the name of the associated logical router port.
 }
 
 // OVNACLRule represents an ACL rule that can be added to a logical switch or port group.
@@ -349,41 +349,111 @@ func (o *NB) LogicalRouterRouteDelete(routerName OVNRouter, prefixes ...net.IPNe
 	return nil
 }
 
-// LogicalRouterPortAdd adds a named logical router port to a logical router.
-func (o *NB) LogicalRouterPortAdd(routerName OVNRouter, portName OVNRouterPort, mac net.HardwareAddr, gatewayMTU uint32, ipAddr []*net.IPNet, mayExist bool) error {
-	if mayExist {
-		// Check if it exists and update addresses.
-		_, err := o.nbctl("list", "Logical_Router_Port", string(portName))
-		if err == nil {
-			// Router port exists.
-			ips := make([]string, 0, len(ipAddr))
-			for _, ip := range ipAddr {
-				ips = append(ips, ip.String())
-			}
+// GetLogicalRouterPort gets the OVN database record for the logical router port.
+func (o *NB) GetLogicalRouterPort(ctx context.Context, portName OVNRouterPort) (*ovnNB.LogicalRouterPort, error) {
+	logicalRouterPort := &ovnNB.LogicalRouterPort{
+		Name: string(portName),
+	}
 
-			_, err := o.nbctl("set", "Logical_Router_Port", string(portName),
-				fmt.Sprintf(`networks="%s"`, strings.Join(ips, `","`)),
-				fmt.Sprintf(`mac="%s"`, mac.String()),
-				fmt.Sprintf("options:gateway_mtu=%d", gatewayMTU),
-			)
-			if err != nil {
-				return err
-			}
+	err := o.get(ctx, logicalRouterPort)
+	if err != nil {
+		return nil, err
+	}
 
-			return nil
+	return logicalRouterPort, nil
+}
+
+// CreateLogicalRouterPort adds a named logical router port to a logical router.
+func (o *NB) CreateLogicalRouterPort(ctx context.Context, routerName OVNRouter, portName OVNRouterPort, mac net.HardwareAddr, gatewayMTU uint32, ipAddr []*net.IPNet, haChassisGroupName OVNChassisGroup, mayExist bool) error {
+	// Prepare the addresses.
+	networks := make([]string, 0, len(ipAddr))
+
+	for _, addr := range ipAddr {
+		networks = append(networks, addr.String())
+	}
+
+	// Prepare the new router port entry.
+	logicalRouterPort := ovnNB.LogicalRouterPort{
+		Name: string(portName),
+		UUID: "lrp",
+	}
+
+	// Check if the entry already exists.
+	err := o.get(ctx, &logicalRouterPort)
+	if err != nil && err != ErrNotFound {
+		return err
+	}
+
+	if logicalRouterPort.UUID != "lrp" && !mayExist {
+		return ErrExists
+	}
+
+	// Apply the configuration.
+	logicalRouterPort.MAC = mac.String()
+	logicalRouterPort.Networks = networks
+	if haChassisGroupName != "" {
+		haChassisGroup := ovnNB.HAChassisGroup{
+			Name: string(haChassisGroupName),
 		}
+
+		err = o.get(ctx, &haChassisGroup)
+		if err != nil {
+			return err
+		}
+
+		logicalRouterPort.HaChassisGroup = &haChassisGroup.UUID
 	}
 
-	args := []string{"lrp-add", string(routerName), string(portName), mac.String()}
-	for _, ipNet := range ipAddr {
-		args = append(args, ipNet.String())
+	if gatewayMTU > 0 {
+		if logicalRouterPort.Options == nil {
+			logicalRouterPort.Options = map[string]string{}
+		}
+
+		logicalRouterPort.Options["gateway_mtu"] = fmt.Sprintf("%d", gatewayMTU)
 	}
 
-	args = append(args, "--", "set", "Logical_Router_Port", string(portName),
-		fmt.Sprintf(`options:gateway_mtu=%d`, gatewayMTU),
-	)
+	operations := []ovsdb.Operation{}
+	if logicalRouterPort.UUID != "lrp" {
+		// If it already exists, update it.
+		updateOps, err := o.client.Where(&logicalRouterPort).Update(&logicalRouterPort)
+		if err != nil {
+			return err
+		}
 
-	_, err := o.nbctl(args...)
+		operations = append(operations, updateOps...)
+	} else {
+		// Else, create it.
+		createOps, err := o.client.Create(&logicalRouterPort)
+		if err != nil {
+			return err
+		}
+
+		operations = append(operations, createOps...)
+
+		// And connect it to the router.
+		logicalRouter := ovnNB.LogicalRouter{
+			Name: string(routerName),
+		}
+
+		updateOps, err := o.client.Where(&logicalRouter).Mutate(&logicalRouter, ovsModel.Mutation{
+			Field:   &logicalRouter.Ports,
+			Mutator: ovsdb.MutateOperationInsert,
+			Value:   []string{logicalRouterPort.UUID},
+		})
+		if err != nil {
+			return err
+		}
+
+		operations = append(operations, updateOps...)
+	}
+
+	// Apply the database changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
 	if err != nil {
 		return err
 	}
@@ -391,9 +461,56 @@ func (o *NB) LogicalRouterPortAdd(routerName OVNRouter, portName OVNRouterPort, 
 	return nil
 }
 
-// LogicalRouterPortDelete deletes a named logical router port from a logical router.
-func (o *NB) LogicalRouterPortDelete(portName OVNRouterPort) error {
-	_, err := o.nbctl("--if-exists", "lrp-del", string(portName))
+// DeleteLogicalRouterPort deletes a named logical router port from a logical router.
+func (o *NB) DeleteLogicalRouterPort(ctx context.Context, routerName OVNRouter, portName OVNRouterPort) error {
+	operations := []ovsdb.Operation{}
+
+	// Get the logical router port.
+	logicalRouterPort := ovnNB.LogicalRouterPort{
+		Name: string(portName),
+	}
+
+	err := o.get(ctx, &logicalRouterPort)
+	if err != nil {
+		// Logical router port is already gone.
+		if err == ErrNotFound {
+			return nil
+		}
+
+		return err
+	}
+
+	// Remove the port from the router.
+	logicalRouter := ovnNB.LogicalRouter{
+		Name: string(routerName),
+	}
+
+	updateOps, err := o.client.Where(&logicalRouter).Mutate(&logicalRouter, ovsModel.Mutation{
+		Field:   &logicalRouter.Ports,
+		Mutator: ovsdb.MutateOperationDelete,
+		Value:   []string{logicalRouterPort.UUID},
+	})
+	if err != nil {
+		return err
+	}
+
+	operations = append(operations, updateOps...)
+
+	// Delete the port itself.
+	deleteOps, err := o.client.Where(&logicalRouterPort).Delete()
+	if err != nil {
+		return err
+	}
+
+	operations = append(operations, deleteOps...)
+
+	// Apply the changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
 	if err != nil {
 		return err
 	}
@@ -474,38 +591,54 @@ func (o *NB) LogicalRouterPortDeleteIPv6Advertisements(portName OVNRouterPort) e
 	return nil
 }
 
-// LogicalRouterPortLinkChassisGroup links a logical router port to a HA chassis group.
-func (o *NB) LogicalRouterPortLinkChassisGroup(portName OVNRouterPort, haChassisGroupName OVNChassisGroup) error {
-	chassisGroupID, err := o.nbctl("--format=csv", "--no-headings", "--data=bare", "--colum=_uuid", "find", "ha_chassis_group", fmt.Sprintf("name=%s", haChassisGroupName))
+// GetLogicalSwitch gets the OVN database record for the switch.
+func (o *NB) GetLogicalSwitch(ctx context.Context, switchName OVNSwitch) (*ovnNB.LogicalSwitch, error) {
+	logicalSwitch := &ovnNB.LogicalSwitch{
+		Name: string(switchName),
+	}
+
+	err := o.get(ctx, logicalSwitch)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	chassisGroupID = strings.TrimSpace(chassisGroupID)
-
-	if chassisGroupID == "" {
-		return fmt.Errorf("Chassis group not found")
-	}
-
-	_, err = o.nbctl("set", "logical_router_port", string(portName), fmt.Sprintf("ha_chassis_group=%s", chassisGroupID))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return logicalSwitch, nil
 }
 
-// LogicalSwitchAdd adds a named logical switch.
+// CreateLogicalSwitch adds a named logical switch.
 // If mayExist is true, then an existing resource of the same name is not treated as an error.
-func (o *NB) LogicalSwitchAdd(switchName OVNSwitch, mayExist bool) error {
-	args := []string{}
-
-	if mayExist {
-		args = append(args, "--may-exist")
+func (o *NB) CreateLogicalSwitch(ctx context.Context, switchName OVNSwitch, mayExist bool) error {
+	logicalSwitch := ovnNB.LogicalSwitch{
+		Name: string(switchName),
 	}
 
-	args = append(args, "ls-add", string(switchName))
-	_, err := o.nbctl(args...)
+	// Check if already exists.
+	err := o.get(ctx, &logicalSwitch)
+	if err != nil && err != ErrNotFound {
+		return err
+	}
+
+	if logicalSwitch.UUID != "" {
+		if mayExist {
+			return nil
+		}
+
+		return ErrExists
+	}
+
+	// Create the record.
+	operations, err := o.client.Create(&logicalSwitch)
+	if err != nil {
+		return err
+	}
+
+	// Apply the changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
 	if err != nil {
 		return err
 	}
@@ -1056,57 +1189,119 @@ func (o *NB) LogicalSwitchPortUUID(portName OVNSwitchPort) (OVNSwitchPortUUID, e
 	return "", nil
 }
 
-// LogicalSwitchPortAdd adds a named logical switch port to a logical switch, and sets options if provided.
+// CreateLogicalSwitchPort adds a named logical switch port to a logical switch, and sets options if provided.
 // If mayExist is true, then an existing resource of the same name is not treated as an error.
-func (o *NB) LogicalSwitchPortAdd(switchName OVNSwitch, portName OVNSwitchPort, opts *OVNSwitchPortOpts, mayExist bool) error {
-	args := []string{}
-
-	if mayExist {
-		args = append(args, "--may-exist")
+func (o *NB) CreateLogicalSwitchPort(ctx context.Context, switchName OVNSwitch, portName OVNSwitchPort, opts *OVNSwitchPortOpts, mayExist bool) error {
+	// Prepare the new switch port entry.
+	logicalSwitchPort := ovnNB.LogicalSwitchPort{
+		Name:        string(portName),
+		UUID:        "lsp",
+		ExternalIDs: map[string]string{},
 	}
 
-	// Add switch port.
-	args = append(args, "lsp-add", string(switchName), string(portName))
+	// Check if the entry already exists.
+	err := o.get(ctx, &logicalSwitchPort)
+	if err != nil && err != ErrNotFound {
+		return err
+	}
+
+	if logicalSwitchPort.UUID != "lsp" && !mayExist {
+		return ErrExists
+	}
 
 	// Set switch port options if supplied.
 	if opts != nil {
 		// Created nested VLAN port if requested.
 		if opts.Parent != "" {
-			args = append(args, string(opts.Parent), fmt.Sprintf("%d", opts.VLAN))
+			parentName := string(opts.Parent)
+			tag := int(opts.VLAN)
+
+			logicalSwitchPort.ParentName = &parentName
+			logicalSwitchPort.Tag = &tag
 		}
 
-		ipStr := make([]string, 0, len(opts.IPs))
-		for _, ip := range opts.IPs {
-			ipStr = append(ipStr, ip.String())
-		}
-
-		var addresses string
-		if opts.MAC != nil && len(ipStr) > 0 {
-			addresses = fmt.Sprintf("%s %s", opts.MAC.String(), strings.Join(ipStr, " "))
-		} else if opts.MAC != nil && len(ipStr) <= 0 {
-			addresses = fmt.Sprintf("%s %s", opts.MAC.String(), "dynamic")
+		if opts.RouterPort != "" {
+			logicalSwitchPort.Type = "router"
+			logicalSwitchPort.Addresses = []string{"router"}
+			logicalSwitchPort.Options = map[string]string{"router-port": string(opts.RouterPort)}
 		} else {
-			addresses = "dynamic"
-		}
+			ipStr := make([]string, 0, len(opts.IPs))
+			for _, ip := range opts.IPs {
+				ipStr = append(ipStr, ip.String())
+			}
 
-		args = append(args, "--", "lsp-set-addresses", string(portName), addresses)
+			var addresses string
+			if opts.MAC != nil && len(ipStr) > 0 {
+				addresses = fmt.Sprintf("%s %s", opts.MAC.String(), strings.Join(ipStr, " "))
+			} else if opts.MAC != nil && len(ipStr) <= 0 {
+				addresses = fmt.Sprintf("%s %s", opts.MAC.String(), "dynamic")
+			} else {
+				addresses = "dynamic"
+			}
+
+			logicalSwitchPort.Addresses = []string{addresses}
+		}
 
 		if opts.DHCPv4OptsID != "" {
-			args = append(args, "--", "lsp-set-dhcpv4-options", string(portName), string(opts.DHCPv4OptsID))
+			dhcp4opts := string(opts.DHCPv4OptsID)
+			logicalSwitchPort.Dhcpv4Options = &dhcp4opts
 		}
 
 		if opts.DHCPv6OptsID != "" {
-			args = append(args, "--", "lsp-set-dhcpv6-options", string(portName), string(opts.DHCPv6OptsID))
+			dhcp6opts := string(opts.DHCPv6OptsID)
+			logicalSwitchPort.Dhcpv6Options = &dhcp6opts
 		}
 
 		if opts.Location != "" {
-			args = append(args, "--", "set", "logical_switch_port", string(portName), fmt.Sprintf("external_ids:%s=%s", ovnExtIDIncusLocation, opts.Location))
+			logicalSwitchPort.ExternalIDs[ovnExtIDIncusLocation] = opts.Location
 		}
 	}
 
-	args = append(args, "--", "set", "logical_switch_port", string(portName), fmt.Sprintf("external_ids:%s=%s", ovnExtIDIncusSwitch, switchName))
+	logicalSwitchPort.ExternalIDs[ovnExtIDIncusSwitch] = string(switchName)
 
-	_, err := o.nbctl(args...)
+	// Apply the changes.
+	operations := []ovsdb.Operation{}
+	if logicalSwitchPort.UUID != "lsp" {
+		// If it already exists, update it.
+		updateOps, err := o.client.Where(&logicalSwitchPort).Update(&logicalSwitchPort)
+		if err != nil {
+			return err
+		}
+
+		operations = append(operations, updateOps...)
+	} else {
+		// Else, create it.
+		createOps, err := o.client.Create(&logicalSwitchPort)
+		if err != nil {
+			return err
+		}
+
+		operations = append(operations, createOps...)
+
+		// And connect it to the switch.
+		logicalSwitch := ovnNB.LogicalSwitch{
+			Name: string(switchName),
+		}
+
+		updateOps, err := o.client.Where(&logicalSwitch).Mutate(&logicalSwitch, ovsModel.Mutation{
+			Field:   &logicalSwitch.Ports,
+			Mutator: ovsdb.MutateOperationInsert,
+			Value:   []string{logicalSwitchPort.UUID},
+		})
+		if err != nil {
+			return err
+		}
+
+		operations = append(operations, updateOps...)
+	}
+
+	// Apply the database changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
 	if err != nil {
 		return err
 	}
@@ -1122,30 +1317,31 @@ func (o *NB) LogicalSwitchPortIPs(portName OVNSwitchPort) ([]net.IP, error) {
 		Name: string(portName),
 	}
 
-	err := o.client.Get(ctx, &lsp)
+	err := o.get(ctx, &lsp)
 	if err != nil {
-		if err == ovsClient.ErrNotFound {
-			// Don't fail on missing port.
-			return []net.IP{}, nil
-		}
-
 		return nil, err
 	}
 
-	addresses := lsp.Addresses
-	if lsp.DynamicAddresses != nil {
-		addresses = append(addresses, strings.Split(*lsp.DynamicAddresses, " ")...)
-	}
-
-	ips := make([]net.IP, 0)
-	for _, address := range addresses {
-		ip := net.ParseIP(address)
-		if ip != nil {
-			ips = append(ips, ip)
+	addresses := []net.IP{}
+	for _, address := range lsp.Addresses {
+		for _, entry := range strings.Split(address, " ") {
+			ip := net.ParseIP(entry)
+			if ip != nil {
+				addresses = append(addresses, ip)
+			}
 		}
 	}
 
-	return ips, nil
+	if lsp.DynamicAddresses != nil {
+		for _, entry := range strings.Split(*lsp.DynamicAddresses, " ") {
+			ip := net.ParseIP(entry)
+			if ip != nil {
+				addresses = append(addresses, ip)
+			}
+		}
+	}
+
+	return addresses, nil
 }
 
 // LogicalSwitchPortDynamicIPs returns a list of dynamc IPs for a switch port.
@@ -1156,7 +1352,7 @@ func (o *NB) LogicalSwitchPortDynamicIPs(portName OVNSwitchPort) ([]net.IP, erro
 		Name: string(portName),
 	}
 
-	err := o.client.Get(ctx, lsp)
+	err := o.get(ctx, lsp)
 	if err != nil {
 		return []net.IP{}, err
 	}
@@ -1343,9 +1539,56 @@ func (o *NB) logicalSwitchPortDeleteAppendArgs(args []string, portName OVNSwitch
 	return args
 }
 
-// LogicalSwitchPortDelete deletes a named logical switch port.
-func (o *NB) LogicalSwitchPortDelete(portName OVNSwitchPort) error {
-	_, err := o.nbctl(o.logicalSwitchPortDeleteAppendArgs(nil, portName)...)
+// DeleteLogicalSwitchPort deletes a named logical switch port.
+func (o *NB) DeleteLogicalSwitchPort(ctx context.Context, switchName OVNSwitch, portName OVNSwitchPort) error {
+	operations := []ovsdb.Operation{}
+
+	// Get the logical switch port.
+	logicalSwitchPort := ovnNB.LogicalSwitchPort{
+		Name: string(portName),
+	}
+
+	err := o.get(ctx, &logicalSwitchPort)
+	if err != nil {
+		// Logical switch port is already gone.
+		if err == ErrNotFound {
+			return nil
+		}
+
+		return err
+	}
+
+	// Remove the port from the switch.
+	logicalSwitch := ovnNB.LogicalSwitch{
+		Name: string(switchName),
+	}
+
+	updateOps, err := o.client.Where(&logicalSwitch).Mutate(&logicalSwitch, ovsModel.Mutation{
+		Field:   &logicalSwitch.Ports,
+		Mutator: ovsdb.MutateOperationDelete,
+		Value:   []string{logicalSwitchPort.UUID},
+	})
+	if err != nil {
+		return err
+	}
+
+	operations = append(operations, updateOps...)
+
+	// Delete the port itself.
+	deleteOps, err := o.client.Where(&logicalSwitchPort).Delete()
+	if err != nil {
+		return err
+	}
+
+	operations = append(operations, deleteOps...)
+
+	// Apply the changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
 	if err != nil {
 		return err
 	}
@@ -1409,18 +1652,41 @@ func (o *NB) LogicalSwitchPortLinkProviderNetwork(switchPortName OVNSwitchPort, 
 	return nil
 }
 
-// ChassisGroupAdd adds a new HA chassis group.
+// CreateChassisGroup adds a new HA chassis group.
 // If mayExist is true, then an existing resource of the same name is not treated as an error.
-func (o *NB) ChassisGroupAdd(haChassisGroupName OVNChassisGroup, mayExist bool) error {
-	if mayExist {
-		// Check if it exists (sadly ha-chassis-group-add doesn't provide --may-exist option).
-		_, err := o.nbctl("list", "HA_Chassis_Group", string(haChassisGroupName))
-		if err == nil {
-			return nil // Chassis group exists.
-		}
+func (o *NB) CreateChassisGroup(ctx context.Context, haChassisGroupName OVNChassisGroup, mayExist bool) error {
+	// Define the new group.
+	haChassisGroup := ovnNB.HAChassisGroup{
+		Name: string(haChassisGroupName),
 	}
 
-	_, err := o.nbctl("ha-chassis-group-add", string(haChassisGroupName))
+	// Check if already exists.
+	err := o.get(ctx, &haChassisGroup)
+	if err != nil && err != ErrNotFound {
+		return err
+	}
+
+	if haChassisGroup.UUID != "" {
+		if mayExist {
+			return nil
+		}
+
+		return ErrExists
+	}
+
+	// Create the record.
+	operations, err := o.client.Create(&haChassisGroup)
+	if err != nil {
+		return err
+	}
+
+	// Apply the changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
 	if err != nil {
 		return err
 	}
@@ -1428,28 +1694,44 @@ func (o *NB) ChassisGroupAdd(haChassisGroupName OVNChassisGroup, mayExist bool) 
 	return nil
 }
 
-// ChassisGroupDelete deletes an HA chassis group.
-func (o *NB) ChassisGroupDelete(haChassisGroupName OVNChassisGroup) error {
-	// ovn-nbctl doesn't provide an "--if-exists" option for removing chassis groups.
-	existing, err := o.nbctl("--no-headings", "--data=bare", "--colum=name", "find", "ha_chassis_group", fmt.Sprintf("name=%s", string(haChassisGroupName)))
+// DeleteChassisGroup deletes an HA chassis group.
+func (o *NB) DeleteChassisGroup(ctx context.Context, haChassisGroupName OVNChassisGroup) error {
+	// Get the current chassis group.
+	haChassisGroup := ovnNB.HAChassisGroup{
+		Name: string(haChassisGroupName),
+	}
+
+	err := o.client.Get(ctx, &haChassisGroup)
+	if err != nil {
+		// Already gone.
+		if err == ErrNotFound {
+			return nil
+		}
+
+		return err
+	}
+
+	// Delete the chassis group.
+	deleteOps, err := o.client.Where(&haChassisGroup).Delete()
 	if err != nil {
 		return err
 	}
 
-	// Remove chassis group if exists.
-	if strings.TrimSpace(existing) != "" {
-		_, err := o.nbctl("ha-chassis-group-del", string(haChassisGroupName))
-		if err != nil {
-			return err
-		}
+	resp, err := o.client.Transact(ctx, deleteOps...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, deleteOps)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-// ChassisGroupChassisAdd adds a chassis ID to an HA chassis group with the specified priority.
-func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisID string, priority uint) error {
-	ctx := context.TODO()
+// SetChassisGroupPriority sets a given priority for the chassis ID in the chassis group..
+func (o *NB) SetChassisGroupPriority(ctx context.Context, haChassisGroupName OVNChassisGroup, chassisID string, priority int) error {
 	operations := []ovsdb.Operation{}
 
 	// Get the chassis group.
@@ -1457,7 +1739,7 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 		Name: string(haChassisGroupName),
 	}
 
-	err := o.client.Get(ctx, &haGroup)
+	err := o.get(ctx, &haGroup)
 	if err != nil {
 		return err
 	}
@@ -1467,7 +1749,7 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 
 	for _, entry := range haGroup.HaChassis {
 		chassis := ovnNB.HAChassis{UUID: entry}
-		err = o.client.Get(ctx, &chassis)
+		err = o.get(ctx, &chassis)
 		if err != nil {
 			return err
 		}
@@ -1479,6 +1761,11 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 	}
 
 	if haChassis.UUID == "" {
+		// If asked to remove, then we're done.
+		if priority < 0 {
+			return nil
+		}
+
 		// No entry found, add a new one.
 		haChassis = ovnNB.HAChassis{
 			UUID:        "chassis",
@@ -1504,7 +1791,27 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 		}
 
 		operations = append(operations, updateOps...)
-	} else if haChassis.Priority != int(priority) {
+	} else if priority < 0 {
+		// Proceed with removing the entry.
+		deleteOps, err := o.client.Where(&haChassis).Delete()
+		if err != nil {
+			return err
+		}
+
+		operations = append(operations, deleteOps...)
+
+		// And removing it from the group.
+		updateOps, err := o.client.Where(&haGroup).Mutate(&haGroup, ovsModel.Mutation{
+			Field:   &haGroup.HaChassis,
+			Mutator: ovsdb.MutateOperationDelete,
+			Value:   []string{haChassis.UUID},
+		})
+		if err != nil {
+			return err
+		}
+
+		operations = append(operations, updateOps...)
+	} else if haChassis.Priority != priority {
 		// Found but wrong priority, correct it.
 		haChassis.Priority = int(priority)
 		updateOps, err := o.client.Where(&haChassis).Update(&haChassis)
@@ -1516,44 +1823,16 @@ func (o *NB) ChassisGroupChassisAdd(haChassisGroupName OVNChassisGroup, chassisI
 	}
 
 	// Apply the changes.
-	if len(operations) > 0 {
-		resp, err := o.client.Transact(ctx, operations...)
-		if err != nil {
-			return err
-		}
-
-		_, err = ovsdb.CheckOperationResults(resp, operations)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ChassisGroupChassisDelete deletes a chassis ID from an HA chassis group.
-func (o *NB) ChassisGroupChassisDelete(haChassisGroupName OVNChassisGroup, chassisID string) error {
-	// Check if chassis group exists. ovn-nbctl doesn't provide an "--if-exists" option for this.
-	output, err := o.nbctl("--no-headings", "--data=bare", "--colum=name,ha_chassis", "find", "ha_chassis_group", fmt.Sprintf("name=%s", string(haChassisGroupName)))
+	resp, err := o.client.Transact(ctx, operations...)
 	if err != nil {
 		return err
 	}
 
-	lines := util.SplitNTrimSpace(output, "\n", -1, true)
-	if len(lines) > 1 {
-		existingChassisGroup := lines[0]
-		members := util.SplitNTrimSpace(lines[1], " ", -1, true)
-
-		// Remove chassis from group if exists.
-		if existingChassisGroup == string(haChassisGroupName) && slices.Contains(members, chassisID) {
-			_, err := o.nbctl("ha-chassis-group-remove-chassis", string(haChassisGroupName), chassisID)
-			if err != nil {
-				return err
-			}
-		}
+	_, err = ovsdb.CheckOperationResults(resp, operations)
+	if err != nil {
+		return err
 	}
 
-	// Nothing to do if chassis group doesn't exist.
 	return nil
 }
 
@@ -1566,7 +1845,7 @@ func (o *NB) PortGroupInfo(portGroupName OVNPortGroup) (OVNPortGroupUUID, bool, 
 		Name: string(portGroupName),
 	}
 
-	err := o.client.Get(ctx, pg)
+	err := o.get(ctx, pg)
 	if err != nil {
 		if err == ovsClient.ErrNotFound {
 			return "", false, nil
@@ -2281,4 +2560,21 @@ func (o *NB) GetHardwareAddress(ovnRouterPort OVNRouterPort) (string, error) {
 	}
 
 	return strings.TrimSpace(hwaddr), nil
+}
+
+// GetName returns the OVN AZ name.
+func (o *NB) GetName(ctx context.Context) (string, error) {
+	// Get the global configuration.
+	nbGlobal := []ovnNB.NBGlobal{}
+	err := o.client.List(ctx, &nbGlobal)
+	if err != nil {
+		return "", err
+	}
+
+	// Check that we got a result.
+	if len(nbGlobal) != 1 {
+		return "", ovsClient.ErrNotFound
+	}
+
+	return nbGlobal[0].Name, nil
 }

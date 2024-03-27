@@ -425,6 +425,7 @@ type qemuNumaEntry struct {
 type qemuCPUOpts struct {
 	architecture        string
 	cpuCount            int
+	cpuRequested        int
 	cpuSockets          int
 	cpuCores            int
 	cpuThreads          int
@@ -433,6 +434,7 @@ type qemuCPUOpts struct {
 	cpuNumaHostNodes    []uint64
 	hugepages           string
 	memory              int64
+	memoryHostNodes     []int64
 	qemuMemObjectFormat string
 }
 
@@ -488,6 +490,8 @@ func qemuCPU(opts *qemuCPUOpts, pinning bool) []cfgSection {
 		max := 64
 		if int(cpu.Total) < max {
 			max = int(cpu.Total)
+		} else if opts.cpuRequested > max {
+			max = opts.cpuRequested
 		} else if opts.cpuCount > max {
 			max = opts.cpuCount
 		}
@@ -510,10 +514,32 @@ func qemuCPU(opts *qemuCPUOpts, pinning bool) []cfgSection {
 	share := cfgEntry{key: "share", value: "on"}
 
 	if len(opts.cpuNumaHostNodes) == 0 {
-		// add one mem and one numa sections with index 0
+		// Add one mem and one numa sections with index 0.
 		numaHostNode := qemuCPUNumaHostNode(opts, 0)
-		// unconditionally append "share = "on" to the [object "mem0"] section
+
+		// Unconditionally append "share = "on" to the [object "mem0"] section
 		numaHostNode[0].entries = append(numaHostNode[0].entries, share)
+
+		// If NUMA memory restrictions are set, apply them.
+		if len(opts.memoryHostNodes) > 0 {
+			extraMemEntries := []cfgEntry{{key: "policy", value: "bind"}}
+
+			for index, element := range opts.memoryHostNodes {
+				var hostNodesKey string
+				if opts.qemuMemObjectFormat == "indexed" {
+					hostNodesKey = fmt.Sprintf("host-nodes.%d", index)
+				} else {
+					hostNodesKey = "host-nodes"
+				}
+
+				hostNode := cfgEntry{key: hostNodesKey, value: fmt.Sprintf("%d", element)}
+				extraMemEntries = append(extraMemEntries, hostNode)
+			}
+
+			// Append the extra entries to the [object "mem{{idx}}"] section.
+			numaHostNode[0].entries = append(numaHostNode[0].entries, extraMemEntries...)
+		}
+
 		return append(sections, numaHostNode...)
 	}
 

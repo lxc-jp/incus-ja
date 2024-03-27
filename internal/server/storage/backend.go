@@ -6339,7 +6339,7 @@ func (b *backend) CheckInstanceBackupFileSnapshots(backupConf *backupConfig.Conf
 
 	if len(backupConf.Snapshots) != len(driverSnapshots) {
 		if !deleteMissing {
-			return nil, fmt.Errorf("Snapshot count in backup config and storage device are different: %w", ErrBackupSnapshotsMismatch)
+			return nil, fmt.Errorf("Snapshot count in backup config (%d) and storage device (%d) are different: %w", len(backupConf.Snapshots), len(driverSnapshots), ErrBackupSnapshotsMismatch)
 		}
 	}
 
@@ -7106,6 +7106,16 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 	volStorageName := project.StorageVolume(srcBackup.Project, srcBackup.Name)
 
 	vol := b.GetVolume(drivers.VolumeTypeCustom, drivers.ContentType(srcBackup.Config.Volume.ContentType), volStorageName, srcBackup.Config.Volume.Config)
+
+	// Check if the volume exists in database.
+	dbVol, err := VolumeDBGet(b, srcBackup.Project, srcBackup.Name, vol.Type())
+	if err != nil && !response.IsNotFoundError(err) {
+		return err
+	}
+
+	if dbVol != nil {
+		return fmt.Errorf("Volume %q already exists in pool %q", srcBackup.Name, b.name)
+	}
 
 	// Validate config and create database entry for new storage volume.
 	// Strip unsupported config keys (in case the export was made from a different type of storage pool).

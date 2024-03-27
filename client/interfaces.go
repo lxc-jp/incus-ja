@@ -183,6 +183,9 @@ type InstanceServer interface {
 	RenameImageAlias(name string, alias api.ImageAliasesEntryPost) (err error)
 	DeleteImageAlias(name string) (err error)
 
+	// Configuration metadata functions
+	GetMetadataConfiguration() (meta *api.MetadataConfiguration, err error)
+
 	// Network functions ("network" API extension)
 	GetNetworkNames() (names []string, err error)
 	GetNetworks() (networks []api.Network, err error)
@@ -245,6 +248,15 @@ type InstanceServer interface {
 	CreateNetworkZoneRecord(zone string, record api.NetworkZoneRecordsPost) (err error)
 	UpdateNetworkZoneRecord(zone string, name string, record api.NetworkZoneRecordPut, ETag string) (err error)
 	DeleteNetworkZoneRecord(zone string, name string) (err error)
+
+	// Network integrations functions ("network_integrations" API extension)
+	GetNetworkIntegrationNames() (names []string, err error)
+	GetNetworkIntegrations() (integrations []api.NetworkIntegration, err error)
+	GetNetworkIntegration(name string) (integration *api.NetworkIntegration, ETag string, err error)
+	CreateNetworkIntegration(integration api.NetworkIntegrationsPost) (err error)
+	UpdateNetworkIntegration(name string, integration api.NetworkIntegrationPut, ETag string) (err error)
+	RenameNetworkIntegration(name string, integration api.NetworkIntegrationPost) (err error)
+	DeleteNetworkIntegration(name string) (err error)
 
 	// Operation functions
 	GetOperationUUIDs() (uuids []string, err error)

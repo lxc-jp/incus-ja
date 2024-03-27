@@ -28,6 +28,7 @@ import (
 	"github.com/lxc/incus/internal/server/network/ovs"
 	"github.com/lxc/incus/internal/server/project"
 	"github.com/lxc/incus/internal/server/resources"
+	"github.com/lxc/incus/internal/server/state"
 	localUtil "github.com/lxc/incus/internal/server/util"
 	"github.com/lxc/incus/shared/api"
 	"github.com/lxc/incus/shared/logger"
@@ -380,6 +381,15 @@ func (d *nicOVN) validateEnvironment() error {
 	return nil
 }
 
+func (d *nicOVN) init(inst instance.Instance, s *state.State, name string, conf deviceConfig.Device, volatileGet VolatileGetter, volatileSet VolatileSetter) error {
+	// Check that OVN is available.
+	if s.OVNNB == nil {
+		return fmt.Errorf("OVN isn't currently available")
+	}
+
+	return d.deviceCommon.init(inst, s, name, conf, volatileGet, volatileSet)
+}
+
 // Start is run when the device is added to a running instance or instance is starting up.
 func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 	err := d.validateEnvironment()
@@ -631,19 +641,14 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 		return nil, fmt.Errorf("Failed to connect to OVS: %w", err)
 	}
 
-	chassisID, err := vswitch.ChassisID()
+	chassisID, err := vswitch.GetChassisID(context.TODO())
 	if err != nil {
 		return nil, fmt.Errorf("Failed getting OVS Chassis ID: %w", err)
 	}
 
-	ovnClient, err := ovn.NewNB(d.state)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get OVN client: %w", err)
-	}
-
 	// Add post start hook for setting logical switch port chassis once instance has been started.
 	runConf.PostHooks = append(runConf.PostHooks, func() error {
-		err := ovnClient.LogicalSwitchPortOptionsSet(logicalPortName, map[string]string{"requested-chassis": chassisID})
+		err := d.state.OVNNB.LogicalSwitchPortOptionsSet(logicalPortName, map[string]string{"requested-chassis": chassisID})
 		if err != nil {
 			return fmt.Errorf("Failed setting logical switch port chassis ID: %w", err)
 		}
@@ -788,12 +793,7 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 
 		if len(removedACLs) > 0 {
-			client, err := ovn.NewNB(d.state)
-			if err != nil {
-				return fmt.Errorf("Failed to get OVN client: %w", err)
-			}
-
-			err = acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, client, d.network.Project(), d.inst, d.name, newACLs...)
+			err := acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, d.state.OVNNB, d.network.Project(), d.inst, d.name, newACLs...)
 			if err != nil {
 				return fmt.Errorf("Failed removing unused OVN port groups: %w", err)
 			}
@@ -862,7 +862,7 @@ func (d *nicOVN) Stop() (*deviceConfig.RunConfig, error) {
 
 	var ovsExternalOVNPort string
 	if d.config["nested"] == "" {
-		ovsExternalOVNPort, err = vswitch.InterfaceAssociatedOVNSwitchPort(d.config["host_name"])
+		ovsExternalOVNPort, err = vswitch.GetInterfaceAssociatedOVNSwitchPort(context.TODO(), d.config["host_name"])
 		if err != nil {
 			d.logger.Warn("Could not find OVN Switch port associated to OVS interface", logger.Ctx{"interface": d.config["host_name"]})
 		}
@@ -884,7 +884,7 @@ func (d *nicOVN) Stop() (*deviceConfig.RunConfig, error) {
 		integrationBridge := d.state.GlobalConfig.NetworkOVNIntegrationBridge()
 
 		// Detach host-side end of veth pair from OVS integration bridge.
-		err = vswitch.BridgePortDelete(integrationBridge, integrationBridgeNICName)
+		err = vswitch.DeleteBridgePort(context.TODO(), integrationBridge, integrationBridgeNICName)
 		if err != nil {
 			// Don't fail here as we want the postStop hook to run to clean up the local veth pair.
 			d.logger.Error("Failed detaching interface from OVS integration bridge", logger.Ctx{"interface": integrationBridgeNICName, "bridge": integrationBridge, "err": err})
@@ -996,12 +996,7 @@ func (d *nicOVN) Remove() error {
 	// Check for port groups that will become unused (and need deleting) as this NIC is deleted.
 	securityACLs := util.SplitNTrimSpace(d.config["security.acls"], ",", -1, true)
 	if len(securityACLs) > 0 {
-		client, err := ovn.NewNB(d.state)
-		if err != nil {
-			return fmt.Errorf("Failed to get OVN client: %w", err)
-		}
-
-		err = acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, client, d.network.Project(), d.inst, d.name)
+		err := acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, d.state.OVNNB, d.network.Project(), d.inst, d.name)
 		if err != nil {
 			return fmt.Errorf("Failed removing unused OVN port groups: %w", err)
 		}
@@ -1166,12 +1161,12 @@ func (d *nicOVN) setupHostNIC(hostName string, ovnPortName ovn.OVNSwitchPort, up
 		return nil, fmt.Errorf("Failed to connect to OVS: %w", err)
 	}
 
-	err = vswitch.BridgePortAdd(integrationBridge, hostName, true)
+	err = vswitch.CreateBridgePort(context.TODO(), integrationBridge, hostName, true)
 	if err != nil {
 		return nil, err
 	}
 
-	revert.Add(func() { _ = vswitch.BridgePortDelete(integrationBridge, hostName) })
+	revert.Add(func() { _ = vswitch.DeleteBridgePort(context.TODO(), integrationBridge, hostName) })
 
 	// Link OVS port to OVN logical port.
 	err = vswitch.InterfaceAssociateOVNSwitchPort(hostName, string(ovnPortName))

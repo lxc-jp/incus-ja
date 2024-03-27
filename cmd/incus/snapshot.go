@@ -88,6 +88,14 @@ running state, including process memory state, TCP connections, ...`))
 
 	cmd.RunE = c.Run
 
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return c.global.cmpInstances(toComplete)
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	return cmd
 }
 
@@ -179,6 +187,14 @@ func (c *cmdSnapshotDelete) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return c.global.cmpInstances(toComplete)
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	return cmd
 }
 
@@ -256,6 +272,14 @@ func (c *cmdSnapshotList) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return c.global.cmpInstances(toComplete)
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	return cmd
 }
 
@@ -287,8 +311,6 @@ func (c *cmdSnapshotList) listSnapshots(d incus.InstanceServer, name string) err
 		return err
 	}
 
-	const layout = "2006/01/02 15:04 MST"
-
 	// List snapshots
 	snapData := [][]string{}
 	for _, snap := range snapshots {
@@ -297,14 +319,14 @@ func (c *cmdSnapshotList) listSnapshots(d incus.InstanceServer, name string) err
 		fields := strings.Split(snap.Name, instance.SnapshotDelimiter)
 		row = append(row, fields[len(fields)-1])
 
-		if snap.CreatedAt.Unix() != 0 {
-			row = append(row, snap.CreatedAt.Local().Format(layout))
+		if !snap.CreatedAt.IsZero() {
+			row = append(row, snap.CreatedAt.Local().Format(dateLayout))
 		} else {
 			row = append(row, " ")
 		}
 
-		if snap.ExpiresAt.Unix() != 0 {
-			row = append(row, snap.ExpiresAt.Local().Format(layout))
+		if !snap.ExpiresAt.IsZero() {
+			row = append(row, snap.ExpiresAt.Local().Format(dateLayout))
 		} else {
 			row = append(row, " ")
 		}
@@ -344,6 +366,18 @@ func (c *cmdSnapshotRename) Command() *cobra.Command {
 		`Rename instance snapshots`))
 
 	cmd.RunE = c.Run
+
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return c.global.cmpInstances(toComplete)
+		}
+
+		if len(args) == 1 {
+			return c.global.cmpInstanceSnapshots(args[0])
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
 
 	return cmd
 }
@@ -404,6 +438,18 @@ Restore the snapshot.`))
 
 	cmd.RunE = c.Run
 
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return c.global.cmpInstances(toComplete)
+		}
+
+		if len(args) == 1 {
+			return c.global.cmpInstanceSnapshots(args[0])
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	return cmd
 }
 
@@ -463,6 +509,18 @@ func (c *cmdSnapshotShow) Command() *cobra.Command {
 		`Show instance snapshot configuration`))
 
 	cmd.RunE = c.Run
+
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return c.global.cmpInstances(toComplete)
+		}
+
+		if len(args) == 1 {
+			return c.global.cmpInstanceSnapshots(args[0])
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
 
 	return cmd
 }

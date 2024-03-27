@@ -86,6 +86,8 @@ var api10 = []APIEndpoint{
 	networkAllocationsCmd,
 	networkForwardCmd,
 	networkForwardsCmd,
+	networkIntegrationCmd,
+	networkIntegrationsCmd,
 	networkLoadBalancerCmd,
 	networkLoadBalancersCmd,
 	networkPeerCmd,
@@ -213,7 +215,7 @@ func api10Get(d *Daemon, r *http.Request) response.Response {
 	// Get the authentication methods.
 	authMethods := []string{api.AuthenticationMethodTLS}
 
-	oidcIssuer, oidcClientID, _ := s.GlobalConfig.OIDCServer()
+	oidcIssuer, oidcClientID, _, _ := s.GlobalConfig.OIDCServer()
 	if oidcIssuer != "" && oidcClientID != "" {
 		authMethods = append(authMethods, api.AuthenticationMethodOIDC)
 	}
@@ -672,7 +674,7 @@ func doApi10Update(d *Daemon, r *http.Request, req api.ServerPut, patch bool) re
 	var newClusterConfig *clusterConfig.Config
 	oldClusterConfig := make(map[string]string)
 
-	err = s.DB.Cluster.Transaction(context.Background(), func(ctx context.Context, tx *db.ClusterTx) error {
+	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		var err error
 		newClusterConfig, err = clusterConfig.Load(ctx, tx)
 		if err != nil {
@@ -730,11 +732,6 @@ func doApi10Update(d *Daemon, r *http.Request, req api.ServerPut, patch bool) re
 		}
 	})
 
-	err = doApi10PreNotifyTriggers(d, clusterChanged, newClusterConfig)
-	if err != nil {
-		return response.InternalError(fmt.Errorf("Failed to run pre-notify triggers for cluster config update: %w", err))
-	}
-
 	// Notify the other nodes about changes
 	notifier, err := cluster.NewNotifier(s, s.Endpoints.NetworkCert(), s.ServerCert(), cluster.NotifyAlive)
 	if err != nil {
@@ -780,72 +777,23 @@ func doApi10Update(d *Daemon, r *http.Request, req api.ServerPut, patch bool) re
 	return response.EmptySyncResponse
 }
 
-func doApi10PreNotifyTriggers(d *Daemon, clusterChanged map[string]string, newClusterConfig *clusterConfig.Config) error {
-	openFGAChanged := false
-	for key := range clusterChanged {
-		switch key {
-		case "openfga.api.url", "openfga.api.token", "openfga.store.id":
-			openFGAChanged = true
-		}
-	}
-
-	if openFGAChanged {
-		apiURL, apiToken, storeID, modelID := newClusterConfig.OpenFGA()
-
-		// Write authorization model only if the modelID has not already been set and we have all other connection information.
-		if modelID == "" && apiURL != "" && apiToken != "" && storeID != "" {
-			var err error
-			modelID, err = auth.WriteOpenFGAAuthorizationModel(d.shutdownCtx, apiURL, apiToken, storeID)
-			if err != nil {
-				return fmt.Errorf("Failed to write OpenFGA authorization model: %w", err)
-			}
-
-			err = d.db.Cluster.Transaction(context.Background(), func(ctx context.Context, tx *db.ClusterTx) error {
-				clusterConfig, err := clusterConfig.Load(ctx, tx)
-				if err != nil {
-					return fmt.Errorf("Failed to load cluster config: %w", err)
-				}
-
-				_, err = clusterConfig.Patch(map[string]string{"openfga.store.model_id": modelID})
-				if err != nil {
-					return err
-				}
-
-				*newClusterConfig = *clusterConfig
-				clusterChanged["openfga.store.model_id"] = modelID
-				return err
-			})
-			if err != nil {
-				return fmt.Errorf("Failed to write OpenFGA authorization model ID to database")
-			}
-		}
-	}
-
-	return nil
-}
-
 func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]string, nodeConfig *node.Config, clusterConfig *clusterConfig.Config) error {
 	s := d.State()
 
+	acmeChanged := false
 	bgpChanged := false
 	dnsChanged := false
 	lokiChanged := false
-	acmeDomainChanged := false
-	acmeCAURLChanged := false
 	oidcChanged := false
-	syslogSocketChanged := false
 	openFGAChanged := false
+	ovnChanged := false
+	syslogChanged := false
 
 	for key := range clusterChanged {
 		switch key {
-		case "core.https_trusted_proxy":
-			s.Endpoints.NetworkUpdateTrustedProxy(clusterChanged[key])
-		case "core.proxy_http":
-			fallthrough
-		case "core.proxy_https":
-			fallthrough
-		case "core.proxy_ignore_hosts":
-			daemonConfigSetProxy(d, clusterConfig)
+		case "acme.ca_url", "acme.domain":
+			acmeChanged = true
+
 		case "cluster.images_minimal_replica":
 			err := autoSyncImages(s.ShutdownCtx, s)
 			if err != nil {
@@ -855,52 +803,45 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 		case "cluster.offline_threshold":
 			d.gateway.HeartbeatOfflineThreshold = clusterConfig.OfflineThreshold()
 			d.taskClusterHeartbeat.Reset()
-		case "images.auto_update_interval":
-			fallthrough
-		case "images.remote_cache_expiry":
+
+		case "core.bgp_asn":
+			bgpChanged = true
+
+		case "core.https_trusted_proxy":
+			s.Endpoints.NetworkUpdateTrustedProxy(clusterChanged[key])
+
+		case "core.proxy_http", "core.proxy_https", "core.proxy_ignore_hosts":
+			daemonConfigSetProxy(d, clusterConfig)
+
+		case "images.auto_update_interval", "images.remote_cache_expiry":
 			if !s.OS.MockMode {
 				d.taskPruneImages.Reset()
 			}
 
-		case "core.bgp_asn":
-			bgpChanged = true
-		case "loki.api.url":
-			fallthrough
-		case "loki.auth.username":
-			fallthrough
-		case "loki.auth.password":
-			fallthrough
-		case "loki.api.ca_cert":
-			fallthrough
-		case "loki.instance":
-			fallthrough
-		case "loki.labels":
-			fallthrough
-		case "loki.loglevel":
-			fallthrough
-		case "loki.types":
+		case "loki.api.url", "loki.auth.username", "loki.auth.password", "loki.api.ca_cert", "loki.instance", "loki.labels", "loki.loglevel", "loki.types":
 			lokiChanged = true
-		case "acme.ca_url":
-			acmeCAURLChanged = true
-		case "acme.domain":
-			acmeDomainChanged = true
-		case "oidc.issuer", "oidc.client.id", "oidc.audience":
+
+		case "network.ovn.northbound_connection", "network.ovn.ca_cert", "network.ovn.client_cert", "network.ovn.client_key":
+			ovnChanged = true
+
+		case "oidc.issuer", "oidc.client.id", "oidc.audience", "oidc.claim":
 			oidcChanged = true
-		case "openfga.api.url", "openfga.api.token", "openfga.store.id", "openfga.store.model_id":
+
+		case "openfga.api.url", "openfga.api.token", "openfga.store.id":
 			openFGAChanged = true
 		}
 	}
 
 	for key := range nodeChanged {
 		switch key {
-		case "core.bgp_address":
-			fallthrough
-		case "core.bgp_routerid":
+		case "core.bgp_address", "core.bgp_routerid":
 			bgpChanged = true
+
 		case "core.dns_address":
 			dnsChanged = true
+
 		case "core.syslog_socket":
-			syslogSocketChanged = true
+			syslogChanged = true
 		}
 	}
 
@@ -908,7 +849,6 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 	// correlated with others, and need to be processed first (for example
 	// core.https_address need to be processed before
 	// cluster.https_address).
-
 	value, ok := nodeChanged["core.https_address"]
 	if ok {
 		err := s.Endpoints.NetworkUpdateAddress(value)
@@ -969,6 +909,14 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 		}
 	}
 
+	// Apply larger changes.
+	if acmeChanged {
+		err := autoRenewCertificate(s.ShutdownCtx, d, true)
+		if err != nil {
+			return err
+		}
+	}
+
 	if bgpChanged {
 		address := nodeConfig.BGPAddress()
 		asn := clusterConfig.BGPASN()
@@ -1002,8 +950,37 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 		}
 	}
 
-	if acmeCAURLChanged || acmeDomainChanged {
-		err := autoRenewCertificate(s.ShutdownCtx, d, acmeCAURLChanged)
+	if oidcChanged {
+		oidcIssuer, oidcClientID, oidcAudience, oidcClaim := clusterConfig.OIDCServer()
+
+		if oidcIssuer == "" || oidcClientID == "" {
+			d.oidcVerifier = nil
+		} else {
+			var err error
+			d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience, oidcClaim)
+			if err != nil {
+				return fmt.Errorf("Failed creating verifier: %w", err)
+			}
+		}
+	}
+
+	if openFGAChanged {
+		openfgaAPIURL, openfgaAPIToken, openfgaStoreID := d.globalConfig.OpenFGA()
+		err := d.setupOpenFGA(openfgaAPIURL, openfgaAPIToken, openfgaStoreID)
+		if err != nil {
+			return err
+		}
+	}
+
+	if ovnChanged {
+		err := d.setupOVN()
+		if err != nil {
+			return err
+		}
+	}
+
+	if syslogChanged {
+		err := d.setupSyslogSocket(nodeConfig.SyslogSocket())
 		if err != nil {
 			return err
 		}
@@ -1015,35 +992,6 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 		err := scriptletLoad.InstancePlacementSet(value)
 		if err != nil {
 			return fmt.Errorf("Failed saving instance placement scriptlet: %w", err)
-		}
-	}
-
-	if oidcChanged {
-		oidcIssuer, oidcClientID, oidcAudience := clusterConfig.OIDCServer()
-
-		if oidcIssuer == "" || oidcClientID == "" {
-			d.oidcVerifier = nil
-		} else {
-			var err error
-			d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience)
-			if err != nil {
-				return fmt.Errorf("Failed creating verifier: %w", err)
-			}
-		}
-	}
-
-	if syslogSocketChanged {
-		err := d.setupSyslogSocket(nodeConfig.SyslogSocket())
-		if err != nil {
-			return err
-		}
-	}
-
-	if openFGAChanged {
-		openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openfgaAuthorizationModelID := d.globalConfig.OpenFGA()
-		err := d.setupOpenFGA(openfgaAPIURL, openfgaAPIToken, openfgaStoreID, openfgaAuthorizationModelID)
-		if err != nil {
-			return err
 		}
 	}
 

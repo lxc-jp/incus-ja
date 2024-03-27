@@ -1922,6 +1922,14 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	revert := revert.New()
 	defer revert.Fail()
 
+	// Assign a NUMA node if needed.
+	if d.expandedConfig["limits.cpu.nodes"] == "balanced" {
+		err := d.setNUMANode()
+		if err != nil {
+			return "", nil, err
+		}
+	}
+
 	// Check if idmap needs changing.
 	if !d.IsPrivileged() {
 		nextMap, err := d.NextIdmap()
@@ -2613,6 +2621,21 @@ func (d *lxc) onStart(_ map[string]string) error {
 	err = d.recordLastState()
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validateStartup checks any constraints that would prevent start up from succeeding under normal circumstances.
+func (d *lxc) validateStartup(stateful bool, statusCode api.StatusCode) error {
+	err := d.common.validateStartup(stateful, statusCode)
+	if err != nil {
+		return err
+	}
+
+	// Ensure nesting is turned on for images that require nesting.
+	if util.IsTrue(d.localConfig["image.requirements.nesting"]) && util.IsFalseOrEmpty(d.expandedConfig["security.nesting"]) {
+		return fmt.Errorf("The image used by this instance requires nesting. Please set security.nesting=true on the instance")
 	}
 
 	return nil
@@ -6136,7 +6159,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 					}
 
 					// Create the snapshot instance.
-					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, true, true)
+					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, true, false)
 					if err != nil {
 						return fmt.Errorf("Failed creating instance snapshot record %q: %w", snapArgs.Name, err)
 					}
