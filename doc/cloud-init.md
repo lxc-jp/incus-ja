@@ -31,6 +31,15 @@ relatedlinks: https://cloudinit.readthedocs.org/
 [`images`リモート](https://images.linuxcontainers.org/)からのイメージには`cloud-init`が有効化されたバリアントがあり、通常デフォルトバリアントよりもサイズが大きくなります。
 クラウドバリアントは`/cloud`接尾辞を使用します。たとえば、`images:ubuntu/22.04/cloud`。
 
+## `cloud-init`と仮想マシン
+
+`cloud-init`を仮想マシン内で動かすには、VM内で`incus-agent`を動かすか、特別な追加ディスク経由で`cloud-init`のデータを提供する必要があります。
+`images:`リモートで提供されるすべてのイメージはagentが設定済みですので、そのままで大丈夫です。
+
+`incus-agent`を持たないインスタンスでは、追加の`cloud-init`ディスクを以下のように渡せます:
+
+    incus config device add INSTANCE cloud-init disk source=cloud-init:config
+
 ## 設定オプション
 
 Incus は、`cloud-init`の設定に対して`cloud-init.*`と`user.*`の 2 つの異なる設定オプションセットをサポートしています。
@@ -209,17 +218,13 @@ config:
 ```yaml
 config:
   cloud-init.network-config: |
-    version: 1
-    config:
-      - type: physical
-        name: eth1
-        subnets:
-          - type: static
-            ipv4: true
-            address: 10.10.101.20
-            netmask: 255.255.255.0
-            gateway: 10.10.101.1
-            control: auto
-      - type: nameserver
-        address: 10.10.10.254
+    version: 2
+    ethernets:
+      eth1:
+        addresses:
+          - 10.10.101.20/24
+        gateway4: 10.10.101.1
+        nameservers:
+          addresses:
+            - 10.10.10.254
 ```

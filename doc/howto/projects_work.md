@@ -82,7 +82,7 @@
 :input: incus launch images:ubuntu/22.04 my-instance
 
 Creating my-instance
-Error: Failed instance creation: Failed creating instance record: Failed initialising instance: Failed getting root disk: No root device could be found
+Error: Failed instance creation: Failed creating instance record: Failed initializing instance: Failed getting root disk: No root device could be found
 ```
 
 これを修正するには、`default`プロジェクトのデフォルトプロファイルの内容を現在のプロジェクトのデフォルトプロファイルにコピーします。

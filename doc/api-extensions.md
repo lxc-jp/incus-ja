@@ -2407,3 +2407,11 @@ TLS クライアント証明書を直接使う代わりに署名された `JSON 
 
 * `type` (現状の挙動は `local`、 統合は `remote`)
 * `target_integration` (統合への参照)
+
+## `instance_memory_swap_bytes`
+
+`limits.memory.swap` を全体のリミットをバイト数で指定できるようにします。
+
+## `network_bridge_external_create`
+
+`bridge.external_interfaces` を `interface/parent/vlan` のシンタックスを使って親のインターフェースを作れるようにします。
