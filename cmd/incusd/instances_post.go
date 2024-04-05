@@ -896,6 +896,7 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 	var sourceImageRef string
 	var candidateMembers []db.NodeInfo
 	var targetMemberInfo *db.NodeInfo
+	var targetGroupName string
 
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		target := request.QueryParam(r, "target")
@@ -913,7 +914,6 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 			return err
 		}
 
-		var targetGroupName string
 		var allMembers []db.NodeInfo
 
 		if s.ServerClustered && !clusterNotification {
@@ -982,7 +982,7 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 			req.Profiles = []string{"default"}
 		}
 
-		// Initialise the profile info list (even if an empty list is provided so this isn't left as nil).
+		// Initialize the profile info list (even if an empty list is provided so this isn't left as nil).
 		// This way instances can still be created without any profiles by providing a non-nil empty list.
 		profiles = make([]api.Profile, 0, len(req.Profiles))
 
@@ -1135,8 +1135,13 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 		}
 	}
 
+	// Record the cluster group as a volatile config key if present.
+	if !clusterNotification && targetGroupName != "" {
+		req.Config["volatile.cluster.group"] = targetGroupName
+	}
+
 	if targetMemberInfo != nil && targetMemberInfo.Address != "" && targetMemberInfo.Name != s.ServerName {
-		client, err := cluster.Connect(targetMemberInfo.Address, s.Endpoints.NetworkCert(), s.ServerCert(), r, false)
+		client, err := cluster.Connect(targetMemberInfo.Address, s.Endpoints.NetworkCert(), s.ServerCert(), r, true)
 		if err != nil {
 			return response.SmartError(err)
 		}

@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/go-logr/logr"
 	ovsdbClient "github.com/ovn-org/libovsdb/client"
 
@@ -21,7 +23,7 @@ type SB struct {
 	cookie ovsdbClient.MonitorCookie
 }
 
-// NewSB initialises new OVN client for Southbound operations.
+// NewSB initializes new OVN client for Southbound operations.
 func NewSB(dbAddr string, sslCACert string, sslClientCert string, sslClientKey string) (*SB, error) {
 	// Prepare the OVSDB client.
 	dbSchema, err := ovnSB.FullDatabaseModel()
@@ -31,7 +33,7 @@ func NewSB(dbAddr string, sslCACert string, sslClientCert string, sslClientKey s
 
 	discard := logr.Discard()
 
-	options := []ovsdbClient.Option{ovsdbClient.WithLogger(&discard)}
+	options := []ovsdbClient.Option{ovsdbClient.WithLogger(&discard), ovsdbClient.WithReconnect(5*time.Second, &backoff.ZeroBackOff{})}
 	for _, entry := range strings.Split(dbAddr, ",") {
 		options = append(options, ovsdbClient.WithEndpoint(entry))
 	}

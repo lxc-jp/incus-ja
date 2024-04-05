@@ -57,7 +57,7 @@ import (
 )
 
 type evacuateStopFunc func(inst instance.Instance, action string) error
-type evacuateMigrateFunc func(ctx context.Context, s *state.State, r *http.Request, inst instance.Instance, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, metadata map[string]any, op *operations.Operation) error
+type evacuateMigrateFunc func(ctx context.Context, s *state.State, r *http.Request, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, metadata map[string]any, op *operations.Operation) error
 
 type evacuateOpts struct {
 	s               *state.State
@@ -598,7 +598,7 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 		// As ServerAddress field is required to be set it means that we're using the new join API
 		// introduced with the 'clustering_join' extension.
 		// Connect to ourselves to initialize storage pools and networks using the API.
-		localClient, err := incus.ConnectIncusUnix(d.UnixSocket(), &incus.ConnectionArgs{UserAgent: clusterRequest.UserAgentJoiner})
+		localClient, err := incus.ConnectIncusUnix(d.os.GetUnixSocket(), &incus.ConnectionArgs{UserAgent: clusterRequest.UserAgentJoiner})
 		if err != nil {
 			return fmt.Errorf("Failed to connect to local server: %w", err)
 		}
@@ -959,7 +959,7 @@ func clusterPutDisable(d *Daemon, r *http.Request, req api.ClusterPut) response.
 	})
 }
 
-// clusterInitMember initialises storage pools and networks on this member. We pass two client instances, one
+// clusterInitMember initializes storage pools and networks on this member. We pass two client instances, one
 // connected to ourselves (the joining member) and one connected to the target cluster member to join.
 func clusterInitMember(d incus.InstanceServer, client incus.InstanceServer, memberConfig []api.ClusterMemberConfigKey) error {
 	data := api.InitLocalPreseed{}
@@ -3064,14 +3064,14 @@ func clusterNodeStatePost(d *Daemon, r *http.Request) response.Response {
 			return nil
 		}
 
-		migrateFunc := func(ctx context.Context, s *state.State, r *http.Request, inst instance.Instance, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, metadata map[string]any, op *operations.Operation) error {
+		migrateFunc := func(ctx context.Context, s *state.State, r *http.Request, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, metadata map[string]any, op *operations.Operation) error {
 			// Migrate the instance.
 			req := api.InstancePost{
-				Name: inst.Name(),
-				Live: live,
+				Migration: true,
+				Live:      live,
 			}
 
-			err := migrateInstance(ctx, s, r, inst, targetMemberInfo.Name, req, op)
+			err := migrateInstance(ctx, s, inst, req, sourceMemberInfo, targetMemberInfo, op)
 			if err != nil {
 				return fmt.Errorf("Failed to migrate instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
 			}
@@ -3115,7 +3115,7 @@ func clusterNodeStatePost(d *Daemon, r *http.Request) response.Response {
 }
 
 func internalClusterHeal(d *Daemon, r *http.Request) response.Response {
-	migrateFunc := func(ctx context.Context, s *state.State, r *http.Request, inst instance.Instance, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, metadata map[string]any, op *operations.Operation) error {
+	migrateFunc := func(ctx context.Context, s *state.State, r *http.Request, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, metadata map[string]any, op *operations.Operation) error {
 		// This returns an error if the instance's storage pool is local.
 		// Since we only care about remote backed instances, this can be ignored and return nil instead.
 		poolName, err := inst.StoragePool()
@@ -3332,29 +3332,11 @@ func evacuateInstances(ctx context.Context, opts evacuateOpts) error {
 			}
 		}
 
-		// Get candidate cluster members to move instances to.
-		var candidateMembers []db.NodeInfo
-		err := opts.s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
-			allMembers, err := tx.GetNodes(ctx)
-			if err != nil {
-				return fmt.Errorf("Failed getting cluster members: %w", err)
-			}
-
-			candidateMembers, err = tx.GetCandidateMembers(ctx, allMembers, []int{inst.Architecture()}, "", nil, opts.s.GlobalConfig.OfflineThreshold())
-			if err != nil {
-				return err
-			}
-
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		targetMemberInfo, err := evacuateClusterSelectTarget(ctx, opts.s, opts.gateway, inst, candidateMembers)
+		// Find a new location for the instance.
+		sourceMemberInfo, targetMemberInfo, err := evacuateClusterSelectTarget(ctx, opts.s, opts.gateway, inst)
 		if err != nil {
 			if api.StatusErrorCheck(err, http.StatusNotFound) {
-				// Skip migration if no target is available
+				// Skip migration if no target is available.
 				l.Warn("No migration target available for instance")
 				continue
 			}
@@ -3370,7 +3352,7 @@ func evacuateInstances(ctx context.Context, opts evacuateOpts) error {
 		}
 
 		start := isRunning || instanceShouldAutoStart(inst)
-		err = opts.migrateInstance(ctx, opts.s, opts.r, inst, targetMemberInfo, action == "live-migrate", start, metadata, opts.op)
+		err = opts.migrateInstance(ctx, opts.s, opts.r, inst, sourceMemberInfo, targetMemberInfo, action == "live-migrate", start, metadata, opts.op)
 		if err != nil {
 			return err
 		}
@@ -4369,14 +4351,58 @@ func clusterGroupValidateName(name string) error {
 	return nil
 }
 
-func evacuateClusterSelectTarget(ctx context.Context, s *state.State, gateway *cluster.Gateway, inst instance.Instance, candidateMembers []db.NodeInfo) (*db.NodeInfo, error) {
+func evacuateClusterSelectTarget(ctx context.Context, s *state.State, gateway *cluster.Gateway, inst instance.Instance) (*db.NodeInfo, *db.NodeInfo, error) {
+	var sourceMemberInfo *db.NodeInfo
 	var targetMemberInfo *db.NodeInfo
+
+	// Get candidate cluster members to move instances to.
+	var candidateMembers []db.NodeInfo
+	err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		// Get the source member info.
+		srcMember, err := tx.GetNodeByName(ctx, inst.Location())
+		if err != nil {
+			return fmt.Errorf("Failed getting current cluster member of instance %q", inst.Name())
+		}
+
+		sourceMemberInfo = &srcMember
+
+		allMembers, err := tx.GetNodes(ctx)
+		if err != nil {
+			return fmt.Errorf("Failed getting cluster members: %w", err)
+		}
+
+		// Filter candidates by group if needed.
+		group := inst.LocalConfig()["volatile.cluster.group"]
+		if group != "" {
+			newMembers := make([]db.NodeInfo, 0, len(allMembers))
+			for _, member := range allMembers {
+				if !slices.Contains(member.Groups, group) {
+					continue
+				}
+
+				newMembers = append(newMembers, member)
+			}
+
+			allMembers = newMembers
+		}
+
+		// Filter offline servers.
+		candidateMembers, err = tx.GetCandidateMembers(ctx, allMembers, []int{inst.Architecture()}, "", nil, s.GlobalConfig.OfflineThreshold())
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Run instance placement scriptlet if enabled.
 	if s.GlobalConfig.InstancesPlacementScriptlet() != "" {
 		leaderAddress, err := gateway.LeaderAddress()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		// Copy request so we don't modify it when expanding the config.
@@ -4395,7 +4421,7 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, gateway *c
 
 		reqExpanded.Architecture, err = osarch.ArchitectureName(inst.Architecture())
 		if err != nil {
-			return nil, fmt.Errorf("Failed getting architecture for instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+			return nil, nil, fmt.Errorf("Failed getting architecture for instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
 		}
 
 		for _, p := range inst.Profiles() {
@@ -4406,7 +4432,7 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, gateway *c
 		targetMemberInfo, err = scriptlet.InstancePlacementRun(ctx, logger.Log, s, &reqExpanded, candidateMembers, leaderAddress)
 		if err != nil {
 			cancel()
-			return nil, fmt.Errorf("Failed instance placement scriptlet for instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+			return nil, nil, fmt.Errorf("Failed instance placement scriptlet for instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
 		}
 
 		cancel()
@@ -4426,11 +4452,11 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, gateway *c
 			return nil
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return targetMemberInfo, nil
+	return sourceMemberInfo, targetMemberInfo, nil
 }
 
 func autoHealClusterTask(d *Daemon) (task.Func, task.Schedule) {

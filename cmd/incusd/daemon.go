@@ -435,6 +435,19 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 		return false, "", "", fmt.Errorf("Bad/missing TLS on network query")
 	}
 
+	// Load the certificates.
+	trustCACertificates := d.globalConfig.TrustCACertificates()
+
+	// Check for JWT token signed by a TLS certificate.
+	jwtOk, _, cert := localUtil.CheckJwtToken(r, trustedCerts[certificate.TypeClient])
+	if jwtOk {
+		trusted, username := localUtil.CheckTrustState(*cert, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert(), trustCACertificates)
+		if trusted {
+			return true, username, api.AuthenticationMethodTLS, nil
+		}
+	}
+
+	// Check for JWT token signed by an OpenID Connect provider.
 	if d.oidcVerifier != nil && d.oidcVerifier.IsRequest(r) {
 		userName, err := d.oidcVerifier.Auth(d.shutdownCtx, w, r)
 		if err != nil {
@@ -444,10 +457,7 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 		return true, userName, api.AuthenticationMethodOIDC, nil
 	}
 
-	// Validate normal TLS access.
-	trustCACertificates := d.globalConfig.TrustCACertificates()
-
-	// Validate metrics certificates.
+	// Validate metrics TLS certificates.
 	if r.URL.Path == "/1.0/metrics" {
 		for _, i := range r.TLS.PeerCertificates {
 			trusted, username := localUtil.CheckTrustState(*i, trustedCerts[certificate.TypeMetrics], d.endpoints.NetworkCert(), trustCACertificates)
@@ -457,17 +467,9 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 		}
 	}
 
+	// Validate regular TLS certificates.
 	for _, i := range r.TLS.PeerCertificates {
 		trusted, username := localUtil.CheckTrustState(*i, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert(), trustCACertificates)
-		if trusted {
-			return true, username, api.AuthenticationMethodTLS, nil
-		}
-	}
-
-	// Check for JWT token in the request.
-	jwtOk, _, cert := localUtil.CheckJwtToken(r, trustedCerts[certificate.TypeClient])
-	if jwtOk {
-		trusted, username := localUtil.CheckTrustState(*cert, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert(), trustCACertificates)
 		if trusted {
 			return true, username, api.AuthenticationMethodTLS, nil
 		}
@@ -519,17 +521,6 @@ func (d *Daemon) State() *state.State {
 		OVNNB:                  d.ovnnb,
 		OVNSB:                  d.ovnsb,
 	}
-}
-
-// UnixSocket returns the full path to the unix.socket file that this daemon is
-// listening on. Used by tests.
-func (d *Daemon) UnixSocket() string {
-	path := os.Getenv("INCUS_SOCKET")
-	if path != "" {
-		return path
-	}
-
-	return filepath.Join(d.os.VarDir, "unix.socket")
 }
 
 func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
@@ -829,7 +820,7 @@ func (d *Daemon) init() error {
 	d.internalListener = events.NewInternalListener(d.shutdownCtx, d.events)
 
 	// Lets check if there's an existing daemon running
-	err = endpoints.CheckAlreadyRunning(d.UnixSocket())
+	err = endpoints.CheckAlreadyRunning(d.os.GetUnixSocket())
 	if err != nil {
 		return err
 	}
@@ -1158,7 +1149,7 @@ func (d *Daemon) init() error {
 	/* Setup the web server */
 	config := &endpoints.Config{
 		Dir:                  d.os.VarDir,
-		UnixSocket:           d.UnixSocket(),
+		UnixSocket:           d.os.GetUnixSocket(),
 		Cert:                 networkCert,
 		RestServer:           restServer(d),
 		DevIncusServer:       devIncusServer(d),
@@ -1315,7 +1306,7 @@ func (d *Daemon) init() error {
 		return err
 	}
 
-	// Apply all patches that need to be run before daemon storage is initialised.
+	// Apply all patches that need to be run before daemon storage is initialized.
 	err = patchesApply(d, patchPreDaemonStorage)
 	if err != nil {
 		return err
@@ -1334,7 +1325,7 @@ func (d *Daemon) init() error {
 		return err
 	}
 
-	// Apply all patches that need to be run after daemon storage is initialised.
+	// Apply all patches that need to be run after daemon storage is initialized.
 	err = patchesApply(d, patchPostDaemonStorage)
 	if err != nil {
 		return err
@@ -1511,7 +1502,7 @@ func (d *Daemon) init() error {
 		}
 	}
 
-	// Apply all patches that need to be run after networks are initialised.
+	// Apply all patches that need to be run after networks are initialized.
 	err = patchesApply(d, patchPostNetworks)
 	if err != nil {
 		return err
@@ -1538,7 +1529,7 @@ func (d *Daemon) init() error {
 			return err
 		}
 
-		// Must occur after d.devmonitor has been initialised.
+		// Must occur after d.devmonitor has been initialized.
 		instances, err = instance.LoadNodeAll(d.State(), instancetype.Any)
 		if err != nil {
 			return fmt.Errorf("Failed loading local instances: %w", err)
