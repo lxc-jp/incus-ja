@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/go-logr/logr"
 	ovsdbClient "github.com/ovn-org/libovsdb/client"
 
@@ -18,7 +20,7 @@ type VSwitch struct {
 	rootUUID string
 }
 
-// NewVSwitch initialises a new vSwitch client..
+// NewVSwitch initializes a new vSwitch client..
 func NewVSwitch() (*VSwitch, error) {
 	// Prepare the OVSDB client.
 	dbSchema, err := ovsSwitch.FullDatabaseModel()
@@ -31,6 +33,7 @@ func NewVSwitch() (*VSwitch, error) {
 	options := []ovsdbClient.Option{
 		ovsdbClient.WithLogger(&discard),
 		ovsdbClient.WithEndpoint("unix:///run/openvswitch/db.sock"),
+		ovsdbClient.WithReconnect(5*time.Second, &backoff.ZeroBackOff{}),
 	}
 
 	// Connect to OVSDB.

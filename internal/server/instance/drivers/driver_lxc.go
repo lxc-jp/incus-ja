@@ -435,7 +435,7 @@ type lxc struct {
 
 	// Cached handles.
 	// Do not use these variables directly, instead use their associated get functions so they
-	// will be initialised on demand.
+	// will be initialized on demand.
 	c *liblxc.Container // Use d.initLXC() instead of accessing this directly.
 
 	cConfig  bool
@@ -1155,27 +1155,28 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 					return nil, err
 				}
 			} else {
-				if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) {
-					err = cg.SetMemoryLimit(valueInt)
-					if err != nil {
-						return nil, err
-					}
+				err = cg.SetMemoryLimit(valueInt)
+				if err != nil {
+					return nil, err
+				}
 
-					if util.IsFalse(memorySwap) {
+				if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) {
+					if util.IsTrueOrEmpty(memorySwap) || util.IsFalse(memorySwap) {
 						err = cg.SetMemorySwapLimit(0)
 						if err != nil {
 							return nil, err
 						}
 					} else {
-						err = cg.SetMemorySwapLimit(valueInt)
+						// Additional memory as swap.
+						swapInt, err := units.ParseByteSizeString(memorySwap)
 						if err != nil {
 							return nil, err
 						}
-					}
-				} else {
-					err = cg.SetMemoryLimit(valueInt)
-					if err != nil {
-						return nil, err
+
+						err = cg.SetMemorySwapLimit(swapInt)
+						if err != nil {
+							return nil, err
+						}
 					}
 				}
 
@@ -3268,7 +3269,7 @@ func (d *lxc) Render(options ...func(response any) error) (any, any, error) {
 			LastUsedAt:      d.lastUsedDate,
 			Name:            strings.SplitN(d.name, "/", 2)[1],
 			Stateful:        d.stateful,
-			Size:            -1, // Default to uninitialised/error state (0 means no CoW usage).
+			Size:            -1, // Default to uninitialized/error state (0 means no CoW usage).
 		}
 
 		snapState.Architecture = architectureName
@@ -4617,46 +4618,49 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 				// Set the new values
 				if memoryEnforce == "soft" {
-					// Set new limit
+					// Set new limit.
 					err = cg.SetMemorySoftLimit(memoryInt)
 					if err != nil {
 						revertMemory()
 						return err
 					}
 				} else {
-					if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) {
-						err = cg.SetMemoryLimit(memoryInt)
-						if err != nil {
-							revertMemory()
-							return err
-						}
+					err = cg.SetMemoryLimit(memoryInt)
+					if err != nil {
+						revertMemory()
+						return err
+					}
 
-						if util.IsFalse(memorySwap) {
+					if d.state.OS.CGInfo.Supports(cgroup.MemorySwap, cg) {
+						if util.IsTrueOrEmpty(memorySwap) || util.IsFalse(memorySwap) {
 							err = cg.SetMemorySwapLimit(0)
 							if err != nil {
 								revertMemory()
 								return err
 							}
 						} else {
-							err = cg.SetMemorySwapLimit(memoryInt)
+							// Additional memory as swap.
+							swapInt, err := units.ParseByteSizeString(memorySwap)
+							if err != nil {
+								revertMemory()
+								return err
+							}
+
+							err = cg.SetMemorySwapLimit(swapInt)
 							if err != nil {
 								revertMemory()
 								return err
 							}
 						}
-					} else {
-						err = cg.SetMemoryLimit(memoryInt)
+					}
+
+					// Set soft limit to value 10% less than hard limit.
+					if memoryInt > 0 {
+						err = cg.SetMemorySoftLimit(int64(float64(memoryInt) * 0.9))
 						if err != nil {
 							revertMemory()
 							return err
 						}
-					}
-
-					// Set soft limit to value 10% less than hard limit
-					err = cg.SetMemorySoftLimit(int64(float64(memoryInt) * 0.9))
-					if err != nil {
-						revertMemory()
-						return err
 					}
 				}
 
@@ -4666,7 +4670,6 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 				// Configure the swappiness
 				if key == "limits.memory.swap" || key == "limits.memory.swap.priority" {
-					memorySwap := d.expandedConfig["limits.memory.swap"]
 					memorySwapPriority := d.expandedConfig["limits.memory.swap.priority"]
 					if util.IsFalse(memorySwap) {
 						err = cg.SetMemorySwappiness(0)
@@ -6045,7 +6048,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 		args.Disconnect()
 	}()
 
-	// Start filesystem transfer routine and initialise a channel that is closed when the routine finishes.
+	// Start filesystem transfer routine and initialize a channel that is closed when the routine finishes.
 	fsTransferDone := make(chan struct{})
 	g.Go(func() error {
 		defer close(fsTransferDone)
@@ -6211,7 +6214,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 		return nil
 	})
 
-	// Start live state transfer routine (if required) and initialise a channel that is closed when the
+	// Start live state transfer routine (if required) and initialize a channel that is closed when the
 	// routine finishes. It is never closed if the routine is not started.
 	stateTransferDone := make(chan struct{})
 	if args.Live {

@@ -121,22 +121,10 @@ func (d *disk) sourceIsCeph() bool {
 
 // CanHotPlug returns whether the device can be managed whilst the instance is running.
 func (d *disk) CanHotPlug() bool {
-	// Containers support hot-plugging all disk types.
-	if d.inst.Type() == instancetype.Container {
-		return true
-	}
-
-	// Only VirtioFS works with path hotplug.
-	// As migration.stateful turns off VirtioFS, this also turns off hotplugging of paths.
-	if util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) {
-		return false
-	}
-
-	// Block disks can be hot-plugged into VMs.
+	// All disks can be hot-plugged.
 	return true
 }
 
-// validateConfig checks the supplied config for correctness.
 // isRequired indicates whether the supplied device config requires this device to start OK.
 func (d *disk) isRequired(devConfig deviceConfig.Device) bool {
 	// Defaults to required.
@@ -399,7 +387,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 					return fmt.Errorf("Failed checking if custom volume is exclusively attached to another instance: %w", err)
 				}
 
-				if remoteInstance != nil {
+				if remoteInstance != nil && remoteInstance.ID != instConf.ID() {
 					return fmt.Errorf("Custom volume is already attached to an instance on a different node")
 				}
 
@@ -465,6 +453,25 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 					return fmt.Errorf("Invalid initial device configuration: %v", err)
 				}
 			}
+		}
+	}
+
+	// Restrict disks allowed when live-migratable.
+	if instConf.Type() == instancetype.VM && util.IsTrue(instConf.ExpandedConfig()["migration.stateful"]) {
+		if d.config["path"] != "" && d.config["path"] != "/" {
+			return fmt.Errorf("Shared filesystem are incompatible with migration.stateful=true")
+		}
+
+		if d.config["pool"] == "" {
+			return fmt.Errorf("Only Incus-managed disks are allowed with migration.stateful=true")
+		}
+
+		if d.config["io.bus"] == "nvme" {
+			return fmt.Errorf("NVME disks aren't supported with migration.stateful=true")
+		}
+
+		if d.config["path"] != "/" && d.pool != nil && !d.pool.Driver().Info().Remote {
+			return fmt.Errorf("Only additional disks coming from a shared storage pool are supported with migration.stateful=true")
 		}
 	}
 
@@ -546,7 +553,7 @@ func (d *disk) UpdatableFields(oldDevice Type) []string {
 	return []string{"limits.max", "limits.read", "limits.write", "size", "size.state"}
 }
 
-// Register calls mount for the disk volume (which should already be mounted) to reinitialise the reference counter
+// Register calls mount for the disk volume (which should already be mounted) to reinitialize the reference counter
 // for volumes attached to running instances on daemon restart.
 func (d *disk) Register() error {
 	d.logger.Debug("Initialising mounted disk ref counter")
@@ -557,7 +564,7 @@ func (d *disk) Register() error {
 			return err
 		}
 
-		// Try to mount the volume that should already be mounted to reinitialise the ref counter.
+		// Try to mount the volume that should already be mounted to reinitialize the ref counter.
 		_, err = pool.MountInstance(d.inst, nil)
 		if err != nil {
 			return err
@@ -568,7 +575,7 @@ func (d *disk) Register() error {
 			return err
 		}
 
-		// Try to mount the volume that should already be mounted to reinitialise the ref counter.
+		// Try to mount the volume that should already be mounted to reinitialize the ref counter.
 		_, err = d.pool.MountCustomVolume(storageProjectName, d.config["source"], nil)
 		if err != nil {
 			return err

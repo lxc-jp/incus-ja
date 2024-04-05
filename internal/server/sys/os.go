@@ -225,9 +225,19 @@ func (s *OS) Init() ([]cluster.Warning, error) {
 	return dbWarnings, nil
 }
 
-// InitStorage initialises the storage layer after it has been mounted.
+// InitStorage initializes the storage layer after it has been mounted.
 func (s *OS) InitStorage() error {
 	return s.initStorageDirs()
+}
+
+// GetUnixSocket returns the full path to the unix.socket file that this daemon is listening on. Used by tests.
+func (s *OS) GetUnixSocket() string {
+	path := os.Getenv("INCUS_SOCKET")
+	if path != "" {
+		return path
+	}
+
+	return filepath.Join(s.VarDir, "unix.socket")
 }
 
 func getIdmapset() *idmap.Set {

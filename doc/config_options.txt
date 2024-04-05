@@ -439,9 +439,11 @@ If this option is set to `false`, regular system memory is used.
 :condition: "container"
 :defaultdesc: "`true`"
 :liveupdate: "yes"
-:shortdesc: "Whether to encourage/discourage swapping less used pages for this instance"
-:type: "bool"
-
+:shortdesc: "Control swap usage by the instance"
+:type: "string"
+When set to `true` or `false`, it controls whether the container is likely to get some of
+its memory swapped by the kernel. Alternatively, it can be set to a bytes value which will
+then allow the container to make use of additional memory through swap.
 ```
 
 ```{config:option} limits.memory.swap.priority instance-resource-limits
@@ -923,6 +925,13 @@ The hash of the image that the instance was created from (empty if the instance 
 :shortdesc: "`instance-id` (UUID) exposed to `cloud-init`"
 :type: "string"
 
+```
+
+```{config:option} volatile.cluster.group instance-volatile
+:shortdesc: "The original cluster group for the instance"
+:type: "string"
+The cluster group(s) that the instance was restricted to at creation time.
+This is used during re-scheduling events like an evacuation to keep the instance within the requested set.
 ```
 
 ```{config:option} volatile.cpu.nodes instance-volatile

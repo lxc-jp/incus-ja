@@ -223,7 +223,7 @@ func qemuInstantiate(s *state.State, args db.InstanceArgs, expandedDevices devic
 	return d
 }
 
-// qemuCreate creates a new storage volume record and returns an initialised Instance.
+// qemuCreate creates a new storage volume record and returns an initialized Instance.
 // Returns a revert fail function that can be used to undo this function if a subsequent step fails.
 func qemuCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.Instance, revert.Hook, error) {
 	revert := revert.New()
@@ -373,7 +373,7 @@ type qemu struct {
 
 	// Cached handles.
 	// Do not use these variables directly, instead use their associated get functions so they
-	// will be initialised on demand.
+	// will be initialized on demand.
 	architectureName string
 
 	// Stateful migration streams.
@@ -6284,7 +6284,7 @@ func (d *qemu) Export(w io.Writer, properties map[string]string, expiration time
 		_ = from.Close()
 	}
 
-	to, err := os.OpenFile(fPath, unix.O_DIRECT|unix.O_CREAT, 0)
+	to, err := os.OpenFile(fPath, unix.O_DIRECT|unix.O_CREAT, 0600)
 	if err == nil {
 		cmd = append(cmd, "-t", "none")
 		_ = to.Close()
@@ -6687,6 +6687,17 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 		defer revert.Fail() // Run the revert fail before the earlier defers.
 
 		d.logger.Debug("Setup temporary migration storage snapshot")
+	} else {
+		// Still set some options for shared storage.
+		capabilities := map[string]bool{
+			// Automatically throttle down the guest to speed up convergence of RAM migration.
+			"auto-converge": true,
+		}
+
+		err = monitor.MigrateSetCapabilities(capabilities)
+		if err != nil {
+			return fmt.Errorf("Failed setting migration capabilities: %w", err)
+		}
 	}
 
 	// Perform storage transfer while instance is still running.
@@ -6698,6 +6709,38 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 	err = pool.MigrateInstance(d, filesystemConn, volSourceArgs, d.op)
 	if err != nil {
 		return err
+	}
+
+	// Derive the effective storage project name from the instance config's project.
+	storageProjectName, err := project.StorageVolumeProject(d.state.DB.Cluster, d.project.Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	// Notify the shared disks that they're going to be accessed from another system.
+	for _, dev := range d.expandedDevices.Sorted() {
+		if dev.Config["type"] != "disk" || dev.Config["path"] == "/" {
+			continue
+		}
+
+		// Load the pool for the disk.
+		diskPool, err := storagePools.LoadByName(d.state, dev.Config["pool"])
+		if err != nil {
+			return fmt.Errorf("Failed loading storage pool: %w", err)
+		}
+
+		// Setup the volume entry.
+		extraSourceArgs := &localMigration.VolumeSourceArgs{
+			ClusterMove: true,
+		}
+
+		vol := diskPool.GetVolume(storageDrivers.VolumeTypeCustom, storageDrivers.ContentTypeBlock, project.StorageVolume(storageProjectName, dev.Config["source"]), nil)
+
+		// Call MigrateVolume on the source.
+		err = diskPool.Driver().MigrateVolume(vol, nil, extraSourceArgs, nil)
+		if err != nil {
+			return fmt.Errorf("Failed to prepare device %q for migration: %w", dev.Name, err)
+		}
 	}
 
 	// Non-shared storage snapshot transfer.
@@ -7066,7 +7109,7 @@ func (d *qemu) MigrateReceive(args instance.MigrateReceiveArgs) error {
 		args.Disconnect()
 	}()
 
-	// Start filesystem transfer routine and initialise a channel that is closed when the routine finishes.
+	// Start filesystem transfer routine and initialize a channel that is closed when the routine finishes.
 	fsTransferDone := make(chan struct{})
 	g.Go(func() error {
 		defer close(fsTransferDone)
@@ -7178,6 +7221,38 @@ func (d *qemu) MigrateReceive(args instance.MigrateReceiveArgs) error {
 		err = pool.CreateInstanceFromMigration(d, filesystemConn, volTargetArgs, d.op)
 		if err != nil {
 			return fmt.Errorf("Failed creating instance on target: %w", err)
+		}
+
+		// Derive the effective storage project name from the instance config's project.
+		storageProjectName, err := project.StorageVolumeProject(d.state.DB.Cluster, d.project.Name, db.StoragePoolVolumeTypeCustom)
+		if err != nil {
+			return err
+		}
+
+		// Notify the shared disks that they're going to be accessed from another system.
+		for _, dev := range d.expandedDevices.Sorted() {
+			if dev.Config["type"] != "disk" || dev.Config["path"] == "/" {
+				continue
+			}
+
+			// Load the pool for the disk.
+			diskPool, err := storagePools.LoadByName(d.state, dev.Config["pool"])
+			if err != nil {
+				return fmt.Errorf("Failed loading storage pool: %w", err)
+			}
+
+			// Setup the volume entry.
+			extraTargetArgs := localMigration.VolumeTargetArgs{
+				ClusterMoveSourceName: args.ClusterMoveSourceName,
+			}
+
+			vol := diskPool.GetVolume(storageDrivers.VolumeTypeCustom, storageDrivers.ContentTypeBlock, project.StorageVolume(storageProjectName, dev.Config["source"]), nil)
+
+			// Call MigrateVolume on the source.
+			err = diskPool.Driver().CreateVolumeFromMigration(vol, nil, extraTargetArgs, nil, nil)
+			if err != nil {
+				return fmt.Errorf("Failed to prepare device %q for migration: %w", dev.Name, err)
+			}
 		}
 
 		// Only delete all instance volumes on error if the pool volume creation has succeeded to
@@ -7498,7 +7573,7 @@ func (d *qemu) Render(options ...func(response any) error) (any, any, error) {
 			LastUsedAt:      d.lastUsedDate,
 			Name:            strings.SplitN(d.name, "/", 2)[1],
 			Stateful:        d.stateful,
-			Size:            -1, // Default to uninitialised/error state (0 means no CoW usage).
+			Size:            -1, // Default to uninitialized/error state (0 means no CoW usage).
 		}
 
 		snapState.Architecture = d.architectureName
