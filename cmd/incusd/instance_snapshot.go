@@ -12,23 +12,22 @@ import (
 
 	"github.com/gorilla/mux"
 
-	internalInstance "github.com/lxc/incus/internal/instance"
-	"github.com/lxc/incus/internal/jmap"
-	"github.com/lxc/incus/internal/server/db"
-	"github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/db/operationtype"
-	"github.com/lxc/incus/internal/server/instance"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/operations"
-	"github.com/lxc/incus/internal/server/project"
-	"github.com/lxc/incus/internal/server/request"
-	"github.com/lxc/incus/internal/server/response"
-	"github.com/lxc/incus/internal/server/state"
-	storagePools "github.com/lxc/incus/internal/server/storage"
-	localUtil "github.com/lxc/incus/internal/server/util"
-	"github.com/lxc/incus/internal/version"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/validate"
+	internalInstance "github.com/lxc/incus/v6/internal/instance"
+	"github.com/lxc/incus/v6/internal/jmap"
+	"github.com/lxc/incus/v6/internal/server/db"
+	"github.com/lxc/incus/v6/internal/server/db/cluster"
+	"github.com/lxc/incus/v6/internal/server/db/operationtype"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/operations"
+	"github.com/lxc/incus/v6/internal/server/project"
+	"github.com/lxc/incus/v6/internal/server/request"
+	"github.com/lxc/incus/v6/internal/server/response"
+	"github.com/lxc/incus/v6/internal/server/state"
+	storagePools "github.com/lxc/incus/v6/internal/server/storage"
+	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/validate"
 )
 
 // swagger:operation GET /1.0/instances/{name}/snapshots instances instance_snapshots_get
@@ -338,10 +337,6 @@ func instanceSnapshotsPost(d *Daemon, r *http.Request) response.Response {
 	resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", name)}
 	resources["instances_snapshots"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", name, "snapshots", req.Name)}
 
-	if inst.Type() == instancetype.Container {
-		resources["containers"] = resources["instances"]
-	}
-
 	op, err := operations.OperationCreate(s, projectName, operations.OperationClassTask, operationtype.SnapshotCreate, resources, nil, snapshot, nil, nil, r)
 	if err != nil {
 		return response.InternalError(err)
@@ -540,10 +535,6 @@ func snapshotPut(s *state.State, r *http.Request, snapInst instance.Instance) re
 	resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName)}
 	resources["instances_snapshots"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName, "snapshots", snapName)}
 
-	if snapInst.Type() == instancetype.Container {
-		resources["containers"] = resources["instances"]
-	}
-
 	op, err := operations.OperationCreate(s, snapInst.Project().Name, operations.OperationClassTask, opType, resources, nil, do, nil, nil, r)
 	if err != nil {
 		return response.InternalError(err)
@@ -692,10 +683,6 @@ func snapshotPost(s *state.State, r *http.Request, snapInst instance.Instance) r
 		resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName)}
 		resources["instances_snapshots"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName, "snapshots", snapName)}
 
-		if snapInst.Type() == instancetype.Container {
-			resources["containers"] = resources["instances"]
-		}
-
 		run := func(op *operations.Operation) error {
 			return ws.Do(s, op)
 		}
@@ -753,10 +740,6 @@ func snapshotPost(s *state.State, r *http.Request, snapInst instance.Instance) r
 	resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName)}
 	resources["instances_snapshots"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName, "snapshots", snapName)}
 
-	if snapInst.Type() == instancetype.Container {
-		resources["containers"] = resources["instances"]
-	}
-
 	op, err := operations.OperationCreate(s, snapInst.Project().Name, operations.OperationClassTask, operationtype.SnapshotRename, resources, nil, rename, nil, nil, r)
 	if err != nil {
 		return response.InternalError(err)
@@ -801,10 +784,6 @@ func snapshotDelete(s *state.State, r *http.Request, snapInst instance.Instance)
 	resources := map[string][]api.URL{}
 	resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName)}
 	resources["instances_snapshots"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", parentName, "snapshots", snapName)}
-
-	if snapInst.Type() == instancetype.Container {
-		resources["containers"] = resources["instances"]
-	}
 
 	op, err := operations.OperationCreate(s, snapInst.Project().Name, operations.OperationClassTask, operationtype.SnapshotDelete, resources, nil, remove, nil, nil, r)
 	if err != nil {

@@ -12,10 +12,10 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/client"
-	cli "github.com/lxc/incus/internal/cmd"
-	"github.com/lxc/incus/internal/i18n"
-	internalSQL "github.com/lxc/incus/internal/sql"
+	"github.com/lxc/incus/v6/client"
+	cli "github.com/lxc/incus/v6/internal/cmd"
+	"github.com/lxc/incus/v6/internal/i18n"
+	internalSQL "github.com/lxc/incus/v6/internal/sql"
 )
 
 type cmdAdminSQL struct {
@@ -54,7 +54,6 @@ func (c *cmdAdminSQL) Command() *cobra.Command {
   This command targets the global database and works in both local
   and cluster mode.`))
 	cmd.RunE = c.Run
-	cmd.Hidden = true
 
 	return cmd
 }

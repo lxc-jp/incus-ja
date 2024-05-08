@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	cli "github.com/lxc/incus/internal/cmd"
-	"github.com/lxc/incus/internal/i18n"
-	"github.com/lxc/incus/shared/util"
+	cli "github.com/lxc/incus/v6/internal/cmd"
+	"github.com/lxc/incus/v6/internal/i18n"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 type cmdAdminCluster struct {
@@ -33,7 +33,9 @@ func (c *cmdAdminCluster) Run(cmd *cobra.Command, args []string) {
 	env := getEnviron()
 	path, _ := exec.LookPath("incusd")
 	if path == "" {
-		if util.PathExists("/usr/lib/incus/incusd") {
+		if util.PathExists("/usr/libexec/incus/incusd") {
+			path = "/usr/libexec/incus/incusd"
+		} else if util.PathExists("/usr/lib/incus/incusd") {
 			path = "/usr/lib/incus/incusd"
 		} else if util.PathExists("/opt/incus/bin/incusd") {
 			path = "/opt/incus/bin/incusd"

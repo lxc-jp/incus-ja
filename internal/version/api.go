@@ -408,6 +408,19 @@ var APIExtensions = []string{
 	"network_integrations",
 	"instance_memory_swap_bytes",
 	"network_bridge_external_create",
+	"network_zones_all_projects",
+	"storage_zfs_vdev",
+	"container_migration_stateful",
+	"profiles_all_projects",
+	"instances_scriptlet_get_instances",
+	"instances_scriptlet_get_cluster_members",
+	"instances_scriptlet_get_project",
+	"network_acl_stateless",
+	"instance_state_started_at",
+	"networks_all_projects",
+	"network_acls_all_projects",
+	"storage_buckets_all_projects",
+	"resources_load",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

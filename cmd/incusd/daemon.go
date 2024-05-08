@@ -26,61 +26,61 @@ import (
 	liblxc "github.com/lxc/go-lxc"
 	"golang.org/x/sys/unix"
 
-	internalIO "github.com/lxc/incus/internal/io"
-	"github.com/lxc/incus/internal/linux"
-	"github.com/lxc/incus/internal/revert"
-	"github.com/lxc/incus/internal/rsync"
-	"github.com/lxc/incus/internal/server/acme"
-	"github.com/lxc/incus/internal/server/apparmor"
-	"github.com/lxc/incus/internal/server/auth"
-	"github.com/lxc/incus/internal/server/auth/oidc"
-	"github.com/lxc/incus/internal/server/bgp"
-	"github.com/lxc/incus/internal/server/certificate"
-	"github.com/lxc/incus/internal/server/cluster"
-	clusterConfig "github.com/lxc/incus/internal/server/cluster/config"
-	"github.com/lxc/incus/internal/server/daemon"
-	"github.com/lxc/incus/internal/server/db"
-	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/db/query"
-	"github.com/lxc/incus/internal/server/db/warningtype"
-	"github.com/lxc/incus/internal/server/dns"
-	"github.com/lxc/incus/internal/server/endpoints"
-	"github.com/lxc/incus/internal/server/events"
-	"github.com/lxc/incus/internal/server/firewall"
-	"github.com/lxc/incus/internal/server/fsmonitor"
-	"github.com/lxc/incus/internal/server/instance"
-	instanceDrivers "github.com/lxc/incus/internal/server/instance/drivers"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/loki"
-	"github.com/lxc/incus/internal/server/network/ovn"
-	"github.com/lxc/incus/internal/server/network/ovs"
-	networkZone "github.com/lxc/incus/internal/server/network/zone"
-	"github.com/lxc/incus/internal/server/node"
-	"github.com/lxc/incus/internal/server/project"
-	"github.com/lxc/incus/internal/server/request"
-	"github.com/lxc/incus/internal/server/response"
-	scriptletLoad "github.com/lxc/incus/internal/server/scriptlet/load"
-	"github.com/lxc/incus/internal/server/seccomp"
-	"github.com/lxc/incus/internal/server/state"
-	storagePools "github.com/lxc/incus/internal/server/storage"
-	storageDrivers "github.com/lxc/incus/internal/server/storage/drivers"
-	"github.com/lxc/incus/internal/server/storage/s3/miniod"
-	"github.com/lxc/incus/internal/server/sys"
-	"github.com/lxc/incus/internal/server/syslog"
-	"github.com/lxc/incus/internal/server/task"
-	"github.com/lxc/incus/internal/server/ucred"
-	localUtil "github.com/lxc/incus/internal/server/util"
-	"github.com/lxc/incus/internal/server/warnings"
-	internalUtil "github.com/lxc/incus/internal/util"
-	"github.com/lxc/incus/internal/version"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/archive"
-	"github.com/lxc/incus/shared/cancel"
-	"github.com/lxc/incus/shared/idmap"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/proxy"
-	localtls "github.com/lxc/incus/shared/tls"
-	"github.com/lxc/incus/shared/util"
+	internalIO "github.com/lxc/incus/v6/internal/io"
+	"github.com/lxc/incus/v6/internal/linux"
+	"github.com/lxc/incus/v6/internal/revert"
+	"github.com/lxc/incus/v6/internal/rsync"
+	"github.com/lxc/incus/v6/internal/server/acme"
+	"github.com/lxc/incus/v6/internal/server/apparmor"
+	"github.com/lxc/incus/v6/internal/server/auth"
+	"github.com/lxc/incus/v6/internal/server/auth/oidc"
+	"github.com/lxc/incus/v6/internal/server/bgp"
+	"github.com/lxc/incus/v6/internal/server/certificate"
+	"github.com/lxc/incus/v6/internal/server/cluster"
+	clusterConfig "github.com/lxc/incus/v6/internal/server/cluster/config"
+	"github.com/lxc/incus/v6/internal/server/daemon"
+	"github.com/lxc/incus/v6/internal/server/db"
+	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
+	"github.com/lxc/incus/v6/internal/server/db/query"
+	"github.com/lxc/incus/v6/internal/server/db/warningtype"
+	"github.com/lxc/incus/v6/internal/server/dns"
+	"github.com/lxc/incus/v6/internal/server/endpoints"
+	"github.com/lxc/incus/v6/internal/server/events"
+	"github.com/lxc/incus/v6/internal/server/firewall"
+	"github.com/lxc/incus/v6/internal/server/fsmonitor"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	instanceDrivers "github.com/lxc/incus/v6/internal/server/instance/drivers"
+	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v6/internal/server/loki"
+	"github.com/lxc/incus/v6/internal/server/network/ovn"
+	"github.com/lxc/incus/v6/internal/server/network/ovs"
+	networkZone "github.com/lxc/incus/v6/internal/server/network/zone"
+	"github.com/lxc/incus/v6/internal/server/node"
+	"github.com/lxc/incus/v6/internal/server/project"
+	"github.com/lxc/incus/v6/internal/server/request"
+	"github.com/lxc/incus/v6/internal/server/response"
+	scriptletLoad "github.com/lxc/incus/v6/internal/server/scriptlet/load"
+	"github.com/lxc/incus/v6/internal/server/seccomp"
+	"github.com/lxc/incus/v6/internal/server/state"
+	storagePools "github.com/lxc/incus/v6/internal/server/storage"
+	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
+	"github.com/lxc/incus/v6/internal/server/storage/s3/miniod"
+	"github.com/lxc/incus/v6/internal/server/sys"
+	"github.com/lxc/incus/v6/internal/server/syslog"
+	"github.com/lxc/incus/v6/internal/server/task"
+	"github.com/lxc/incus/v6/internal/server/ucred"
+	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	"github.com/lxc/incus/v6/internal/server/warnings"
+	internalUtil "github.com/lxc/incus/v6/internal/util"
+	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/archive"
+	"github.com/lxc/incus/v6/shared/cancel"
+	"github.com/lxc/incus/v6/shared/idmap"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/proxy"
+	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 // A Daemon can respond to requests from a shared client.
@@ -788,13 +788,24 @@ func (d *Daemon) setupLoki(URL string, cert string, key string, caCert string, i
 		return err
 	}
 
-	// Figure out the instance name.
-	if instanceName == "" {
+	// Handle standalone systems.
+	var location string
+	if !d.serverClustered {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return err
+		}
+
+		location = hostname
+		if instanceName == "" {
+			instanceName = hostname
+		}
+	} else if instanceName == "" {
 		instanceName = d.serverName
 	}
 
 	// Start a new client.
-	d.lokiClient = loki.NewClient(d.shutdownCtx, u, cert, key, caCert, instanceName, logLevel, labels, types)
+	d.lokiClient = loki.NewClient(d.shutdownCtx, u, cert, key, caCert, instanceName, location, logLevel, labels, types)
 
 	// Attach the new client to the log handler.
 	d.internalListener.AddHandler("loki", d.lokiClient.HandleEvent)
@@ -1248,26 +1259,6 @@ func (d *Daemon) init() error {
 
 	d.gateway.Cluster = d.db.Cluster
 
-	// This logic used to belong to patchUpdateFromV10, but has been moved
-	// here because it needs database access.
-	if util.PathExists(internalUtil.VarPath("lxc")) {
-		err := os.Rename(internalUtil.VarPath("lxc"), internalUtil.VarPath("containers"))
-		if err != nil {
-			return err
-		}
-
-		logger.Debug("Restarting all the containers following directory rename")
-
-		s := d.State()
-		instances, err := instance.LoadNodeAll(s, instancetype.Container)
-		if err != nil {
-			return fmt.Errorf("Failed loading containers to restart: %w", err)
-		}
-
-		instancesShutdown(s, instances)
-		instancesStart(s, instances)
-	}
-
 	// Setup the user-agent.
 	if d.serverClustered {
 		version.UserAgentFeatures([]string{"cluster"})
@@ -1471,10 +1462,13 @@ func (d *Daemon) init() error {
 	}
 
 	// Setup the networks.
-	logger.Infof("Initializing networks")
-	err = networkStartup(d.State())
-	if err != nil {
-		return err
+	if !d.db.Cluster.LocalNodeIsEvacuated() {
+		logger.Infof("Initializing networks")
+
+		err = networkStartup(d.State())
+		if err != nil {
+			return err
+		}
 	}
 
 	// Setup tertiary listeners that may use managed network addresses and must be started after networks.
@@ -1631,9 +1625,7 @@ func (d *Daemon) init() error {
 	d.tasks.Start(d.shutdownCtx)
 
 	// Restore instances
-	if !d.db.Cluster.LocalNodeIsEvacuated() {
-		instancesStart(d.State(), instances)
-	}
+	instancesStart(d.State(), instances)
 
 	// Re-balance in case things changed while the daemon was down
 	deviceTaskBalance(d.State())

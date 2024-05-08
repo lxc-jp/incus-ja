@@ -21,6 +21,408 @@
 				]
 			}
 		},
+		"devices": {
+			"disk": {
+				"keys": [
+					{
+						"boot.priority": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Boot priority for VMs (higher value boots first)",
+							"type": "integer"
+						}
+					},
+					{
+						"ceph.cluster_name": {
+							"default": "`ceph`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "The cluster name of the Ceph cluster (required for Ceph or CephFS sources)",
+							"type": "string"
+						}
+					},
+					{
+						"ceph.user_name": {
+							"default": "`admin`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "The user name of the Ceph cluster (required for Ceph or CephFS sources)",
+							"type": "string"
+						}
+					},
+					{
+						"initial.*": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Initial volume configuration for instance root disk devices",
+							"type": "string"
+						}
+					},
+					{
+						"io.bus": {
+							"default": "`virtio-scsi`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Only for VMs: Override the bus for the device (`nvme`, `virtio-blk`, or `virtio-scsi`)",
+							"type": "string"
+						}
+					},
+					{
+						"io.cache": {
+							"default": "`none`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Only for VMs: Override the caching mode for the device (`none`, `writeback` or `unsafe`)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "I/O limit in byte/s or IOPS for both read and write (same as setting both `limits.read` and `limits.write`)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.read": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) or in IOPS (must be suffixed with `iops`) - see also {ref}`storage-configure-IO`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.write": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) or in IOPS (must be suffixed with `iops`) - see also {ref}`storage-configure-IO`",
+							"type": "string"
+						}
+					},
+					{
+						"path": {
+							"longdesc": "",
+							"required": "yes",
+							"shortdesc": "Path inside the instance where the disk will be mounted (only for containers)",
+							"type": "string"
+						}
+					},
+					{
+						"pool": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "The storage pool to which the disk device belongs (only applicable for storage volumes managed by Incus)",
+							"type": "string"
+						}
+					},
+					{
+						"propagation": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Controls how a bind-mount is shared between the instance and the host (can be one of `private`, the default, or `shared`, `slave`, `unbindable`,  `rshared`, `rslave`, `runbindable`,  `rprivate`; see the Linux Kernel [shared subtree](https://www.kernel.org/doc/Documentation/filesystems/sharedsubtree.txt) documentation for a full explanation)",
+							"type": "string"
+						}
+					},
+					{
+						"raw.mount.options": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "File system specific mount options",
+							"type": "string"
+						}
+					},
+					{
+						"readonly": {
+							"default": "`false`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Controls whether to make the mount read-only",
+							"type": "bool"
+						}
+					},
+					{
+						"recursive": {
+							"default": "`false`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Controls whether to recursively mount the source path",
+							"type": "bool"
+						}
+					},
+					{
+						"required": {
+							"default": "`true`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Controls whether to fail if the source doesn't exist",
+							"type": "bool"
+						}
+					},
+					{
+						"shift": {
+							"default": "`false`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Sets up a shifting overlay to translate the source UID/GID to match the instance (only for containers)",
+							"type": "bool"
+						}
+					},
+					{
+						"size": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Disk size in bytes (various suffixes supported, see {ref}`instances-limit-units`) - only supported for the `rootfs` (`/`)",
+							"type": "string"
+						}
+					},
+					{
+						"size.state": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Same as `size`, but applies to the file-system volume used for saving runtime state in VMs",
+							"type": "string"
+						}
+					},
+					{
+						"source": {
+							"longdesc": "",
+							"required": "yes",
+							"shortdesc": "Source of a file system or block device (see {ref}`devices-disk-types` for details)",
+							"type": "string"
+						}
+					}
+				]
+			},
+			"unix-char-block": {
+				"keys": [
+					{
+						"gid": {
+							"default": "0",
+							"longdesc": "",
+							"shortdesc": "GID of the device owner in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"major": {
+							"default": "device on host",
+							"longdesc": "",
+							"shortdesc": "Device major number",
+							"type": "int"
+						}
+					},
+					{
+						"minor": {
+							"default": "device on host",
+							"longdesc": "",
+							"shortdesc": "Device minor number",
+							"type": "int"
+						}
+					},
+					{
+						"mode": {
+							"default": "0660",
+							"longdesc": "",
+							"shortdesc": "Mode of the device in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"path": {
+							"longdesc": "",
+							"shortdesc": "Path inside the instance (one of `source` and `path` must be set)",
+							"type": "string"
+						}
+					},
+					{
+						"required": {
+							"default": "true",
+							"longdesc": "",
+							"shortdesc": "Whether this device is required to start the instance",
+							"type": "bool"
+						}
+					},
+					{
+						"source": {
+							"longdesc": "",
+							"shortdesc": "Path on the host (one of `source` and `path` must be set)",
+							"type": "string"
+						}
+					},
+					{
+						"uid": {
+							"default": "0",
+							"longdesc": "",
+							"shortdesc": "UID of the device owner in the instance",
+							"type": "int"
+						}
+					}
+				]
+			},
+			"unix-hotplug": {
+				"keys": [
+					{
+						"gid": {
+							"default": "0",
+							"longdesc": "",
+							"shortdesc": "GID of the device owner in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"mode": {
+							"default": "0660",
+							"longdesc": "",
+							"shortdesc": "Mode of the device in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"productid": {
+							"longdesc": "",
+							"shortdesc": "The product ID of the USB device",
+							"type": "string"
+						}
+					},
+					{
+						"required": {
+							"default": "true",
+							"longdesc": "",
+							"shortdesc": "Whether this device is required to start the instance",
+							"type": "bool"
+						}
+					},
+					{
+						"uid": {
+							"default": "0",
+							"longdesc": "",
+							"shortdesc": "UID of the device owner in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"vendorid": {
+							"longdesc": "",
+							"shortdesc": "The vendor ID of the USB device",
+							"type": "string"
+						}
+					}
+				]
+			},
+			"usb": {
+				"keys": [
+					{
+						"busnum": {
+							"longdesc": "",
+							"shortdesc": "The bus number of which the USB device is attached",
+							"type": "int"
+						}
+					},
+					{
+						"devnum": {
+							"longdesc": "",
+							"shortdesc": "The device number of the USB device",
+							"type": "int"
+						}
+					},
+					{
+						"gid": {
+							"defaultdesc": "`0`",
+							"longdesc": "",
+							"shortdesc": "Only for containers: GID of the device owner in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"mode": {
+							"defaultdesc": "`0660`",
+							"longdesc": "",
+							"shortdesc": "Only for containers: Mode of the device in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"productid": {
+							"longdesc": "",
+							"shortdesc": "The product ID of the USB device",
+							"type": "string"
+						}
+					},
+					{
+						"required": {
+							"defaultdesc": "`false`",
+							"longdesc": "",
+							"shortdesc": "Whether this device is required to start the instance (the default is `false`, and all devices can be hotplugged)",
+							"type": "bool"
+						}
+					},
+					{
+						"serial": {
+							"longdesc": "",
+							"shortdesc": "The serial number of the USB device",
+							"type": "string"
+						}
+					},
+					{
+						"uid": {
+							"defaultdesc": "`0`",
+							"longdesc": "",
+							"shortdesc": "Only for containers: UID of the device owner in the instance",
+							"type": "int"
+						}
+					},
+					{
+						"vendorid": {
+							"longdesc": "",
+							"shortdesc": "The vendor ID of the USB device",
+							"type": "string"
+						}
+					}
+				]
+			}
+		},
+		"image": {
+			"requirements": {
+				"keys": [
+					{
+						"requirements.cdrom_agent": {
+							"longdesc": "",
+							"shortdesc": "If set to `true`, indicates that the VM requires an `agent:config` disk be added.",
+							"type": "bool"
+						}
+					},
+					{
+						"requirements.cgroup": {
+							"longdesc": "",
+							"shortdesc": "If set to `v1`, indicates that the image requires the host to run cgroup v1.",
+							"type": "string"
+						}
+					},
+					{
+						"requirements.nesting": {
+							"longdesc": "",
+							"shortdesc": "If set to `true`, indicates that the image cannot work without nesting enabled.",
+							"type": "bool"
+						}
+					},
+					{
+						"requirements.privileged": {
+							"longdesc": "",
+							"shortdesc": "If set to `false`, indicates that the image cannot work as a privileged container.",
+							"type": "bool"
+						}
+					},
+					{
+						"requirements.secureboot": {
+							"longdesc": "",
+							"shortdesc": "If set to `false`, indicates that the image cannot boot under secure boot.",
+							"type": "bool"
+						}
+					}
+				]
+			}
+		},
 		"instance": {
 			"boot": {
 				"keys": [
@@ -177,7 +579,6 @@
 					},
 					{
 						"migration.stateful": {
-							"condition": "virtual machine",
 							"defaultdesc": "`false`",
 							"liveupdate": "no",
 							"longdesc": "Enabling this option prevents the use of some features that are incompatible with it.",
@@ -1086,6 +1487,108 @@
 				]
 			}
 		},
+		"kernel": {
+			"limits": {
+				"keys": [
+					{
+						"limits.kernel.as": {
+							"longdesc": "",
+							"resource": "`RLIMIT_AS`",
+							"shortdesc": "Maximum size of the process's virtual memory",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.core": {
+							"longdesc": "",
+							"resource": "`RLIMIT_CORE`",
+							"shortdesc": "Maximum size of the process's core dump file",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.cpu": {
+							"longdesc": "",
+							"resource": "`RLIMIT_CPU`",
+							"shortdesc": "Limit in seconds on the amount of CPU time the process can consume",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.data": {
+							"longdesc": "",
+							"resource": "`RLIMIT_DATA`",
+							"shortdesc": "Maximum size of the process's data segment",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.fsize": {
+							"longdesc": "",
+							"resource": "`RLIMIT_FSIZE`",
+							"shortdesc": "Maximum size of files the process may create",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.locks": {
+							"longdesc": "",
+							"resource": "`RLIMIT_LOCKS`",
+							"shortdesc": "Limit on the number of file locks that this process may establish",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.memlock": {
+							"longdesc": "",
+							"resource": "`RLIMIT_MEMLOCK`",
+							"shortdesc": "Limit on the number of bytes of memory that the process may lock in RAM",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.nice": {
+							"longdesc": "",
+							"resource": "`RLIMIT_NICE`",
+							"shortdesc": "Maximum value to which the process's nice value can be raised",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.nofile": {
+							"longdesc": "",
+							"resource": "`RLIMIT_NOFILE`",
+							"shortdesc": "Maximum number of open files for the process",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.nproc": {
+							"longdesc": "",
+							"resource": "`RLIMIT_NPROC`",
+							"shortdesc": "Maximum number of processes that can be created for the user of the calling process",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.rtprio": {
+							"longdesc": "",
+							"resource": "`RLIMIT_RTPRIO`",
+							"shortdesc": "Maximum value on the real-time-priority that may be set for this process",
+							"type": "string"
+						}
+					},
+					{
+						"limits.kernel.sigpending": {
+							"longdesc": "",
+							"resource": "`RLIMIT_SIGPENDING`",
+							"shortdesc": "Limit on the number of bytes of memory that the process may lock in RAM",
+							"type": "string"
+						}
+					}
+				]
+			}
+		},
 		"network_integration": {
 			"common": {
 				"keys": [
@@ -1145,6 +1648,53 @@
 							"defaultdesc": "`ts-incus-{{ integrationName }}-{{ projectName }}-{{ networkname }}`",
 							"longdesc": "Specify a Pongo2 template string that represents the transit switch name.\nThis template gets access to the project name (`projectName`), integration name (`integrationName`) and network name (`networkName`).\n",
 							"shortdesc": "Template for the transit switch name",
+							"type": "string"
+						}
+					}
+				]
+			}
+		},
+		"network_zone": {
+			"common": {
+				"keys": [
+					{
+						"dns.nameservers": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Comma-separated list of DNS server FQDNs (for NS records)",
+							"type": "string set"
+						}
+					},
+					{
+						"network.nat": {
+							"defaultdesc": "`true`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Whether to generate records for NAT-ed subnets",
+							"type": "bool"
+						}
+					},
+					{
+						"peers.NAME.address": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "IP address of a DNS server",
+							"type": "string"
+						}
+					},
+					{
+						"peers.NAME.key": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "TSIG key for the server",
+							"type": "string"
+						}
+					},
+					{
+						"user.*": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "User-provided free-form key/value pairs",
 							"type": "string"
 						}
 					}

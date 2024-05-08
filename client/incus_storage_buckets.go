@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/cancel"
-	"github.com/lxc/incus/shared/ioprogress"
-	"github.com/lxc/incus/shared/units"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/cancel"
+	"github.com/lxc/incus/v6/shared/ioprogress"
+	"github.com/lxc/incus/v6/shared/units"
 )
 
 // GetStoragePoolBucketNames returns a list of storage bucket names.
@@ -42,6 +42,24 @@ func (r *ProtocolIncus) GetStoragePoolBuckets(poolName string) ([]api.StorageBuc
 
 	// Fetch the raw value.
 	u := api.NewURL().Path("storage-pools", poolName, "buckets").WithQuery("recursion", "1")
+	_, err = r.queryStruct("GET", u.String(), nil, "", &buckets)
+	if err != nil {
+		return nil, err
+	}
+
+	return buckets, nil
+}
+
+// GetStoragePoolBucketsAllProjects gets all storage pool buckets across all projects.
+func (r *ProtocolIncus) GetStoragePoolBucketsAllProjects(poolName string) ([]api.StorageBucket, error) {
+	err := r.CheckExtension("storage_buckets_all_projects")
+	if err != nil {
+		return nil, fmt.Errorf(`The server is missing the required "storage_buckets_all_projects" API extension`)
+	}
+
+	buckets := []api.StorageBucket{}
+
+	u := api.NewURL().Path("storage-pools", poolName, "buckets").WithQuery("recursion", "1").WithQuery("all-projects", "true")
 	_, err = r.queryStruct("GET", u.String(), nil, "", &buckets)
 	if err != nil {
 		return nil, err

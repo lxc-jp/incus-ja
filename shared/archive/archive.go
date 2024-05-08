@@ -14,9 +14,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/shared/ioprogress"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/subprocess"
+	"github.com/lxc/incus/v6/shared/ioprogress"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/subprocess"
 )
 
 // RunWrapper is an optional function that's used to wrap rsync, useful for confinement like AppArmor.
@@ -142,11 +142,14 @@ func Unpack(file string, path string, blockBackend bool, maxMemory int64, tracke
 	if strings.HasPrefix(extension, ".tar") {
 		command = "tar"
 		// We can't create char/block devices in unpriv containers so avoid extracting them.
+		args = append(args, "--anchored")
 		args = append(args, "--wildcards")
 		args = append(args, "--exclude=dev/*")
+		args = append(args, "--exclude=/dev/*")
 		args = append(args, "--exclude=./dev/*")
 		args = append(args, "--exclude=rootfs/dev/*")
-		args = append(args, "--exclude=rootfs/./dev/*")
+		args = append(args, "--exclude=/rootfs/dev/*")
+		args = append(args, "--exclude=./rootfs/dev/*")
 
 		args = append(args, "--restrict", "--force-local")
 		args = append(args, "-C", path, "--numeric-owner", "--xattrs-include=*")

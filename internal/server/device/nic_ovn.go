@@ -13,26 +13,26 @@ import (
 
 	"github.com/mdlayher/netx/eui64"
 
-	"github.com/lxc/incus/internal/linux"
-	"github.com/lxc/incus/internal/revert"
-	"github.com/lxc/incus/internal/server/db"
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
-	pcidev "github.com/lxc/incus/internal/server/device/pci"
-	"github.com/lxc/incus/internal/server/dnsmasq/dhcpalloc"
-	"github.com/lxc/incus/internal/server/instance"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/ip"
-	"github.com/lxc/incus/internal/server/network"
-	"github.com/lxc/incus/internal/server/network/acl"
-	"github.com/lxc/incus/internal/server/network/ovn"
-	"github.com/lxc/incus/internal/server/network/ovs"
-	"github.com/lxc/incus/internal/server/project"
-	"github.com/lxc/incus/internal/server/resources"
-	"github.com/lxc/incus/internal/server/state"
-	localUtil "github.com/lxc/incus/internal/server/util"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/util"
+	"github.com/lxc/incus/v6/internal/linux"
+	"github.com/lxc/incus/v6/internal/revert"
+	"github.com/lxc/incus/v6/internal/server/db"
+	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
+	pcidev "github.com/lxc/incus/v6/internal/server/device/pci"
+	"github.com/lxc/incus/v6/internal/server/dnsmasq/dhcpalloc"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v6/internal/server/ip"
+	"github.com/lxc/incus/v6/internal/server/network"
+	"github.com/lxc/incus/v6/internal/server/network/acl"
+	"github.com/lxc/incus/v6/internal/server/network/ovn"
+	"github.com/lxc/incus/v6/internal/server/network/ovs"
+	"github.com/lxc/incus/v6/internal/server/project"
+	"github.com/lxc/incus/v6/internal/server/resources"
+	"github.com/lxc/incus/v6/internal/server/state"
+	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 // ovnNet defines an interface for accessing instance specific functions on OVN network.
@@ -433,7 +433,12 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 				return nil, fmt.Errorf("Failed to connect to OVS: %w", err)
 			}
 
-			if !vswitch.HardwareOffloadingEnabled() {
+			offload, err := vswitch.GetHardwareOffload(context.TODO())
+			if err != nil {
+				return nil, err
+			}
+
+			if !offload {
 				return nil, fmt.Errorf("SR-IOV acceleration requires hardware offloading be enabled in OVS")
 			}
 
@@ -484,7 +489,12 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 				return nil, fmt.Errorf("Failed to connect to OVS: %w", err)
 			}
 
-			if !vswitch.HardwareOffloadingEnabled() {
+			offload, err := vswitch.GetHardwareOffload(context.TODO())
+			if err != nil {
+				return nil, err
+			}
+
+			if !offload {
 				return nil, fmt.Errorf("SR-IOV acceleration requires hardware offloading be enabled in OVS")
 			}
 
@@ -1169,7 +1179,7 @@ func (d *nicOVN) setupHostNIC(hostName string, ovnPortName ovn.OVNSwitchPort, up
 	revert.Add(func() { _ = vswitch.DeleteBridgePort(context.TODO(), integrationBridge, hostName) })
 
 	// Link OVS port to OVN logical port.
-	err = vswitch.InterfaceAssociateOVNSwitchPort(hostName, string(ovnPortName))
+	err = vswitch.AssociateInterfaceOVNSwitchPort(context.TODO(), hostName, string(ovnPortName))
 	if err != nil {
 		return nil, err
 	}

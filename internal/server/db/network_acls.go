@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/lxc/incus/internal/server/db/query"
-	"github.com/lxc/incus/internal/version"
-	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/v6/internal/server/db/query"
+	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 // GetNetworkACLs returns the names of existing Network ACLs.
@@ -35,6 +35,39 @@ func (c *ClusterTx) GetNetworkACLs(ctx context.Context, project string) ([]strin
 
 		return nil
 	}, project)
+	if err != nil {
+		return nil, err
+	}
+
+	return aclNames, nil
+}
+
+// GetNetworkACLsAllProjects returns the names of existing Network ACLs.
+func (c *ClusterTx) GetNetworkACLsAllProjects(ctx context.Context) (map[string][]string, error) {
+	q := `SELECT projects.name, networks_acls.name FROM networks_acls
+		JOIN projects ON projects.id=networks_acls.project_id
+		ORDER BY networks_acls.id
+	`
+
+	aclNames := map[string][]string{}
+	err := query.Scan(ctx, c.tx, q, func(scan func(dest ...any) error) error {
+		var projectName string
+		var aclName string
+
+		err := scan(&projectName, &aclName)
+		if err != nil {
+			return err
+		}
+
+		_, ok := aclNames[projectName]
+		if !ok {
+			aclNames[projectName] = []string{}
+		}
+
+		aclNames[projectName] = append(aclNames[projectName], aclName)
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}

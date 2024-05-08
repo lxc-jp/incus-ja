@@ -40,49 +40,49 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v2"
 
-	"github.com/lxc/incus/client"
-	internalInstance "github.com/lxc/incus/internal/instance"
-	"github.com/lxc/incus/internal/instancewriter"
-	"github.com/lxc/incus/internal/jmap"
-	"github.com/lxc/incus/internal/linux"
-	"github.com/lxc/incus/internal/migration"
-	"github.com/lxc/incus/internal/ports"
-	"github.com/lxc/incus/internal/revert"
-	"github.com/lxc/incus/internal/server/apparmor"
-	"github.com/lxc/incus/internal/server/cgroup"
-	"github.com/lxc/incus/internal/server/db"
-	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/device"
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
-	"github.com/lxc/incus/internal/server/device/nictype"
-	"github.com/lxc/incus/internal/server/instance"
-	"github.com/lxc/incus/internal/server/instance/drivers/qmp"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/instance/operationlock"
-	"github.com/lxc/incus/internal/server/lifecycle"
-	"github.com/lxc/incus/internal/server/metrics"
-	localMigration "github.com/lxc/incus/internal/server/migration"
-	"github.com/lxc/incus/internal/server/network"
-	"github.com/lxc/incus/internal/server/operations"
-	"github.com/lxc/incus/internal/server/project"
-	"github.com/lxc/incus/internal/server/resources"
-	"github.com/lxc/incus/internal/server/response"
-	"github.com/lxc/incus/internal/server/state"
-	storagePools "github.com/lxc/incus/internal/server/storage"
-	storageDrivers "github.com/lxc/incus/internal/server/storage/drivers"
-	pongoTemplate "github.com/lxc/incus/internal/server/template"
-	localUtil "github.com/lxc/incus/internal/server/util"
-	localvsock "github.com/lxc/incus/internal/server/vsock"
-	internalUtil "github.com/lxc/incus/internal/util"
-	"github.com/lxc/incus/internal/version"
-	"github.com/lxc/incus/shared/api"
-	agentAPI "github.com/lxc/incus/shared/api/agent"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/osarch"
-	"github.com/lxc/incus/shared/subprocess"
-	localtls "github.com/lxc/incus/shared/tls"
-	"github.com/lxc/incus/shared/units"
-	"github.com/lxc/incus/shared/util"
+	"github.com/lxc/incus/v6/client"
+	internalInstance "github.com/lxc/incus/v6/internal/instance"
+	"github.com/lxc/incus/v6/internal/instancewriter"
+	"github.com/lxc/incus/v6/internal/jmap"
+	"github.com/lxc/incus/v6/internal/linux"
+	"github.com/lxc/incus/v6/internal/migration"
+	"github.com/lxc/incus/v6/internal/ports"
+	"github.com/lxc/incus/v6/internal/revert"
+	"github.com/lxc/incus/v6/internal/server/apparmor"
+	"github.com/lxc/incus/v6/internal/server/cgroup"
+	"github.com/lxc/incus/v6/internal/server/db"
+	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
+	"github.com/lxc/incus/v6/internal/server/device"
+	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
+	"github.com/lxc/incus/v6/internal/server/device/nictype"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/instance/drivers/qmp"
+	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
+	"github.com/lxc/incus/v6/internal/server/lifecycle"
+	"github.com/lxc/incus/v6/internal/server/metrics"
+	localMigration "github.com/lxc/incus/v6/internal/server/migration"
+	"github.com/lxc/incus/v6/internal/server/network"
+	"github.com/lxc/incus/v6/internal/server/operations"
+	"github.com/lxc/incus/v6/internal/server/project"
+	"github.com/lxc/incus/v6/internal/server/resources"
+	"github.com/lxc/incus/v6/internal/server/response"
+	"github.com/lxc/incus/v6/internal/server/state"
+	storagePools "github.com/lxc/incus/v6/internal/server/storage"
+	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
+	pongoTemplate "github.com/lxc/incus/v6/internal/server/template"
+	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	localvsock "github.com/lxc/incus/v6/internal/server/vsock"
+	internalUtil "github.com/lxc/incus/v6/internal/util"
+	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v6/shared/api"
+	agentAPI "github.com/lxc/incus/v6/shared/api/agent"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v6/shared/subprocess"
+	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 // incus-agent files
@@ -132,6 +132,10 @@ var ovmfGenericFirmwares = []ovmfFirmware{
 var ovmfSecurebootFirmwares = []ovmfFirmware{
 	{code: "OVMF_CODE.4MB.fd", vars: "OVMF_VARS.4MB.ms.fd"},
 	{code: "OVMF_CODE_4M.ms.fd", vars: "OVMF_VARS_4M.ms.fd"},
+	{code: "OVMF_CODE_4M.secboot.fd", vars: "OVMF_VARS_4M.secboot.fd"},
+	{code: "OVMF_CODE.secboot.4m.fd", vars: "OVMF_VARS.4m.fd"},
+	{code: "OVMF_CODE.secboot.fd", vars: "OVMF_VARS.secboot.fd"},
+	{code: "OVMF_CODE.secboot.fd", vars: "OVMF_VARS.fd"},
 	{code: "OVMF_CODE.2MB.fd", vars: "OVMF_VARS.2MB.ms.fd"},
 	{code: "OVMF_CODE.fd", vars: "OVMF_VARS.ms.fd"},
 	{code: "OVMF_CODE.fd", vars: "qemu.nvram"},
@@ -1042,6 +1046,12 @@ func (d *qemu) validateStartup(stateful bool, statusCode api.StatusCode) error {
 		return fmt.Errorf("Stateful start requires migration.stateful to be set to true")
 	}
 
+	// gendoc:generate(entity=image, group=requirements, key=requirements.secureboot)
+	//
+	// ---
+	//  type: bool
+	//  shortdesc: If set to `false`, indicates that the image cannot boot under secure boot.
+	//
 	// Ensure secureboot is turned off for images that are not secureboot enabled.
 	if util.IsFalse(d.localConfig["image.requirements.secureboot"]) && util.IsTrueOrEmpty(d.expandedConfig["security.secureboot"]) {
 		return fmt.Errorf("The image used by this instance is incompatible with secureboot. Please set security.secureboot=false on the instance")
@@ -1052,6 +1062,12 @@ func (d *qemu) validateStartup(stateful bool, statusCode api.StatusCode) error {
 		return fmt.Errorf("Secure boot can't be enabled while CSM is turned on. Please set security.secureboot=false on the instance")
 	}
 
+	// gendoc:generate(entity=image, group=requirements, key=requirements.cdrom_agent)
+	//
+	// ---
+	//  type: bool
+	//  shortdesc: If set to `true`, indicates that the VM requires an `agent:config` disk be added.
+	//
 	// Ensure an agent drive is present if the image requires it.
 	if util.IsTrue(d.localConfig["image.requirements.cdrom_agent"]) {
 		found := false
@@ -7745,9 +7761,14 @@ func (d *qemu) renderState(statusCode api.StatusCode) (*api.InstanceState, error
 				}
 			}
 		}
+
+		status.Pid = int64(pid)
+		status.StartedAt, err = d.processStartedAt(d.InitPID())
+		if err != nil {
+			return status, err
+		}
 	}
 
-	status.Pid = int64(pid)
 	status.Status = statusCode.String()
 	status.StatusCode = statusCode
 	status.Disk, err = d.diskState()
@@ -8128,7 +8149,7 @@ func (d *qemu) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConf
 	}
 
 	// Fill in the MAC address.
-	if !slices.Contains([]string{"physical", "ipvlan", "sriov"}, nicType) && m["hwaddr"] == "" {
+	if !slices.Contains([]string{"physical", "ipvlan"}, nicType) && m["hwaddr"] == "" {
 		configKey := fmt.Sprintf("volatile.%s.hwaddr", name)
 		volatileHwaddr := d.localConfig[configKey]
 		if volatileHwaddr == "" {

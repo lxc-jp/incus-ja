@@ -19,24 +19,24 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/mdlayher/netx/eui64"
 
-	"github.com/lxc/incus/internal/revert"
-	"github.com/lxc/incus/internal/server/db"
-	"github.com/lxc/incus/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
-	"github.com/lxc/incus/internal/server/dnsmasq"
-	"github.com/lxc/incus/internal/server/dnsmasq/dhcpalloc"
-	"github.com/lxc/incus/internal/server/instance"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/ip"
-	"github.com/lxc/incus/internal/server/network"
-	"github.com/lxc/incus/internal/server/network/ovs"
-	"github.com/lxc/incus/internal/server/resources"
-	localUtil "github.com/lxc/incus/internal/server/util"
-	internalUtil "github.com/lxc/incus/internal/util"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/util"
-	"github.com/lxc/incus/shared/validate"
+	"github.com/lxc/incus/v6/internal/revert"
+	"github.com/lxc/incus/v6/internal/server/db"
+	"github.com/lxc/incus/v6/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
+	"github.com/lxc/incus/v6/internal/server/dnsmasq"
+	"github.com/lxc/incus/v6/internal/server/dnsmasq/dhcpalloc"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v6/internal/server/ip"
+	"github.com/lxc/incus/v6/internal/server/network"
+	"github.com/lxc/incus/v6/internal/server/network/ovs"
+	"github.com/lxc/incus/v6/internal/server/resources"
+	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	internalUtil "github.com/lxc/incus/v6/internal/util"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v6/shared/validate"
 )
 
 type bridgeNetwork interface {
@@ -1553,7 +1553,12 @@ func (d *nicBridged) setupOVSBridgePortVLANs(hostName string) error {
 		// Order is important here, as vlan_mode is set to "access", assuming that vlan.tagged is not used.
 		// If vlan.tagged is specified, then we expect it to also change the vlan_mode as needed.
 		if d.config["vlan"] != "none" {
-			err := vswitch.BridgePortSet(hostName, "vlan_mode=access", fmt.Sprintf("tag=%s", d.config["vlan"]))
+			vlanID, err := strconv.Atoi(d.config["vlan"])
+			if err != nil {
+				return err
+			}
+
+			err = vswitch.UpdateBridgePortVLANs(context.TODO(), hostName, "access", vlanID, nil)
 			if err != nil {
 				return err
 			}
@@ -1567,12 +1572,6 @@ func (d *nicBridged) setupOVSBridgePortVLANs(hostName string) error {
 			return err
 		}
 
-		var vlanIDs []string
-
-		for _, intNetworkVLAN := range intNetworkVLANs {
-			vlanIDs = append(vlanIDs, strconv.Itoa(intNetworkVLAN))
-		}
-
 		vlanMode := "trunk" // Default to only allowing tagged frames (drop untagged frames).
 		if d.config["vlan"] != "none" {
 			// If untagged vlan mode isn't "none" then allow untagged frames for port's 'native' VLAN.
@@ -1583,7 +1582,7 @@ func (d *nicBridged) setupOVSBridgePortVLANs(hostName string) error {
 		// Also set the vlan_mode as needed from above.
 		// Must come after the PortSet command used for setting "vlan" mode above so that the correct
 		// vlan_mode is retained.
-		err = vswitch.BridgePortSet(hostName, fmt.Sprintf("vlan_mode=%s", vlanMode), fmt.Sprintf("trunks=%s", strings.Join(vlanIDs, ",")))
+		err = vswitch.UpdateBridgePortVLANs(context.TODO(), hostName, vlanMode, 0, intNetworkVLANs)
 		if err != nil {
 			return err
 		}

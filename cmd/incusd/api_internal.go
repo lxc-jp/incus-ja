@@ -20,31 +20,31 @@ import (
 	"github.com/gorilla/mux"
 	"golang.org/x/sys/unix"
 
-	internalInstance "github.com/lxc/incus/internal/instance"
-	"github.com/lxc/incus/internal/jmap"
-	"github.com/lxc/incus/internal/revert"
-	"github.com/lxc/incus/internal/server/auth"
-	"github.com/lxc/incus/internal/server/backup"
-	"github.com/lxc/incus/internal/server/db"
-	"github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/db/query"
-	"github.com/lxc/incus/internal/server/db/warningtype"
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
-	"github.com/lxc/incus/internal/server/instance"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/project"
-	"github.com/lxc/incus/internal/server/request"
-	"github.com/lxc/incus/internal/server/response"
-	"github.com/lxc/incus/internal/server/state"
-	storagePools "github.com/lxc/incus/internal/server/storage"
-	storageDrivers "github.com/lxc/incus/internal/server/storage/drivers"
-	internalSQL "github.com/lxc/incus/internal/sql"
-	internalUtil "github.com/lxc/incus/internal/util"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/osarch"
-	"github.com/lxc/incus/shared/units"
-	"github.com/lxc/incus/shared/util"
+	internalInstance "github.com/lxc/incus/v6/internal/instance"
+	"github.com/lxc/incus/v6/internal/jmap"
+	"github.com/lxc/incus/v6/internal/revert"
+	"github.com/lxc/incus/v6/internal/server/auth"
+	"github.com/lxc/incus/v6/internal/server/backup"
+	"github.com/lxc/incus/v6/internal/server/db"
+	"github.com/lxc/incus/v6/internal/server/db/cluster"
+	"github.com/lxc/incus/v6/internal/server/db/query"
+	"github.com/lxc/incus/v6/internal/server/db/warningtype"
+	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v6/internal/server/project"
+	"github.com/lxc/incus/v6/internal/server/request"
+	"github.com/lxc/incus/v6/internal/server/response"
+	"github.com/lxc/incus/v6/internal/server/state"
+	storagePools "github.com/lxc/incus/v6/internal/server/storage"
+	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
+	internalSQL "github.com/lxc/incus/v6/internal/sql"
+	internalUtil "github.com/lxc/incus/v6/internal/util"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 var apiInternal = []APIEndpoint{
@@ -732,7 +732,7 @@ func internalImportFromBackup(ctx context.Context, s *state.State, projectName s
 		return err
 	})
 	if err != nil {
-		return fmt.Errorf("Failed loading profiles for instance: %w", err)
+		return fmt.Errorf("Failed loading profiles (%v) for instance: %w", strings.Join(backupConf.Container.Profiles, ", "), err)
 	}
 
 	// Add root device if needed.
@@ -844,7 +844,7 @@ func internalImportFromBackup(ctx context.Context, s *state.State, projectName s
 			return err
 		})
 		if err != nil {
-			return fmt.Errorf("Failed loading profiles for instance snapshot %q: %w", snapInstName, err)
+			return fmt.Errorf("Failed loading profiles (%v) for instance snapshot %q: %w", strings.Join(snap.Profiles, ", "), snapInstName, err)
 		}
 
 		// Add root device if needed.

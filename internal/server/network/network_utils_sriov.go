@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lxc/incus/internal/server/db"
-	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/device/pci"
-	"github.com/lxc/incus/internal/server/ip"
-	"github.com/lxc/incus/internal/server/network/ovs"
-	"github.com/lxc/incus/internal/server/state"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/subprocess"
-	"github.com/lxc/incus/shared/util"
+	"github.com/lxc/incus/v6/internal/server/db"
+	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
+	"github.com/lxc/incus/v6/internal/server/device/pci"
+	"github.com/lxc/incus/v6/internal/server/ip"
+	"github.com/lxc/incus/v6/internal/server/network/ovs"
+	"github.com/lxc/incus/v6/internal/server/state"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/subprocess"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 // sriovReservedDevicesMutex used to coordinate access for checking reserved devices.
@@ -383,7 +383,7 @@ func SRIOVFindFreeVFAndRepresentor(state *state.State, ovsBridgeName string) (st
 	}
 
 	// Get all ports on the integration bridge.
-	ports, err := vswitch.BridgePortList(ovsBridgeName)
+	ports, err := vswitch.GetBridgePorts(context.TODO(), ovsBridgeName)
 	if err != nil {
 		return "", "", "", -1, fmt.Errorf("Failed to get port list: %w", err)
 	}

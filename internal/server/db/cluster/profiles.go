@@ -6,8 +6,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/lxc/incus/internal/server/device/config"
-	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/v6/internal/server/device/config"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 // Code generation directives.
@@ -70,6 +70,7 @@ func (p *Profile) ToAPI(ctx context.Context, tx *sql.Tx) (*api.Profile, error) {
 			Config:      config,
 			Devices:     DevicesToAPI(devices),
 		},
+		Project: p.Project,
 	}
 
 	return profile, nil

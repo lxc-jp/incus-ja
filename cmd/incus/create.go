@@ -11,12 +11,12 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
-	"github.com/lxc/incus/client"
-	cli "github.com/lxc/incus/internal/cmd"
-	"github.com/lxc/incus/internal/i18n"
-	"github.com/lxc/incus/shared/api"
-	config "github.com/lxc/incus/shared/cliconfig"
-	"github.com/lxc/incus/shared/termios"
+	"github.com/lxc/incus/v6/client"
+	cli "github.com/lxc/incus/v6/internal/cmd"
+	"github.com/lxc/incus/v6/internal/i18n"
+	"github.com/lxc/incus/v6/shared/api"
+	config "github.com/lxc/incus/v6/shared/cliconfig"
+	"github.com/lxc/incus/v6/shared/termios"
 )
 
 type cmdCreate struct {
@@ -419,11 +419,7 @@ func (c *cmdCreate) create(conf *config.Config, args []string, launch bool) (inc
 
 	instances, ok := opInfo.Resources["instances"]
 	if !ok || len(instances) == 0 {
-		// Try using the older "containers" field
-		instances, ok = opInfo.Resources["containers"]
-		if !ok || len(instances) == 0 {
-			return nil, "", fmt.Errorf(i18n.G("Didn't get any affected image, instance or snapshot from server"))
-		}
+		return nil, "", fmt.Errorf(i18n.G("Didn't get name of new instance from the server"))
 	}
 
 	if len(instances) == 1 && name == "" {
