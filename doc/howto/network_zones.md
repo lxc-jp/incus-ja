@@ -142,13 +142,11 @@ incus network zone edit <network_zone>
 
 ネットワークゾーンで利用可能な設定オプションは下記のとおりです。
 
-キー                 | 型         | 必須 | デフォルト値 | 説明
-:--                  | :--        | :--  | -            | :--
-`peers.NAME.address` | string     | no   | -            | DNS サーバーの IP アドレス
-`peers.NAME.key`     | string     | no   | -            | サーバーの TSIG キー
-`dns.nameservers`    | string set | no   | -            | （NS レコード用の）DNS サーバーの FQDN のカンマ区切りリスト
-`network.nat`        | bool       | no   | `true`       | NAT されたサブネットのレコードを生成するかどうか
-`user.*`             | *          | no   | -            | ユーザー提供の自由形式のキー・バリューペア
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_zone-common start -->
+    :end-before: <!-- config group network_zone-common end -->
+```
 
 ```{note}
 

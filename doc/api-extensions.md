@@ -1820,6 +1820,10 @@ network zones (DNS) API を拡張し、カスタムレコードの作成と管�
 * `PATCH /1.0/network-zones/ZONE/records/RECORD`
 * `DELETE /1.0/network-zones/ZONE/records/RECORD`
 
+## `network_zones_all_projects`
+
+`GET /1.0/network-zones` APIで`all-projects`でパラメータによりすべてプロジェクトのネットワークゾーンを一覧表示できるようにします。
+
 ## `storage_zfs_reserve_space`
 
 `quota`/`refquota` に加えて、ZFS プロパティの `reservation`/`refreservation` を設定する機能を追加します。
@@ -2415,3 +2419,55 @@ TLS クライアント証明書を直接使う代わりに署名された `JSON 
 ## `network_bridge_external_create`
 
 `bridge.external_interfaces` を `interface/parent/vlan` のシンタックスを使って親のインターフェースを作れるようにします。
+
+## `storage_zfs_vdev`
+
+ストレージの`source`設定を拡張して`mirror`、`raidz1`、`raidz2` ZFS `vdev`のサポートを追加します。
+
+## `container_migration_stateful`
+
+`migration.stateful`設定キーを追加します。
+
+これはBooleanのフラグでコンテナが起動、終了、スナップショットの機能中にステートフルモードであるときは常にtrueに設定されます。
+
+これによりコンテナを別のシステムにコピーする際にCRIUエラーを起きにくくします。
+
+## `profiles_all_projects`
+
+`GET /1.0/profiles` APIで`all-projects`でパラメータによりすべてプロジェクトのプロファイルを一覧表示できるようにします。
+
+## `instances_scriptlet_get_instances`
+
+オプショナルのProjectやLocationフィルターを指定してインスタンススクリプトレットがインスタンスの一覧を取得できるようにします。
+
+## `instances_scriptlet_get_cluster_members`
+
+オプショナルでクラスタグループを指定してインスタンススクリプトレットがクラスタメンバーの一覧を取得できるようにします。
+
+## `instances_scriptlet_get_project`
+
+プロジェクト名を指定してインスタンススクリプトレットがプロジェクトを取得できるようにします。
+
+## `network_acl_stateless`
+
+ネットワークのACL内でステートレスなルールのサポートを追加します。
+
+## `instance_state_started_at`
+
+インスタンスステートAPIに`started_at`タイムスタンプを追加します。
+
+## `networks_all_projects`
+
+`GET /1.0/networks` APIで`all-projects`でパラメータによりすべてプロジェクトのネットワークを一覧表示できるようにします。
+
+## `network_acls_all_projects`
+
+`GET /1.0/network-acls` APIで`all-projects`でパラメータによりすべてプロジェクトのネットワークACLを一覧表示できるようにします。
+
+## `storage_buckets_all_projects`
+
+`GET /1.0/storage-pools/POOL/buckets` APIで`all-projects`でパラメータによりすべてプロジェクトのストレージバケットを一覧表示できるようにします。
+
+## `resources_load
+
+リソースAPIにLoadセクションを追加します。

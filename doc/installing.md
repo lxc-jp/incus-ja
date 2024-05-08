@@ -32,6 +32,21 @@ Incus デーモンは Linux でのみ稼働します。
 
 ````{tabs}
 
+```{group-tab} Alpine
+Incus と全ての依存ソフトウェアは Alpine Linux のメインレポジトリ内で `incus` として利用できます。
+
+Incus を以下のコマンドでインストールします:
+
+    apk add incus incus-client
+
+次にサービスを有効化と起動します:
+
+    rc-update add incusd
+    rc-service incusd start
+
+パッケージングの問題は[こちら](https://gitlab.alpinelinux.org/alpine/aports/-/issues)に報告してください。
+```
+
 ```{group-tab} Arch Linux
 Incus と全ての依存ソフトウェアは Arch Linux のメインレポジトリ内で `incus` として利用できます。
 
@@ -66,6 +81,10 @@ Debian ユーザーには現在 3 つの選択肢があります。
     これらのパッケージは Incus の全ての機能を使用するために必要なすべてを含んでいます。
 
     最新のインストール手順はこちらを参照してください: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)
+```
+
+```{group-tab} Docker
+Zabblyのパッケージレポジトリをベースにした、IncusのDocker/Podmanのイメージが利用手順付きで[`ghcr.io/cmspam/incus-docker`](https://ghcr.io/cmspam/incus-docker)で提供されています。
 ```
 
 ```{group-tab} Fedora
@@ -228,30 +247,6 @@ Incus の開発には`liblxc`の最新バージョン（5.0.0 以上が必要）
 
 ````{tabs}
 
-```{group-tab} Debian と Ubuntu
-ビルドと実行時の依存ソフトウェアをインストールします:
-
-    sudo apt update
-    sudo apt install acl attr autoconf automake dnsmasq-base git golang-go libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
-
-デフォルトのストレージドライバーである`dir`ドライバーに加えて、Incus ではいくつかのストレージドライバーが使えます。
-これらのツールをインストールすると、initramfs への追加が行われ、ホストのブートが少しだけ遅くなるかもしれませんが、特定のドライバーを使いたい場合には必要です。
-
-    sudo apt install btrfs-progs
-    sudo apt install ceph-common
-    sudo apt install lvm2 thin-provisioning-tools
-    sudo apt install zfsutils-linux
-
-テストスイートを実行するには、次のパッケージも必要です。
-
-    sudo apt install busybox-static curl gettext jq sqlite3 socat bind9-dnsutils
-
-****重要:**** `liblxc-dev` パッケージを使って `go-lxc` モジュールのビルド時にコンパイルエラーが出た場合、`liblxc` のビルド時に `INC_DEVEL` の値に `0` を指定したか確認してください。確認するためには、`/usr/include/lxc/version.h` を見てください。
-もし `INC_DEVEL` の値が `1` なら、`0` に置き換えると問題を回避できます。これは Ubuntu 22.04/22.10 のパッケージのバグです。Ubuntu 23.04/23.10 ではこの問題はありません。
-
-```
-
-
 ```{group-tab} Alpine Linux
 以下のコマンドで Alpine Linux 上で Incus をビルドするのに必要な開発リソースを取得できます:
 
@@ -278,6 +273,48 @@ Incus の必要な機能をすべて使えるようにするには、さらに�
     export CGO_LDFLAGS="$CGO_LDFLAGS -L/usr/lib -lintl"
     export CGO_CPPFLAGS="-I/usr/include"
 ```
+
+```{group-tab} Debian と Ubuntu
+ビルドと実行時の依存ソフトウェアをインストールします:
+
+    sudo apt update
+    sudo apt install acl attr autoconf automake dnsmasq-base git golang-go libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
+
+デフォルトのストレージドライバーである`dir`ドライバーに加えて、Incus ではいくつかのストレージドライバーが使えます。
+これらのツールをインストールすると、initramfs への追加が行われ、ホストのブートが少しだけ遅くなるかもしれませんが、特定のドライバーを使いたい場合には必要です。
+
+    sudo apt install btrfs-progs
+    sudo apt install ceph-common
+    sudo apt install lvm2 thin-provisioning-tools
+    sudo apt install zfsutils-linux
+
+テストスイートを実行するには、次のパッケージも必要です。
+
+    sudo apt install busybox-static curl gettext jq sqlite3 socat bind9-dnsutils
+
+****重要:**** `liblxc-dev` パッケージを使って `go-lxc` モジュールのビルド時にコンパイルエラーが出た場合、`liblxc` のビルド時に `INC_DEVEL` の値に `0` を指定したか確認してください。確認するためには、`/usr/include/lxc/version.h` を見てください。
+もし `INC_DEVEL` の値が `1` なら、`0` に置き換えると問題を回避できます。これは Ubuntu 22.04/22.10 のパッケージのバグです。Ubuntu 23.04/23.10 ではこの問題はありません。
+
+```
+
+```{group-tab} OpenSUSE
+以下のコマンドで OpenSUSE Tumbleweed システム上で Incus をビルドするのに必要な開発リソースを取得できます:
+
+    sudo zypper install autoconf automake git go libacl-devel libcap-devel liblxc1 liblxc-devel sqlite3-devel libtool libudev-devel liblz4-devel libuv-devel make pkg-config tcl
+
+さらに、通常の運用方法であれば、以下のコマンドも必要になるでしょう:
+
+    sudo zypper install dnsmasq squashfs xz rsync tar attr acl qemu qemu-img qemu-spice qemu-hw-display-virtio-gpu-pci iptables ebtables nftables
+
+OpenSUSE は QEMU のファームウェアのファイルを変わったファイル名と場所に置いていますので、それらへのシンボリックリンクを作成する必要があります:
+
+    sudo mkdir /usr/share/OVMF
+    sudo ln -s /usr/share/qemu/ovmf-x86_64-4m-code.bin /usr/share/OVMF/OVMF_CODE.4MB.fd
+    sudo ln -s /usr/share/qemu/ovmf-x86_64-4m-vars.bin /usr/share/OVMF/OVMF_VARS.4MB.fd
+    sudo ln -s /usr/share/qemu/ovmf-x86_64-ms-4m-vars.bin /usr/share/OVMF/OVMF_VARS.4MB.ms.fd
+    sudo ln -s /usr/share/qemu/ovmf-x86_64-ms-4m-code.bin /usr/share/OVMF/OVMF_CODE.4MB.ms.fd
+```
+
 
 ````
 

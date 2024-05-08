@@ -71,7 +71,7 @@ HTTP ステータスコードは必ず 200 です。
     "status": "Running",                                    // 文字列表記での操作の状態
     "status_code": 103,                                     // 整数表記での操作の状態（status ではなくこちらを利用してください。訳注: 詳しくは下記のステータスコードの項を参照）
     "resources": {                                          // リソース種別（container, snapshots, images のいずれか）の dict を影響を受けるリソース
-      "containers": [
+      "instances": [
         "/1.0/instances/test"
       ]
     },

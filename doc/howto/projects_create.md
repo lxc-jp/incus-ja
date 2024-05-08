@@ -8,12 +8,16 @@
 
 プロジェクトを作成するには、[`incus project create`](incus_project_create.md) コマンドを使用します。
 
+例えば、`my-project`というプロジェクトを作成するには、以下のコマンドを入力します:
+
+    incus project create my-project
+
 `--config`フラグを使用して設定オプションを指定できます。
 利用可能な設定オプションについては、{ref}`ref-projects`を参照してください。
 
-たとえば、インスタンスを分離し、デフォルトプロジェクトのイメージとプロファイルにアクセスを許可する`my-project`というプロジェクトを作成するには、次のコマンドを入力します:
+たとえば、インスタンスを分離しますがデフォルトプロジェクトのイメージへのアクセスを許可する`my-project-shared-images`というプロジェクトを作成するには、次のコマンドを入力します:
 
-    incus project create my-project --config features.images=false --config features.profiles=false
+    incus project create my-project-shared-images --config features.images=false
 
 セキュリティーに関する機能（たとえば、コンテナのネスト）へのアクセスをブロックし、バックアップを許可する`my-restricted-project`というプロジェクトを作成するには、次のコマンドを入力します:
 

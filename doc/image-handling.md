@@ -54,10 +54,8 @@ Incus はリモートサーバーからのイメージを自動的に最新に�
 
 以下の要件がサポートされています:
 
-キー                       | タイプ | 既定値  | 説明
-:--                        | :---   | :------ | :----------
-`requirements.cdrom_agent` | bool   | -       | `true` に設定すると、VM が `agent:config` ディスクが追加されることを要求することを示します。
-`requirements.cgroup`      | string | -       | `v1` に設定されている場合、ホストで`CGroupV1`が実行されている必要があることを示します。
-`requirements.nesting`     | bool   | -       | `true` に設定すると、ネスティングを有効にしないとイメージが動かないことを示します。
-`requirements.privileged`  | bool   | -       | `false` に設定すると、イメージが特権コンテナで使えないことを示します。
-`requirements.secureboot`  | bool   | -       | `false` に設定すると、イメージがセキュアブートで起動しないことを示します。
+% Include content from [config_options.txt](config_options.txt)
+```{include} config_options.txt
+    :start-after: <!-- config group image-requirements start -->
+    :end-before: <!-- config group image-requirements end -->
+```
