@@ -13,16 +13,11 @@ Unix キャラクタデバイスは、指定したキャラクタデバイスを
 
 `unix-char`デバイスには以下のデバイスオプションがあります:
 
-キー       | 型     | デフォルト値       | 説明
-:--        | :--    | :--                | :--
-`gid`      | int    | `0`                | インスタンス内のデバイス所有者のGID
-`major`    | int    | ホスト上のデバイス | デバイスのメジャー番号
-`minor`    | int    | ホスト上のデバイス | デバイスのマイナー番号
-`mode`     | int    | `0660`             | インスタンス内のデバイスのモード
-`path`     | string | -                  | インスタンス内のパス（`source`と`path`のどちらかを設定しなければいけません）
-`required` | bool   | `true`             | このデバイスがインスタンスの起動に必要かどうか（{ref}`devices-unix-char-hotplugging`参照）
-`source`   | string | -                  | ホスト上のパス（`source`と`path`のどちらかを設定しなければいけません）
-`uid`      | int    | `0`                | インスタンス内のデバイス所有者の UID
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-unix-char-block start -->
+    :end-before: <!-- config group devices-unix-char-block end -->
+```
 
 (devices-unix-char-hotplugging)=
 ## ホットプラグ

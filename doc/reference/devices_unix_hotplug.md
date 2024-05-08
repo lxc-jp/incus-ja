@@ -15,11 +15,8 @@ Unix ホットプラグデバイスは、指定した Unix デバイスをイン
 
 `unix-hotplug`デバイスには以下のデバイスオプションがあります:
 
-キー        | 型     | デフォルト値 | 説明
-:--         | :--    | :--          | :--
-`gid`       | int    | `0`          | インスタンス内でのデバイスオーナーのGID
-`mode`      | int    | `0660`       | インスタンス内でのデバイスのモード
-`productid` | string | -            | Unixデバイスの製品ID
-`required`  | bool   | `false`      | このデバイスがインスタンスを起動するのに必要かどうか（デフォルトは`false`で、すべてのデバイスはホットプラグ可能です）
-`uid`       | int    | `0`          | インスタンス内でのデバイスオーナーのUID
-`vendorid`  | string | -            | UnixデバイスのベンダーID
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-unix-hotplug start -->
+    :end-before: <!-- config group devices-unix-hotplug end -->
+```

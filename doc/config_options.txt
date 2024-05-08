@@ -3,23 +3,22 @@
 <!-- config group cluster-cluster start -->
 ```{config:option} scheduler.instance cluster-cluster
 :defaultdesc: "`all`"
-:shortdesc: "Controls how instances are scheduled to run on this member"
+:shortdesc: "このメンバー上でインスタンスがどのようにスケジュールされるかを制御します"
 :type: "string"
-Possible values are `all`, `manual`, and `group`. See
-{ref}`clustering-instance-placement` for more information.
+指定可能な値は`all`、`manual`、`group`です。詳細は{ref}`clustering-instance-placement`を参照してください。
 ```
 
 ```{config:option} user.* cluster-cluster
-:shortdesc: "Free form user key/value storage"
+:shortdesc: "自由形式のユーザーのkey/valueストレージ"
 :type: "string"
-User keys can be used in search.
+ユーザーキーは検索で使用できます。
 ```
 
 <!-- config group cluster-cluster end -->
 <!-- config group devices-disk start -->
 ```{config:option} boot.priority devices-disk
 :required: "no"
-:shortdesc: "Boot priority for VMs (higher value boots first)"
+:shortdesc: "VM のブート優先度（高いほうが先にブート）"
 :type: "integer"
 
 ```
@@ -27,7 +26,7 @@ User keys can be used in search.
 ```{config:option} ceph.cluster_name devices-disk
 :default: "`ceph`"
 :required: "no"
-:shortdesc: "The cluster name of the Ceph cluster (required for Ceph or CephFS sources)"
+:shortdesc: "Ceph クラスタのクラスタ名（Ceph か CephFS のソースには必須）"
 :type: "string"
 
 ```
@@ -35,14 +34,14 @@ User keys can be used in search.
 ```{config:option} ceph.user_name devices-disk
 :default: "`admin`"
 :required: "no"
-:shortdesc: "The user name of the Ceph cluster (required for Ceph or CephFS sources)"
+:shortdesc: "Ceph クラスタのユーザー名（Ceph か CephFS のソースには必須）"
 :type: "string"
 
 ```
 
 ```{config:option} initial.* devices-disk
 :required: "no"
-:shortdesc: "Initial volume configuration for instance root disk devices"
+:shortdesc: "デフォルトストレージプール設定と独立して個別の設定を許可する"
 :type: "string"
 
 ```
@@ -50,7 +49,7 @@ User keys can be used in search.
 ```{config:option} io.bus devices-disk
 :default: "`virtio-scsi`"
 :required: "no"
-:shortdesc: "Only for VMs: Override the bus for the device (`nvme`, `virtio-blk`, or `virtio-scsi`)"
+:shortdesc: "VMのみ: デバイスのバスを上書きする（`nvme`、`virtio-blk`、または`virtio-scsi`）"
 :type: "string"
 
 ```
@@ -58,56 +57,56 @@ User keys can be used in search.
 ```{config:option} io.cache devices-disk
 :default: "`none`"
 :required: "no"
-:shortdesc: "Only for VMs: Override the caching mode for the device (`none`, `writeback` or `unsafe`)"
+:shortdesc: "VMのみ: デバイスのキャッシュモードを上書きする（`none`、`writeback`または`unsafe`）"
 :type: "string"
 
 ```
 
 ```{config:option} limits.max devices-disk
 :required: "no"
-:shortdesc: "I/O limit in byte/s or IOPS for both read and write (same as setting both `limits.read` and `limits.write`)"
+:shortdesc: "読み取りと書き込み両方のbyte/sかIOPSによるI/O制限（`limits.read`と`limits.write`の両方を設定するのと同じ）"
 :type: "string"
 
 ```
 
 ```{config:option} limits.read devices-disk
 :required: "no"
-:shortdesc: "I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) or in IOPS (must be suffixed with `iops`) - see also {ref}`storage-configure-IO`"
+:shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）もしくはIOPS（あとに`iops`と付けなければなりません）で指定する読み込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
 :type: "string"
 
 ```
 
 ```{config:option} limits.write devices-disk
 :required: "no"
-:shortdesc: "I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) or in IOPS (must be suffixed with `iops`) - see also {ref}`storage-configure-IO`"
+:shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）もしくはIOPS（あとに`iops`と付けなければなりません）で指定する書き込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
 :type: "string"
 
 ```
 
 ```{config:option} path devices-disk
 :required: "yes"
-:shortdesc: "Path inside the instance where the disk will be mounted (only for containers)"
+:shortdesc: "ディスクをマウントするインスタンス内のパス（コンテナのみ）"
 :type: "string"
 
 ```
 
 ```{config:option} pool devices-disk
 :required: "no"
-:shortdesc: "The storage pool to which the disk device belongs (only applicable for storage volumes managed by Incus)"
+:shortdesc: "ディスクデバイスが属するストレージプール（Incus が管理するストレージボリュームにのみ適用可能）"
 :type: "string"
 
 ```
 
 ```{config:option} propagation devices-disk
 :required: "no"
-:shortdesc: "Controls how a bind-mount is shared between the instance and the host (can be one of `private`, the default, or `shared`, `slave`, `unbindable`,  `rshared`, `rslave`, `runbindable`,  `rprivate`; see the Linux Kernel [shared subtree](https://www.kernel.org/doc/Documentation/filesystems/sharedsubtree.txt) documentation for a full explanation)"
+:shortdesc: "バインドマウントをインスタンスとホストでどのように共有するかを管理する（`private` （デフォルト）、`shared`、`slave`、`unbindable`、 `rshared`、`rslave`、`runbindable`、`rprivate` のいずれか。完全な説明は Linux Kernel の文書 [shared subtree](https://www.kernel.org/doc/Documentation/filesystems/sharedsubtree.txt) 参照）"
 :type: "string"
 
 ```
 
 ```{config:option} raw.mount.options devices-disk
 :required: "no"
-:shortdesc: "File system specific mount options"
+:shortdesc: "ファイルシステム固有のマウントオプション"
 :type: "string"
 
 ```
@@ -115,7 +114,7 @@ User keys can be used in search.
 ```{config:option} readonly devices-disk
 :default: "`false`"
 :required: "no"
-:shortdesc: "Controls whether to make the mount read-only"
+:shortdesc: "マウントを読み込み専用とするかどうかを制御"
 :type: "bool"
 
 ```
@@ -123,7 +122,7 @@ User keys can be used in search.
 ```{config:option} recursive devices-disk
 :default: "`false`"
 :required: "no"
-:shortdesc: "Controls whether to recursively mount the source path"
+:shortdesc: "ソースパスを再帰的にマウントするかどうかを制御"
 :type: "bool"
 
 ```
@@ -131,7 +130,7 @@ User keys can be used in search.
 ```{config:option} required devices-disk
 :default: "`true`"
 :required: "no"
-:shortdesc: "Controls whether to fail if the source doesn't exist"
+:shortdesc: "ソースが存在しないときに失敗とするかどうかを制御"
 :type: "bool"
 
 ```
@@ -139,28 +138,28 @@ User keys can be used in search.
 ```{config:option} shift devices-disk
 :default: "`false`"
 :required: "no"
-:shortdesc: "Sets up a shifting overlay to translate the source UID/GID to match the instance (only for containers)"
+:shortdesc: "ソースの UID/GID をインスタンスにマッチするように変換させるためにオーバーレイの shift を設定するか（コンテナのみ）"
 :type: "bool"
 
 ```
 
 ```{config:option} size devices-disk
 :required: "no"
-:shortdesc: "Disk size in bytes (various suffixes supported, see {ref}`instances-limit-units`) - only supported for the `rootfs` (`/`)"
+:shortdesc: "byte（さまざまな単位が使用可能、 {ref}`instances-limit-units` 参照）で指定するディスクサイズ。`rootfs`（`/`） でのみサポートされます"
 :type: "string"
 
 ```
 
 ```{config:option} size.state devices-disk
 :required: "no"
-:shortdesc: "Same as `size`, but applies to the file-system volume used for saving runtime state in VMs"
+:shortdesc: "`size` と同じですが、仮想マシン内のランタイム状態を保存するために使われるファイルシステムボリュームに適用されます"
 :type: "string"
 
 ```
 
 ```{config:option} source devices-disk
 :required: "yes"
-:shortdesc: "Source of a file system or block device (see {ref}`devices-disk-types` for details)"
+:shortdesc: "ファイルシステムまたはブロックデバイスのソース（詳細は{ref}`devices-disk-types`参照）"
 :type: "string"
 
 ```
@@ -169,96 +168,97 @@ User keys can be used in search.
 <!-- config group devices-unix-char-block start -->
 ```{config:option} gid devices-unix-char-block
 :default: "0"
-:shortdesc: "GID of the device owner in the instance"
+:shortdesc: "インスタンス内のデバイス所有者のGID"
 :type: "int"
 
 ```
 
 ```{config:option} major devices-unix-char-block
-:default: "device on host"
-:shortdesc: "Device major number"
+:default: "ホスト上のデバイス"
+:shortdesc: "デバイスのメジャー番号"
 :type: "int"
 
 ```
 
 ```{config:option} minor devices-unix-char-block
-:default: "device on host"
-:shortdesc: "Device minor number"
+:default: "ホスト上のデバイス"
+:shortdesc: "デバイスのマイナー番号"
 :type: "int"
 
 ```
 
 ```{config:option} mode devices-unix-char-block
 :default: "0660"
-:shortdesc: "Mode of the device in the instance"
+:shortdesc: "インスタンス内のデバイスのモード"
 :type: "int"
 
 ```
 
 ```{config:option} path devices-unix-char-block
-:shortdesc: "Path inside the instance (one of `source` and `path` must be set)"
+:shortdesc: "インスタンス内のパス（`source`と`path`のどちらかを設定しなければいけません）"
 :type: "string"
 
 ```
 
 ```{config:option} required devices-unix-char-block
 :default: "true"
-:shortdesc: "Whether this device is required to start the instance"
+:shortdesc: "このデバイスがインスタンスの起動に必要かどうか"
 :type: "bool"
 
 ```
 
 ```{config:option} source devices-unix-char-block
-:shortdesc: "Path on the host (one of `source` and `path` must be set)"
+:shortdesc: "ホスト上のパス（`source`と`path`のどちらかを設定しなければいけません）"
 :type: "string"
 
 ```
 
 ```{config:option} uid devices-unix-char-block
 :default: "0"
-:shortdesc: "UID of the device owner in the instance"
+:shortdesc: "インスタンス内のデバイス所有者の UID"
 :type: "int"
 
 ```
 
 <!-- config group devices-unix-char-block end -->
 <!-- config group devices-unix-hotplug start -->
+
 ```{config:option} gid devices-unix-hotplug
 :default: "0"
-:shortdesc: "GID of the device owner in the instance"
+:shortdesc: "インスタンス内でのデバイスオーナーのGID"
 :type: "int"
 
 ```
 
 ```{config:option} mode devices-unix-hotplug
 :default: "0660"
-:shortdesc: "Mode of the device in the instance"
+:shortdesc: "インスタンス内でのデバイスのモード"
 :type: "int"
 
 ```
 
 ```{config:option} productid devices-unix-hotplug
-:shortdesc: "The product ID of the USB device"
+:shortdesc: "Unixデバイスの製品ID"
 :type: "string"
 
 ```
 
 ```{config:option} required devices-unix-hotplug
 :default: "true"
-:shortdesc: "Whether this device is required to start the instance"
+:shortdesc: "このデバイスがインスタンスを起動するのに必要かどうか"
 :type: "bool"
 
 ```
 
 ```{config:option} uid devices-unix-hotplug
 :default: "0"
-:shortdesc: "UID of the device owner in the instance"
+:shortdesc: "インスタンス内でのデバイスオーナーのUID"
 :type: "int"
 
 ```
 
 ```{config:option} vendorid devices-unix-hotplug
-:shortdesc: "The vendor ID of the USB device"
+:shortdesc: "UnixデバイスのベンダーID"
 :type: "string"
 
 ```
@@ -266,59 +266,59 @@ User keys can be used in search.
 <!-- config group devices-unix-hotplug end -->
 <!-- config group devices-usb start -->
 ```{config:option} busnum devices-usb
-:shortdesc: "The bus number of which the USB device is attached"
+:shortdesc: "USBデバイスがアタッチされている先のバスナンバー"
 :type: "int"
 
 ```
 
 ```{config:option} devnum devices-usb
-:shortdesc: "The device number of the USB device"
+:shortdesc: "USBデバイスのデバイスナンバー"
 :type: "int"
 
 ```
 
 ```{config:option} gid devices-usb
 :defaultdesc: "`0`"
-:shortdesc: "Only for containers: GID of the device owner in the instance"
+:shortdesc: "コンテナのみ: インスタンス内のデバイス所有者のGID"
 :type: "int"
 
 ```
 
 ```{config:option} mode devices-usb
 :defaultdesc: "`0660`"
-:shortdesc: "Only for containers: Mode of the device in the instance"
+:shortdesc: "コンテナのみ: インスタンス内のデバイスのモード"
 :type: "int"
 
 ```
 
 ```{config:option} productid devices-usb
-:shortdesc: "The product ID of the USB device"
+:shortdesc: "USBデバイスのプロダクトID"
 :type: "string"
 
 ```
 
 ```{config:option} required devices-usb
 :defaultdesc: "`false`"
-:shortdesc: "Whether this device is required to start the instance (the default is `false`, and all devices can be hotplugged)"
+:shortdesc: "このデバイスがインスタンスの起動に必要かどうか（デフォルトは`false`で、すべてのデバイスがホットプラグ可能です）"
 :type: "bool"
 
 ```
 
 ```{config:option} serial devices-usb
-:shortdesc: "The serial number of the USB device"
+:shortdesc: "USBデバイスのシリアルナンバー"
 :type: "string"
 
 ```
 
 ```{config:option} uid devices-usb
 :defaultdesc: "`0`"
-:shortdesc: "Only for containers: UID of the device owner in the instance"
+:shortdesc: "コンテナのみ: インスタンス内のデバイス所有者のUID"
 :type: "int"
 
 ```
 
 ```{config:option} vendorid devices-usb
-:shortdesc: "The vendor ID of the USB device"
+:shortdesc: "USBデバイスのベンダーID"
 :type: "string"
 
 ```
@@ -326,31 +326,31 @@ User keys can be used in search.
 <!-- config group devices-usb end -->
 <!-- config group image-requirements start -->
 ```{config:option} requirements.cdrom_agent image-requirements
-:shortdesc: "If set to `true`, indicates that the VM requires an `agent:config` disk be added."
+:shortdesc: "`true` に設定すると、VM が `agent:config` ディスクが追加されることを要求することを示します。"
 :type: "bool"
 
 ```
 
 ```{config:option} requirements.cgroup image-requirements
-:shortdesc: "If set to `v1`, indicates that the image requires the host to run cgroup v1."
+:shortdesc: "`v1` に設定されている場合、ホストで`CGroupV1`が実行されている必要があることを示します。"
 :type: "string"
 
 ```
 
 ```{config:option} requirements.nesting image-requirements
-:shortdesc: "If set to `true`, indicates that the image cannot work without nesting enabled."
+:shortdesc: "`true` に設定すると、ネスティングを有効にしないとイメージが動かないことを示します。"
 :type: "bool"
 
 ```
 
 ```{config:option} requirements.privileged image-requirements
-:shortdesc: "If set to `false`, indicates that the image cannot work as a privileged container."
+:shortdesc: "`false` に設定すると、イメージが特権コンテナで使えないことを示します。"
 :type: "bool"
 
 ```
 
 ```{config:option} requirements.secureboot image-requirements
-:shortdesc: "If set to `false`, indicates that the image cannot boot under secure boot."
+:shortdesc: "`false` に設定すると、イメージがセキュアブートで起動しないことを示します。"
 :type: "bool"
 
 ```
@@ -359,103 +359,103 @@ User keys can be used in search.
 <!-- config group instance-boot start -->
 ```{config:option} boot.autostart instance-boot
 :liveupdate: "no"
-:shortdesc: "Whether to always start the instance when the daemon starts"
+:shortdesc: "デーモンの起動時にインスタンスを常に起動するかどうか"
 :type: "bool"
-If set to `false`, restore the last state.
+`false`に設定すると、最後の状態を復元します。
 ```
 
 ```{config:option} boot.autostart.delay instance-boot
 :defaultdesc: "0"
 :liveupdate: "no"
-:shortdesc: "Delay after starting the instance"
+:shortdesc: "インスタンスの起動からの遅延"
 :type: "integer"
-The number of seconds to wait after the instance started before starting the next one.
+インスタンスが起動してから次のインスタンスを起動するまでの待ち時間の秒数。
 ```
 
 ```{config:option} boot.autostart.priority instance-boot
 :defaultdesc: "0"
 :liveupdate: "no"
-:shortdesc: "What order to start the instances in"
+:shortdesc: "インスタンスをどの順序で起動するか"
 :type: "integer"
-The instance with the highest value is started first.
+一番大きな値のインスタンスが最初に起動されます。
 ```
 
 ```{config:option} boot.host_shutdown_action instance-boot
 :defaultdesc: "stop"
 :liveupdate: "yes"
-:shortdesc: "What action to take on the instance when the host is shut down"
+:shortdesc: "ホストが停止される際にインスタンスにどのアクションを行うか"
 :type: "integer"
-Action to take on host shut down
+ホストの停止の際に行うアクション
 ```
 
 ```{config:option} boot.host_shutdown_timeout instance-boot
 :defaultdesc: "30"
 :liveupdate: "yes"
-:shortdesc: "How long to wait for the instance to shut down"
+:shortdesc: "インスタンスが停止するのに待つ秒数"
 :type: "integer"
-Number of seconds to wait for the instance to shut down before it is force-stopped.
+インスタンスを強制停止する前に停止するのを待つ秒数。
 ```
 
 ```{config:option} boot.stop.priority instance-boot
 :defaultdesc: "0"
 :liveupdate: "no"
-:shortdesc: "What order to shut down the instances in"
+:shortdesc: "インスタンスをどの順序で停止するか"
 :type: "integer"
-The instance with the highest value is shut down first.
+一番大きな値のインスタンスが最初に停止されます。
 ```
 
 <!-- config group instance-boot end -->
 <!-- config group instance-cloud-init start -->
 ```{config:option} cloud-init.network-config instance-cloud-init
-:condition: "If supported by image"
+:condition: "イメージでサポートされる場合"
 :defaultdesc: "`DHCP on eth0`"
 :liveupdate: "no"
-:shortdesc: "Network configuration for `cloud-init`"
+:shortdesc: "`cloud-init`のネットワーク設定"
 :type: "string"
-The content is used as seed value for `cloud-init`.
+中身が`cloud-init`へのシード値として使用されます。
 ```
 
 ```{config:option} cloud-init.user-data instance-cloud-init
-:condition: "If supported by image"
+:condition: "イメージでサポートされる場合"
 :defaultdesc: "`#cloud-config`"
 :liveupdate: "no"
-:shortdesc: "User data for `cloud-init`"
+:shortdesc: "`cloud-init`のユーザーデータ"
 :type: "string"
-The content is used as seed value for `cloud-init`.
+中身が`cloud-init`へのシード値として使用されます。
 ```
 
 ```{config:option} cloud-init.vendor-data instance-cloud-init
-:condition: "If supported by image"
+:condition: "イメージでサポートされる場合"
 :defaultdesc: "`#cloud-config`"
 :liveupdate: "no"
-:shortdesc: "Vendor data for `cloud-init`"
+:shortdesc: "`cloud-init`のVendorデータ"
 :type: "string"
-The content is used as seed value for `cloud-init`.
+中身が`cloud-init`へのシード値として使用されます。
 ```
 
 ```{config:option} user.network-config instance-cloud-init
-:condition: "If supported by image"
+:condition: "イメージでサポートされる場合"
 :defaultdesc: "`DHCP on eth0`"
 :liveupdate: "no"
-:shortdesc: "Legacy version of `cloud-init.network-config`"
+:shortdesc: "`cloud-init.network-config`のレガシーバージョン"
 :type: "string"
 
 ```
 
 ```{config:option} user.user-data instance-cloud-init
-:condition: "If supported by image"
+:condition: "イメージでサポートされる場合"
 :defaultdesc: "`#cloud-config`"
 :liveupdate: "no"
-:shortdesc: "Legacy version of `cloud-init.user-data`"
+:shortdesc: "`cloud-init.user-data`のレガシーバージョン"
 :type: "string"
 
 ```
 
 ```{config:option} user.vendor-data instance-cloud-init
-:condition: "If supported by image"
+:condition: "イメージでサポートされる場合"
 :defaultdesc: "`#cloud-config`"
 :liveupdate: "no"
-:shortdesc: "Legacy version of `cloud-init.vendor-data`"
+:shortdesc: "`cloud-init.vendor-data`のレガシーバージョン"
 :type: "string"
 
 ```
@@ -466,16 +466,16 @@ The content is used as seed value for `cloud-init`.
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "yes"
-:shortdesc: "Whether to use incremental memory transfer"
+:shortdesc: "インクリメンタルなメモリ転送を使用するかどうか"
 :type: "bool"
-Using incremental memory transfer of the instance's memory can reduce downtime.
+インスタンスのメモリのインクリメンタルなメモリ転送を使用するとダウンタイムを短縮できます。
 ```
 
 ```{config:option} migration.incremental.memory.goal instance-migration
 :condition: "container"
 :defaultdesc: "`70`"
 :liveupdate: "yes"
-:shortdesc: "Percentage of memory to have in sync before stopping the instance"
+:shortdesc: "インスタンスを停止する前に同期するメモリのパーセンテージ"
 :type: "integer"
 
 ```
@@ -484,7 +484,7 @@ Using incremental memory transfer of the instance's memory can reduce downtime.
 :condition: "container"
 :defaultdesc: "`10`"
 :liveupdate: "yes"
-:shortdesc: "Maximum number of transfer operations to go through before stopping the instance"
+:shortdesc: "インスタンスを停止する前に行う転送操作の最大数"
 :type: "integer"
 
 ```
@@ -492,9 +492,9 @@ Using incremental memory transfer of the instance's memory can reduce downtime.
 ```{config:option} migration.stateful instance-migration
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to allow for stateful stop/start and snapshots"
+:shortdesc: "ステートフルな停止／起動とスナップショットを許可するかどうか"
 :type: "bool"
-Enabling this option prevents the use of some features that are incompatible with it.
+このオプションを有効にするとそれと非互換ないくつかの機能は使えなくなります。
 ```
 
 <!-- config group instance-migration end -->
@@ -503,60 +503,53 @@ Enabling this option prevents the use of some features that are incompatible wit
 :condition: "virtual machine"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to use the name and MTU of the default network interfaces"
+:shortdesc: "デフォルトネットワークインタフェースの名前とMTUを使うかどうか"
 :type: "bool"
-For containers, the name and MTU of the default network interfaces is used for the instance devices.
-For virtual machines, set this option to `true` to set the name and MTU of the default network interfaces to be the same as the instance devices.
+コンテナでは、デフォルトネットワークインタフェースの名前とMTUを使うようになります。
+仮想マシンでは、このオプションを`true`に設定するとデフォルトのネットワークインタフェースの名前とMTUがインスタンスデバイスと同じになります。
 ```
 
 ```{config:option} cluster.evacuate instance-miscellaneous
 :defaultdesc: "`auto`"
 :liveupdate: "no"
-:shortdesc: "What to do when evacuating the instance"
+:shortdesc: "インスタンスを退避する際に何をするか"
 :type: "string"
-The `cluster.evacuate` provides control over how instances are handled when a cluster member is being
-evacuated.
+`cluster.evacuate`はクラスタメンバーが退避される際にインスタンスがどのように扱われるかを制御します。
 
-Available Modes:
-  - `auto` *(default)*: The system will automatically decide the best evacuation method based on the
-     instance's type and configured devices:
-    + If any device is not suitable for migration, the instance will not be migrated (only stopped).
-    + Live migration will be used only for virtual machines with the `migration.stateful` setting
-      enabled and for which all its devices can be migrated as well.
-  - `live-migrate`: Instances are live-migrated to another server. This means the instance remains running
-     and operational during the migration process, ensuring minimal disruption.
-  - `migrate`: In this mode, instances are migrated to another server in the cluster. The migration
-     process will not be live, meaning there will be a brief downtime for the instance during the
-     migration.
-  -  `stop`: Instances are not migrated. Instead, they are stopped on the current server.
-  -  `stateful-stop`: Instances are not migrated. Instead, they are stopped on the current server
-     but with their runtime state (memory) stored on disk for resuming on restore.
-  -  `force-stop`: Instances are not migrated. Instead, they are forcefully stopped.
+利用可能なモード:
+  - `auto` *(デフォルト)*: インスタンスのタイプと設定されたデバイスに基づいてベストな退避の方法をシステムが自動的に決定します:
+    + マイグレーションに適さないデバイスがある場合、インスタンスはマイグレーションされません（停止のみされます）。
+    + ライブマイグレーションは`migration.stateful`設定を有効にした仮想マシンでのみ実行され、仮想マシンのすべてのデバイスもマイグレートされます。
+  - `live-migrate`: インスタンスが別のサーバーにライブマイグレートされます。つまりインスタンスはマイグレーションプロセス中にも稼働して操作可能なままになり、切断は最小限ですみます。
+  - `migrate`: このモードでは、インスタンスはクラスター内の他のサーバーにマイグレートされます。マイグレーションプロセスはライブではありません。つまり、インスタンスはマイグレーション中に短時間ダウンタイムが発生します。
+  -  `stop`: インスタンスはマイグレートされません。代わりに現在のサーバー上で停止されます。
+  -  `stateful-stop`: インスタンスはマイグレートされません。代わりに現在のサーバー上で停止されますが、復元時にレジュームできるように実行状態（メモリ）をディスク上に保存します。
+  -  `force-stop`: インスタンスはマイグレートされません。代わりに強制停止されます。
 
-See {ref}`cluster-evacuate` for more information.
+詳細は{ref}`cluster-evacuate`を参照してください。
 ```
 
 ```{config:option} linux.kernel_modules instance-miscellaneous
 :condition: "container"
 :liveupdate: "yes"
-:shortdesc: "Kernel modules to load before starting the instance"
+:shortdesc: "インスタンスの起動前にロードするカーネルモジュール"
 :type: "string"
-Specify the kernel modules as a comma-separated list.
+カーネルモジュールをカンマ区切りリストで指定します。
 ```
 
 ```{config:option} linux.sysctl.* instance-miscellaneous
 :condition: "container"
 :liveupdate: "no"
-:shortdesc: "Override for the corresponding `sysctl` setting in the container"
+:shortdesc: "コンテナ内の対応する`sysctl`設定をオーバーライドします"
 :type: "string"
 
 ```
 
 ```{config:option} user.* instance-miscellaneous
 :liveupdate: "no"
-:shortdesc: "Free-form user key/value storage"
+:shortdesc: "自由形式のユーザーのkey/valueストレージ"
 :type: "string"
-User keys can be used in search.
+ユーザーキーは検索で使用できます。
 ```
 
 <!-- config group instance-miscellaneous end -->
@@ -565,32 +558,32 @@ User keys can be used in search.
 :condition: "container"
 :defaultdesc: "`compute,utility`"
 :liveupdate: "no"
-:shortdesc: "What driver capabilities the instance needs"
+:shortdesc: "インスタンスが必要なドライバーのケイパビリティ"
 :type: "string"
-The specified driver capabilities are used to set `libnvidia-container NVIDIA_DRIVER_CAPABILITIES`.
+指定されたドライバーのケイパビリティは`libnvidia-container NVIDIA_DRIVER_CAPABILITIES`を設定するのに使われます。
 ```
 
 ```{config:option} nvidia.require.cuda instance-nvidia
 :condition: "container"
 :liveupdate: "no"
-:shortdesc: "Required CUDA version"
+:shortdesc: "必要なCUDAのバージョン"
 :type: "string"
-The specified version expression is used to set `libnvidia-container NVIDIA_REQUIRE_CUDA`.
+指定されたバージョンは`libnvidia-container NVIDIA_REQUIRE_CUDA`を設定するのに使われます。
 ```
 
 ```{config:option} nvidia.require.driver instance-nvidia
 :condition: "container"
 :liveupdate: "no"
-:shortdesc: "Required driver version"
+:shortdesc: "必要なドライバーのバージョン"
 :type: "string"
-The specified version expression is used to set `libnvidia-container NVIDIA_REQUIRE_DRIVER`.
+指定されたバージョンは`libnvidia-container NVIDIA_REQUIRE_CUDA`を設定するのに使われます。
 ```
 
 ```{config:option} nvidia.runtime instance-nvidia
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to pass the host NVIDIA and CUDA runtime libraries into the instance"
+:shortdesc: "ホストのNVIDIAとCUDAのランタイムライブラリをインスタンスに引き渡すかどうか"
 :type: "bool"
 
 ```
@@ -599,23 +592,23 @@ The specified version expression is used to set `libnvidia-container NVIDIA_REQU
 <!-- config group instance-raw start -->
 ```{config:option} raw.apparmor instance-raw
 :liveupdate: "yes"
-:shortdesc: "AppArmor profile entries"
+:shortdesc: "AppArmorプロファイルのエントリ"
 :type: "blob"
-The specified entries are appended to the generated profile.
+指定されたエントリは生成されるプロファイルに追加されます。
 ```
 
 ```{config:option} raw.idmap instance-raw
 :condition: "unprivileged container"
 :liveupdate: "no"
-:shortdesc: "Raw idmap configuration"
+:shortdesc: "生のidmap設定"
 :type: "blob"
-For example: `both 1000 1000`
+例: `both 1000 1000`
 ```
 
 ```{config:option} raw.lxc instance-raw
 :condition: "container"
 :liveupdate: "no"
-:shortdesc: "Raw LXC configuration to be appended to the generated one"
+:shortdesc: "生成される設定に追加する生のLXC設定"
 :type: "blob"
 
 ```
@@ -623,7 +616,7 @@ For example: `both 1000 1000`
 ```{config:option} raw.qemu instance-raw
 :condition: "virtual machine"
 :liveupdate: "no"
-:shortdesc: "Raw QEMU configuration to be appended to the generated command line"
+:shortdesc: "生成されるコマンドラインに追加する生のQEMU設定"
 :type: "blob"
 
 ```
@@ -631,15 +624,15 @@ For example: `both 1000 1000`
 ```{config:option} raw.qemu.conf instance-raw
 :condition: "virtual machine"
 :liveupdate: "no"
-:shortdesc: "Addition/override to the generated `qemu.conf` file"
+:shortdesc: "生成される`qemu.conf`ファイルへの追加／上書きA"
 :type: "blob"
-See {ref}`instance-options-qemu` for more information.
+詳細は{ref}`instance-options-qemu`を参照してください。
 ```
 
 ```{config:option} raw.seccomp instance-raw
 :condition: "container"
 :liveupdate: "no"
-:shortdesc: "Raw Seccomp configuration"
+:shortdesc: "生のSeccomp設定"
 :type: "blob"
 
 ```
@@ -649,159 +642,157 @@ See {ref}`instance-options-qemu` for more information.
 ```{config:option} limits.cpu instance-resource-limits
 :defaultdesc: "1 (VMs)"
 :liveupdate: "yes"
-:shortdesc: "Which CPUs to expose to the instance"
+:shortdesc: "インスタンスにどのCPUを見せるか"
 :type: "string"
-A number or a specific range of CPUs to expose to the instance.
+インスタンスに見せるCPUの番号または範囲。
 
-See {ref}`instance-options-limits-cpu` for more information.
+詳細は{ref}`instance-options-limits-cpu`を参照してください。
 ```
 
 ```{config:option} limits.cpu.allowance instance-resource-limits
 :condition: "container"
 :defaultdesc: "100%"
 :liveupdate: "yes"
-:shortdesc: "How much of the CPU can be used"
+:shortdesc: "CPUのどれだけを使えるか"
 :type: "string"
-To control how much of the CPU can be used, specify either a percentage (`50%`) for a soft limit
-or a chunk of time (`25ms/100ms`) for a hard limit.
+CPUのどれだけを使えるか制御するため、パーセント（`50%`）でソフトリミットかタイムスライス（`25ms/100ms`）でハードリミットを指定します。
 
-See {ref}`instance-options-limits-cpu-container` for more information.
+詳細は{ref}`instance-options-limits-cpu-container`を指定してください。
 ```
 
 ```{config:option} limits.cpu.nodes instance-resource-limits
 :liveupdate: "yes"
-:shortdesc: "Which NUMA nodes to place the instance CPUs on"
+:shortdesc: "どのNUMAノード上にインスタンスのCPUを配置するか"
 :type: "string"
-A comma-separated list of NUMA node IDs or ranges to place the instance CPUs on.
-Alternatively, the value `balanced` may be used to have Incus pick the least busy NUMA node on startup.
+インスタンスのCPUを配置するNUMAノードIDのカンマ区切りリストか範囲。
+あるいは、起動時に一番忙しくないNUMAノードをIncusが選んで使用する`balanced`という値も使えます。
 
-See {ref}`instance-options-limits-cpu-container` for more information.
+詳細は{ref}`instance-options-limits-cpu-container`を参照してください。
 ```
 
 ```{config:option} limits.cpu.priority instance-resource-limits
 :condition: "container"
 :defaultdesc: "`10` (maximum)"
 :liveupdate: "yes"
-:shortdesc: "CPU scheduling priority compared to other instances"
+:shortdesc: "他のインスタンスと比較してのCPUスケジュールの優先度"
 :type: "integer"
-When overcommitting resources, specify the CPU scheduling priority compared to other instances that share the same CPUs.
-Specify an integer between 0 and 10.
+リソースをオーバーコミットする際、同じCPUを共有する他のインスタンスと比較したCPUスケジュールの優先度を指定します。
+0から10の間の整数を指定します。
 
-See {ref}`instance-options-limits-cpu-container` for more information.
+詳細は{ref}`instance-options-limits-cpu-container`を参照してください。
 ```
 
 ```{config:option} limits.disk.priority instance-resource-limits
 :defaultdesc: "`5` (medium)"
 :liveupdate: "yes"
-:shortdesc: "Priority of the instance's I/O requests"
+:shortdesc: "インスタンスのI/Oリクエストの優先度"
 :type: "integer"
-Controls how much priority to give to the instance's I/O requests when under load.
+負荷がかかった際のインスタンスのI/Oリクエストにどれぐらいの優先度を与えるかを制御します。
 
-Specify an integer between 0 and 10.
+0から10の間の整数を指定します。
 ```
 
 ```{config:option} limits.hugepages.1GB instance-resource-limits
 :condition: "container"
 :liveupdate: "yes"
-:shortdesc: "Limit for the number of 1 GB huge pages"
+:shortdesc: "1 GB huge pageの数を制限します"
 :type: "string"
-Fixed value (in bytes) to limit the number of 1 GB huge pages.
-Various suffixes are supported (see {ref}`instances-limit-units`).
+1 GB huge pageの数を制限するための（バイト単位の）固定値。
+さまざまな接尾辞がサポートされます（{ref}`instances-limit-units`参照）。
 
-See {ref}`instance-options-limits-hugepages` for more information.
+詳細は{ref}`instance-options-limits-hugepages`を参照してください。
 ```
 
 ```{config:option} limits.hugepages.1MB instance-resource-limits
 :condition: "container"
 :liveupdate: "yes"
-:shortdesc: "Limit for the number of 1 MB huge pages"
+:shortdesc: "1 MB huge pageの数を制限します"
 :type: "string"
-Fixed value (in bytes) to limit the number of 1 MB huge pages.
-Various suffixes are supported (see {ref}`instances-limit-units`).
+1 MB huge pageの数を制限するための（バイト単位の）固定値。
+さまざまな接尾辞がサポートされます（{ref}`instances-limit-units`参照）。
 
-See {ref}`instance-options-limits-hugepages` for more information.
+詳細は{ref}`instance-options-limits-hugepages`を参照してください。
 ```
 
 ```{config:option} limits.hugepages.2MB instance-resource-limits
 :condition: "container"
 :liveupdate: "yes"
-:shortdesc: "Limit for the number of 2 MB huge pages"
+:shortdesc: "2 MB huge pageの数を制限します"
 :type: "string"
-Fixed value (in bytes) to limit the number of 2 MB huge pages.
-Various suffixes are supported (see {ref}`instances-limit-units`).
+2 MB huge pageの数を制限するための（バイト単位の）固定値。
+さまざまな接尾辞がサポートされます（{ref}`instances-limit-units`参照）。
 
-See {ref}`instance-options-limits-hugepages` for more information.
+詳細は{ref}`instance-options-limits-hugepages`を参照してください。
 ```
 
 ```{config:option} limits.hugepages.64KB instance-resource-limits
 :condition: "container"
 :liveupdate: "yes"
-:shortdesc: "Limit for the number of 64 KB huge pages"
+:shortdesc: "64 KB huge pageの数を制限します"
 :type: "string"
-Fixed value (in bytes) to limit the number of 64 KB huge pages.
-Various suffixes are supported (see {ref}`instances-limit-units`).
+64 KB huge pageの数を制限するための（バイト単位の）固定値。
+さまざまな接尾辞がサポートされます（{ref}`instances-limit-units`参照）。
 
-See {ref}`instance-options-limits-hugepages` for more information.
+詳細は{ref}`instance-options-limits-hugepages`を参照してください。
 ```
 
 ```{config:option} limits.memory instance-resource-limits
 :defaultdesc: "`1Gib` (VMs)"
 :liveupdate: "yes"
-:shortdesc: "Usage limit for the host's memory"
+:shortdesc: "ホストのメモリの使用制限"
 :type: "string"
-Percentage of the host's memory or a fixed value in bytes.
-Various suffixes are supported.
+ホストのメモリのパーセンテージかバイト単位の固定値。
+さまざまな接尾辞がサポートされます。
 
-See {ref}`instances-limit-units` for details.
+詳細は{ref}`instances-limit-units`を参照してください。
 ```
 
 ```{config:option} limits.memory.enforce instance-resource-limits
 :condition: "container"
 :defaultdesc: "`hard`"
 :liveupdate: "yes"
-:shortdesc: "Whether the memory limit is `hard` or `soft`"
+:shortdesc: "メモリリミットが`hard`か`soft`か"
 :type: "string"
-If the instance's memory limit is `hard`, the instance cannot exceed its limit.
-If it is `soft`, the instance can exceed its memory limit when extra host memory is available.
+インスタンスの目盛リミットが`hard`の場合、インスタンスはそのリミットを超えられません。
+`soft`の場合、ホストのメモリに余裕があればインスタンスはそのリミットを超えられます。
 ```
 
 ```{config:option} limits.memory.hugepages instance-resource-limits
 :condition: "virtual machine"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to back the instance using huge pages"
+:shortdesc: "インスタンスにhuge pageを使えるか"
 :type: "bool"
-If this option is set to `false`, regular system memory is used.
+このオプションが`false`に設定された場合、通常のシステムメモリが使用されます。
 ```
 
 ```{config:option} limits.memory.swap instance-resource-limits
 :condition: "container"
 :defaultdesc: "`true`"
 :liveupdate: "yes"
-:shortdesc: "Control swap usage by the instance"
+:shortdesc: "インスタンスのスワップ使用を制御"
 :type: "string"
-When set to `true` or `false`, it controls whether the container is likely to get some of
-its memory swapped by the kernel. Alternatively, it can be set to a bytes value which will
-then allow the container to make use of additional memory through swap.
+`true`か`false`に設定すると、カーネルがスワップしたメモリの一部をコンテナが受け取るかどうかを制御します。
+あるいはバイト数の値をセットすると、コンテナがスワップを通じて追加のメモリを使用できるようにします。
 ```
 
 ```{config:option} limits.memory.swap.priority instance-resource-limits
 :condition: "container"
 :defaultdesc: "`10` (maximum)"
 :liveupdate: "yes"
-:shortdesc: "Prevents the instance from being swapped to disk"
+:shortdesc: "インスタンスがディスクにスワップされるのを防ぐ"
 :type: "integer"
-Specify an integer between 0 and 10.
-The higher the value, the less likely the instance is to be swapped to disk.
+0から10の間の整数を指定します。
+値が高いほど、インスタンスがディスクにスワップされにくくなります。
 ```
 
 ```{config:option} limits.processes instance-resource-limits
 :condition: "container"
 :defaultdesc: "empty"
 :liveupdate: "yes"
-:shortdesc: "Maximum number of processes that can run in the instance"
+:shortdesc: "インスタンス内で実行できるプロセスの最大数"
 :type: "integer"
-If left empty, no limit is set.
+空の場合は、制限なし。
 ```
 
 <!-- config group instance-resource-limits end -->
@@ -810,7 +801,7 @@ If left empty, no limit is set.
 :condition: "virtual machine"
 :defaultdesc: "`true`"
 :liveupdate: "no"
-:shortdesc: "Whether the `incus-agent` is queried for state information and metrics"
+:shortdesc: "状態とメトリクスを`incus-agent`に問い合わせるかどうか"
 :type: "bool"
 
 ```
@@ -819,24 +810,24 @@ If left empty, no limit is set.
 :condition: "virtual machine"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to use a firmware that supports UEFI-incompatible operating systems"
+:shortdesc: "UEFI互換のオペレーティングシステムをサポートするファームウェアを使用するかどうか"
 :type: "bool"
-When enabling this option, set {config:option}`instance-security:security.secureboot` to `false`.
+このオプションを有効にする際は、{config:option}`instance-security:security.secureboot`を`false`に設定してください。
 ```
 
 ```{config:option} security.guestapi instance-security
 :defaultdesc: "`true`"
 :liveupdate: "no"
-:shortdesc: "Whether `/dev/incus` is present in the instance"
+:shortdesc: "インスタンス内に`/dev/incus`を作るかどうか"
 :type: "bool"
-See {ref}`dev-incus` for more information.
+詳細は{ref}`dev-incus`を参照してください。
 ```
 
 ```{config:option} security.guestapi.images instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Controls the availability of the `/1.0/images` API over `guestapi`"
+:shortdesc: "`guestapi`上に`/1.0/images`を提供するかどうかを制御"
 :type: "bool"
 
 ```
@@ -844,24 +835,24 @@ See {ref}`dev-incus` for more information.
 ```{config:option} security.idmap.base instance-security
 :condition: "unprivileged container"
 :liveupdate: "no"
-:shortdesc: "The base host ID to use for the allocation"
+:shortdesc: "割り当てに使用するベースのホストID"
 :type: "integer"
-Setting this option overrides auto-detection.
+このオプションを設定すると自動検出をオーバーライドします。
 ```
 
 ```{config:option} security.idmap.isolated instance-security
 :condition: "unprivileged container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to use a unique idmap for this instance"
+:shortdesc: "このインスタンスにユニークなidmapを使用するかどうか"
 :type: "bool"
-If specified, the idmap used for this instance is unique among instances that have this option set.
+指定すると、このインスタンスに使用するidmapはこのオプションを設定したインスタンス間でユニークになります。
 ```
 
 ```{config:option} security.idmap.size instance-security
 :condition: "unprivileged container"
 :liveupdate: "no"
-:shortdesc: "The size of the idmap to use"
+:shortdesc: "使用するidmapのサイズ"
 :type: "integer"
 
 ```
@@ -870,7 +861,7 @@ If specified, the idmap used for this instance is unique among instances that ha
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "yes"
-:shortdesc: "Whether to support running Incus (nested) inside the instance"
+:shortdesc: "インスタンス内部で（ネストして）Incusを稼働するのをサポートするかどうか"
 :type: "bool"
 
 ```
@@ -879,7 +870,7 @@ If specified, the idmap used for this instance is unique among instances that ha
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to run the instance in privileged mode"
+:shortdesc: "インスタンスを特権モードで動かすかどうか"
 :type: "bool"
 
 ```
@@ -887,7 +878,7 @@ If specified, the idmap used for this instance is unique among instances that ha
 ```{config:option} security.protection.delete instance-security
 :defaultdesc: "`false`"
 :liveupdate: "yes"
-:shortdesc: "Prevents the instance from being deleted"
+:shortdesc: "インスタンスが削除されるのを防ぐ"
 :type: "bool"
 
 ```
@@ -896,25 +887,25 @@ If specified, the idmap used for this instance is unique among instances that ha
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "yes"
-:shortdesc: "Whether to protect the file system from being UID/GID shifted"
+:shortdesc: "ファイルシステムでUID/GIDがシフトされるのを防ぐかどうか"
 :type: "bool"
-Set this option to `true` to prevent the instance's file system from being UID/GID shifted on startup.
+このオプションを`true`にするとインスタンスの起動時にファイルシステムでUID/GIDがシフトされなくなります。
 ```
 
 ```{config:option} security.secureboot instance-security
 :condition: "virtual machine"
 :defaultdesc: "`true`"
 :liveupdate: "no"
-:shortdesc: "Whether UEFI secure boot is enabled with the default Microsoft keys"
+:shortdesc: "UEFIセキュアブートをデフォルトのMicorsoftのキーで有効化するかどうか"
 :type: "bool"
-When disabling this option, consider enabling {config:option}`instance-security:security.csm`.
+このオプションを無効にする場合、{config:option}`instance-security:security.csm`を有効にすることを検討してください。
 ```
 
 ```{config:option} security.sev instance-security
 :condition: "virtual machine"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether AMD SEV (Secure Encrypted Virtualization) is enabled for this VM"
+:shortdesc: "このVMでAMD SEV (Secure Encrypted Virtualization)を有効にするかどうか"
 :type: "bool"
 
 ```
@@ -923,7 +914,7 @@ When disabling this option, consider enabling {config:option}`instance-security:
 :condition: "virtual machine"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether AMD SEV-ES (SEV Encrypted State) is enabled for this VM"
+:shortdesc: "このVMでAMD SEV-ES (SEV Encrypted State)を有効にするかどうか"
 :type: "bool"
 
 ```
@@ -932,7 +923,7 @@ When disabling this option, consider enabling {config:option}`instance-security:
 :condition: "virtual machine"
 :defaultdesc: "`true`"
 :liveupdate: "no"
-:shortdesc: "The guest owner's `base64`-encoded session blob"
+:shortdesc: "ゲストオーナーの`base64`エンコードされたセッションblob"
 :type: "string"
 
 ```
@@ -941,7 +932,7 @@ When disabling this option, consider enabling {config:option}`instance-security:
 :condition: "virtual machine"
 :defaultdesc: "`true`"
 :liveupdate: "no"
-:shortdesc: "The guest owner's `base64`-encoded Diffie-Hellman key"
+:shortdesc: "ゲストオーナーの`base64`エンコードされたDiffie-Hellman鍵"
 :type: "string"
 
 ```
@@ -949,36 +940,36 @@ When disabling this option, consider enabling {config:option}`instance-security:
 ```{config:option} security.syscalls.allow instance-security
 :condition: "container"
 :liveupdate: "no"
-:shortdesc: "List of syscalls to allow"
+:shortdesc: "許可するシステムコールのリスト"
 :type: "string"
-A `\n`-separated list of syscalls to allow.
-This list must be mutually exclusive with `security.syscalls.deny*`.
+`\n`で区切られた許可するシステムコールのリスト。
+このリストは`security.syscalls.deny`と相互排他的である必要があります。
 ```
 
 ```{config:option} security.syscalls.deny instance-security
 :condition: "container"
 :liveupdate: "no"
-:shortdesc: "List of syscalls to deny"
+:shortdesc: "許可するシステムコールのリスト"
 :type: "string"
-A `\n`-separated list of syscalls to deny.
-This list must be mutually exclusive with `security.syscalls.allow`.
+`\n`で区切られた拒否するシステムコールのリスト。
+このリストは`security.syscalls.allow`と相互排他的である必要があります。
 ```
 
 ```{config:option} security.syscalls.deny_compat instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to block `compat_*` syscalls (`x86_64` only)"
+:shortdesc: "`compat_*`システムコールをブロックするかどうか（`x86_64`のみ）"
 :type: "bool"
-On `x86_64`, this option controls whether to block `compat_*` syscalls.
-On other architectures, the option is ignored.
+`x86_64`上では、このオプションは`compat_*`システムコールをブロックするかどうかを制御します。
+他のアーキテクチャーでは、このオプションは無視されます。
 ```
 
 ```{config:option} security.syscalls.deny_default instance-security
 :condition: "container"
 :defaultdesc: "`true`"
 :liveupdate: "no"
-:shortdesc: "Whether to enable the default syscall deny"
+:shortdesc: "デフォルトのシステムコールを無視するのを有効にするかどうか"
 :type: "bool"
 
 ```
@@ -987,7 +978,7 @@ On other architectures, the option is ignored.
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to handle the `bpf()` system call"
+:shortdesc: "`bpf()`システムコールを処理するかどうか"
 :type: "bool"
 
 ```
@@ -996,25 +987,25 @@ On other architectures, the option is ignored.
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to allow BPF programs"
+:shortdesc: "BPFプログラムを許可するかどうか"
 :type: "bool"
-This option controls whether to allow BPF programs for the devices cgroup in the unified hierarchy to be loaded.
+このオプションはBPFプログラムが単一階層構造のデバイスcgroupをロードするのを許可するかどうかを制御します。
 ```
 
 ```{config:option} security.syscalls.intercept.mknod instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to handle the `mknod` and `mknodat` system calls"
+:shortdesc: "`mknod`と`mknodat`システムコールを処理するかどうか"
 :type: "bool"
-These system calls allow creation of a limited subset of char/block devices.
+これらのシステムコールはキャラクター／ブロックデバイスの限定されたサブセットの作成を許可します。
 ```
 
 ```{config:option} security.syscalls.intercept.mount instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to handle the `mount` system call"
+:shortdesc: "`mount`システムコールを処理するかどうか"
 :type: "bool"
 
 ```
@@ -1022,24 +1013,24 @@ These system calls allow creation of a limited subset of char/block devices.
 ```{config:option} security.syscalls.intercept.mount.allowed instance-security
 :condition: "container"
 :liveupdate: "yes"
-:shortdesc: "File systems that can be mounted"
+:shortdesc: "マウント可能なファイルシステム"
 :type: "string"
-Specify a comma-separated list of file systems that are safe to mount for processes inside the instance.
+インスタンス内部のプロセスが安全にマウントできるファイルシステムのカンマ区切りリストを指定します。
 ```
 
 ```{config:option} security.syscalls.intercept.mount.fuse instance-security
 :condition: "container"
 :liveupdate: "yes"
-:shortdesc: "File system that should be redirected to FUSE implementation"
+:shortdesc: "FUSE実装にリダイレクトすべきファイルシステム"
 :type: "string"
-Specify the mounts of a given file system that should be redirected to their FUSE implementation (for example, `ext4=fuse2fs`).
+FUSE実装にリダイレクトすべきファイルシステムのマウントを指定します（例えば、`ext4=fuse2fs`）。
 ```
 
 ```{config:option} security.syscalls.intercept.mount.shift instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "yes"
-:shortdesc: "Whether to use idmapped mounts for syscall interception"
+:shortdesc: "システムコールのインターセプションにidmapマウントを使用するかどうか"
 :type: "bool"
 
 ```
@@ -1048,62 +1039,61 @@ Specify the mounts of a given file system that should be redirected to their FUS
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to handle the `sched_setscheduler` system call"
+:shortdesc: "`sched_setscheduler`システムコールを処理するかどうか"
 :type: "bool"
-This system call allows increasing process priority.
+このシステムコールはプロセスの優先度を増加させることができます。
 ```
 
 ```{config:option} security.syscalls.intercept.setxattr instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to handle the `setxattr` system call"
+:shortdesc: "`setxattr`システムコールを処理するかどうか"
 :type: "bool"
-This system call allows setting a limited subset of restricted extended attributes.
+このシステムコールは制限された拡張属性の限定されたサブセットを設定できます。
 ```
 
 ```{config:option} security.syscalls.intercept.sysinfo instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to handle the `sysinfo` system call"
+:shortdesc: "`sysinfo`システムコールを処理するかどうか"
 :type: "bool"
-This system call can be used to get cgroup-based resource usage information.
+このシステムコールはcgroupベースのリソース消費情報を取得するのに使用できます。
 ```
 
 <!-- config group instance-security end -->
 <!-- config group instance-snapshots start -->
 ```{config:option} snapshots.expiry instance-snapshots
 :liveupdate: "no"
-:shortdesc: "When snapshots are to be deleted"
+:shortdesc: "いつスナップショットを削除するか"
 :type: "string"
-Specify an expression like `1M 2H 3d 4w 5m 6y`.
+`1M 2H 3d 4w 5m 6y`のような式を指定します。
 ```
 
 ```{config:option} snapshots.pattern instance-snapshots
 :defaultdesc: "`snap%d`"
 :liveupdate: "no"
-:shortdesc: "Template for the snapshot name"
+:shortdesc: "スナップショット名のテンプレート"
 :type: "string"
-Specify a Pongo2 template string that represents the snapshot name.
-This template is used for scheduled snapshots and for unnamed snapshots.
+スナップショット名を表すPongo2のテンプレート文字列を指定します。
+このテンプレートはスケジュールされたスナップショットと無名のスナップショットに使用されます。
 
-See {ref}`instance-options-snapshots-names` for more information.
+詳細は{ref}`instance-options-snapshots-names`を参照してください。
 ```
 
 ```{config:option} snapshots.schedule instance-snapshots
 :defaultdesc: "empty"
 :liveupdate: "no"
-:shortdesc: "Schedule for automatic instance snapshots"
+:shortdesc: "自動インスタンススナップショットのスケジュール"
 :type: "string"
-Specify either a cron expression (`<minute> <hour> <dom> <month> <dow>`), a comma-separated list of schedule aliases (`@hourly`, `@daily`, `@midnight`, `@weekly`, `@monthly`, `@annually`, `@yearly`), or leave empty to disable automatic snapshots.
-
+cronの式（`<minute> <hour> <dom> <month> <dow>`）かスケジュールのエイリアス（`@hourly`, `@daily`, `@midnight`, `@weekly`, `@monthly`, `@annually`, `@yearly`）のカンマ区切りリストを設定するか、あるいは自動スナップショットを無効にするためには空にしてください。
 ```
 
 ```{config:option} snapshots.schedule.stopped instance-snapshots
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "Whether to automatically snapshot stopped instances"
+:shortdesc: "停止したインスタンスのスナップショットを自動で作成するかどうか"
 :type: "bool"
 
 ```
@@ -1111,231 +1101,231 @@ Specify either a cron expression (`<minute> <hour> <dom> <month> <dow>`), a comm
 <!-- config group instance-snapshots end -->
 <!-- config group instance-volatile start -->
 ```{config:option} volatile.<name>.apply_quota instance-volatile
-:shortdesc: "Disk quota"
+:shortdesc: "ディスククォータ"
 :type: "string"
-The disk quota is applied the next time the instance starts.
+ディスククォータはインスタンスの次回起動時に適用されます。
 ```
 
 ```{config:option} volatile.<name>.ceph_rbd instance-volatile
-:shortdesc: "RBD device path for Ceph disk devices"
+:shortdesc: "CephディスクデバイスのRBDデバイスパス"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.<name>.host_name instance-volatile
-:shortdesc: "Network device name on the host"
+:shortdesc: "ホスト上のネットワークデバイス名"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.<name>.hwaddr instance-volatile
-:shortdesc: "Network device MAC address"
+:shortdesc: "ネットワークデバイスのMACアドレス"
 :type: "string"
-The network device MAC address is used when no `hwaddr` property is set on the device itself.
+ネットワークデバイスのMACアドレスはデバイス自身に`hwaddr`プロパティが設定されていない場合に使用されます。
 ```
 
 ```{config:option} volatile.<name>.last_state.created instance-volatile
-:shortdesc: "Whether the network device physical device was created"
+:shortdesc: "ネットワーク物理デバイスが作成されたかどうか"
 :type: "string"
-Possible values are `true` or `false`.
+取りうる値は`true`または`false`。
 ```
 
 ```{config:option} volatile.<name>.last_state.hwaddr instance-volatile
-:shortdesc: "Network device original MAC"
+:shortdesc: "ネットワークデバイスの元のMAC"
 :type: "string"
-The original MAC that was used when moving a physical device into an instance.
+物理デバイスがインスタンスに移動する際に使われた元のMAC
 ```
 
 ```{config:option} volatile.<name>.last_state.ip_addresses instance-volatile
-:shortdesc: "Last used IP addresses"
+:shortdesc: "最後に使用したIPアドレス"
 :type: "string"
-Comma-separated list of the last used IP addresses of the network device.
+ネットワークデバイスの最後に使用されたIPアドレスのカンマ区切りリスト。
 ```
 
 ```{config:option} volatile.<name>.last_state.mtu instance-volatile
-:shortdesc: "Network device original MTU"
+:shortdesc: "ネットワークデバイスの元のMTU"
 :type: "string"
-The original MTU that was used when moving a physical device into an instance.
+物理デバイスがインスタンスに移動する際に使われた元のMTU
 ```
 
 ```{config:option} volatile.<name>.last_state.pci.driver instance-volatile
-:shortdesc: "PCI original host driver"
+:shortdesc: "PCIの元のホストドライバー"
 :type: "string"
-The original host driver for the PCI device.
+PCIデバイスの元のホストドライバー。
 ```
 
 ```{config:option} volatile.<name>.last_state.pci.parent instance-volatile
-:shortdesc: "PCI parent host device"
+:shortdesc: "PCIの親のホストデバイス"
 :type: "string"
-The parent host device used when allocating a PCI device to an instance.
+PCIデバイスをインスタンスに割り当てる際に使用された親のホストデバイス。
 ```
 
 ```{config:option} volatile.<name>.last_state.pci.slot.name instance-volatile
-:shortdesc: "PCI parent slot name"
+:shortdesc: "PCIの親のスロット名"
 :type: "string"
-The parent host device PCI slot name.
+親のホストデバイスのPCIスロット名。
 ```
 
 ```{config:option} volatile.<name>.last_state.usb.bus instance-volatile
-:shortdesc: "USB bus address"
+:shortdesc: "USBバスアドレス"
 :type: "string"
-The original USB bus address.
+元のUSBバスアドレス。
 ```
 
 ```{config:option} volatile.<name>.last_state.usb.device instance-volatile
-:shortdesc: "USB device identifier"
+:shortdesc: "USBデバイス識別子"
 :type: "string"
-The original USB device identifier.
+元のUSBデバイス識別子。
 ```
 
 ```{config:option} volatile.<name>.last_state.vdpa.name instance-volatile
-:shortdesc: "VDPA device name"
+:shortdesc: "VDPAデバイス名"
 :type: "string"
-The VDPA device name used when moving a VDPA device file descriptor into an instance.
+VDPAデバイスファイルディスクリプターをインスタンスに移動する際に使用されたVPDAデバイス名。
 ```
 
 ```{config:option} volatile.<name>.last_state.vf.hwaddr instance-volatile
-:shortdesc: "SR-IOV virtual function original MAC"
+:shortdesc: "SR-IOV仮想ファンクションの元のMAC"
 :type: "string"
-The original MAC used when moving a VF into an instance.
+VF（仮想ファンクション）をインスタンスに移動する際に使用された元のMAC。
 ```
 
 ```{config:option} volatile.<name>.last_state.vf.id instance-volatile
-:shortdesc: "SR-IOV virtual function ID"
+:shortdesc: "SR-IOV仮想ファンクションID"
 :type: "string"
-The ID used when moving a VF into an instance.
+VF（仮想ファンクション）をインスタンスに移動する際に使用されたID。
 ```
 
 ```{config:option} volatile.<name>.last_state.vf.parent instance-volatile
-:shortdesc: "SR-IOV parent host device"
+:shortdesc: "SR-IOV親のホストデバイス"
 :type: "string"
-The parent host device used when allocating a VF into an instance.
+VF（仮想ファンクション）をインスタンスに移動する際に使用された親のホストデバイス。
 ```
 
 ```{config:option} volatile.<name>.last_state.vf.spoofcheck instance-volatile
-:shortdesc: "SR-IOV virtual function original spoof check setting"
+:shortdesc: "SR-IOV仮想ファンクションの元のspoolチェック設定"
 :type: "string"
-The original spoof check setting used when moving a VF into an instance.
+VF（仮想ファンクション）をインスタンスに移動する際に使用された元のspoolチェック設定。
 ```
 
 ```{config:option} volatile.<name>.last_state.vf.vlan instance-volatile
-:shortdesc: "SR-IOV virtual function original VLAN"
+:shortdesc: "SR-IOV仮想ファンクションの元のVLAN"
 :type: "string"
-The original VLAN used when moving a VF into an instance.
+VF（仮想ファンクション）をインスタンスに移動する際に使用された元のVLAN。
 ```
 
 ```{config:option} volatile.<name>.mig.uuid instance-volatile
-:shortdesc: "MIG instance UUID"
+:shortdesc: "MIGインスタンスUUID"
 :type: "string"
-The NVIDIA MIG instance UUID.
+NVIDIA MIGインスタンスUUID。
 ```
 
 ```{config:option} volatile.<name>.name instance-volatile
-:shortdesc: "Network interface name inside of the instance"
+:shortdesc: "インスタンス内部のネットワークインタフェース名"
 :type: "string"
-The network interface name inside of the instance when no `name` property is set on the device itself.
+デバイス自身に`name`プロパティがせってされていない場合のインスタンス内部のネットワークインタフェース名。
 ```
 
 ```{config:option} volatile.<name>.vgpu.uuid instance-volatile
-:shortdesc: "virtual GPU instance UUID"
+:shortdesc: "仮想GPUインスタンスUUID"
 :type: "string"
-The NVIDIA virtual GPU instance UUID.
+NVIDIA仮想GPUインスタンスUUID。
 ```
 
 ```{config:option} volatile.apply_nvram instance-volatile
-:shortdesc: "Whether to regenerate VM NVRAM the next time the instance starts"
+:shortdesc: "インスタンスの次回起動時にVM NVRAMを再生成するかどうか"
 :type: "bool"
 
 ```
 
 ```{config:option} volatile.apply_template instance-volatile
-:shortdesc: "Template hook"
+:shortdesc: "テンプレートフック"
 :type: "string"
-The template with the given name is triggered upon next startup.
+次回起動時に指定された名前のテンプレートが起動されます。
 ```
 
 ```{config:option} volatile.base_image instance-volatile
-:shortdesc: "Hash of the base image"
+:shortdesc: "ベースイメージのハッシュ値"
 :type: "string"
-The hash of the image that the instance was created from (empty if the instance was not created from an image).
+インスタンスの作成に使われたイメージのハッシュ値（インスタンスがイメージから作成されなかった場合は空）
 ```
 
 ```{config:option} volatile.cloud_init.instance-id instance-volatile
-:shortdesc: "`instance-id` (UUID) exposed to `cloud-init`"
+:shortdesc: "`cloud-init`に公開される`instance-id`（UUID）"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.cluster.group instance-volatile
-:shortdesc: "The original cluster group for the instance"
+:shortdesc: "インスタンスの元のクラスタグループ"
 :type: "string"
-The cluster group(s) that the instance was restricted to at creation time.
-This is used during re-scheduling events like an evacuation to keep the instance within the requested set.
+インスタンスが作成時に限定されていた1つまたは複数のクラスタグループ。
+これは退避のようなイベントをスケジュールする際にインスタンスを指定した組の中に維持するのに使われます。
 ```
 
 ```{config:option} volatile.cpu.nodes instance-volatile
-:shortdesc: "Instance NUMA node"
+:shortdesc: "インスタンスのNUMAノード"
 :type: "string"
-The NUMA node that was selected for the instance.
+インスタンスに割り当てられたNUMAノード。
 ```
 
 ```{config:option} volatile.evacuate.origin instance-volatile
-:shortdesc: "The origin of the evacuated instance"
+:shortdesc: "退避されたインスタンスの起源"
 :type: "string"
-The cluster member that the instance lived on before evacuation.
+退避前にインスタンスが存在していたクラスタメンバー。
 ```
 
 ```{config:option} volatile.idmap.base instance-volatile
-:shortdesc: "The first ID in the instance's primary idmap range"
+:shortdesc: "インスタンスのプライマリidmap範囲内の最初のID"
 :type: "integer"
 
 ```
 
 ```{config:option} volatile.idmap.current instance-volatile
-:shortdesc: "The idmap currently in use by the instance"
+:shortdesc: "インスタンスで現在使用中のidmap"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.idmap.next instance-volatile
-:shortdesc: "The idmap to use the next time the instance starts"
+:shortdesc: "インスタンスの次回起動時に使用するidmap"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.last_state.idmap instance-volatile
-:shortdesc: "Serialized instance UID/GID map"
+:shortdesc: "シリアライズされたインスタンスのUID/GIDマップ"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.last_state.power instance-volatile
-:shortdesc: "Instance state as of last host shutdown"
+:shortdesc: "前回のホスト停止時点のインスタンスの状態"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.last_state.ready instance-volatile
-:shortdesc: "Instance marked itself as ready"
+:shortdesc: "準備完了とマークされたインスタンス"
 :type: "string"
 
 ```
 
 ```{config:option} volatile.uuid instance-volatile
-:shortdesc: "Instance UUID"
+:shortdesc: "インスタンスUUID"
 :type: "string"
-The instance UUID is globally unique across all servers and projects.
+インスタンスUUIDは全てのサーバーとプロジェクトに対してグローバルにユニークです。
 ```
 
 ```{config:option} volatile.uuid.generation instance-volatile
-:shortdesc: "Instance generation UUID"
+:shortdesc: "インスタンス生成UUID"
 :type: "string"
-The instance generation UUID changes whenever the instance's place in time moves backwards.
-It is globally unique across all servers and projects.
+インスタンス生成UUIDはインスタンスの時刻が遡るたびに変更されます。
+全てのサーバーとプロジェクトに対してグローバルにユニークです。
 ```
 
 ```{config:option} volatile.vsock_id instance-volatile
-:shortdesc: "Instance `vsock ID` used as of last start"
+:shortdesc: "前回起動時点でのインスタンスの`vsock ID`"
 :type: "string"
 
 ```
@@ -1344,84 +1334,84 @@ It is globally unique across all servers and projects.
 <!-- config group kernel-limits start -->
 ```{config:option} limits.kernel.as kernel-limits
 :resource: "`RLIMIT_AS`"
-:shortdesc: "Maximum size of the process's virtual memory"
+:shortdesc: "プロセスの仮想メモリーの最大サイズ"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.core kernel-limits
 :resource: "`RLIMIT_CORE`"
-:shortdesc: "Maximum size of the process's core dump file"
+:shortdesc: "プロセスのコアダンプファイルの最大サイズ"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.cpu kernel-limits
 :resource: "`RLIMIT_CPU`"
-:shortdesc: "Limit in seconds on the amount of CPU time the process can consume"
+:shortdesc: "プロセスが使えるCPU時間の秒単位の制限"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.data kernel-limits
 :resource: "`RLIMIT_DATA`"
-:shortdesc: "Maximum size of the process's data segment"
+:shortdesc: "プロセスのデータセグメントの最大サイズ"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.fsize kernel-limits
 :resource: "`RLIMIT_FSIZE`"
-:shortdesc: "Maximum size of files the process may create"
+:shortdesc: "プロセスが作成できるファイルの最大サイズ"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.locks kernel-limits
 :resource: "`RLIMIT_LOCKS`"
-:shortdesc: "Limit on the number of file locks that this process may establish"
+:shortdesc: "プロセスが確立できるファイルロック数の制限"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.memlock kernel-limits
 :resource: "`RLIMIT_MEMLOCK`"
-:shortdesc: "Limit on the number of bytes of memory that the process may lock in RAM"
+:shortdesc: "プロセスがRAM上でロックできるメモリーのバイト数の制限"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.nice kernel-limits
 :resource: "`RLIMIT_NICE`"
-:shortdesc: "Maximum value to which the process's nice value can be raised"
+:shortdesc: "引き上げることができるプロセスのnice値の最大値"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.nofile kernel-limits
 :resource: "`RLIMIT_NOFILE`"
-:shortdesc: "Maximum number of open files for the process"
+:shortdesc: "プロセスがオープンできるファイルの最大値"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.nproc kernel-limits
 :resource: "`RLIMIT_NPROC`"
-:shortdesc: "Maximum number of processes that can be created for the user of the calling process"
+:shortdesc: "呼び出し元プロセスのユーザーが作れるプロセスの最大数"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.rtprio kernel-limits
 :resource: "`RLIMIT_RTPRIO`"
-:shortdesc: "Maximum value on the real-time-priority that may be set for this process"
+:shortdesc: "プロセスに対して設定できるリアルタイム優先度の最大値"
 :type: "string"
 
 ```
 
 ```{config:option} limits.kernel.sigpending kernel-limits
 :resource: "`RLIMIT_SIGPENDING`"
-:shortdesc: "Limit on the number of bytes of memory that the process may lock in RAM"
+:shortdesc: "呼び出し元プロセスのユーザーがキューに入れられるシグナルの最大数"
 :type: "string"
 
 ```
@@ -1429,54 +1419,54 @@ It is globally unique across all servers and projects.
 <!-- config group kernel-limits end -->
 <!-- config group network_integration-common start -->
 ```{config:option} user.* network_integration-common
-:shortdesc: "Free form user key/value storage"
+:shortdesc: "自由形式のユーザーのkey/valueストレージ"
 :type: "string"
-User keys can be used in search.
+ユーザーキーは検索で使用できます。
 ```
 
 <!-- config group network_integration-common end -->
 <!-- config group network_integration-ovn start -->
 ```{config:option} ovn.ca_cert network_integration-ovn
 :scope: "global"
-:shortdesc: "OVN SSL certificate authority for the inter-connection database"
+:shortdesc: "相互接続データベースのためのOVN SSL証明書認証局"
 :type: "string"
 
 ```
 
 ```{config:option} ovn.client_cert network_integration-ovn
 :scope: "global"
-:shortdesc: "OVN SSL client certificate"
+:shortdesc: "OVN SSLクライアント証明書"
 :type: "string"
 
 ```
 
 ```{config:option} ovn.client_key network_integration-ovn
 :scope: "global"
-:shortdesc: "OVN SSL client key"
+:shortdesc: "OVN SSLクライアント鍵"
 :type: "string"
 
 ```
 
 ```{config:option} ovn.northbound_connection network_integration-ovn
 :scope: "global"
-:shortdesc: "OVN northbound inter-connection connection string"
+:shortdesc: "OVN northbound相互接続の接続文字列"
 :type: "string"
 
 ```
 
 ```{config:option} ovn.southbound_connection network_integration-ovn
 :scope: "global"
-:shortdesc: "OVN southbound inter-connection connection string"
+:shortdesc: "OVN southbound相互接続の接続文字列"
 :type: "string"
 
 ```
 
 ```{config:option} ovn.transit.pattern network_integration-ovn
 :defaultdesc: "`ts-incus-{{ integrationName }}-{{ projectName }}-{{ networkname }}`"
-:shortdesc: "Template for the transit switch name"
+:shortdesc: "トランジットのスイッチ名のテンプレート"
 :type: "string"
-Specify a Pongo2 template string that represents the transit switch name.
-This template gets access to the project name (`projectName`), integration name (`integrationName`) and network name (`networkName`).
+トランジットのスイッチ名を表すPong2のテンプレート文字列を指定します。
+このテンプレートではプロジェクト名（`projectName`）、インテグレーション名（`integrationName`）、ネットワーク名（`networkName`）の変数が使えます。
 
 ```
 
@@ -1484,7 +1474,7 @@ This template gets access to the project name (`projectName`), integration name 
 <!-- config group network_zone-common start -->
 ```{config:option} dns.nameservers network_zone-common
 :required: "no"
-:shortdesc: "Comma-separated list of DNS server FQDNs (for NS records)"
+:shortdesc: "（NS レコード用の）DNS サーバーの FQDN のカンマ区切りリスト"
 :type: "string set"
 
 ```
@@ -1492,28 +1482,28 @@ This template gets access to the project name (`projectName`), integration name 
 ```{config:option} network.nat network_zone-common
 :defaultdesc: "`true`"
 :required: "no"
-:shortdesc: "Whether to generate records for NAT-ed subnets"
+:shortdesc: "NAT されたサブネットのレコードを生成するかどうか"
 :type: "bool"
 
 ```
 
 ```{config:option} peers.NAME.address network_zone-common
 :required: "no"
-:shortdesc: "IP address of a DNS server"
+:shortdesc: "DNS サーバーの IP アドレス"
 :type: "string"
 
 ```
 
 ```{config:option} peers.NAME.key network_zone-common
 :required: "no"
-:shortdesc: "TSIG key for the server"
+:shortdesc: "サーバーの TSIG キー"
 :type: "string"
 
 ```
 
 ```{config:option} user.* network_zone-common
 :required: "no"
-:shortdesc: "User-provided free-form key/value pairs"
+:shortdesc: "ユーザー提供の自由形式のキー・バリューペア"
 :type: "string"
 
 ```
@@ -1523,15 +1513,15 @@ This template gets access to the project name (`projectName`), integration name 
 ```{config:option} features.images project-features
 :defaultdesc: "`false`"
 :initialvaluedesc: "`true`"
-:shortdesc: "Whether to use a separate set of images for the project"
+:shortdesc: "プロジェクトに異なる組のイメージを使用するかどうか"
 :type: "bool"
-This setting applies to both images and image aliases.
+この設定はイメージとイメージエイリアスの両方に適用されます。
 ```
 
 ```{config:option} features.networks project-features
 :defaultdesc: "`false`"
 :initialvaluedesc: "`false`"
-:shortdesc: "Whether to use a separate set of networks for the project"
+:shortdesc: "プロジェクトに異なる組のネットワークを使用するかどうか"
 :type: "bool"
 
 ```
@@ -1539,7 +1529,7 @@ This setting applies to both images and image aliases.
 ```{config:option} features.networks.zones project-features
 :defaultdesc: "`false`"
 :initialvaluedesc: "`false`"
-:shortdesc: "Whether to use a separate set of network zones for the project"
+:shortdesc: "プロジェクトに異なる組のネットワークゾーンを使用するかどうか"
 :type: "bool"
 
 ```
@@ -1547,7 +1537,7 @@ This setting applies to both images and image aliases.
 ```{config:option} features.profiles project-features
 :defaultdesc: "`false`"
 :initialvaluedesc: "`true`"
-:shortdesc: "Whether to use a separate set of profiles for the project"
+:shortdesc: "プロジェクトに異なる組のプロファイルを使用するかどうか"
 :type: "bool"
 
 ```
@@ -1555,7 +1545,7 @@ This setting applies to both images and image aliases.
 ```{config:option} features.storage.buckets project-features
 :defaultdesc: "`false`"
 :initialvaluedesc: "`true`"
-:shortdesc: "Whether to use a separate set of storage buckets for the project"
+:shortdesc: "プロジェクトに異なる組のストレージバケットを使用するかどうか"
 :type: "bool"
 
 ```
@@ -1563,7 +1553,7 @@ This setting applies to both images and image aliases.
 ```{config:option} features.storage.volumes project-features
 :defaultdesc: "`false`"
 :initialvaluedesc: "`true`"
-:shortdesc: "Whether to use a separate set of storage volumes for the project"
+:shortdesc: "プロジェクトに異なる組のストレージボリュームを使用するかどうか"
 :type: "bool"
 
 ```
@@ -1571,49 +1561,49 @@ This setting applies to both images and image aliases.
 <!-- config group project-features end -->
 <!-- config group project-limits start -->
 ```{config:option} limits.containers project-limits
-:shortdesc: "Maximum number of containers that can be created in the project"
+:shortdesc: "プロジェクト内で作成できるコンテナの最大数"
 :type: "integer"
 
 ```
 
 ```{config:option} limits.cpu project-limits
-:shortdesc: "Maximum number of CPUs to use in the project"
+:shortdesc: "プロジェクト内で使用できるCPUの最大数"
 :type: "integer"
-This value is the maximum value for the sum of the individual {config:option}`instance-resource-limits:limits.cpu` configurations set on the instances of the project.
+この値はプロジェクトのインスタンスに設定される個々の{config:option}`instance-resource-limits:limits.cpu`設定の合計の最大値です。
 ```
 
 ```{config:option} limits.disk project-limits
-:shortdesc: "Maximum disk space used by the project"
+:shortdesc: "プロジェクトで使用できる最大のディスクスペース"
 :type: "string"
-This value is the maximum value of the aggregate disk space used by all instance volumes, custom volumes, and images of the project.
+この値はプロジェクトのすべてのインスタンスボリューム、カスタムボリューム、イメージで使用されるディスクスペース合計の最大値です。
 ```
 
 ```{config:option} limits.instances project-limits
-:shortdesc: "Maximum number of instances that can be created in the project"
+:shortdesc: "プロジェクト内で作成できるインスタンスの最大数"
 :type: "integer"
 
 ```
 
 ```{config:option} limits.memory project-limits
-:shortdesc: "Usage limit for the host's memory for the project"
+:shortdesc: "プロジェクトで使えるホストのメモリの使用リミット"
 :type: "string"
-The value is the maximum value for the sum of the individual {config:option}`instance-resource-limits:limits.memory` configurations set on the instances of the project.
+この値はプロジェクトのインスタンスに設定される個々の{config:option}`instance-resource-limits:limits.memory`設定の合計の最大値です。
 ```
 
 ```{config:option} limits.networks project-limits
-:shortdesc: "Maximum number of networks that the project can have"
+:shortdesc: "プロジェクトが持てるネットワークの最大数"
 :type: "integer"
 
 ```
 
 ```{config:option} limits.processes project-limits
-:shortdesc: "Maximum number of processes within the project"
+:shortdesc: "プロジェクト内のプロセスの最大数"
 :type: "integer"
-This value is the maximum value for the sum of the individual {config:option}`instance-resource-limits:limits.processes` configurations set on the instances of the project.
+この値はプロジェクトのインスタンスに設定される個々の{config:option}`instance-resource-limits:limits.processes`設定の合計の最大値です。
 ```
 
 ```{config:option} limits.virtual-machines project-limits
-:shortdesc: "Maximum number of VMs that can be created in the project"
+:shortdesc: "プロジェクト内で作成できるVMの最大数"
 :type: "integer"
 
 ```
@@ -1622,260 +1612,259 @@ This value is the maximum value for the sum of the individual {config:option}`in
 <!-- config group project-restricted start -->
 ```{config:option} restricted project-restricted
 :defaultdesc: "`false`"
-:shortdesc: "Whether to block access to security-sensitive features"
+:shortdesc: "セキュリティセンシティブな機能へのアクセスをブロックするかどうか"
 :type: "bool"
-This option must be enabled to allow the `restricted.*` keys to take effect.
-To temporarily remove the restrictions, you can disable this option instead of clearing the related keys.
+`restricted.*`キーが有効になるにはこのオプションを有効にする必要があります。
+制限を一時的に解除するには、関連するキーを削除する代わりにこのオプションを無効にできます。
 ```
 
 ```{config:option} restricted.backups project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent creating instance or volume backups"
+:shortdesc: "インスタンスやボリュームバックアップの作成を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.cluster.groups project-restricted
-:shortdesc: "Cluster groups that can be targeted"
+:shortdesc: "ターゲットできるクラスタグループ"
 :type: "string"
-If specified, this option prevents targeting cluster groups other than the provided ones.
+設定された場合、このオプションはクラスタグループが指定されたクラスタグループ以外にターゲットするのを禁止します。
 ```
 
 ```{config:option} restricted.cluster.target project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent targeting of cluster members"
+:shortdesc: "クラスタメンバーのターゲットを禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
-When set to `allow`, this option allows targeting of cluster members (either directly or via a group) when creating or moving instances.
+設定できる値は`allow`か`block`です。
+`allow`に設定すると、このオプションはインスタンスの作成や移動時にクラスタメンバー（直接あるいはグループ経由で）のターゲットを許可します。
 ```
 
 ```{config:option} restricted.containers.interception project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using system call interception options"
-:type: "string"
-Possible values are `allow`, `block`, or `full`.
-When set to `allow`, interception options that are usually safe are allowed.
-File system mounting remains blocked.
+:shortdesc: "システムコールインターセプションのオプションの使用を禁止するかどうか"
+設定できる値は`allow`、`block`、`full`です。
+`allow`に設定すると、通常安全なインターセプションオプションは許可されます。
+ファイルシステムのマウントはブロックされたままです。
 ```
 
 ```{config:option} restricted.containers.lowlevel project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using low-level container options"
+:shortdesc: "低レベルなコンテナオプションの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
-When set to `allow`, low-level container options like {config:option}`instance-raw:raw.lxc`, {config:option}`instance-raw:raw.idmap`, `volatile.*`, etc. can be used.
+設定できる値は`allow`か`block`です。
+`allow`に設定すると、{config:option}`instance-raw:raw.lxc`、{config:option}`instance-raw:raw.idmap`、`volatile.*`などの低レベルコンテナオプションが使用できます。
 ```
 
 ```{config:option} restricted.containers.nesting project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent running nested Incus"
+:shortdesc: "ネストしたIncusの稼働を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
-When set to `allow`, {config:option}`instance-security:security.nesting` can be set to `true` for an instance.
+設定できる値は`allow`か`block`です。
+`allow`に設定すると、インスタンスに対して{config:option}`instance-security:security.nesting`を`true`に設定できます。
 ```
 
 ```{config:option} restricted.containers.privilege project-restricted
 :defaultdesc: "`unprivileged`"
-:shortdesc: "Which settings for privileged containers to prevent"
+:shortdesc: "特権コンテナのどの設定を禁止するか"
 :type: "string"
-Possible values are `unprivileged`, `isolated`, and `allow`.
+設定できる値は`unprivileged`、`isolated`、`allow`です。
 
-- When set to `unpriviliged`, this option prevents setting {config:option}`instance-security:security.privileged` to `true`.
-- When set to `isolated`, this option prevents setting {config:option}`instance-security:security.privileged` and {config:option}`instance-security:security.idmap.isolated` to `true`.
-- When set to `allow`, there is no restriction.
+- `unpriviliged`に設定すると、このオプションは{config:option}`instance-security:security.privileged`を`true`に設定するのを禁止します。
+- `isolated`に設定すると、このオプションは{config:option}`instance-security:security.privileged`と{config:option}`instance-security:security.idmap.isolated`を`true`に設定するのを禁止します。
+- `allow`に設定すると、制限はありません。
 ```
 
 ```{config:option} restricted.devices.disk project-restricted
 :defaultdesc: "`managed`"
-:shortdesc: "Which disk devices can be used"
+:shortdesc: "どのディスクデバイスが使用できるか"
 :type: "string"
-Possible values are `allow`, `block`, or `managed`.
+設定できる値は`allow`、`block`、`managed`です。
 
-- When set to `block`, this option prevents using all disk devices except the root one.
-- When set to `managed`, this option allows using disk devices only if `pool=` is set.
-- When set to `allow`, there is no restriction on which disk devices can be used.
+- `block`に設定すると、このオプションはroot以外のすべてのディスクデバイスの使用を禁止します。
+- `managed`に設定すると、このオプションは`pool=`が設定されいているディスクデバイスの使用のみを許可します。
+- `allow`に設定すると、どのディスクデバイスを使えるかについて制限はありません。
 ```
 
 ```{config:option} restricted.devices.disk.paths project-restricted
-:shortdesc: "Which `source` can be used for `disk` devices"
+:shortdesc: "`disk`デバイスにどの`source`が使用できるか"
 :type: "string"
-If {config:option}`project-restricted:restricted.devices.disk` is set to `allow`, this option controls which `source` can be used for `disk` devices.
-Specify a comma-separated list of path prefixes that restrict the `source` setting.
-If this option is left empty, all paths are allowed.
+{config:option}`project-restricted:restricted.devices.disk`が`allow`に設定された場合、このオプションは`disk`デバイスにどの`source`を使用できるかを制御します。
+`source`設定を制限するパスの接頭辞のカンマ区切りリストを指定します。
+このオプションが空の場合、すべてのパスが許可されます。
 ```
 
 ```{config:option} restricted.devices.gpu project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `gpu`"
+:shortdesc: "タイプ`gpu`のデバイスの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.devices.infiniband project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `infiniband`"
+:shortdesc: "タイプ`infiniband`のデバイスの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.devices.nic project-restricted
 :defaultdesc: "`managed`"
-:shortdesc: "Which network devices can be used"
+:shortdesc: "どのネットワークデバイスが使用できるか"
 :type: "string"
-Possible values are `allow`, `block`, or `managed`.
+設定できる値は`allow`、`block`、`managed`です。
 
-- When set to `block`, this option prevents using all network devices.
-- When set to `managed`, this option allows using network devices only if `network=` is set.
-- When set to `allow`, there is no restriction on which network devices can be used.
+- `block`に設定すると、このオプションはすべてのネットワークデバイスの使用を禁止します。
+- `managed`に設定すると、このオプションは`network=`が設定されいているネットワークデバイスの使用のみを許可します。
+- `allow`に設定すると、どのネットワークデバイスを使えるかについて制限はありません。
 ```
 
 ```{config:option} restricted.devices.pci project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `pci`"
+:shortdesc: "タイプ`pci`のデバイスの使用を禁止するかどうか"
 :type: "string"
 Possible values are `allow` or `block`.
 ```
 
 ```{config:option} restricted.devices.proxy project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `proxy`"
+:shortdesc: "タイプ`proxy`のデバイスの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.devices.unix-block project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `unix-block`"
+:shortdesc: "タイプ`unix-block`のデバイスの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.devices.unix-char project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `unix-char`"
+:shortdesc: "タイプ`unix-char`のデバイスの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.devices.unix-hotplug project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `unix-hotplug`"
+:shortdesc: "タイプ`unix-hotplug`のデバイスの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.devices.usb project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using devices of type `usb`"
+:shortdesc: "タイプ`usb`のデバイスの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
+設定できる値は`allow`か`block`です。
 ```
 
 ```{config:option} restricted.idmap.gid project-restricted
-:shortdesc: "Which host GID ranges are allowed in `raw.idmap`"
+:shortdesc: "`raw.idmap`内でどのGIDの範囲を許可するか"
 :type: "string"
-This option specifies the host GID ranges that are allowed in the instance's {config:option}`instance-raw:raw.idmap` setting.
+このオプションはインスタンスの{config:option}`instance-raw:raw.idmap`設定内で許可されるホストのGIDの範囲を指定します。
 ```
 
 ```{config:option} restricted.idmap.uid project-restricted
-:shortdesc: "Which host UID ranges are allowed in `raw.idmap`"
+:shortdesc: "`raw.idmap`内でどのUIDの範囲を許可するか"
 :type: "string"
-This option specifies the host UID ranges that are allowed in the instance's {config:option}`instance-raw:raw.idmap` setting.
+このオプションはインスタンスの{config:option}`instance-raw:raw.idmap`設定内で許可されるホストのUIDの範囲を指定します。
 ```
 
 ```{config:option} restricted.networks.access project-restricted
-:shortdesc: "Which network names are allowed for use in this project"
+:shortdesc: "このプロジェクト内でどのネットワーク名が使用できるか"
 :type: "string"
-Specify a comma-delimited list of network names that are allowed for use in this project.
-If this option is not set, all networks are accessible.
+このプロジェクト内で使用できるネットワーク名のカンマ区切りリストを指定します。
+このオプションを設定しない場合、すべてのネットワークが使用できます。
 
-Note that this setting depends on the {config:option}`project-restricted:restricted.devices.nic` setting.
+この設定は{config:option}`project-restricted:restricted.devices.nic`設定に依存することに注意してください。
 ```
 
 ```{config:option} restricted.networks.integrations project-restricted
-:shortdesc: "Which network integrations can be used in this project"
+:shortdesc: "このプロジェクト内でどのネットワーク統合が使用できるか"
 :type: "string"
-Specify a comma-delimited list of network integrations that can be used by networks in this project.
+このプロジェクト内のネットワークで使用できるネットワーク統合のカンマ区切りリストを指定します。
 ```
 
 ```{config:option} restricted.networks.subnets project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Which network subnets are allocated for use in this project"
+:shortdesc: "このプロジェクト内で使うためにどのネットワークサブネットが割り当てできるか"
 :type: "string"
-Specify a comma-delimited list of network subnets from the uplink networks that are allocated for use in this project.
-Use the form `<uplink>:<subnet>`.
+このプロジェクト内で使うために割り当てられるuplinkのネットワークからのネットワークサブネットのカンマ区切りリストを指定します。
+`<uplink>:<subnet>`の形式で指定します。
 ```
 
 ```{config:option} restricted.networks.uplinks project-restricted
-:shortdesc: "Which network names can be used as uplink in this project"
+:shortdesc: "このプロジェクト内でどのネットワーク名がuplinkとして使用できるか"
 :type: "string"
-Specify a comma-delimited list of network names that can be used as uplink for networks in this project.
+このプロジェクト内のネットワークのuplinkとして使用できるネットワーク名のカンマ区切りリストを指定します。
 ```
 
 ```{config:option} restricted.networks.zones project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Which network zones can be used in this project"
+:shortdesc: "このプロジェクト内でどのネットワークゾーンが使用できるか"
 :type: "string"
-Specify a comma-delimited list of network zones that can be used (or something under them) in this project.
+このプロジェクト内で使用できるネットワークゾーン（あるいはその配下の何か）のカンマ区切りリストを指定します。
 ```
 
 ```{config:option} restricted.snapshots project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent creating instance or volume snapshots"
+:shortdesc: "インスタンスやボリュームスナップショットの作成を禁止するかどうか"
 :type: "string"
 
 ```
 
 ```{config:option} restricted.virtual-machines.lowlevel project-restricted
 :defaultdesc: "`block`"
-:shortdesc: "Whether to prevent using low-level VM options"
+:shortdesc: "低レベルのVMオプションの使用を禁止するかどうか"
 :type: "string"
-Possible values are `allow` or `block`.
-When set to `allow`, low-level VM options like {config:option}`instance-raw:raw.qemu`, `volatile.*`, etc. can be used.
+設定できる値は`allow`か`block`です。
+`allow`と設定すると、{config:option}`instance-raw:raw.qemu`、`volatile.*`、などの低レベルのVMオプションが使用できます。
 ```
 
 <!-- config group project-restricted end -->
 <!-- config group project-specific start -->
 ```{config:option} backups.compression_algorithm project-specific
-:shortdesc: "Compression algorithm to use for backups"
+:shortdesc: "バックアップに使用できる圧縮アルゴリズム"
 :type: "string"
-Specify which compression algorithm to use for backups in this project.
-Possible values are `bzip2`, `gzip`, `lzma`, `xz`, or `none`.
+このプロジェクト内でバックアップに使用できる圧縮アルゴリズムを指定します。
+設定できる値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
 ```
 
 ```{config:option} images.auto_update_cached project-specific
-:shortdesc: "Whether to automatically update cached images in the project"
+:shortdesc: "このプロジェクト内のキャッシュされたイメージを自動的に更新するかどうか"
 :type: "bool"
 
 ```
 
 ```{config:option} images.auto_update_interval project-specific
-:shortdesc: "Interval at which to look for updates to cached images"
+:shortdesc: "キャッシュされたイメージの更新を確認する間隔"
 :type: "integer"
-Specify the interval in hours.
-To disable looking for updates to cached images, set this option to `0`.
+間隔を時間で指定します。
+キャッシュされたイメージの更新の確認を無効化するには、このオプションを`0`に設定します。
 ```
 
 ```{config:option} images.compression_algorithm project-specific
-:shortdesc: "Compression algorithm to use for new images in the project"
+:shortdesc: "このプロジェクト内の新しいイメージの圧縮アルゴリズム"
 :type: "string"
-Possible values are `bzip2`, `gzip`, `lzma`, `xz`, or `none`.
+設定できる値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
 ```
 
 ```{config:option} images.default_architecture project-specific
-:shortdesc: "Default architecture to use in a mixed-architecture cluster"
+:shortdesc: "アーキテクチャー混在のクラスタ内で使用するデフォルトのアーキテクチャー"
 :type: "string"
 
 ```
 
 ```{config:option} images.remote_cache_expiry project-specific
-:shortdesc: "When an unused cached remote image is flushed in the project"
+:shortdesc: "プロジェクト内で使用していないキャッシュされたリモートのイメージをいつ削除するか"
 :type: "integer"
-Specify the number of days after which the unused cached image expires.
+使用していないキャッシュされたイメージが期限切れになる日数を指定します。
 ```
 
 ```{config:option} user.* project-specific
-:shortdesc: "User-provided free-form key/value pairs"
+:shortdesc: "ユーザーが指定する自由形式のキー／バリューペア"
 :type: "string"
 
 ```
@@ -1885,7 +1874,7 @@ Specify the number of days after which the unused cached image expires.
 ```{config:option} acme.agree_tos server-acme
 :defaultdesc: "`false`"
 :scope: "global"
-:shortdesc: "Agree to ACME terms of service"
+:shortdesc: "ACMEの利用規約に同意する"
 :type: "bool"
 
 ```
@@ -1893,21 +1882,21 @@ Specify the number of days after which the unused cached image expires.
 ```{config:option} acme.ca_url server-acme
 :defaultdesc: "`https://acme-v02.api.letsencrypt.org/directory`"
 :scope: "global"
-:shortdesc: "URL to the directory resource of the ACME service"
+:shortdesc: "ACMEサービスのディレクトリリソースのURL"
 :type: "string"
 
 ```
 
 ```{config:option} acme.domain server-acme
 :scope: "global"
-:shortdesc: "Domain for which the certificate is issued"
+:shortdesc: "証明書を発行する対象のドメイン"
 :type: "string"
 
 ```
 
 ```{config:option} acme.email server-acme
 :scope: "global"
-:shortdesc: "Email address used for the account registration"
+:shortdesc: "アカウント登録に使用するEmailアドレス"
 :type: "string"
 
 ```
@@ -1917,15 +1906,15 @@ Specify the number of days after which the unused cached image expires.
 ```{config:option} cluster.healing_threshold server-cluster
 :defaultdesc: "`0`"
 :scope: "global"
-:shortdesc: "Threshold when to evacuate an offline cluster member"
+:shortdesc: "オフラインのクラスタメンバーをいつ退避するかの閾値"
 :type: "integer"
-Specify the number of seconds after which an offline cluster member is to be evacuated.
-To disable evacuating offline members, set this option to `0`.
+オフラインのクラスタメンバーが退避されるまでの秒数を指定します。
+オフラインメンバーの退避を無効化するには、このオプションを`0`に設定します。
 ```
 
 ```{config:option} cluster.https_address server-cluster
 :scope: "local"
-:shortdesc: "Address to use for clustering traffic"
+:shortdesc: "クラスタトラフィックに使用するアドレス"
 :type: "string"
 See {ref}`cluster-https-address`.
 ```
@@ -1933,16 +1922,16 @@ See {ref}`cluster-https-address`.
 ```{config:option} cluster.images_minimal_replica server-cluster
 :defaultdesc: "`3`"
 :scope: "global"
-:shortdesc: "Number of cluster members that replicate an image"
+:shortdesc: "イメージを複製するクラスタメンバー数"
 :type: "integer"
-Specify the minimal number of cluster members that keep a copy of a particular image.
-Set this option to `1` for no replication, or to `-1` to replicate images on all members.
+特定のイメージのコピーを保持するクラスタメンバーの最小数を指定します。
+このオプションを`1`にすると複製なし、`-1`にするとすべてのメンバーでイメージを複製します。
 ```
 
 ```{config:option} cluster.join_token_expiry server-cluster
 :defaultdesc: "`3H`"
 :scope: "global"
-:shortdesc: "Time after which a cluster join token expires"
+:shortdesc: "クラスタ参加トークンが期限切れになるまでの時間"
 :type: "string"
 
 ```
@@ -1950,151 +1939,151 @@ Set this option to `1` for no replication, or to `-1` to replicate images on all
 ```{config:option} cluster.max_standby server-cluster
 :defaultdesc: "`2`"
 :scope: "global"
-:shortdesc: "Number of database stand-by members"
+:shortdesc: "データベースのスタンバイメンバー数"
 :type: "integer"
-Specify the maximum number of cluster members that are assigned the database stand-by role.
-This must be a number between `0` and `5`.
+データベースのスタンバイロールが割り当てられるクラスタメンバーの最大数を指定します。
+これは`0`と`5`の間の整数である必要があります。
 ```
 
 ```{config:option} cluster.max_voters server-cluster
 :defaultdesc: "`3`"
 :scope: "global"
-:shortdesc: "Number of database voter members"
+:shortdesc: "データベースのvoterメンバー数"
 :type: "integer"
-Specify the maximum number of cluster members that are assigned the database voter role.
-This must be an odd number >= `3`.
+データベースのvoterロールが割り当てられるクラスタメンバーの最大数を指定します。
+これは`3`以上の奇数である必要があります。
 ```
 
 ```{config:option} cluster.offline_threshold server-cluster
 :defaultdesc: "`20`"
 :scope: "global"
-:shortdesc: "Threshold when an unresponsive member is considered offline"
+:shortdesc: "反応しないメンバーがオフラインと判定されるまでの時間の閾値"
 :type: "integer"
-Specify the number of seconds after which an unresponsive member is considered offline.
+反応しないメンバーがオフラインと判定されるまでの秒数を指定します。
 ```
 
 <!-- config group server-cluster end -->
 <!-- config group server-core start -->
 ```{config:option} core.bgp_address server-core
 :scope: "local"
-:shortdesc: "Address to bind the BGP server to"
+:shortdesc: "BGPサーバーをバインドするアドレス"
 :type: "string"
-See {ref}`network-bgp`.
+{ref}`network-bgp`参照。
 ```
 
 ```{config:option} core.bgp_asn server-core
 :scope: "global"
-:shortdesc: "BGP Autonomous System Number for the local server"
+:shortdesc: "ローカルサーバーのBGP AS番号（Autonomous System Number）"
 :type: "string"
 
 ```
 
 ```{config:option} core.bgp_routerid server-core
 :scope: "local"
-:shortdesc: "A unique identifier for the BGP server"
+:shortdesc: "BGPサーバーのユニーク識別子"
 :type: "string"
-The identifier must be formatted as an IPv4 address.
+識別子はIPv4アドレスの形式である必要があります。
 ```
 
 ```{config:option} core.debug_address server-core
 :scope: "local"
-:shortdesc: "Address to bind the `pprof` debug server to (HTTP)"
+:shortdesc: "`pprof`デバッグサーバーがバインドするアドレス"
 :type: "string"
 
 ```
 
 ```{config:option} core.dns_address server-core
 :scope: "local"
-:shortdesc: "Address to bind the authoritative DNS server to"
+:shortdesc: "権威DNSサーバーがバインドするアドレス"
 :type: "string"
-See {ref}`network-dns-server`.
+{ref}`network-dns-server`参照。
 ```
 
 ```{config:option} core.https_address server-core
 :scope: "local"
-:shortdesc: "Address to bind for the remote API (HTTPS)"
+:shortdesc: "リモートAPI (HTTPS)用にバインドするアドレス"
 :type: "string"
-See {ref}`server-expose`.
+{ref}`server-expose`参照。
 ```
 
 ```{config:option} core.https_allowed_credentials server-core
 :defaultdesc: "`false`"
 :scope: "global"
-:shortdesc: "Whether to set `Access-Control-Allow-Credentials`"
+:shortdesc: "`Access-Control-Allow-Credentials`を設定するかどうか"
 :type: "bool"
-If enabled, the `Access-Control-Allow-Credentials` HTTP header value is set to `true`.
+有効にすると、`Access-Control-Allow-Credentials` HTTPヘッダーの値が`true`に設定されます。
 ```
 
 ```{config:option} core.https_allowed_headers server-core
 :scope: "global"
-:shortdesc: "`Access-Control-Allow-Headers` HTTP header value"
+:shortdesc: "`Access-Control-Allow-Headers` HTTPヘッダーの値"
 :type: "string"
 
 ```
 
 ```{config:option} core.https_allowed_methods server-core
 :scope: "global"
-:shortdesc: "`Access-Control-Allow-Methods` HTTP header value"
+:shortdesc: "`Access-Control-Allow-Methods` HTTPヘッダーの値"
 :type: "string"
 
 ```
 
 ```{config:option} core.https_allowed_origin server-core
 :scope: "global"
-:shortdesc: "`Access-Control-Allow-Origin` HTTP header value"
+:shortdesc: "`Access-Control-Allow-Origin` HTTPヘッダーの値"
 :type: "string"
 
 ```
 
 ```{config:option} core.https_trusted_proxy server-core
 :scope: "global"
-:shortdesc: "Trusted servers to provide the client's address"
+:shortdesc: "クライアントのアドレスを提供するトラストサーバー"
 :type: "string"
-Specify a comma-separated list of IP addresses of trusted servers that provide the client's address through the proxy connection header.
+プロキシの接続ヘッダーを通してクライアントのアドレスを提供するトラストサーバーのIPアドレスのカンマ区切りリストを指定します。
 ```
 
 ```{config:option} core.metrics_address server-core
 :scope: "local"
-:shortdesc: "Address to bind the metrics server to (HTTPS)"
+:shortdesc: "メトリクスサーバーをバインドするアドレス (HTTPS)"
 :type: "string"
-See {ref}`metrics`.
+{ref}`metrics`参照。
 ```
 
 ```{config:option} core.metrics_authentication server-core
 :defaultdesc: "`true`"
 :scope: "global"
-:shortdesc: "Whether to enforce authentication on the metrics endpoint"
+:shortdesc: "メトリクスエンドポイントに認証を強制するかどうか"
 :type: "bool"
 
 ```
 
 ```{config:option} core.proxy_http server-core
 :scope: "global"
-:shortdesc: "HTTP proxy to use"
+:shortdesc: "使用するHTTPプロキシ"
 :type: "string"
-If this option is not specified, the daemon falls back to the `HTTP_PROXY` environment variable (if set).
+このオプションが設定されない場合、デーモンは（設定されていれば）`HTTP_PROXY`環境変数にフォールバックします。
 ```
 
 ```{config:option} core.proxy_https server-core
 :scope: "global"
-:shortdesc: "HTTPS proxy to use"
+:shortdesc: "使用するHTTPSプロキシ"
 :type: "string"
-If this option is not specified, the daemon falls back to the `HTTPS_PROXY` environment variable (if set).
+このオプションが設定されない場合、デーモンは（設定されていれば）`HTTPS_PROXY`環境変数にフォールバックします。
 ```
 
 ```{config:option} core.proxy_ignore_hosts server-core
 :scope: "global"
-:shortdesc: "Hosts that don't need the proxy"
+:shortdesc: "プロキシを必要としないホスト"
 :type: "string"
-Specify this option in a similar format to `NO_PROXY` (for example, `1.2.3.4,1.2.3.5`)
+`NO_PROXY`と同様な形式（例えば、 `1.2.3.4,1.2.3.5`）でこのオプションを指定します。
 
-If this option is not specified, the daemon falls back to the `NO_PROXY` environment variable (if set).
+このオプションが指定されない場合、デーモンは（設定されていれば）`NO_PROXY`環境変数にフォールバックします。
 ```
 
 ```{config:option} core.remote_token_expiry server-core
 :defaultdesc: "no expiry"
 :scope: "global"
-:shortdesc: "Time after which a remote add token expires"
+:shortdesc: "リモート追加トークンが期限切れになるまでの時間"
 :type: "string"
 
 ```
@@ -2102,30 +2091,30 @@ If this option is not specified, the daemon falls back to the `NO_PROXY` environ
 ```{config:option} core.shutdown_timeout server-core
 :defaultdesc: "`5`"
 :scope: "global"
-:shortdesc: "How long to wait before shutdown"
+:shortdesc: "停止までどれぐらいの時間待つか"
 :type: "integer"
-Specify the number of minutes to wait for running operations to complete before the daemon shuts down.
+デーモンが停止するまで実行中の操作を何分待つかの分の数。
 ```
 
 ```{config:option} core.storage_buckets_address server-core
 :scope: "local"
-:shortdesc: "Address to bind the storage object server to (HTTPS)"
+:shortdesc: "ストレージオブジェクトサーバーがバインドするアドレス (HTTPS)"
 :type: "string"
-See {ref}`howto-storage-buckets`.
+{ref}`howto-storage-buckets`参照。
 ```
 
 ```{config:option} core.syslog_socket server-core
 :defaultdesc: "`false`"
 :scope: "local"
-:shortdesc: "Whether to enable the syslog unixgram socket listener"
+:shortdesc: "syslogのunixgramのソケットリスナーを有効にするかどうか"
 :type: "bool"
-Set this option to `true` to enable the syslog unixgram socket to receive log messages from external processes.
+このオプションを`true`に設定すると、外部プロセスからのログメッセージを受信するsyslogのunixgramのソケットが有効化されます。
 ```
 
 ```{config:option} core.trust_ca_certificates server-core
 :defaultdesc: "`false`"
 :scope: "global"
-:shortdesc: "Whether to automatically trust clients signed by the CA"
+:shortdesc: "CAで署名されたクライアントを自動的に信頼するかどうか"
 :type: "bool"
 
 ```
@@ -2135,7 +2124,7 @@ Set this option to `true` to enable the syslog unixgram socket to receive log me
 ```{config:option} images.auto_update_cached server-images
 :defaultdesc: "`true`"
 :scope: "global"
-:shortdesc: "Whether to automatically update cached images"
+:shortdesc: "キャッシュされたイメージを自動的に更新するかどうか"
 :type: "bool"
 
 ```
@@ -2143,22 +2132,22 @@ Set this option to `true` to enable the syslog unixgram socket to receive log me
 ```{config:option} images.auto_update_interval server-images
 :defaultdesc: "`6`"
 :scope: "global"
-:shortdesc: "Interval at which to look for updates to cached images"
+:shortdesc: "キャッシュされたイメージの更新を確認する間隔"
 :type: "integer"
-Specify the interval in hours.
-To disable looking for updates to cached images, set this option to `0`.
+間隔を時間単位で指定します。
+キャッシュされたイメージの更新の確認を無効化するには、このオプションを`0`に設定します。
 ```
 
 ```{config:option} images.compression_algorithm server-images
 :defaultdesc: "`gzip`"
 :scope: "global"
-:shortdesc: "Compression algorithm to use for new images"
+:shortdesc: "新しいイメージに使用する圧縮アルゴリズム"
 :type: "string"
-Possible values are `bzip2`, `gzip`, `lzma`, `xz`, or `none`.
+設定可能な値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
 ```
 
 ```{config:option} images.default_architecture server-images
-:shortdesc: "Default architecture to use in a mixed-architecture cluster"
+:shortdesc: "アーキテクチャー混在のクラスターで使用するデフォルトのアーキテクチャー"
 :type: "string"
 
 ```
@@ -2166,37 +2155,37 @@ Possible values are `bzip2`, `gzip`, `lzma`, `xz`, or `none`.
 ```{config:option} images.remote_cache_expiry server-images
 :defaultdesc: "`10`"
 :scope: "global"
-:shortdesc: "When an unused cached remote image is flushed"
+:shortdesc: "使用していないキャッシュされたリモートのイメージをいつ削除するか"
 :type: "integer"
-Specify the number of days after which the unused cached image expires.
+使用していないキャッシュされたイメージが期限切れになる日数を指定します。
 ```
 
 <!-- config group server-images end -->
 <!-- config group server-loki start -->
 ```{config:option} loki.api.ca_cert server-loki
 :scope: "global"
-:shortdesc: "CA certificate for the Loki server"
+:shortdesc: "LokiサーバーのCA証明書"
 :type: "string"
 
 ```
 
 ```{config:option} loki.api.url server-loki
 :scope: "global"
-:shortdesc: "URL to the Loki server"
+:shortdesc: "LokiサーバーのURL"
 :type: "string"
-Specify the protocol, name or IP and port. For example `https://loki.example.com:3100`. Incus will automatically add the `/loki/api/v1/push` suffix so there's no need to add it here.
+プロトコル、名前、またはIPとポートを指定します。例えば`https://loki.example.com:3100`。Incusが`/loki/api/v1/push`の接尾辞を自動で追加しますので、ここで追加する必要はありません。
 ```
 
 ```{config:option} loki.auth.password server-loki
 :scope: "global"
-:shortdesc: "Password used for Loki authentication"
+:shortdesc: "Lokiの認証に使用するパスワード"
 :type: "string"
 
 ```
 
 ```{config:option} loki.auth.username server-loki
 :scope: "global"
-:shortdesc: "User name used for Loki authentication"
+:shortdesc: "Lokiの認証に使用するユーザー名"
 :type: "string"
 
 ```
@@ -2204,22 +2193,22 @@ Specify the protocol, name or IP and port. For example `https://loki.example.com
 ```{config:option} loki.instance server-loki
 :defaultdesc: "Local server host name or cluster member name"
 :scope: "global"
-:shortdesc: "Name to use as the instance field in Loki events."
+:shortdesc: "Lokiイベントのインスタンスフィールドとして使用する名前"
 :type: "string"
-This allows replacing the default instance value (server host name) by a more relevant value like a cluster identifier.
+これによりデフォルトのインスタンスの値（サーバーホスト名）をクラスタ識別子などのより重要な値に置き換えられます。
 ```
 
 ```{config:option} loki.labels server-loki
 :scope: "global"
-:shortdesc: "Labels for a Loki log entry"
+:shortdesc: "Lokiログエントリのラベル"
 :type: "string"
-Specify a comma-separated list of values that should be used as labels for a Loki log entry.
+Lokiログエントリのラベルとして使用する値のカンマ区切りリストを指定します。
 ```
 
 ```{config:option} loki.loglevel server-loki
 :defaultdesc: "`info`"
 :scope: "global"
-:shortdesc: "Minimum log level to send to the Loki server"
+:shortdesc: "Lokiサーバーへ送る最低のログレベル"
 :type: "string"
 
 ```
@@ -2227,10 +2216,10 @@ Specify a comma-separated list of values that should be used as labels for a Lok
 ```{config:option} loki.types server-loki
 :defaultdesc: "`lifecycle,logging`"
 :scope: "global"
-:shortdesc: "Events to send to the Loki server"
+:shortdesc: "Lokiサーバーへ送るイベント"
 :type: "string"
-Specify a comma-separated list of events to send to the Loki server.
-The events can be any combination of `lifecycle`, `logging`, and `network-acl`.
+Lokiサーバーへ送るイベントのカンマ区切りリストを指定します。
+イベントは`lifecycle`、`logging`、`network-acl`の任意の組み合わせです。
 ```
 
 <!-- config group server-loki end -->
@@ -2238,50 +2227,50 @@ The events can be any combination of `lifecycle`, `logging`, and `network-acl`.
 ```{config:option} backups.compression_algorithm server-miscellaneous
 :defaultdesc: "`gzip`"
 :scope: "global"
-:shortdesc: "Compression algorithm to use for backups"
+:shortdesc: "バックアップに使用できる圧縮アルゴリズム"
 :type: "string"
-Possible values are `bzip2`, `gzip`, `lzma`, `xz`, or `none`.
+設定できる値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
 ```
 
 ```{config:option} instances.nic.host_name server-miscellaneous
 :defaultdesc: "`random`"
 :scope: "global"
-:shortdesc: "How to set the host name for a NIC"
+:shortdesc: "NICにホスト名をどのように設定するか"
 :type: "string"
-Possible values are `random` and `mac`.
+設定できる値は`random`と`mac`です。
 
-If set to `random`, use the random host interface name as the host name.
-If set to `mac`, generate a host name in the form `inc<mac_address>` (MAC without leading two digits).
+`random`と設定すると、ランダムなホストのインタフェース名をホスト名として使用します。
+`mac`と設定すると、`inc<mac_address>` （先頭の2桁を除いたMAC without leading two digits）の形式でホスト名を生成します。
 ```
 
 ```{config:option} instances.placement.scriptlet server-miscellaneous
 :scope: "global"
-:shortdesc: "Instance placement scriptlet for automatic instance placement"
+:shortdesc: "自動インスタンス配置のためのインスタンス配置スクリプトレット"
 :type: "string"
-When using custom automatic instance placement logic, this option stores the scriptlet.
-See {ref}`clustering-instance-placement-scriptlet` for more information.
+カスタムのインスタンス配置ロジックを使用する際、このオプションでスクリプトレットを保管します。
+詳細は{ref}`clustering-instance-placement-scriptlet`を参照してください。
 ```
 
 ```{config:option} network.ovn.ca_cert server-miscellaneous
-:defaultdesc: "Content of `/etc/ovn/ovn-central.crt` if present"
+:defaultdesc: "存在する場合`/etc/ovn/ovn-central.crt`の中身"
 :scope: "global"
-:shortdesc: "OVN SSL certificate authority"
+:shortdesc: "OVN SSL証明書認証局"
 :type: "string"
 
 ```
 
 ```{config:option} network.ovn.client_cert server-miscellaneous
-:defaultdesc: "Content of `/etc/ovn/cert_host` if present"
+:defaultdesc: "存在する場合`/etc/ovn/cert_host`の中身"
 :scope: "global"
-:shortdesc: "OVN SSL client certificate"
+:shortdesc: "OVN SSLクライアント証明書"
 :type: "string"
 
 ```
 
 ```{config:option} network.ovn.client_key server-miscellaneous
-:defaultdesc: "Content of `/etc/ovn/key_host` if present"
+:defaultdesc: "存在する場合`/etc/ovn/key_host`の中身"
 :scope: "global"
-:shortdesc: "OVN SSL client key"
+:shortdesc: "OVN SSLクライアント鍵"
 :type: "string"
 
 ```
@@ -2289,7 +2278,7 @@ See {ref}`clustering-instance-placement-scriptlet` for more information.
 ```{config:option} network.ovn.integration_bridge server-miscellaneous
 :defaultdesc: "`br-int`"
 :scope: "global"
-:shortdesc: "OVS integration bridge to use for OVN networks"
+:shortdesc: "OVNネットワークで使用するOVS統合ブリッジ"
 :type: "string"
 
 ```
@@ -2297,51 +2286,51 @@ See {ref}`clustering-instance-placement-scriptlet` for more information.
 ```{config:option} network.ovn.northbound_connection server-miscellaneous
 :defaultdesc: "`unix:/var/run/ovn/ovnnb_db.sock`"
 :scope: "global"
-:shortdesc: "OVN northbound database connection string"
+:shortdesc: "OVN northboundデータベース接続文字列"
 :type: "string"
 
 ```
 
 ```{config:option} storage.backups_volume server-miscellaneous
 :scope: "local"
-:shortdesc: "Volume to use to store backup tarballs"
+:shortdesc: "バックアップtarballを保管するのに使用するボリューム"
 :type: "string"
-Specify the volume using the syntax `POOL/VOLUME`.
+`POOL/VOLUME`の形式でボリュームを指定します。
 ```
 
 ```{config:option} storage.images_volume server-miscellaneous
 :scope: "local"
-:shortdesc: "Volume to use to store the image tarballs"
+:shortdesc: "イメージtarballを保管するのに使用するボリューム"
 :type: "string"
-Specify the volume using the syntax `POOL/VOLUME`.
+`POOL/VOLUME`の形式でボリュームを指定します。
 ```
 
 <!-- config group server-miscellaneous end -->
 <!-- config group server-oidc start -->
 ```{config:option} oidc.audience server-oidc
 :scope: "global"
-:shortdesc: "Expected audience value for the application"
+:shortdesc: "アプリケーション用に期待されるaudienceの値"
 :type: "string"
-This value is required by some providers.
+この値はいくつかのプロバイダーで必要です。
 ```
 
 ```{config:option} oidc.claim server-oidc
 :scope: "global"
-:shortdesc: "OpenID Connect claim to use as the username"
+:shortdesc: "ユーザー名として使用するOpenID Connectクレーム"
 :type: "string"
 
 ```
 
 ```{config:option} oidc.client.id server-oidc
 :scope: "global"
-:shortdesc: "OpenID Connect client ID"
+:shortdesc: "OpenID ConnectクライアントID"
 :type: "string"
 
 ```
 
 ```{config:option} oidc.issuer server-oidc
 :scope: "global"
-:shortdesc: "OpenID Connect Discovery URL for the provider"
+:shortdesc: "プロバイダーで使用するOpenID Connect Discovery URL"
 :type: "string"
 
 ```
@@ -2350,21 +2339,21 @@ This value is required by some providers.
 <!-- config group server-openfga start -->
 ```{config:option} openfga.api.token server-openfga
 :scope: "global"
-:shortdesc: "API token of the OpenFGA server"
+:shortdesc: "OpenFGAサーバーのAPIトークン"
 :type: "string"
 
 ```
 
 ```{config:option} openfga.api.url server-openfga
 :scope: "global"
-:shortdesc: "URL of the OpenFGA server"
+:shortdesc: "OpenFGAサーバーのURL"
 :type: "string"
 
 ```
 
 ```{config:option} openfga.store.id server-openfga
 :scope: "global"
-:shortdesc: "ID of the OpenFGA permission store"
+:shortdesc: "OpenFGAパーミッションストアーのID"
 :type: "string"
 
 ```

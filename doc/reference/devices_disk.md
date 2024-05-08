@@ -97,25 +97,8 @@ VM `agent`
 
 `disk` デバイスには以下のデバイスオプションがあります:
 
-キー                | 型      | デフォルト値  | 必須 | 説明
-:--                 | :--     | :--           | :--  | :--
-`boot.priority`     | integer | -             | no   | VM のブート優先度（高いほうが先にブート）
-`ceph.cluster_name` | string  | `ceph`        | no   | Ceph クラスタのクラスタ名（Ceph か CephFS のソースには必須）
-`ceph.user_name`    | string  | `admin`       | no   | Ceph クラスタのユーザー名（Ceph か CephFS のソースには必須）
-`initial.*`         | n/a     | -             | no   | デフォルトストレージプール設定と独立して個別の設定を許可する{ref}`devices-disk-initial-config`
-`io.bus`            | string  | `virtio-scsi` | no   | VMのみ: デバイスのバスを上書きする（`nvme`、`virtio-blk`、または`virtio-scsi`）
-`io.cache`          | string  | `none`        | no   | VMのみ: デバイスのキャッシュモードを上書きする（`none`、`writeback`または`unsafe`）
-`limits.max`        | string  | -             | no   | 読み取りと書き込み両方のbyte/sかIOPSによるI/O制限（`limits.read`と`limits.write`の両方を設定するのと同じ）
-`limits.read`       | string  | -             | no   | byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）もしくはIOPS（あとに`iops`と付けなければなりません）で指定する読み込みのI/O制限値 - {ref}`storage-configure-IO` も参照
-`limits.write`      | string  | -             | no   | byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）もしくはIOPS（あとに`iops`と付けなければなりません）で指定する書き込みのI/O制限値 - {ref}`storage-configure-IO` も参照
-`path`              | string  | -             | yes  | ディスクをマウントするインスタンス内のパス（コンテナのみ）
-`pool`              | string  | -             | no   | ディスクデバイスが属するストレージプール（Incus が管理するストレージボリュームにのみ適用可能）
-`propagation`       | string  | -             | no   | バインドマウントをインスタンスとホストでどのように共有するかを管理する（`private` （デフォルト）、`shared`、`slave`、`unbindable`、 `rshared`、`rslave`、`runbindable`、`rprivate` のいずれか。完全な説明は Linux Kernel の文書 [shared subtree](https://www.kernel.org/doc/Documentation/filesystems/sharedsubtree.txt) 参照） <!-- wokeignore:rule=slave -->
-`raw.mount.options` | string  | -             | no   | ファイルシステム固有のマウントオプション
-`readonly`          | bool    | `false`       | no   | マウントを読み込み専用とするかどうかを制御
-`recursive`         | bool    | `false`       | no   | ソースパスを再帰的にマウントするかどうかを制御
-`required`          | bool    | `true`        | no   | ソースが存在しないときに失敗とするかどうかを制御
-`shift`             | bool    | `false`       | no   | ソースの UID/GID をインスタンスにマッチするように変換させるためにオーバーレイの shift を設定するか（コンテナのみ）
-`size`              | string  | -             | no   | byte（さまざまな単位が使用可能、 {ref}`instances-limit-units` 参照）で指定するディスクサイズ。`rootfs`（`/`） でのみサポートされます
-`size.state`        | string  | -             | no   | 上の `size` と同じですが、仮想マシン内のランタイム状態を保存するために使われるファイルシステムボリュームに適用されます
-`source`            | string  | -             | yes  | ファイルシステムまたはブロックデバイスのソース（詳細は{ref}`devices-disk-types`参照）
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-disk start -->
+    :end-before: <!-- config group devices-disk end -->
+```
