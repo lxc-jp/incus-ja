@@ -89,7 +89,7 @@ ACL ルールには次のプロパティがあります:
 
 プロパティ         | 型     | 必須 | 説明
 :--                | :--    | :--  | :--
-`action`           | string | yes  | マッチしたトラフィックに適用するアクション（`allow`, `reject` または `drop`）
+`action`           | string | yes  | マッチしたトラフィックに適用するアクション（`allow`, `allow-stateless`, `reject` または `drop`）
 `state`            | string | yes  | ルールの状態（`enabled`, `disabled` または `logged`）、未設定の場合のデフォルト値は `enabled`
 `description`      | string | no   | ルールの説明
 `source`           | string | no   | CIDR か IP の範囲、送信元の ACL の名前、あるいは（ingress ルールに対しての） ソースサブジェクト名セレクターのカンマ区切りリスト、または any の場合は空を指定

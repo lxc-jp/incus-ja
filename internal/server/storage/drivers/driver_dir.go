@@ -7,11 +7,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
-	"github.com/lxc/incus/internal/server/operations"
-	internalUtil "github.com/lxc/incus/internal/util"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/util"
+	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
+	"github.com/lxc/incus/v6/internal/server/operations"
+	internalUtil "github.com/lxc/incus/v6/internal/util"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 type dir struct {
@@ -77,7 +77,8 @@ func (d *dir) Create() error {
 
 	// Check that if within INCUS_DIR, we're at our expected spot.
 	cleanSource := filepath.Clean(sourcePath)
-	if strings.HasPrefix(cleanSource, internalUtil.VarPath()) && cleanSource != GetPoolMountPath(d.name) {
+	varPath := strings.TrimRight(internalUtil.VarPath(), "/") + "/"
+	if (cleanSource == internalUtil.VarPath() || strings.HasPrefix(cleanSource, varPath)) && cleanSource != GetPoolMountPath(d.name) {
 		return fmt.Errorf("Source path '%s' is within the Incus directory", cleanSource)
 	}
 

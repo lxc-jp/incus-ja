@@ -11,20 +11,20 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lxc/incus/client"
-	internalInstance "github.com/lxc/incus/internal/instance"
-	"github.com/lxc/incus/internal/revert"
-	"github.com/lxc/incus/internal/server/cluster"
-	"github.com/lxc/incus/internal/server/cluster/request"
-	"github.com/lxc/incus/internal/server/db"
-	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/state"
-	localUtil "github.com/lxc/incus/internal/server/util"
-	"github.com/lxc/incus/internal/version"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/util"
-	"github.com/lxc/incus/shared/validate"
+	"github.com/lxc/incus/v6/client"
+	internalInstance "github.com/lxc/incus/v6/internal/instance"
+	"github.com/lxc/incus/v6/internal/revert"
+	"github.com/lxc/incus/v6/internal/server/cluster"
+	"github.com/lxc/incus/v6/internal/server/cluster/request"
+	"github.com/lxc/incus/v6/internal/server/db"
+	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
+	"github.com/lxc/incus/v6/internal/server/state"
+	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v6/shared/validate"
 )
 
 // Define type for rule directions.
@@ -48,7 +48,7 @@ var ruleSubjectInternalAliases = []string{ruleSubjectInternal, "#internal"}
 var ruleSubjectExternalAliases = []string{ruleSubjectExternal, "#external"}
 
 // ValidActions defines valid actions for rules.
-var ValidActions = []string{"allow", "drop", "reject"}
+var ValidActions = []string{"allow", "allow-stateless", "drop", "reject"}
 
 // common represents a Network ACL.
 type common struct {
@@ -113,6 +113,7 @@ func (d *common) Info() *api.NetworkACL {
 	info.Egress = append(make([]api.NetworkACLRule, 0, len(d.info.Egress)), d.info.Egress...)
 	info.Config = localUtil.CopyConfig(d.info.Config)
 	info.UsedBy = nil // To indicate its not populated (use Usedby() function to populate).
+	info.Project = d.projectName
 
 	return &info
 }

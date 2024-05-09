@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lxc/incus/internal/instance"
-	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/v6/internal/instance"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 func TestDotPrefixMatch(t *testing.T) {
@@ -153,7 +153,7 @@ func TestShouldShow(t *testing.T) {
 }
 
 // Used by TestColumns and TestInvalidColumns.
-const shorthand = "46abcdDefFlmMnNpPsStuL"
+const shorthand = "46abcdDefFlmMnNpPsStuUL"
 const alphanum = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 func TestColumns(t *testing.T) {

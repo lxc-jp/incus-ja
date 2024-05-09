@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 // Profile handling functions
@@ -29,6 +29,22 @@ func (r *ProtocolIncus) GetProfiles() ([]api.Profile, error) {
 
 	// Fetch the raw value
 	_, err := r.queryStruct("GET", "/profiles?recursion=1", nil, "", &profiles)
+	if err != nil {
+		return nil, err
+	}
+
+	return profiles, nil
+}
+
+// GetProfilesAllProjects returns a list of profiles across all projects as Profile structs.
+func (r *ProtocolIncus) GetProfilesAllProjects() ([]api.Profile, error) {
+	err := r.CheckExtension("profiles_all_projects")
+	if err != nil {
+		return nil, fmt.Errorf(`The server is missing the required "profiles_all_projects" API extension`)
+	}
+
+	profiles := []api.Profile{}
+	_, err = r.queryStruct("GET", "/profiles?recursion=1&all-projects=true", nil, "", &profiles)
 	if err != nil {
 		return nil, err
 	}

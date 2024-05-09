@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lxc/incus/internal/linux"
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
-	"github.com/lxc/incus/internal/server/fsmonitor/drivers"
-	"github.com/lxc/incus/internal/server/instance"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/shared/util"
-	"github.com/lxc/incus/shared/validate"
+	"github.com/lxc/incus/v6/internal/linux"
+	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
+	"github.com/lxc/incus/v6/internal/server/fsmonitor/drivers"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v6/shared/validate"
 )
 
 // unixIsOurDeviceType checks that device file type matches what we are expecting in the config.
@@ -45,6 +45,11 @@ func (d *unixCommon) validateConfig(instConf instance.ConfigReader) error {
 	}
 
 	rules := map[string]func(string) error{
+		// gendoc:generate(entity=devices, group=unix-char-block, key=source)
+		//
+		// ---
+		//  type: string
+		//  shortdesc: Path on the host (one of `source` and `path` must be set)
 		"source": func(value string) error {
 			if value == "" {
 				return nil
@@ -56,13 +61,61 @@ func (d *unixCommon) validateConfig(instConf instance.ConfigReader) error {
 
 			return &drivers.ErrInvalidPath{PrefixPath: d.state.DevMonitor.PrefixPath()}
 		},
-		"path":     validate.IsAny,
-		"major":    unixValidDeviceNum,
-		"minor":    unixValidDeviceNum,
-		"uid":      unixValidUserID,
-		"gid":      unixValidUserID,
-		"mode":     unixValidOctalFileMode,
+
+		// gendoc:generate(entity=devices, group=unix-char-block, key=gid)
+		//
+		// ---
+		//  type: int
+		//  default: 0
+		//  shortdesc: GID of the device owner in the instance
+		"gid": unixValidUserID,
+
+		// gendoc:generate(entity=devices, group=unix-char-block, key=major)
+		//
+		// ---
+		//  type: int
+		//  default: device on host
+		//  shortdesc: Device major number
+		"major": unixValidDeviceNum,
+
+		// gendoc:generate(entity=devices, group=unix-char-block, key=minor)
+		//
+		// ---
+		//  type: int
+		//  default: device on host
+		//  shortdesc: Device minor number
+		"minor": unixValidDeviceNum,
+
+		// gendoc:generate(entity=devices, group=unix-char-block, key=mode)
+		//
+		// ---
+		//  type: int
+		//  default: 0660
+		//  shortdesc: Mode of the device in the instance
+		"mode": unixValidOctalFileMode,
+
+		// gendoc:generate(entity=devices, group=unix-char-block, key=path)
+		//
+		// ---
+		//  type: string
+		//  shortdesc: Path inside the instance (one of `source` and `path` must be set)
+		"path": validate.IsAny,
+
+		// gendoc:generate(entity=devices, group=unix-char-block, key=required)
+		//
+		// ---
+		//  type: bool
+		//  default: true
+		//  shortdesc: Whether this device is required to start the instance
 		"required": validate.Optional(validate.IsBool),
+
+		// gendoc:generate(entity=devices, group=unix-char-block, key=uid)
+		//
+		// ---
+		//  type: int
+		//  default: 0
+		//  shortdesc: UID of the device owner in the instance
+		"uid": unixValidUserID,
 	}
 
 	err := d.config.Validate(rules)

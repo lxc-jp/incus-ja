@@ -14,23 +14,24 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/lxc/incus/client"
-	"github.com/lxc/incus/internal/jmap"
-	"github.com/lxc/incus/internal/server/auth"
-	"github.com/lxc/incus/internal/server/cluster"
-	"github.com/lxc/incus/internal/server/db"
-	dbCluster "github.com/lxc/incus/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/internal/server/device/config"
-	"github.com/lxc/incus/internal/server/instance"
-	"github.com/lxc/incus/internal/server/instance/instancetype"
-	"github.com/lxc/incus/internal/server/lifecycle"
-	"github.com/lxc/incus/internal/server/project"
-	"github.com/lxc/incus/internal/server/request"
-	"github.com/lxc/incus/internal/server/response"
-	localUtil "github.com/lxc/incus/internal/server/util"
-	"github.com/lxc/incus/internal/version"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/logger"
+	"github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/internal/jmap"
+	"github.com/lxc/incus/v6/internal/server/auth"
+	"github.com/lxc/incus/v6/internal/server/cluster"
+	"github.com/lxc/incus/v6/internal/server/db"
+	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
+	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v6/internal/server/lifecycle"
+	"github.com/lxc/incus/v6/internal/server/project"
+	"github.com/lxc/incus/v6/internal/server/request"
+	"github.com/lxc/incus/v6/internal/server/response"
+	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 var profilesCmd = APIEndpoint{
@@ -65,6 +66,11 @@ var profileCmd = APIEndpoint{
 //      description: Project name
 //      type: string
 //      example: default
+//    - in: query
+//      name: all-projects
+//      description: Retrieve profiles from all projects
+//      type: boolean
+//      example: true
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -114,6 +120,11 @@ var profileCmd = APIEndpoint{
 //	    description: Project name
 //	    type: string
 //	    example: default
+//	  - in: query
+//	    name: all-projects
+//	    description: Retrieve profiles from all projects
+//	    type: boolean
+//	    example: true
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -151,6 +162,7 @@ func profilesGet(d *Daemon, r *http.Request) response.Response {
 	}
 
 	recursion := localUtil.IsRecursionRequest(r)
+	allProjects := util.IsTrue(request.QueryParam(r, "all-projects"))
 
 	userHasPermission, err := s.Authorizer.GetPermissionChecker(r.Context(), r, auth.EntitlementCanView, auth.ObjectTypeProfile)
 	if err != nil {
@@ -158,14 +170,23 @@ func profilesGet(d *Daemon, r *http.Request) response.Response {
 	}
 
 	var result any
-	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
-		filter := dbCluster.ProfileFilter{
-			Project: &p.Name,
-		}
 
-		profiles, err := dbCluster.GetProfiles(ctx, tx.Tx(), filter)
-		if err != nil {
-			return err
+	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var profiles []dbCluster.Profile
+		if !allProjects {
+			filter := dbCluster.ProfileFilter{
+				Project: &p.Name,
+			}
+
+			profiles, err = dbCluster.GetProfiles(ctx, tx.Tx(), filter)
+			if err != nil {
+				return err
+			}
+		} else {
+			profiles, err = dbCluster.GetProfiles(ctx, tx.Tx())
+			if err != nil {
+				return err
+			}
 		}
 
 		apiProfiles := make([]*api.Profile, 0, len(profiles))
@@ -193,7 +214,7 @@ func profilesGet(d *Daemon, r *http.Request) response.Response {
 		} else {
 			urls := make([]string, len(apiProfiles))
 			for i, apiProfile := range apiProfiles {
-				urls[i] = apiProfile.URL(version.APIVersion, p.Name).String()
+				urls[i] = apiProfile.URL(version.APIVersion, apiProfile.Project).String()
 			}
 
 			result = urls

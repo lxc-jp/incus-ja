@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lxc/incus/internal/server/db"
-	firewallDrivers "github.com/lxc/incus/internal/server/firewall/drivers"
-	"github.com/lxc/incus/internal/server/state"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/logger"
-	"github.com/lxc/incus/shared/util"
+	"github.com/lxc/incus/v6/internal/server/db"
+	firewallDrivers "github.com/lxc/incus/v6/internal/server/firewall/drivers"
+	"github.com/lxc/incus/v6/internal/server/state"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/util"
 )
 
 // FirewallApplyACLRules applies ACL rules to network firewall.
@@ -17,6 +17,7 @@ func FirewallApplyACLRules(s *state.State, logger logger.Logger, aclProjectName 
 	var dropRules []firewallDrivers.ACLRule
 	var rejectRules []firewallDrivers.ACLRule
 	var allowRules []firewallDrivers.ACLRule
+	var allowStatelessRules []firewallDrivers.ACLRule
 
 	// convertACLRules converts the ACL rules to Firewall ACL rules.
 	convertACLRules := func(direction string, logPrefix string, rules ...api.NetworkACLRule) error {
@@ -50,6 +51,8 @@ func FirewallApplyACLRules(s *state.State, logger logger.Logger, aclProjectName 
 				rejectRules = append(rejectRules, firewallACLRule)
 			case rule.Action == "allow":
 				allowRules = append(allowRules, firewallACLRule)
+			case rule.Action == "allow-stateless": // TODO: add NOTRACK support
+				allowStatelessRules = append(allowStatelessRules, firewallACLRule)
 			default:
 				return fmt.Errorf("Unrecognised action %q", rule.Action)
 			}
@@ -90,6 +93,7 @@ func FirewallApplyACLRules(s *state.State, logger logger.Logger, aclProjectName 
 	rules = append(rules, dropRules...)
 	rules = append(rules, rejectRules...)
 	rules = append(rules, allowRules...)
+	rules = append(rules, allowStatelessRules...)
 
 	// Add the automatic default ACL rule for the network.
 	egressAction, egressLogged := firewallACLDefaults(aclNet.Config, "egress")

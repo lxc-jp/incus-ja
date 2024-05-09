@@ -243,7 +243,7 @@ scrape_configs:
 ## Grafanaダッシュボードをセットアップする
 
 メトリクスデータを可視化するには、[Grafana](https://grafana.com/)を設定します。
-Incus は、Prometheus によって収集された Incus メトリクスを表示するように設定された[Grafanaダッシュボード](https://grafana.com/grafana/dashboards/19727-incus/)を提供します。
+Incus は、Prometheus によって収集された Incus メトリクスと Loki からのログエントリを表示するように設定された[Grafanaダッシュボード](https://grafana.com/grafana/dashboards/19727-incus/)を提供します。
 
 ```{note}
 このダッシュボードはGrafana 8.4以降が必要です。
@@ -267,11 +267,21 @@ Grafana のドキュメントを参照して、インストールとサインイ
 
       ![データソースとしてPrometheusを選択](images/grafana_select_prometheus.png)
 
-   1. {guilabel}`URL`フィールドに`http://localhost:9090/`を入力します。
+   1. Prometheusがローカルで動いている場合{guilabel}`URL`フィールドに`http://localhost:9090/`を入力します。
 
       ![Prometheus URLを入力](images/grafana_configure_datasource.png)
 
    1. 他のフィールドはデフォルトの設定のままにし、{guilabel}`保存＆テスト`をクリックします。
+
+1. Loki をデータソースとして設定します:
+
+   1. {guilabel}`Configuration` > {guilabel}`Data sources`に移動します。
+   1. {guilabel}`Add data source`をクリックします。
+   1. {guilabel}`Loki`を選択します。
+   1. Lokiをローカルで動かす場合{guilabel}`URL`フィールド内で`http://localhost:3100/`を入力します
+   1. 他のフィールドはデフォルトの設定のままにし、{guilabel}`保存＆テスト`をクリックします。
+
+1. Incus のダッシュボードをインポートします:
 
    1. {guilabel}`Dashboards` > {guilabel}`Browse`に移動します。
    1. {guilabel}`New`をクリックし、{guilabel}`Import`を選択します。
@@ -283,7 +293,7 @@ Grafana のドキュメントを参照して、インストールとサインイ
       ![Incus ダッシュボードIDを入力](images/grafana_dashboard_id.png)
 
    1. {guilabel}`Load`をクリックします。
-   1. {guilabel}`Incus`のドロップダウンメニューから、設定した Prometheus のデータソースを選択します。
+   1. {guilabel}`Incus`のドロップダウンメニューから、設定した Prometheus と Loki のデータソースを選択します。
 
       ![Prometheusのデータソースを選択](images/grafana_dashboard_select_datasource.png)
 
@@ -297,3 +307,8 @@ Grafana のドキュメントを参照して、インストールとサインイ
 ページの下部で、各インスタンスのデータを見ることができます。
 
 ![Incus Grafanaダッシュボードのインスタンスデータ](images/grafana_instances.png)
+
+```{note}
+ダッシュボードの Loki の部分を適切に動かすには、`instance`フィールドをPrometheusのジョブ名と一致させる必要があります。
+`instance`フィールドは`loki.instance`設定キーで変更できます。
+```

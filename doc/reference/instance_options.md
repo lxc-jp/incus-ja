@@ -183,21 +183,11 @@ Incus は対象のカーネルがサポートするすべての利用可能な�
 
 よくある制限のいくつかは以下のとおりです:
 
-キー                       | リソース            | 説明
-:--                       | :---              | :----------
-`limits.kernel.as`        | `RLIMIT_AS`       | プロセスの仮想メモリーの最大サイズ
-`limits.kernel.core`      | `RLIMIT_CORE`     | プロセスのコアダンプファイルの最大サイズ
-`limits.kernel.cpu`       | `RLIMIT_CPU`      | プロセスが使えるCPU時間の秒単位の制限
-`limits.kernel.data`      | `RLIMIT_DATA`     | プロセスのデータセグメントの最大サイズ
-`limits.kernel.fsize`     | `RLIMIT_FSIZE`    | プロセスが作成できるファイルの最大サイズ
-`limits.kernel.locks`     | `RLIMIT_LOCKS`    | プロセスが確立できるファイルロック数の制限
-`limits.kernel.memlock`   | `RLIMIT_MEMLOCK`  | プロセスがRAM上でロックできるメモリーのバイト数の制限
-`limits.kernel.nice`      | `RLIMIT_NICE`     | 引き上げることができるプロセスのnice値の最大値
-`limits.kernel.nofile`    | `RLIMIT_NOFILE`   | プロセスがオープンできるファイルの最大値
-`limits.kernel.nproc`     | `RLIMIT_NPROC`    | 呼び出し元プロセスのユーザーが作れるプロセスの最大数
-`limits.kernel.rtprio`    | `RLIMIT_RTPRIO`   | プロセスに対して設定できるリアルタイム優先度の最大値
-`limits.kernel.sigpending`| `RLIMIT_SIGPENDING` | 呼び出し元プロセスのユーザーがキューに入れられるシグナルの最大数
-
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group kernel-limits start -->
+    :end-before: <!-- config group kernel-limits end -->
+```
 
 指定できる制限の完全なリストは `getrlimit(2)`/`setrlimit(2)`システムコールの man ページで確認できます。
 

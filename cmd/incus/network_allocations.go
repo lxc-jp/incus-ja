@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	cli "github.com/lxc/incus/internal/cmd"
-	"github.com/lxc/incus/internal/i18n"
-	"github.com/lxc/incus/shared/api"
+	cli "github.com/lxc/incus/v6/internal/cmd"
+	"github.com/lxc/incus/v6/internal/i18n"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 type cmdNetworkListAllocations struct {
@@ -73,7 +73,17 @@ func (c *cmdNetworkListAllocations) Run(cmd *cobra.Command, args []string) error
 
 	resource := resources[0]
 	server := resource.server.UseProject(c.flagProject)
-	addresses, err := server.GetNetworkAllocations(c.flagAllProjects)
+
+	if c.flagAllProjects {
+		addresses, err := server.GetNetworkAllocationsAllProjects()
+		if err != nil {
+			return err
+		}
+
+		return c.pretty(addresses)
+	}
+
+	addresses, err := server.GetNetworkAllocations()
 	if err != nil {
 		return err
 	}

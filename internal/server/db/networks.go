@@ -11,10 +11,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lxc/incus/internal/server/db/cluster"
-	"github.com/lxc/incus/internal/server/db/query"
-	"github.com/lxc/incus/internal/version"
-	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/v6/internal/server/db/cluster"
+	"github.com/lxc/incus/v6/internal/server/db/query"
+	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 // GetNetworksLocalConfig returns a map associating each network name to its
@@ -481,6 +481,42 @@ func (c *ClusterTx) GetNetworkURIs(ctx context.Context, projectID int, project s
 // GetNetworks returns the names of existing networks.
 func (c *ClusterTx) GetNetworks(ctx context.Context, project string) ([]string, error) {
 	return c.networks(ctx, project, "")
+}
+
+// GetNetworksAllProjects returns the names of all networks across all projects.
+func (c *ClusterTx) GetNetworksAllProjects(ctx context.Context) (map[string][]string, error) {
+	q := "SELECT projects.name, networks.name FROM networks JOIN projects ON networks.project_id=projects.id"
+
+	var projectName string
+	var networkName string
+	outfmt := []any{projectName, networkName}
+
+	result, err := queryScan(ctx, c, q, nil, outfmt)
+	if err != nil {
+		return nil, err
+	}
+
+	response := map[string][]string{}
+	for _, r := range result {
+		projectName, ok := r[0].(string)
+		if !ok {
+			continue
+		}
+
+		networkName, ok := r[1].(string)
+		if !ok {
+			continue
+		}
+
+		_, ok = response[projectName]
+		if !ok {
+			response[projectName] = []string{}
+		}
+
+		response[projectName] = append(response[projectName], networkName)
+	}
+
+	return response, nil
 }
 
 // Get all networks matching the given WHERE filter (if given).

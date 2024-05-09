@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 // GetNetworkNames returns a list of network names.
@@ -35,6 +35,21 @@ func (r *ProtocolIncus) GetNetworks() ([]api.Network, error) {
 
 	// Fetch the raw value
 	_, err := r.queryStruct("GET", "/networks?recursion=1", nil, "", &networks)
+	if err != nil {
+		return nil, err
+	}
+
+	return networks, nil
+}
+
+// GetNetworksAllProjects gets all networks across all projects.
+func (r *ProtocolIncus) GetNetworksAllProjects() ([]api.Network, error) {
+	if !r.HasExtension("networks_all_projects") {
+		return nil, fmt.Errorf(`The server is missing the required "networks_all_projects" API extension`)
+	}
+
+	networks := []api.Network{}
+	_, err := r.queryStruct("GET", "/networks?recursion=1&all-projects=true", nil, "", &networks)
 	if err != nil {
 		return nil, err
 	}

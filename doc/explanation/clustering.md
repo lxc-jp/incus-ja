@@ -202,6 +202,9 @@ Incus に現在適用されているスクリプトレットを見るには`incu
 - `get_cluster_member_resources(member_name)`: クラスタメンバーのリソースについての情報を取得する。[`api.Resources`](https://pkg.go.dev/github.com/lxc/incus/shared/api#Resources)の形式でリソースについての情報を含むオブジェクトを返す。`member_name`はリソース情報を取得する対象のクラスタメンバーの名前。
 - `get_cluster_member_state(member_name)`: クラスタメンバーの状態を取得する。[`api.ClusterMemberState`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMemberState)の形式でクラスタメンバーの状態を含むオブジェクトを返す。`member_name`は状態を取得する対象のクラスタメンバーの名前。
 - `get_instance_resources()`: インスタンスが必要とするリソースについての情報を取得する。[`scriptlet.InstanceResources`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstanceResources)の形式でリソース情報を含むオブジェクトを返す。
+- `get_instances(location, project)`: プロジェクトやロケーションフィルターに基づいてインスタンスの一覧を取得する。[`[]api.Instance`](https://pkg.go.dev/github.com/lxc/incus/shared/api#Instance)の形式でインスタンスの一覧を返す。
+- `get_cluster_members(group)`: クラスタグループに基づいてクラスタメンバーの一覧を取得する。[`[]api.ClusterMember`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMember)の形式でクラスタメンバーの一覧を返す。
+- `get_project(name)`: プロジェクト名に基づいてプロジェクトオブジェクトを取得する。[`api.Project`](https://pkg.go.dev/github.com/lxc/incus/shared/api#Project)の形式でプロジェクトオブジェクトを返す。
 
 ```{note}
 オブジェクト内のフィールド名は対応する Go の型の JSON フィールド名と同じです。

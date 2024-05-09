@@ -13,13 +13,13 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
-	"github.com/lxc/incus/client"
-	cli "github.com/lxc/incus/internal/cmd"
-	"github.com/lxc/incus/internal/i18n"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/ioprogress"
-	"github.com/lxc/incus/shared/termios"
-	"github.com/lxc/incus/shared/units"
+	"github.com/lxc/incus/v6/client"
+	cli "github.com/lxc/incus/v6/internal/cmd"
+	"github.com/lxc/incus/v6/internal/i18n"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/ioprogress"
+	"github.com/lxc/incus/v6/shared/termios"
+	"github.com/lxc/incus/v6/shared/units"
 )
 
 type cmdStorageBucket struct {
@@ -94,6 +94,11 @@ func (c *cmdStorageBucketCreate) Command() *cobra.Command {
 	cmd.Use = usage("create", i18n.G("[<remote>:]<pool> <bucket> [key=value...]"))
 	cmd.Short = i18n.G("Create new custom storage buckets")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Create new custom storage buckets`))
+	cmd.Example = cli.FormatSection("", i18n.G(`incus storage bucket create p1 b01
+	Create a new storage bucket name b01 in storage pool p1
+
+incus storage bucket create p1 b01 < config.yaml
+	Craete a new storage bucket name b01 in storage pool p1 using the content of config.yaml`))
 
 	cmd.Flags().StringVar(&c.storageBucket.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
 	cmd.RunE = c.Run
@@ -454,7 +459,9 @@ func (c *cmdStorageBucketGet) Run(cmd *cobra.Command, args []string) error {
 type cmdStorageBucketList struct {
 	global        *cmdGlobal
 	storageBucket *cmdStorageBucket
-	flagFormat    string
+
+	flagFormat      string
+	flagAllProjects bool
 }
 
 func (c *cmdStorageBucketList) Command() *cobra.Command {
@@ -465,6 +472,7 @@ func (c *cmdStorageBucketList) Command() *cobra.Command {
 
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`List storage buckets`))
 	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G("Format (csv|json|table|yaml|compact)")+"``")
+	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Display storage pool buckets from all projects"))
 
 	cmd.RunE = c.Run
 
@@ -492,9 +500,17 @@ func (c *cmdStorageBucketList) Run(cmd *cobra.Command, args []string) error {
 
 	client := resource.server
 
-	buckets, err := client.GetStoragePoolBuckets(resource.name)
-	if err != nil {
-		return err
+	var buckets []api.StorageBucket
+	if c.flagAllProjects {
+		buckets, err = client.GetStoragePoolBucketsAllProjects(resource.name)
+		if err != nil {
+			return err
+		}
+	} else {
+		buckets, err = client.GetStoragePoolBuckets(resource.name)
+		if err != nil {
+			return err
+		}
 	}
 
 	clustered := resource.server.IsClustered()
@@ -510,6 +526,10 @@ func (c *cmdStorageBucketList) Run(cmd *cobra.Command, args []string) error {
 			details = append(details, bucket.Location)
 		}
 
+		if c.flagAllProjects {
+			details = append([]string{bucket.Project}, details...)
+		}
+
 		data = append(data, details)
 	}
 
@@ -522,6 +542,10 @@ func (c *cmdStorageBucketList) Run(cmd *cobra.Command, args []string) error {
 
 	if clustered {
 		header = append(header, i18n.G("LOCATION"))
+	}
+
+	if c.flagAllProjects {
+		header = append([]string{i18n.G("PROJECT")}, header...)
 	}
 
 	return cli.RenderTable(c.flagFormat, header, data, buckets)
@@ -858,6 +882,12 @@ func (c *cmdStorageBucketKeyCreate) Command() *cobra.Command {
 	cmd.Use = usage("create", i18n.G("[<remote>:]<pool> <bucket> <key>"))
 	cmd.Short = i18n.G("Create key for a storage bucket")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G("Create key for a storage bucket"))
+	cmd.Example = cli.FormatSection("", i18n.G(`incus storage bucket key create p1 b01 k1
+	Create a key called k1 for the bucket b01 in the pool p1.
+
+incus storage bucket key create p1 b01 k1 < config.yaml
+	Create a key called k1 for the bucket b01 in the pool p1 using the content of config.yaml.`))
+
 	cmd.RunE = c.RunAdd
 
 	cmd.Flags().StringVar(&c.storageBucketKey.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
@@ -902,13 +932,35 @@ func (c *cmdStorageBucketKeyCreate) RunAdd(cmd *cobra.Command, args []string) er
 		client = client.UseTarget(c.storageBucketKey.flagTarget)
 	}
 
+	// If stdin isn't a terminal, read yaml from it.
+	var bucketKeyPut api.StorageBucketKeyPut
+	if !termios.IsTerminal(getStdinFd()) {
+		contents, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+
+		err = yaml.UnmarshalStrict(contents, &bucketKeyPut)
+		if err != nil {
+			return err
+		}
+	}
+
 	req := api.StorageBucketKeysPost{
-		Name: args[2],
-		StorageBucketKeyPut: api.StorageBucketKeyPut{
-			Role:      c.flagRole,
-			AccessKey: c.flagAccessKey,
-			SecretKey: c.flagSecretKey,
-		},
+		Name:                args[2],
+		StorageBucketKeyPut: bucketKeyPut,
+	}
+
+	if c.flagRole != "" {
+		req.Role = c.flagRole
+	}
+
+	if c.flagAccessKey != "" {
+		req.AccessKey = c.flagAccessKey
+	}
+
+	if c.flagSecretKey != "" {
+		req.SecretKey = c.flagSecretKey
 	}
 
 	key, err := client.CreateStoragePoolBucketKey(resource.name, args[1], req)

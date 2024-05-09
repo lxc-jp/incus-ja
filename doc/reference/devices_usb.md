@@ -20,14 +20,8 @@ USB デバイスは、指定された USB デバイスをインスタンスに�
 
 `usb`デバイスには以下のデバイスオプションがあります:
 
-キー        | 型     | デフォルト値 | 説明
-:--         | :--    | :--          | :--
-`gid`       | int    | `0`          | コンテナのみ: インスタンス内のデバイス所有者のGID
-`mode`      | int    | `0660`       | コンテナのみ: インスタンス内のデバイスのモード
-`productid` | string | -            | USBデバイスのプロダクトID
-`required`  | bool   | `false`      | このデバイスがインスタンスの起動に必要かどうか（デフォルトは`false`で、すべてのデバイスがホットプラグ可能です）
-`uid`       | int    | `0`          | コンテナのみ: インスタンス内のデバイス所有者のUID
-`vendorid`  | string | -            | USBデバイスのベンダーID
-`serial`    | string | -            | USBデバイスのシリアルナンバー
-`busnum`    | int    | -            | USBデバイスがアタッチされている先のバスナンバー
-`devnum`    | int    | -            | USBデバイスのデバイスナンバー
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-usb start -->
+    :end-before: <!-- config group devices-usb end -->
+```

@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
-	cli "github.com/lxc/incus/internal/cmd"
-	"github.com/lxc/incus/internal/i18n"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/termios"
+	cli "github.com/lxc/incus/v6/internal/cmd"
+	"github.com/lxc/incus/v6/internal/i18n"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/termios"
 )
 
 type cmdNetworkPeer struct {
@@ -248,7 +248,10 @@ func (c *cmdNetworkPeerCreate) Command() *cobra.Command {
 
 incus network peer create default peer2 ovn-ic --type=remote
     Create a new peering between network "default" in the current project and other remote networks through the "ovn-ic" integration
-`))
+
+incus network peer create default peer3 web/default < config.yaml
+	Create a new peering between network default in the current project and network default in the web project using the configuration
+	in the file config.yaml`))
 
 	cmd.RunE = c.Run
 

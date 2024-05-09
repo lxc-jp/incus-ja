@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/lxc/incus/shared/api"
+	"github.com/lxc/incus/v6/shared/api"
 )
 
 // GetNetworkACLNames returns a list of network ACL names.
@@ -37,6 +37,21 @@ func (r *ProtocolIncus) GetNetworkACLs() ([]api.NetworkACL, error) {
 
 	// Fetch the raw value.
 	_, err := r.queryStruct("GET", "/network-acls?recursion=1", nil, "", &acls)
+	if err != nil {
+		return nil, err
+	}
+
+	return acls, nil
+}
+
+// GetNetworkACLsAllProjects returns all list of Network ACL structs across all projects.
+func (r *ProtocolIncus) GetNetworkACLsAllProjects() ([]api.NetworkACL, error) {
+	if !r.HasExtension("network_acls_all_projects") {
+		return nil, fmt.Errorf(`The server is missing the required "network_acls_all_projects" API extension`)
+	}
+
+	acls := []api.NetworkACL{}
+	_, err := r.queryStruct("GET", "/network-acls?recursion=1&all-projects=true", nil, "", &acls)
 	if err != nil {
 		return nil, err
 	}

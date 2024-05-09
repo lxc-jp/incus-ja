@@ -10,10 +10,10 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
-	cli "github.com/lxc/incus/internal/cmd"
-	"github.com/lxc/incus/internal/i18n"
-	"github.com/lxc/incus/shared/api"
-	"github.com/lxc/incus/shared/termios"
+	cli "github.com/lxc/incus/v6/internal/cmd"
+	"github.com/lxc/incus/v6/internal/i18n"
+	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/termios"
 )
 
 type cmdNetworkForward struct {
@@ -248,6 +248,11 @@ func (c *cmdNetworkForwardCreate) Command() *cobra.Command {
 	cmd.Use = usage("create", i18n.G("[<remote>:]<network> <listen_address> [key=value...]"))
 	cmd.Short = i18n.G("Create new network forwards")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G("Create new network forwards"))
+	cmd.Example = cli.FormatSection("", i18n.G(`incus network forward create n1 127.0.0.1
+
+incus network forward create n1 127.0.0.1 < config.yaml
+    Create a new network forward for network n1 from config.yaml`))
+
 	cmd.RunE = c.Run
 
 	cmd.Flags().StringVar(&c.networkForward.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
