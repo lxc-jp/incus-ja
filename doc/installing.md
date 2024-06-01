@@ -39,6 +39,10 @@ Incus を以下のコマンドでインストールします:
 
     apk add incus incus-client
 
+仮想マシンを動かす場合は、さらに以下を実行します:
+
+    apk add incus-vm
+
 次にサービスを有効化と起動します:
 
     rc-update add incusd
@@ -66,12 +70,14 @@ Debian ユーザーには現在 3 つの選択肢があります。
     このパッケージは次回の Debian 13 (`trixie`) リリース内に含まれる予定です。
 
     それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
+    仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
 
 1. ネイティブの `incus` のバックポートされたパッケージ
 
    ネイティブの `incus` のバックポートされたパッケージが現在 Debian 12 (`bookworm`) ユーザーに提供されています。
 
    Debian 12 のシステムでは、単に `apt install incus/bookworm-backports` と実行すれば Incus がインストールされます。
+    仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
 
    ****NOTE:**** バックポートされたパッケージのユーザーは Debian Bug Tracker にはバグ報告しないでください。代わりに [Incus のフォーラム](https://discuss.linuxcontainers.org) に報告するか Debian のパッケージ作成者に直接報告してください。
 
@@ -111,6 +117,10 @@ Incus の全ての依存ソフトウェアは Gentoo のメインレポジトリ
 Incus は以下のコマンドでインストールできます:
 
     emerge -av app-containers/incus
+
+仮想マシンを動かす場合は、さらに以下を実行します:
+
+    emerge -av app-emulation/qemu
 
 重要: Incus のアップストリームと Gentoo のレポジトリに LTS と機能リリースが利用できるときに、どちらをインストールするかは後で説明します。
 
@@ -159,10 +169,9 @@ Ubuntu ユーザーには現在 2 つの選択肢があります。
 
 1. ネイティブの `incus` パッケージ
 
-    ネイティブの `incus` パッケージは現在 Ubuntu の開発用レポジトリ内で利用できます。
-    このパッケージは次回の Ubuntu 24.04 (noble) リリースに含まれる予定です。
-
+    ネイティブの `incus` パッケージは現在 Ubuntu 24.04 LTS 以降で利用できます。
     それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
+    仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
 
 1. Zabbly パッケージレポジトリ
 
