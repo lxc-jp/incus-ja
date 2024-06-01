@@ -78,6 +78,23 @@ func (r *ProtocolIncus) GetProjectState(name string) (*api.ProjectState, error) 
 	return &projectState, nil
 }
 
+// GetProjectAccess returns an Access entry for the specified project.
+func (r *ProtocolIncus) GetProjectAccess(name string) (api.Access, error) {
+	access := api.Access{}
+
+	if !r.HasExtension("project_access") {
+		return nil, fmt.Errorf("The server is missing the required \"project_access\" API extension")
+	}
+
+	// Fetch the raw value
+	_, err := r.queryStruct("GET", fmt.Sprintf("/projects/%s/access", url.PathEscape(name)), nil, "", &access)
+	if err != nil {
+		return nil, err
+	}
+
+	return access, nil
+}
+
 // CreateProject defines a new project.
 func (r *ProtocolIncus) CreateProject(project api.ProjectsPost) error {
 	if !r.HasExtension("projects") {
@@ -131,6 +148,21 @@ func (r *ProtocolIncus) DeleteProject(name string) error {
 
 	// Send the request
 	_, _, err := r.query("DELETE", fmt.Sprintf("/projects/%s", url.PathEscape(name)), nil, "")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteProjectForce deletes a project and everything inside of it.
+func (r *ProtocolIncus) DeleteProjectForce(name string) error {
+	if !r.HasExtension("projects_force_delete") {
+		return fmt.Errorf("The server is missing the required \"projects_force_delete\" API extension")
+	}
+
+	// Send the request
+	_, _, err := r.query("DELETE", fmt.Sprintf("/projects/%s?force=1", url.PathEscape(name)), nil, "")
 	if err != nil {
 		return err
 	}

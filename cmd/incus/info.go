@@ -21,9 +21,10 @@ import (
 type cmdInfo struct {
 	global *cmdGlobal
 
-	flagShowLog   bool
-	flagResources bool
-	flagTarget    string
+	flagShowAccess bool
+	flagShowLog    bool
+	flagResources  bool
+	flagTarget     string
 }
 
 func (c *cmdInfo) Command() *cobra.Command {
@@ -40,7 +41,8 @@ incus info [<remote>:] [--resources]
     For server information.`))
 
 	cmd.RunE = c.Run
-	cmd.Flags().BoolVar(&c.flagShowLog, "show-log", false, i18n.G("Show the instance's last 100 log lines?"))
+	cmd.Flags().BoolVar(&c.flagShowAccess, "show-access", false, i18n.G("Show the instance's access list"))
+	cmd.Flags().BoolVar(&c.flagShowLog, "show-log", false, i18n.G("Show the instance's recent log entries"))
 	cmd.Flags().BoolVar(&c.flagResources, "resources", false, i18n.G("Show the resources available to the server"))
 	cmd.Flags().StringVar(&c.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
 
@@ -85,6 +87,22 @@ func (c *cmdInfo) Run(cmd *cobra.Command, args []string) error {
 
 	if cName == "" {
 		return c.remoteInfo(d)
+	}
+
+	if c.flagShowAccess {
+		access, err := d.GetInstanceAccess(cName)
+		if err != nil {
+			return err
+		}
+
+		data, err := yaml.Marshal(access)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%s", data)
+
+		return nil
 	}
 
 	return c.instanceInfo(d, conf.Remotes[remote], cName, c.flagShowLog)
@@ -415,53 +433,59 @@ func (c *cmdInfo) remoteInfo(d incus.InstanceServer) error {
 		}
 
 		// System: Chassis
-		fmt.Printf(i18n.G("  Chassis:") + "\n")
-		if resources.System.Chassis.Vendor != "" {
-			fmt.Printf("      "+i18n.G("Vendor: %s")+"\n", resources.System.Chassis.Vendor)
-		}
+		if resources.System.Chassis != nil {
+			fmt.Printf(i18n.G("  Chassis:") + "\n")
+			if resources.System.Chassis.Vendor != "" {
+				fmt.Printf("      "+i18n.G("Vendor: %s")+"\n", resources.System.Chassis.Vendor)
+			}
 
-		if resources.System.Chassis.Type != "" {
-			fmt.Printf("      "+i18n.G("Type: %s")+"\n", resources.System.Chassis.Type)
-		}
+			if resources.System.Chassis.Type != "" {
+				fmt.Printf("      "+i18n.G("Type: %s")+"\n", resources.System.Chassis.Type)
+			}
 
-		if resources.System.Chassis.Version != "" {
-			fmt.Printf("      "+i18n.G("Version: %s")+"\n", resources.System.Chassis.Version)
-		}
+			if resources.System.Chassis.Version != "" {
+				fmt.Printf("      "+i18n.G("Version: %s")+"\n", resources.System.Chassis.Version)
+			}
 
-		if resources.System.Chassis.Serial != "" {
-			fmt.Printf("      "+i18n.G("Serial: %s")+"\n", resources.System.Chassis.Serial)
+			if resources.System.Chassis.Serial != "" {
+				fmt.Printf("      "+i18n.G("Serial: %s")+"\n", resources.System.Chassis.Serial)
+			}
 		}
 
 		// System: Motherboard
-		fmt.Printf(i18n.G("  Motherboard:") + "\n")
-		if resources.System.Motherboard.Vendor != "" {
-			fmt.Printf("      "+i18n.G("Vendor: %s")+"\n", resources.System.Motherboard.Vendor)
-		}
+		if resources.System.Motherboard != nil {
+			fmt.Printf(i18n.G("  Motherboard:") + "\n")
+			if resources.System.Motherboard.Vendor != "" {
+				fmt.Printf("      "+i18n.G("Vendor: %s")+"\n", resources.System.Motherboard.Vendor)
+			}
 
-		if resources.System.Motherboard.Product != "" {
-			fmt.Printf("      "+i18n.G("Product: %s")+"\n", resources.System.Motherboard.Product)
-		}
+			if resources.System.Motherboard.Product != "" {
+				fmt.Printf("      "+i18n.G("Product: %s")+"\n", resources.System.Motherboard.Product)
+			}
 
-		if resources.System.Motherboard.Serial != "" {
-			fmt.Printf("      "+i18n.G("Serial: %s")+"\n", resources.System.Motherboard.Serial)
-		}
+			if resources.System.Motherboard.Serial != "" {
+				fmt.Printf("      "+i18n.G("Serial: %s")+"\n", resources.System.Motherboard.Serial)
+			}
 
-		if resources.System.Motherboard.Version != "" {
-			fmt.Printf("      "+i18n.G("Version: %s")+"\n", resources.System.Motherboard.Version)
+			if resources.System.Motherboard.Version != "" {
+				fmt.Printf("      "+i18n.G("Version: %s")+"\n", resources.System.Motherboard.Version)
+			}
 		}
 
 		// System: Firmware
-		fmt.Printf(i18n.G("  Firmware:") + "\n")
-		if resources.System.Firmware.Vendor != "" {
-			fmt.Printf("      "+i18n.G("Vendor: %s")+"\n", resources.System.Firmware.Vendor)
-		}
+		if resources.System.Firmware != nil {
+			fmt.Printf(i18n.G("  Firmware:") + "\n")
+			if resources.System.Firmware.Vendor != "" {
+				fmt.Printf("      "+i18n.G("Vendor: %s")+"\n", resources.System.Firmware.Vendor)
+			}
 
-		if resources.System.Firmware.Version != "" {
-			fmt.Printf("      "+i18n.G("Version: %s")+"\n", resources.System.Firmware.Version)
-		}
+			if resources.System.Firmware.Version != "" {
+				fmt.Printf("      "+i18n.G("Version: %s")+"\n", resources.System.Firmware.Version)
+			}
 
-		if resources.System.Firmware.Date != "" {
-			fmt.Printf("      "+i18n.G("Date: %s")+"\n", resources.System.Firmware.Date)
+			if resources.System.Firmware.Date != "" {
+				fmt.Printf("      "+i18n.G("Date: %s")+"\n", resources.System.Firmware.Date)
+			}
 		}
 
 		// Load

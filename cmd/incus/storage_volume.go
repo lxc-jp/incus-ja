@@ -575,6 +575,10 @@ func (c *cmdStorageVolumeCreate) Command() *cobra.Command {
 	cmd.Short = i18n.G("Create new custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Create new custom storage volumes`))
+	cmd.Example = cli.FormatSection("", i18n.G(`incus storage volume create p1 v1
+
+incus storage volume create p1 v1 < config.yaml
+	Create storage volume v1 for pool p1 with configuration from config.yaml.`))
 
 	cmd.Flags().StringVar(&c.storage.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
 	cmd.Flags().StringVar(&c.flagContentType, "type", "filesystem", i18n.G("Content type, block or filesystem")+"``")
@@ -612,15 +616,33 @@ func (c *cmdStorageVolumeCreate) Run(cmd *cobra.Command, args []string) error {
 
 	client := resource.server
 
+	var volumePut api.StorageVolumePut
+	if !termios.IsTerminal(getStdinFd()) {
+		contents, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+
+		err = yaml.UnmarshalStrict(contents, &volumePut)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Parse the input
 	volName, volType := parseVolume("custom", args[1])
 
 	// Create the storage volume entry
-	vol := api.StorageVolumesPost{}
-	vol.Name = volName
-	vol.Type = volType
-	vol.ContentType = c.flagContentType
-	vol.Config = map[string]string{}
+	vol := api.StorageVolumesPost{
+		Name:             volName,
+		Type:             volType,
+		ContentType:      c.flagContentType,
+		StorageVolumePut: volumePut,
+	}
+
+	if volumePut.Config == nil {
+		vol.Config = map[string]string{}
+	}
 
 	for i := 2; i < len(args); i++ {
 		entry := strings.SplitN(args[i], "=", 2)
@@ -2291,6 +2313,11 @@ func (c *cmdStorageVolumeSnapshotCreate) Command() *cobra.Command {
 	cmd.Short = i18n.G("Snapshot storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Snapshot storage volumes`))
+	cmd.Example = cli.FormatSection("", i18n.G(`incus storage volume snapshot create default v1 snap0
+       Create a snapshot of "v1" in pool "default" called "snap0".
+
+incus storage volume snapshot create default v1 snap0 < config.yaml
+       Create a snapshot of "v1" in pool "default" called "snap0" with the configuration from "config.yaml".`))
 
 	cmd.Flags().BoolVar(&c.flagNoExpiry, "no-expiry", false, i18n.G("Ignore any configured auto-expiry for the storage volume"))
 	cmd.Flags().BoolVar(&c.flagReuse, "reuse", false, i18n.G("If the snapshot name already exists, delete and create a new one"))
@@ -2313,10 +2340,25 @@ func (c *cmdStorageVolumeSnapshotCreate) Command() *cobra.Command {
 }
 
 func (c *cmdStorageVolumeSnapshotCreate) Run(cmd *cobra.Command, args []string) error {
+	var stdinData api.StorageVolumeSnapshotPut
+
 	// Quick checks.
 	exit, err := c.global.CheckArgs(cmd, args, 2, 3)
 	if exit {
 		return err
+	}
+
+	// If stdin isn't a terminal, read text from it
+	if !termios.IsTerminal(getStdinFd()) {
+		contents, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+
+		err = yaml.Unmarshal(contents, &stdinData)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Parse remote
@@ -2362,6 +2404,8 @@ func (c *cmdStorageVolumeSnapshotCreate) Run(cmd *cobra.Command, args []string) 
 
 	if c.flagNoExpiry {
 		req.ExpiresAt = &time.Time{}
+	} else if stdinData.ExpiresAt != nil && !stdinData.ExpiresAt.IsZero() {
+		req.ExpiresAt = stdinData.ExpiresAt
 	}
 
 	if c.flagReuse && snapname != "" {
