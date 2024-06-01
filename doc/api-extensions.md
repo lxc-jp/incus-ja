@@ -2468,6 +2468,18 @@ TLS クライアント証明書を直接使う代わりに署名された `JSON 
 
 `GET /1.0/storage-pools/POOL/buckets` APIで`all-projects`でパラメータによりすべてプロジェクトのストレージバケットを一覧表示できるようにします。
 
-## `resources_load
+## `resources_load`
 
 リソースAPIにLoadセクションを追加します。
+
+## `instance_access`
+
+`GET /1.0/instances/NAME/access`に新しいAPIエンドポイントを追加します。これはインスタンスを操作できる人とその人たちが持つロールを表示します。
+
+## `project_access`
+
+`GET /1.0/projects/NAME/access`に新しいAPIエンドポイントを追加します。これはプロジェクトを操作できる人とその人たちが持つロールを表示します。
+
+## `projects_force_delete`
+
+`DELETE /1.0/projects`が`?force=true`を受け付けるようにします。指定するとプロジェクトをプロジェクト内部に含まれるあらゆるものとまとめて消せるようになります。
