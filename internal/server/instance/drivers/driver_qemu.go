@@ -56,6 +56,7 @@ import (
 	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
 	"github.com/lxc/incus/v6/internal/server/device/nictype"
 	"github.com/lxc/incus/v6/internal/server/instance"
+	"github.com/lxc/incus/v6/internal/server/instance/drivers/edk2"
 	"github.com/lxc/incus/v6/internal/server/instance/drivers/qmp"
 	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
 	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
@@ -113,42 +114,6 @@ const qemuBlockDevIDPrefix = "incus_"
 
 // qemuMigrationNBDExportName is the name of the disk device export by the migration NBD server.
 const qemuMigrationNBDExportName = "incus_root"
-
-// OVMF firmwares.
-type ovmfFirmware struct {
-	code string
-	vars string
-}
-
-var ovmfGenericFirmwares = []ovmfFirmware{
-	{code: "OVMF_CODE.4MB.fd", vars: "OVMF_VARS.4MB.fd"},
-	{code: "OVMF_CODE_4M.fd", vars: "OVMF_VARS_4M.fd"},
-	{code: "OVMF_CODE.4m.fd", vars: "OVMF_VARS.4m.fd"},
-	{code: "OVMF_CODE.2MB.fd", vars: "OVMF_VARS.2MB.fd"},
-	{code: "OVMF_CODE.fd", vars: "OVMF_VARS.fd"},
-	{code: "OVMF_CODE.fd", vars: "qemu.nvram"},
-}
-
-var ovmfSecurebootFirmwares = []ovmfFirmware{
-	{code: "OVMF_CODE.4MB.fd", vars: "OVMF_VARS.4MB.ms.fd"},
-	{code: "OVMF_CODE_4M.ms.fd", vars: "OVMF_VARS_4M.ms.fd"},
-	{code: "OVMF_CODE_4M.secboot.fd", vars: "OVMF_VARS_4M.secboot.fd"},
-	{code: "OVMF_CODE.secboot.4m.fd", vars: "OVMF_VARS.4m.fd"},
-	{code: "OVMF_CODE.secboot.fd", vars: "OVMF_VARS.secboot.fd"},
-	{code: "OVMF_CODE.secboot.fd", vars: "OVMF_VARS.fd"},
-	{code: "OVMF_CODE.2MB.fd", vars: "OVMF_VARS.2MB.ms.fd"},
-	{code: "OVMF_CODE.fd", vars: "OVMF_VARS.ms.fd"},
-	{code: "OVMF_CODE.fd", vars: "qemu.nvram"},
-}
-
-var ovmfCSMFirmwares = []ovmfFirmware{
-	{code: "seabios.bin", vars: "seabios.bin"},
-	{code: "OVMF_CODE.4MB.CSM.fd", vars: "OVMF_VARS.4MB.CSM.fd"},
-	{code: "OVMF_CODE.csm.4m.fd", vars: "OVMF_VARS.4m.fd"},
-	{code: "OVMF_CODE.2MB.CSM.fd", vars: "OVMF_VARS.2MB.CSM.fd"},
-	{code: "OVMF_CODE.CSM.fd", vars: "OVMF_VARS.CSM.fd"},
-	{code: "OVMF_CODE.csm.fd", vars: "OVMF_VARS.fd"},
-}
 
 // qemuSparseUSBPorts is the amount of sparse USB ports for VMs.
 // 4 are reserved, and the other 4 can be used for any USB device.
@@ -416,6 +381,90 @@ func (d *qemu) getAgentClient() (*http.Client, error) {
 	}
 
 	return agent, nil
+}
+
+func (d *qemu) getClusterCPUFlags() ([]string, error) {
+	// Get the list of cluster members.
+	var nodes []db.RaftNode
+	err := d.state.DB.Node.Transaction(context.TODO(), func(ctx context.Context, tx *db.NodeTx) error {
+		var err error
+		nodes, err = tx.GetRaftNodes(ctx)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Get architecture name.
+	arch, err := osarch.ArchitectureName(d.architecture)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all the CPU flags for the architecture.
+	flagMembers := map[string]int{}
+	coreCount := 0
+
+	for _, node := range nodes {
+		// Attempt to load the cached resources.
+		resourcesPath := internalUtil.CachePath("resources", fmt.Sprintf("%s.yaml", node.Name))
+
+		data, err := os.ReadFile(resourcesPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+
+			return nil, err
+		}
+
+		res := api.Resources{}
+		err = json.Unmarshal(data, &res)
+		if err != nil {
+			return nil, err
+		}
+
+		// Skip if not the correct architecture.
+		if res.CPU.Architecture != arch {
+			continue
+		}
+
+		// Add the CPU flags to the map.
+		for _, socket := range res.CPU.Sockets {
+			for _, core := range socket.Cores {
+				coreCount += 1
+				for _, flag := range core.Flags {
+					flagMembers[flag] += 1
+				}
+			}
+		}
+	}
+
+	// Get the host flags.
+	info := DriverStatuses()[instancetype.VM].Info
+	hostFlags, ok := info.Features["flags"].(map[string]bool)
+	if !ok {
+		// No CPU flags found.
+		return nil, nil
+	}
+
+	// Build a set of flags common to all cores.
+	flags := []string{}
+
+	for k, v := range flagMembers {
+		if v != coreCount {
+			continue
+		}
+
+		hostVal, ok := hostFlags[k]
+		if !ok || hostVal {
+			continue
+		}
+
+		flags = append(flags, k)
+	}
+
+	return flags, nil
 }
 
 func (d *qemu) getMonitorEventHandler() func(event string, data map[string]any) {
@@ -793,14 +842,6 @@ func (d *qemu) Restart(timeout time.Duration) error {
 // Rebuild rebuilds the instance using the supplied image fingerprint as source.
 func (d *qemu) Rebuild(img *api.Image, op *operations.Operation) error {
 	return d.rebuildCommon(d, img, op)
-}
-
-func (d *qemu) ovmfPath() string {
-	if os.Getenv("INCUS_OVMF_PATH") != "" {
-		return os.Getenv("INCUS_OVMF_PATH")
-	}
-
-	return "/usr/share/OVMF"
 }
 
 // killQemuProcess kills specified process. Optimistically attempts to wait for the process to fully exit, but does
@@ -1291,7 +1332,7 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 		return err
 	}
 
-	// Copy OVMF settings firmware to nvram file if needed.
+	// Copy EDK2 settings firmware to nvram file if needed.
 	// This firmware file can be modified by the VM so it must be copied from the defaults.
 	if d.architectureSupportsUEFI(d.architecture) && (!util.PathExists(d.nvramPath()) || util.IsTrue(d.localConfig["volatile.apply_nvram"])) {
 		err = d.setupNvram()
@@ -1456,6 +1497,19 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	}
 
 	cpuType := "host"
+
+	// Get CPU flags if clustered and migration is enabled (x86_64 only for now).
+	if d.architecture != osarch.ARCH_64BIT_INTEL_X86 && d.state.ServerClustered && util.IsTrue(d.expandedConfig["migration.stateful"]) {
+		cpuFlags, err := d.getClusterCPUFlags()
+		if err != nil {
+			op.Done(err)
+			return err
+		}
+
+		cpuType = "kvm64"
+		cpuExtensions = append(cpuExtensions, cpuFlags...)
+	}
+
 	if len(cpuExtensions) > 0 {
 		cpuType += "," + strings.Join(cpuExtensions, ",")
 	}
@@ -1976,55 +2030,54 @@ func (d *qemu) setupNvram() error {
 	d.logger.Debug("Generating NVRAM")
 
 	// Cleanup existing variables.
-	for _, firmwares := range [][]ovmfFirmware{ovmfGenericFirmwares, ovmfSecurebootFirmwares, ovmfCSMFirmwares} {
-		for _, firmware := range firmwares {
-			err := os.Remove(filepath.Join(d.Path(), firmware.vars))
-			if err != nil && !os.IsNotExist(err) {
-				return err
-			}
+	for _, firmwarePair := range edk2.GetAchitectureFirmwarePairs(d.architecture) {
+		err := os.Remove(filepath.Join(d.Path(), filepath.Base(firmwarePair.Vars)))
+		if err != nil && !os.IsNotExist(err) {
+			return err
 		}
 	}
 
 	// Determine expected firmware.
-	firmwares := ovmfGenericFirmwares
+	var firmwares []edk2.FirmwarePair
 	if util.IsTrue(d.expandedConfig["security.csm"]) {
-		firmwares = ovmfCSMFirmwares
+		firmwares = edk2.GetArchitectureFirmwarePairsForUsage(d.architecture, edk2.CSM)
 	} else if util.IsTrueOrEmpty(d.expandedConfig["security.secureboot"]) {
-		firmwares = ovmfSecurebootFirmwares
+		firmwares = edk2.GetArchitectureFirmwarePairsForUsage(d.architecture, edk2.SECUREBOOT)
+	} else {
+		firmwares = edk2.GetArchitectureFirmwarePairsForUsage(d.architecture, edk2.GENERIC)
 	}
 
 	// Find the template file.
-	var ovmfVarsPath string
-	var ovmfVarsName string
+	var efiVarsPath string
+	var efiVarsName string
 	for _, firmware := range firmwares {
-		varsPath := filepath.Join(d.ovmfPath(), firmware.vars)
-		varsPath, err = filepath.EvalSymlinks(varsPath)
+		varsPath, err := filepath.EvalSymlinks(firmware.Vars)
 		if err != nil {
 			continue
 		}
 
 		if util.PathExists(varsPath) {
-			ovmfVarsPath = varsPath
-			ovmfVarsName = firmware.vars
+			efiVarsPath = varsPath
+			efiVarsName = filepath.Base(firmware.Vars)
 			break
 		}
 	}
 
-	if ovmfVarsPath == "" {
+	if efiVarsPath == "" {
 		return fmt.Errorf("Couldn't find one of the required UEFI firmware files: %+v", firmwares)
 	}
 
 	// Copy the template.
-	err = internalUtil.FileCopy(ovmfVarsPath, filepath.Join(d.Path(), ovmfVarsName))
+	err = internalUtil.FileCopy(efiVarsPath, filepath.Join(d.Path(), efiVarsName))
 	if err != nil {
 		return err
 	}
 
 	// Generate a symlink if needed.
-	// This is so qemu.nvram can always be assumed to be the OVMF vars file.
+	// This is so qemu.nvram can always be assumed to be the EDK2 vars file.
 	// The real file name is then used to determine what firmware must be selected.
 	if !util.PathExists(d.nvramPath()) {
-		err = os.Symlink(ovmfVarsName, d.nvramPath())
+		err = os.Symlink(efiVarsName, d.nvramPath())
 		if err != nil {
 			return err
 		}
@@ -3047,27 +3100,29 @@ func (d *qemu) generateQemuConfigFile(cpuInfo *cpuTopology, mountInfo *storagePo
 		}
 
 		// Determine expected firmware.
-		firmwares := ovmfGenericFirmwares
+		var firmwares []edk2.FirmwarePair
 		if util.IsTrue(d.expandedConfig["security.csm"]) {
-			firmwares = ovmfCSMFirmwares
+			firmwares = edk2.GetArchitectureFirmwarePairsForUsage(d.architecture, edk2.CSM)
 		} else if util.IsTrueOrEmpty(d.expandedConfig["security.secureboot"]) {
-			firmwares = ovmfSecurebootFirmwares
+			firmwares = edk2.GetArchitectureFirmwarePairsForUsage(d.architecture, edk2.SECUREBOOT)
+		} else {
+			firmwares = edk2.GetArchitectureFirmwarePairsForUsage(d.architecture, edk2.GENERIC)
 		}
 
-		var ovmfCode string
+		var efiCode string
 		for _, firmware := range firmwares {
-			if util.PathExists(filepath.Join(d.Path(), firmware.vars)) {
-				ovmfCode = firmware.code
+			if util.PathExists(filepath.Join(d.Path(), filepath.Base(firmware.Vars))) {
+				efiCode = firmware.Code
 				break
 			}
 		}
 
-		if ovmfCode == "" {
+		if efiCode == "" {
 			return "", nil, fmt.Errorf("Unable to locate matching firmware: %+v", firmwares)
 		}
 
 		driveFirmwareOpts := qemuDriveFirmwareOpts{
-			roPath:    filepath.Join(d.ovmfPath(), ovmfCode),
+			roPath:    efiCode,
 			nvramPath: fmt.Sprintf("/dev/fd/%d", d.addFileDescriptor(fdFiles, nvRAMFile)),
 		}
 
@@ -3679,29 +3734,31 @@ func (d *qemu) addDriveDirConfig(cfg *[]cfgSection, bus *qemuBus, fdFiles *[]*os
 	}
 
 	// Add 9p share config.
-	devBus, devAddr, multi := bus.allocate(busFunctionGroup9p)
+	if !slices.Contains(driveConf.Opts, "bus=virtiofs") {
+		devBus, devAddr, multi := bus.allocate(busFunctionGroup9p)
 
-	fd, err := strconv.Atoi(driveConf.DevPath)
-	if err != nil {
-		return fmt.Errorf("Invalid file descriptor %q for drive %q: %w", driveConf.DevPath, driveConf.DevName, err)
+		fd, err := strconv.Atoi(driveConf.DevPath)
+		if err != nil {
+			return fmt.Errorf("Invalid file descriptor %q for drive %q: %w", driveConf.DevPath, driveConf.DevName, err)
+		}
+
+		proxyFD := d.addFileDescriptor(fdFiles, os.NewFile(uintptr(fd), driveConf.DevName))
+
+		driveDir9pOpts := qemuDriveDirOpts{
+			dev: qemuDevOpts{
+				busName:       bus.name,
+				devBus:        devBus,
+				devAddr:       devAddr,
+				multifunction: multi,
+			},
+			devName:  driveConf.DevName,
+			mountTag: mountTag,
+			proxyFD:  proxyFD, // Pass by file descriptor
+			readonly: readonly,
+			protocol: "9p",
+		}
+		*cfg = append(*cfg, qemuDriveDir(&driveDir9pOpts)...)
 	}
-
-	proxyFD := d.addFileDescriptor(fdFiles, os.NewFile(uintptr(fd), driveConf.DevName))
-
-	driveDir9pOpts := qemuDriveDirOpts{
-		dev: qemuDevOpts{
-			busName:       bus.name,
-			devBus:        devBus,
-			devAddr:       devAddr,
-			multifunction: multi,
-		},
-		devName:  driveConf.DevName,
-		mountTag: mountTag,
-		proxyFD:  proxyFD, // Pass by file descriptor
-		readonly: readonly,
-		protocol: "9p",
-	}
-	*cfg = append(*cfg, qemuDriveDir(&driveDir9pOpts)...)
 
 	return nil
 }
@@ -3781,9 +3838,11 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 			} else {
 				// Use host cache, with neither O_DSYNC nor O_DIRECT semantics if filesystem
 				// doesn't support Direct I/O.
-				_, err := os.OpenFile(srcDevPath, unix.O_DIRECT|unix.O_RDONLY, 0)
+				f, err := os.OpenFile(srcDevPath, unix.O_DIRECT|unix.O_RDONLY, 0)
 				if err != nil {
 					cacheMode = "writeback"
+				} else {
+					_ = f.Close() // Don't leak FD.
 				}
 			}
 
@@ -6736,7 +6795,7 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 
 	// Notify the shared disks that they're going to be accessed from another system.
 	for _, dev := range d.expandedDevices.Sorted() {
-		if dev.Config["type"] != "disk" || dev.Config["path"] == "/" {
+		if dev.Config["type"] != "disk" || dev.Config["path"] == "/" || dev.Config["pool"] == "" {
 			continue
 		}
 
@@ -7248,7 +7307,7 @@ func (d *qemu) MigrateReceive(args instance.MigrateReceiveArgs) error {
 
 		// Notify the shared disks that they're going to be accessed from another system.
 		for _, dev := range d.expandedDevices.Sorted() {
-			if dev.Config["type"] != "disk" || dev.Config["path"] == "/" {
+			if dev.Config["type"] != "disk" || dev.Config["path"] == "/" || dev.Config["pool"] == "" {
 				continue
 			}
 
@@ -7973,10 +8032,10 @@ func (d *qemu) acquireVsockID(vsockID uint32) (*os.File, error) {
 	revert.Add(func() { _ = vsockF.Close() })
 
 	// The vsock Context ID cannot be supplied as type uint32.
-	vsockIDInt := int(vsockID)
+	vsockIDInt := uint64(vsockID)
 
-	// 0x4008AF60 = VHOST_VSOCK_SET_GUEST_CID = _IOW(VHOST_VIRTIO, 0x60, __u64)
-	_, _, errno := unix.Syscall(unix.SYS_IOCTL, vsockF.Fd(), 0x4008AF60, uintptr(unsafe.Pointer(&vsockIDInt)))
+	// Call the ioctl to set the context ID.
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, vsockF.Fd(), linux.IoctlVhostVsockSetGuestCid, uintptr(unsafe.Pointer(&vsockIDInt)))
 	if errno != 0 {
 		if !errors.Is(errno, unix.EADDRINUSE) {
 			return nil, fmt.Errorf("Failed ioctl syscall to vhost socket: %q", errno.Error())
@@ -8471,19 +8530,19 @@ func (d *qemu) checkFeatures(hostArch int, qemuPath string) (map[string]any, err
 
 	if d.architectureSupportsUEFI(hostArch) {
 		// Try to locate a UEFI firmware.
-		var ovmfPath string
-		for _, entry := range ovmfGenericFirmwares {
-			if util.PathExists(filepath.Join(d.ovmfPath(), entry.code)) {
-				ovmfPath = filepath.Join(d.ovmfPath(), entry.code)
+		var efiPath string
+		for _, firmwarePair := range edk2.GetArchitectureFirmwarePairsForUsage(hostArch, edk2.GENERIC) {
+			if util.PathExists(firmwarePair.Code) {
+				efiPath = firmwarePair.Code
 				break
 			}
 		}
 
-		if ovmfPath == "" {
+		if efiPath == "" {
 			return nil, fmt.Errorf("Unable to locate a UEFI firmware")
 		}
 
-		qemuArgs = append(qemuArgs, "-drive", fmt.Sprintf("if=pflash,format=raw,readonly=on,file=%s", ovmfPath))
+		qemuArgs = append(qemuArgs, "-drive", fmt.Sprintf("if=pflash,format=raw,readonly=on,file=%s", efiPath))
 	}
 
 	var stderr bytes.Buffer
@@ -8622,6 +8681,26 @@ func (d *qemu) checkFeatures(hostArch int, qemuPath string) (map[string]any, err
 	// Check if vhost-net accelerator (for NIC CPU offloading) is available.
 	if util.PathExists("/dev/vhost-net") {
 		features["vhost_net"] = struct{}{}
+	}
+
+	// Get the host CPU model (x86_64 only for now).
+	if hostArch != osarch.ARCH_64BIT_INTEL_X86 {
+		model, err := monitor.QueryCPUModel("kvm64")
+		if err != nil {
+			return nil, err
+		}
+
+		cpuFlags := map[string]bool{}
+		for k, v := range model.Flags {
+			value, ok := v.(bool)
+			if !ok {
+				continue
+			}
+
+			cpuFlags[k] = value
+		}
+
+		features["flags"] = cpuFlags
 	}
 
 	return features, nil

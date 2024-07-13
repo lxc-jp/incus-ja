@@ -128,7 +128,7 @@ func OVNEnsureACLs(s *state.State, l logger.Logger, client *ovn.NB, aclProjectNa
 		portGroupName := OVNACLPortGroupName(aclNameIDs[aclName])
 
 		// Check if port group exists and has ACLs.
-		portGroupUUID, portGroupHasACLs, err := client.PortGroupInfo(portGroupName)
+		portGroupUUID, portGroupHasACLs, err := client.GetPortGroupInfo(context.TODO(), portGroupName)
 		if err != nil {
 			return nil, fmt.Errorf("Failed getting port group UUID for security ACL %q setup: %w", aclName, err)
 		}
@@ -154,7 +154,7 @@ func OVNEnsureACLs(s *state.State, l logger.Logger, client *ovn.NB, aclProjectNa
 			// Check each per-ACL-per-network port group exists.
 			for _, aclNet := range aclNets {
 				netPortGroupName := OVNACLNetworkPortGroupName(aclNameIDs[aclName], aclNet.ID)
-				netPortGroupUUID, _, err := client.PortGroupInfo(netPortGroupName)
+				netPortGroupUUID, _, err := client.GetPortGroupInfo(context.TODO(), netPortGroupName)
 				if err != nil {
 					return nil, fmt.Errorf("Failed getting port group UUID for security ACL %q setup: %w", aclName, err)
 				}
@@ -215,7 +215,7 @@ func OVNEnsureACLs(s *state.State, l logger.Logger, client *ovn.NB, aclProjectNa
 		portGroupName := OVNACLPortGroupName(aclNameIDs[aclName])
 
 		// Check if port group exists.
-		portGroupUUID, _, err := client.PortGroupInfo(portGroupName)
+		portGroupUUID, _, err := client.GetPortGroupInfo(context.TODO(), portGroupName)
 		if err != nil {
 			return nil, fmt.Errorf("Failed getting port group UUID for security ACL %q setup: %w", aclName, err)
 		}
@@ -223,12 +223,12 @@ func OVNEnsureACLs(s *state.State, l logger.Logger, client *ovn.NB, aclProjectNa
 		if portGroupUUID == "" {
 			l.Debug("Creating empty referenced ACL OVN port group", logger.Ctx{"networkACL": aclName, "portGroup": portGroupName})
 
-			err := client.PortGroupAdd(projectID, portGroupName, "", "")
+			err := client.CreatePortGroup(context.TODO(), projectID, portGroupName, "", "")
 			if err != nil {
 				return nil, fmt.Errorf("Failed creating port group %q for referenced security ACL %q setup: %w", portGroupName, aclName, err)
 			}
 
-			revert.Add(func() { _ = client.PortGroupDelete(portGroupName) })
+			revert.Add(func() { _ = client.DeletePortGroup(context.TODO(), portGroupName) })
 		}
 	}
 
@@ -237,12 +237,12 @@ func OVNEnsureACLs(s *state.State, l logger.Logger, client *ovn.NB, aclProjectNa
 		portGroupName := OVNACLPortGroupName(aclNameIDs[aclStatus.name])
 		l.Debug("Creating ACL OVN port group", logger.Ctx{"networkACL": aclStatus.name, "portGroup": portGroupName})
 
-		err := client.PortGroupAdd(projectID, portGroupName, "", "")
+		err := client.CreatePortGroup(context.TODO(), projectID, portGroupName, "", "")
 		if err != nil {
 			return nil, fmt.Errorf("Failed creating port group %q for security ACL %q setup: %w", portGroupName, aclStatus.name, err)
 		}
 
-		revert.Add(func() { _ = client.PortGroupDelete(portGroupName) })
+		revert.Add(func() { _ = client.DeletePortGroup(context.TODO(), portGroupName) })
 
 		// Create any per-ACL-per-network port groups needed.
 		for _, aclNet := range aclNets {
@@ -250,12 +250,12 @@ func OVNEnsureACLs(s *state.State, l logger.Logger, client *ovn.NB, aclProjectNa
 			l.Debug("Creating ACL OVN network port group", logger.Ctx{"networkACL": aclStatus.name, "portGroup": netPortGroupName})
 
 			// Create OVN network specific port group and link it to switch by adding the router port.
-			err = client.PortGroupAdd(projectID, netPortGroupName, portGroupName, OVNIntSwitchName(aclNet.ID), OVNIntSwitchRouterPortName(aclNet.ID))
+			err = client.CreatePortGroup(context.TODO(), projectID, netPortGroupName, portGroupName, OVNIntSwitchName(aclNet.ID), OVNIntSwitchRouterPortName(aclNet.ID))
 			if err != nil {
 				return nil, fmt.Errorf("Failed creating port group %q for security ACL %q and network %q setup: %w", portGroupName, aclStatus.name, aclNet.Name, err)
 			}
 
-			revert.Add(func() { _ = client.PortGroupDelete(netPortGroupName) })
+			revert.Add(func() { _ = client.DeletePortGroup(context.TODO(), netPortGroupName) })
 		}
 
 		// Now apply our ACL rules to port group (and any per-ACL-per-network port groups needed).
@@ -276,12 +276,12 @@ func OVNEnsureACLs(s *state.State, l logger.Logger, client *ovn.NB, aclProjectNa
 			l.Debug("Creating ACL OVN network port group", logger.Ctx{"networkACL": aclStatus.name, "portGroup": netPortGroupName})
 
 			// Create OVN network specific port group and link it to switch by adding the router port.
-			err := client.PortGroupAdd(projectID, netPortGroupName, portGroupName, OVNIntSwitchName(aclNet.ID), OVNIntSwitchRouterPortName(aclNet.ID))
+			err := client.CreatePortGroup(context.TODO(), projectID, netPortGroupName, portGroupName, OVNIntSwitchName(aclNet.ID), OVNIntSwitchRouterPortName(aclNet.ID))
 			if err != nil {
 				return nil, fmt.Errorf("Failed creating port group %q for security ACL %q and network %q setup: %w", portGroupName, aclStatus.name, aclNet.Name, err)
 			}
 
-			revert.Add(func() { _ = client.PortGroupDelete(netPortGroupName) })
+			revert.Add(func() { _ = client.DeletePortGroup(context.TODO(), netPortGroupName) })
 		}
 
 		// If aclInfo has been loaded, then we should use it to apply ACL rules to the existing port group
@@ -403,7 +403,7 @@ func ovnApplyToPortGroup(l logger.Logger, client *ovn.NB, aclInfo *api.NetworkAC
 	}
 
 	// Clear all existing ACL rules from port group then add the new rules to the port group.
-	err = client.PortGroupSetACLRules(portGroupName, nil, portGroupRules...)
+	err = client.UpdatePortGroupACLRules(context.TODO(), portGroupName, nil, portGroupRules...)
 	if err != nil {
 		return fmt.Errorf("Failed applying ACL %q rules to port group %q: %w", aclInfo.Name, portGroupName, err)
 	}
@@ -419,7 +419,7 @@ func ovnApplyToPortGroup(l logger.Logger, client *ovn.NB, aclInfo *api.NetworkAC
 			fmt.Sprintf("@%s", ruleSubjectExternal): fmt.Sprintf(`"%s"`, OVNIntSwitchRouterPortName(aclNet.ID)),
 		}
 
-		err = client.PortGroupSetACLRules(netPortGroupName, matchReplace, networkRules...)
+		err = client.UpdatePortGroupACLRules(context.TODO(), netPortGroupName, matchReplace, networkRules...)
 		if err != nil {
 			return fmt.Errorf("Failed applying ACL %q rules to port group %q for network %q: %w", aclInfo.Name, netPortGroupName, aclNet.Name, err)
 		}
@@ -746,7 +746,7 @@ func OVNApplyNetworkBaselineRules(client *ovn.NB, switchName ovn.OVNSwitch, rout
 		)
 	}
 
-	err := client.LogicalSwitchSetACLRules(switchName, rules...)
+	err := client.UpdateLogicalSwitchACLRules(context.TODO(), switchName, rules...)
 	if err != nil {
 		return fmt.Errorf("Failed applying baseline ACL rules to logical switch %q: %w", switchName, err)
 	}
@@ -793,7 +793,7 @@ func OVNPortGroupDeleteIfUnused(s *state.State, l logger.Logger, client *ovn.NB,
 	}
 
 	// Get list of OVN port groups associated to this project.
-	portGroups, err := client.PortGroupListByProject(projectID)
+	portGroups, err := client.GetPortGroupsByProject(context.TODO(), projectID)
 	if err != nil {
 		return fmt.Errorf("Failed getting port groups for project %q: %w", aclProjectName, err)
 	}
@@ -974,7 +974,7 @@ func OVNPortGroupDeleteIfUnused(s *state.State, l logger.Logger, client *ovn.NB,
 	}
 
 	if len(removePortGroups) > 0 {
-		err = client.PortGroupDelete(removePortGroups...)
+		err = client.DeletePortGroup(context.TODO(), removePortGroups...)
 		if err != nil {
 			return fmt.Errorf("Failed to delete unused OVN port groups: %w", err)
 		}
@@ -1024,7 +1024,7 @@ func OVNApplyInstanceNICDefaultRules(client *ovn.NB, switchPortGroup ovn.OVNPort
 		},
 	}
 
-	err := client.PortGroupPortSetACLRules(switchPortGroup, nicPortName, rules...)
+	err := client.UpdatePortGroupPortACLRules(context.TODO(), switchPortGroup, nicPortName, rules...)
 	if err != nil {
 		return fmt.Errorf("Failed applying instance NIC default ACL rules for port %q: %w", nicPortName, err)
 	}
@@ -1082,12 +1082,12 @@ func ovnParseLogEntry(input string, prefix string) string {
 	}
 
 	// Get the protocol.
-	severityFields := strings.Split(aclEntry["severity"], " ")
-	if len(severityFields) != 2 {
+	directionFields := strings.Split(aclEntry["direction"], " ")
+	if len(directionFields) != 2 {
 		return ""
 	}
 
-	protocol := severityFields[1]
+	protocol := directionFields[1]
 
 	// Get the source and destination addresses.
 	srcAddr, ok := aclEntry["nw_src"]

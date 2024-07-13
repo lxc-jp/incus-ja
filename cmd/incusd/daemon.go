@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/x509"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -696,6 +697,11 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 			resp = handleRequest(c.Patch)
 		default:
 			resp = response.NotFound(fmt.Errorf("Method %q not found", r.Method))
+		}
+
+		// If sending out Forbidden, make sure we have OIDC headers.
+		if resp.Code() == http.StatusForbidden && d.oidcVerifier != nil {
+			_ = d.oidcVerifier.WriteHeaders(w)
 		}
 
 		// Handle errors
@@ -2305,6 +2311,55 @@ func (d *Daemon) heartbeatHandler(w http.ResponseWriter, r *http.Request, isLead
 		}
 
 		logger.Info("Partial heartbeat received", logger.Ctx{"local": localClusterAddress})
+	}
+
+	// Refresh cluster member resource info cache.
+	var muRefresh sync.Mutex
+
+	for _, member := range hbData.Members {
+		// Ignore offline servers.
+		if !member.Online {
+			continue
+		}
+
+		if member.Name == s.ServerName {
+			continue
+		}
+
+		go func(name string, address string) {
+			muRefresh.Lock()
+			defer muRefresh.Unlock()
+
+			// Check if we have a recent local cache entry already.
+			resourcesPath := internalUtil.CachePath("resources", fmt.Sprintf("%s.yaml", name))
+			fi, err := os.Stat(resourcesPath)
+			if err == nil && fi.ModTime().Before(time.Now().Add(time.Hour)) {
+				return
+			}
+
+			// Connect to the server.
+			client, err := cluster.Connect(address, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
+			if err != nil {
+				return
+			}
+
+			// Get the server resources.
+			resources, err := client.GetServerResources()
+			if err != nil {
+				return
+			}
+
+			// Write to cache.
+			data, err := json.Marshal(resources)
+			if err != nil {
+				return
+			}
+
+			err = os.WriteFile(resourcesPath, data, 0600)
+			if err != nil {
+				return
+			}
+		}(member.Name, member.Address)
 	}
 }
 
