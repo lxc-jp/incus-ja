@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -167,34 +166,11 @@ func (d *lvm) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, vol
 			return err
 		}
 
-		// Mark the volume for shared locking during live migration.
-		if vol.volType == VolumeTypeVM || vol.IsCustomBlock() {
-			volDevPath := d.lvmDevPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, vol.Name())
-			_, err := subprocess.RunCommand("lvchange", "--activate", "sy", "--ignoreactivationskip", volDevPath)
+		if vol.IsVMBlock() {
+			fsVol := vol.NewVMBlockFilesystemVolume()
+			err := d.CreateVolumeFromMigration(fsVol, conn, volTargetArgs, preFiller, op)
 			if err != nil {
 				return err
-			}
-
-			go func(volDevPath string) {
-				// Attempt to re-lock as host-exclusive as soon as possible.
-				// This will only happen once the migration on the source system is fully over.
-				// Re-try every 10s until success as we can't predict how long a migration may take (from a few seconds to hours).
-				for {
-					_, err := subprocess.RunCommand("lvchange", "--activate", "ey", "--ignoreactivationskip", volDevPath)
-					if err == nil {
-						break
-					}
-
-					time.Sleep(10 * time.Second)
-				}
-			}(volDevPath)
-
-			if vol.IsVMBlock() {
-				fsVol := vol.NewVMBlockFilesystemVolume()
-				err := d.CreateVolumeFromMigration(fsVol, conn, volTargetArgs, preFiller, op)
-				if err != nil {
-					return err
-				}
 			}
 		}
 
@@ -343,7 +319,18 @@ func (d *lvm) commonVolumeRules() map[string]func(value string) error {
 
 // ValidateVolume validates the supplied volume config.
 func (d *lvm) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
-	err := d.validateVolume(vol, d.commonVolumeRules(), removeUnknownKeys)
+	commonRules := d.commonVolumeRules()
+
+	// Disallow block.* settings for regular custom block volumes. These settings only make sense
+	// when using custom filesystem volumes. Incus will create the filesystem
+	// for these volumes, and use the mount options. When attaching a regular block volume to a VM,
+	// these are not mounted by Incus and therefore don't need these config keys.
+	if vol.IsVMBlock() || vol.volType == VolumeTypeCustom && vol.contentType == ContentTypeBlock {
+		delete(commonRules, "block.filesystem")
+		delete(commonRules, "block.mount_options")
+	}
+
+	err := d.validateVolume(vol, commonRules, removeUnknownKeys)
 	if err != nil {
 		return err
 	}
@@ -869,7 +856,7 @@ func (d *lvm) RenameVolume(vol Volume, newVolName string, op *operations.Operati
 // MigrateVolume sends a volume for migration.
 func (d *lvm) MigrateVolume(vol Volume, conn io.ReadWriteCloser, volSrcArgs *migration.VolumeSourceArgs, op *operations.Operation) error {
 	if d.clustered && volSrcArgs.ClusterMove {
-		// Mark the volume for shared locking during live migration.
+		// Ensure the volume allows shared access.
 		if vol.volType == VolumeTypeVM || vol.IsCustomBlock() {
 			// Block volume.
 			volDevPath := d.lvmDevPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, vol.Name())

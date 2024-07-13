@@ -35,7 +35,7 @@
 `INCUS_EXEC_PATH`               | （サブコマンド実行時に使用される）Incus実行ファイルのフルパス
 `INCUS_IDMAPPED_MOUNTS_DISABLE` | idmapを使ったマウントを無効にする（従来のUIDシフトを試す際に有用です）
 `INCUS_LXC_TEMPLATE_CONFIG`     | LXCテンプレート設定ディレクトリー
-`INCUS_OVMF_PATH`               | `OVMF_CODE.fd`と`OVMF_VARS.ms.fd`を含むOVMFビルドへのパス
+`INCUS_EDK2_PATH`               | `*_CODE.fd`と`*_VARS.fd`を含むEDK2ファームウェアビルドへのパス
 `INCUS_SECURITY_APPARMOR`       | `false`に設定するとAppArmorを無効にします
 `INCUS_UI`                      | ウェブサーバーを配信する web UI のパス
 `INCUS_USBIDS_PATH`             | hwdata `usb.ids` ファイルのパス

@@ -102,7 +102,12 @@ func (d *disk) CanMigrate() bool {
 	}
 
 	// Remote disks are migratable.
-	if d.pool.Driver().Info().Remote {
+	if d.pool != nil && d.pool.Driver().Info().Remote {
+		return true
+	}
+
+	// Virtual disks are migratable.
+	if !slices.Contains([]string{diskSourceCloudInit, diskSourceAgent}, d.config["source"]) {
 		return true
 	}
 
@@ -320,22 +325,42 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		"path": validate.IsAny,
 
 		// gendoc:generate(entity=devices, group=disk, key=io.cache)
+		// This controls what bus a disk device should be attached to.
 		//
+		// For block devices (disks), this is one of:
+		// - `none` (default)
+		// - `writeback`
+		// - `unsafe`
+		//
+		// For file systems (shared directories or custom volumes), this is one of:
+		// - `none` (default)
+		// - `metadata`
+		// - `unsafe`
 		// ---
 		//  type: string
 		//  default: `none`
 		//  required: no
-		//  shortdesc: Only for VMs: Override the caching mode for the device (`none`, `writeback` or `unsafe`)
-		"io.cache": validate.Optional(validate.IsOneOf("none", "writeback", "unsafe")),
+		//  shortdesc: Only for VMs: Override the caching mode for the device
+		"io.cache": validate.Optional(validate.IsOneOf("none", "metadata", "writeback", "unsafe")),
 
 		// gendoc:generate(entity=devices, group=disk, key=io.bus)
+		// This controls what bus a disk device should be attached to.
 		//
+		// For block devices (disks), this is one of:
+		// - `nvme`
+		// - `virtio-blk`
+		// - `virtio-scsi` (default)
+		//
+		// For file systems (shared directories or custom volumes), this is one of:
+		// - `9p`
+		// - `auto` (default) (`virtiofs` + `9p`, just `9p` if `virtiofsd` is missing)
+		// - `virtiofs`
 		// ---
 		//  type: string
-		//  default: `virtio-scsi`
+		//  default: `virtio-scsi` for block, `auto` for file system
 		//  required: no
-		//  shortdesc: Only for VMs: Override the bus for the device (`nvme`, `virtio-blk`, or `virtio-scsi`)
-		"io.bus": validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi")),
+		//  shortdesc: Only for VMs: Override the bus for the device
+		"io.bus": validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "auto", "9p", "virtiofs")),
 	}
 
 	err := d.config.Validate(rules)
@@ -527,7 +552,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 					return fmt.Errorf("Failed checking if custom volume is exclusively attached to another instance: %w", err)
 				}
 
-				if remoteInstance != nil && remoteInstance.ID != instConf.ID() {
+				if dbVolume.ContentType != db.StoragePoolVolumeContentTypeNameISO && remoteInstance != nil && remoteInstance.ID != instConf.ID() {
 					return fmt.Errorf("Custom volume is already attached to an instance on a different node")
 				}
 
@@ -609,7 +634,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 			return fmt.Errorf("Shared filesystem are incompatible with migration.stateful=true")
 		}
 
-		if d.config["pool"] == "" {
+		if d.config["pool"] == "" && !slices.Contains([]string{diskSourceCloudInit, diskSourceAgent}, d.config["source"]) {
 			return fmt.Errorf("Only Incus-managed disks are allowed with migration.stateful=true")
 		}
 
@@ -1102,8 +1127,6 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				},
 			}
 		} else {
-			var err error
-
 			// Default to block device or image file passthrough first.
 			mount := deviceConfig.MountEntryItem{
 				DevPath: d.config["source"],
@@ -1193,6 +1216,17 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 			// directory sharing feature to mount the directory inside the VM, and as such we need to
 			// indicate to the VM the target path to mount to.
 			if internalUtil.IsDir(mount.DevPath) || d.sourceIsCephFs() {
+				// Confirm we're using filesystem options.
+				err := validate.Optional(validate.IsOneOf("auto", "9p", "virtiofs"))(d.config["io.bus"])
+				if err != nil {
+					return nil, err
+				}
+
+				err = validate.Optional(validate.IsOneOf("none", "metadata", "unsafe"))(d.config["io.cache"])
+				if err != nil {
+					return nil, err
+				}
+
 				if d.config["path"] == "" {
 					return nil, fmt.Errorf(`Missing mount "path" setting`)
 				}
@@ -1226,15 +1260,29 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					rawIDMaps.Entries = diskAddRootUserNSEntry(rawIDMaps.Entries, 65534)
 				}
 
+				busOption := d.config["io.bus"]
+				if busOption == "" {
+					busOption = "auto"
+				}
+
 				// Start virtiofsd for virtio-fs share. The agent prefers to use this over the
 				// virtfs-proxy-helper 9p share. The 9p share will only be used as a fallback.
 				err = func() error {
+					// Check if we should start virtiofsd.
+					if busOption != "auto" && busOption != "virtiofs" {
+						return nil
+					}
+
 					sockPath, pidPath := d.vmVirtiofsdPaths()
 					logPath := filepath.Join(d.inst.LogPath(), fmt.Sprintf("disk.%s.log", d.name))
 					_ = os.Remove(logPath) // Remove old log if needed.
 
-					revertFunc, unixListener, err := DiskVMVirtiofsdStart(d.state.OS.ExecPath, d.inst, sockPath, pidPath, logPath, mount.DevPath, rawIDMaps.Entries)
+					revertFunc, unixListener, err := DiskVMVirtiofsdStart(d.state.OS.ExecPath, d.inst, sockPath, pidPath, logPath, mount.DevPath, rawIDMaps.Entries, d.config["io.cache"])
 					if err != nil {
+						if busOption == "virtiofs" {
+							return err
+						}
+
 						var errUnsupported UnsupportedError
 						if errors.As(err, &errUnsupported) {
 							d.logger.Warn("Unable to use virtio-fs for device, using 9p as a fallback", logger.Ctx{"err": errUnsupported})
@@ -1282,6 +1330,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					// Start virtfs-proxy-helper for 9p share (this will rewrite mount.DevPath with
 					// socket FD number so must come after starting virtiofsd).
 					err = func() error {
+						// Check if we should start 9p.
+						if busOption != "auto" && busOption != "9p" {
+							return nil
+						}
+
 						sockFile, cleanup, err := DiskVMVirtfsProxyStart(d.state.OS.ExecPath, d.vmVirtfsProxyHelperPaths(), mount.DevPath, rawIDMaps.Entries)
 						if err != nil {
 							return err
@@ -1302,6 +1355,17 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					}
 				}
 			} else {
+				// Confirm we're dealing with block options.
+				err := validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi"))(d.config["io.bus"])
+				if err != nil {
+					return nil, err
+				}
+
+				err = validate.Optional(validate.IsOneOf("none", "writeback", "unsafe"))(d.config["io.cache"])
+				if err != nil {
+					return nil, err
+				}
+
 				f, err := d.localSourceOpen(mount.DevPath)
 				if err != nil {
 					return nil, err
@@ -2632,4 +2696,30 @@ func (d *disk) cephCreds() (string, string) {
 	}
 
 	return clusterName, userName
+}
+
+// Remove cleans up the device when it is removed from an instance.
+func (d *disk) Remove() error {
+	// Remove the config.iso file for cloud-init config drives.
+	if d.config["source"] == diskSourceCloudInit {
+		pool, err := storagePools.LoadByInstance(d.state, d.inst)
+		if err != nil {
+			return err
+		}
+
+		_, err = pool.MountInstance(d.inst, nil)
+		if err != nil {
+			return err
+		}
+
+		defer func() { _ = pool.UnmountInstance(d.inst, nil) }()
+
+		isoPath := filepath.Join(d.inst.Path(), "config.iso")
+		err = os.Remove(isoPath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("Failed removing %s file: %w", diskSourceCloudInit, err)
+		}
+	}
+
+	return nil
 }

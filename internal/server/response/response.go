@@ -28,6 +28,7 @@ func Init(d bool) {
 type Response interface {
 	Render(w http.ResponseWriter) error
 	String() string
+	Code() int
 }
 
 // DevIncus response.
@@ -70,6 +71,11 @@ func (r *devIncusResponse) String() string {
 	}
 
 	return "failure"
+}
+
+// Code returns the HTTP code.
+func (r *devIncusResponse) Code() int {
+	return r.code
 }
 
 // DevIncusErrorResponse returns an error response. If rawResponse is true, a api.ResponseRaw will be sent instead of a minimal devIncusResponse.
@@ -151,24 +157,16 @@ func (r *syncResponse) Render(w http.ResponseWriter) error {
 		}
 	}
 
-	// Prepare the JSON response
-	status := api.Success
-	if !r.success {
-		status = api.Failure
-	}
-
 	if r.headers != nil {
 		for h, v := range r.headers {
 			w.Header().Set(h, v)
 		}
 	}
 
-	code := r.code
-
 	if r.location != "" {
 		w.Header().Set("Location", r.location)
-		if code == 0 {
-			code = 201
+		if r.code == 0 {
+			r.code = 201
 		}
 	}
 
@@ -183,12 +181,25 @@ func (r *syncResponse) Render(w http.ResponseWriter) error {
 	}
 
 	// Write header and status code.
-	if code == 0 {
-		code = http.StatusOK
+	if r.code == 0 {
+		r.code = http.StatusOK
 	}
 
 	if w.Header().Get("Connection") != "keep-alive" {
-		w.WriteHeader(code)
+		w.WriteHeader(r.code)
+	}
+
+	// Prepare the JSON response
+	status := api.Success
+	if !r.success {
+		status = api.Failure
+
+		// If the metadata is an error, consider the response a SmartError
+		// to propagate the data and preserve the status code.
+		err, ok := r.metadata.(error)
+		if ok {
+			return SmartError(err).Render(w)
+		}
 	}
 
 	// Handle plain text responses.
@@ -223,7 +234,7 @@ func (r *syncResponse) Render(w http.ResponseWriter) error {
 
 	var debugLogger logger.Logger
 	if debug {
-		debugLogger = logger.AddContext(logger.Ctx{"http_code": code})
+		debugLogger = logger.AddContext(logger.Ctx{"http_code": r.code})
 	}
 
 	return localUtil.WriteJSON(w, resp, debugLogger)
@@ -235,6 +246,11 @@ func (r *syncResponse) String() string {
 	}
 
 	return "failure"
+}
+
+// Code returns the HTTP code.
+func (r *syncResponse) Code() int {
+	return r.code
 }
 
 // Error response.
@@ -316,6 +332,11 @@ func Unavailable(err error) Response {
 
 func (r *errorResponse) String() string {
 	return r.msg
+}
+
+// Code returns the HTTP code.
+func (r *errorResponse) Code() int {
+	return r.code
 }
 
 func (r *errorResponse) Render(w http.ResponseWriter) error {
@@ -484,6 +505,11 @@ func (r *fileResponse) String() string {
 	return fmt.Sprintf("%d files", len(r.files))
 }
 
+// Code returns the HTTP code.
+func (r *fileResponse) Code() int {
+	return http.StatusOK
+}
+
 type forwardedResponse struct {
 	client  incus.InstanceServer
 	request *http.Request
@@ -540,6 +566,11 @@ func (r *forwardedResponse) String() string {
 	return fmt.Sprintf("request to %s", r.request.URL)
 }
 
+// Code returns the HTTP code.
+func (r *forwardedResponse) Code() int {
+	return http.StatusOK
+}
+
 type manualResponse struct {
 	hook func(w http.ResponseWriter) error
 }
@@ -555,6 +586,11 @@ func (r *manualResponse) Render(w http.ResponseWriter) error {
 
 func (r *manualResponse) String() string {
 	return "unknown"
+}
+
+// Code returns the HTTP code.
+func (r *manualResponse) Code() int {
+	return http.StatusNotImplemented
 }
 
 // Unauthorized return an unauthorized response (401) with the given error.

@@ -151,6 +151,10 @@ func validConfigKey(os *sys.OS, key string, value string, instanceType instancet
 		return err
 	}
 
+	if strings.HasPrefix(key, "limits.kernel.") && instanceType == instancetype.VM {
+		return fmt.Errorf("%s isn't supported for VMs", key)
+	}
+
 	if key == "raw.lxc" {
 		return lxcValidConfig(value)
 	}
@@ -633,6 +637,18 @@ func SuitableArchitectures(ctx context.Context, s *state.State, tx *db.ClusterTx
 			} else if req.Source.Protocol == "simplestreams" {
 				// Remote simplestreams image server.
 				remote, err = incus.ConnectSimpleStreams(req.Source.Server, &incus.ConnectionArgs{
+					TLSServerCert: req.Source.Certificate,
+					UserAgent:     version.UserAgent,
+					Proxy:         s.Proxy,
+					CachePath:     s.OS.CacheDir,
+					CacheExpiry:   time.Hour,
+				})
+				if err != nil {
+					return nil, err
+				}
+			} else if req.Source.Protocol == "oci" {
+				// Remote OCI registry.
+				remote, err = incus.ConnectOCI(req.Source.Server, &incus.ConnectionArgs{
 					TLSServerCert: req.Source.Certificate,
 					UserAgent:     version.UserAgent,
 					Proxy:         s.Proxy,

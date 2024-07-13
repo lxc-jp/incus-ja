@@ -25,7 +25,12 @@
 さらなる利点は `incus-agent` プロセスが実行していなくても、コンソールは利用可能です。
 これは `incus-agent` が起動する前や `incus-agent` が全く利用可能でない場合にもコンソール経由で仮想マシンにアクセスできることを意味します。
 
-仮想マシンにグラフィカルなアウトプットを持つ VGA コンソールを開始するには、 SPICE クライアント (たとえば、`virt-viewer` または `spice-gtk-client`) をインストールする必要があります。
+仮想マシンにグラフィカルなアウトプットを持つVGAコンソールを開始するには、SPICEクライアントをインストールする必要があります。
+Incusは2つのクライアントをサポートします:
+
+- `remote-viewer` （`virt-viewer`パッケージの一部であることが多い）
+- `spicy` （`spice-client-gtk`または`spice-gtk-tools`パッケージの一部）
+
 次に以下のコマンドを入力します:
 
     incus console <vm_name> --type vga

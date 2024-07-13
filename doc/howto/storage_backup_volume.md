@@ -98,7 +98,7 @@ myst:
 そのためには、まずストレージボリュームを使用しているすべてのインスタンスを停止する必要があります。
 その後以下のコマンドを入力します:
 
-    incus storage volume restore <pool_name> <volume_name> <snapshot_name>
+    incus storage volume snapshot restore <pool_name> <volume_name> <snapshot_name>
 
 スナップショットを同じまたは別のストレージプール（リモートのストレージプールでも可）内に新しいカスタムストレージボリュームをリストアもできます。
 そのためには、以下のコマンドを入力します:

@@ -55,6 +55,8 @@ func serverInitialConfiguration(client incus.InstanceServer) error {
 	availableBackends := linux.AvailableStorageDrivers(internalUtil.VarPath(), info.Environment.StorageSupportedDrivers, internalUtil.PoolTypeLocal)
 
 	// Load the default profile.
+	var profileNeedsUpdate bool
+
 	profile, profileEtag, err := client.GetProfile("default")
 	if err != nil {
 		return fmt.Errorf("Failed to load default profile: %w", err)
@@ -97,6 +99,8 @@ func serverInitialConfiguration(client incus.InstanceServer) error {
 			"pool": "default",
 			"path": "/",
 		}
+
+		profileNeedsUpdate = true
 	}
 
 	// Look for networks.
@@ -131,12 +135,16 @@ func serverInitialConfiguration(client incus.InstanceServer) error {
 			"network": "incusbr0",
 			"name":    "eth0",
 		}
+
+		profileNeedsUpdate = true
 	}
 
 	// Update the default profile.
-	err = client.UpdateProfile("default", profile.Writable(), profileEtag)
-	if err != nil {
-		return fmt.Errorf("Failed to update default profile: %w", err)
+	if profileNeedsUpdate {
+		err = client.UpdateProfile("default", profile.Writable(), profileEtag)
+		if err != nil {
+			return fmt.Errorf("Failed to update default profile: %w", err)
+		}
 	}
 
 	return nil
@@ -145,6 +153,11 @@ func serverInitialConfiguration(client incus.InstanceServer) error {
 func serverSetupUser(uid uint32) error {
 	projectName := fmt.Sprintf("user-%d", uid)
 	networkName := fmt.Sprintf("incusbr-%d", uid)
+	if len(networkName) > 15 {
+		// For long UIDs, use a shorter slightly less descriptive interface name.
+		networkName = fmt.Sprintf("user-%d", uid)
+	}
+
 	userPath := internalUtil.VarPath("users", fmt.Sprintf("%d", uid))
 
 	// User account.
@@ -248,7 +261,7 @@ func serverSetupUser(uid uint32) error {
 	network.Config = map[string]string{}
 	network.Type = "bridge"
 	network.Name = networkName
-	network.Description = fmt.Sprintf("Network for user restricted project user-%s", projectName)
+	network.Description = fmt.Sprintf("Network for user restricted project %s", projectName)
 
 	err = client.CreateNetwork(network)
 	if err != nil {
