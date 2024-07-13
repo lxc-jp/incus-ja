@@ -2483,3 +2483,15 @@ TLS クライアント証明書を直接使う代わりに署名された `JSON 
 ## `projects_force_delete`
 
 `DELETE /1.0/projects`が`?force=true`を受け付けるようにします。指定するとプロジェクトをプロジェクト内部に含まれるあらゆるものとまとめて消せるようになります。
+
+## `resources_cpu_flags`
+
+これはリソースAPIにCPUの機能をチェックするためのCPUフラグ／拡張を追加します。
+
+## `disk_io_bus_cache_filesystem`
+
+これはファイルシステムに支えられたディスクで`io.bus`と`io.cache`を使えるようにします。
+
+## `instance_oci`
+
+OCIコンテナを稼働させる初期サポートを追加します。

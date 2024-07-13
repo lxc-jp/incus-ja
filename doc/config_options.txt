@@ -47,19 +47,39 @@
 ```
 
 ```{config:option} io.bus devices-disk
-:default: "`virtio-scsi`"
+:default: "ブロックデバイスでは`virtio-scsi`、ファイルシステムでは`auto`"
 :required: "no"
-:shortdesc: "VMのみ: デバイスのバスを上書きする（`nvme`、`virtio-blk`、または`virtio-scsi`）"
+:shortdesc: "VMのみ: デバイスのバスを上書きする"
 :type: "string"
+これはディスクデバイスをどのバスにアタッチするかを制御します。
 
+ブロックデバイス（ディスク）では、これは以下のいずれかです:
+- `nvme`
+- `virtio-blk`
+- `virtio-scsi` （デフォルト）
+
+ファイルシステム（共有ディレクトリまたはカスタムボリューム）では、これは以下のいずれかです:
+- `9p`
+- `auto` （デフォルト） （`virtiofs` + `9p`、`virtiofsd`がない場合は`9p`のみ）
+- `virtiofs`
 ```
 
 ```{config:option} io.cache devices-disk
 :default: "`none`"
 :required: "no"
-:shortdesc: "VMのみ: デバイスのキャッシュモードを上書きする（`none`、`writeback`または`unsafe`）"
+:shortdesc: "VMのみ: デバイスのキャッシュモードを上書きする"
 :type: "string"
+これはディスクデバイスをどのバスにアタッチするかを制御します。
 
+ブロックデバイス（ディスク）では、これは以下のいずれかです:
+- `none` （デフォルト）
+- `writeback`
+- `unsafe`
+
+ファイルシステム（共有ディレクトリまたはカスタムボリューム）では、これは以下のいずれかです:
+- `none` （デフォルト）
+- `metadata`
+- `unsafe`
 ```
 
 ```{config:option} limits.max devices-disk
@@ -1261,6 +1281,13 @@ NVIDIA仮想GPUインスタンスUUID。
 :type: "string"
 インスタンスが作成時に限定されていた1つまたは複数のクラスタグループ。
 これは退避のようなイベントをスケジュールする際にインスタンスを指定した組の中に維持するのに使われます。
+```
+
+```{config:option} volatile.container.oci instance-volatile
+:defaultdesc: "`false`"
+:shortdesc: "コンテナがOCIアプリケーションコンテナかどうか"
+:type: "bool"
+
 ```
 
 ```{config:option} volatile.cpu.nodes instance-volatile

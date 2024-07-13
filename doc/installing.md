@@ -71,13 +71,15 @@ Debian ユーザーには現在 3 つの選択肢があります。
 
     それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
     仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
+    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
 
 1. ネイティブの `incus` のバックポートされたパッケージ
 
    ネイティブの `incus` のバックポートされたパッケージが現在 Debian 12 (`bookworm`) ユーザーに提供されています。
 
-   Debian 12 のシステムでは、単に `apt install incus/bookworm-backports` と実行すれば Incus がインストールされます。
+    Debian 12 のシステムでは、単に `apt install incus/bookworm-backports` と実行すれば Incus がインストールされます。
     仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
+    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
 
    ****NOTE:**** バックポートされたパッケージのユーザーは Debian Bug Tracker にはバグ報告しないでください。代わりに [Incus のフォーラム](https://discuss.linuxcontainers.org) に報告するか Debian のパッケージ作成者に直接報告してください。
 
@@ -172,6 +174,7 @@ Ubuntu ユーザーには現在 2 つの選択肢があります。
     ネイティブの `incus` パッケージは現在 Ubuntu 24.04 LTS 以降で利用できます。
     それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
     仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
+    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
 
 1. Zabbly パッケージレポジトリ
 
@@ -287,7 +290,10 @@ Incus の必要な機能をすべて使えるようにするには、さらに�
 ビルドと実行時の依存ソフトウェアをインストールします:
 
     sudo apt update
-    sudo apt install acl attr autoconf automake dnsmasq-base git golang-go libacl1-dev libcap-dev liblxc1 liblxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
+    sudo apt install acl attr autoconf automake dnsmasq-base git golang-go libacl1-dev libcap-dev liblxc1 lxc-dev libsqlite3-dev libtool libudev-dev liblz4-dev libuv1-dev make pkg-config rsync squashfs-tools tar tcl xz-utils ebtables
+
+****NOTE:**** DebianやUbuntuの`golang-go`のバージョンはIncusをビルドするのに必要なバージョンより古いかもしれません（{ref}`requirements-go`参照）。
+そのような場合は、[upstreamから](https://go.dev/doc/install)新しいGoをインストールする必要があるかもしれません。
 
 デフォルトのストレージドライバーである`dir`ドライバーに加えて、Incus ではいくつかのストレージドライバーが使えます。
 これらのツールをインストールすると、initramfs への追加が行われ、ホストのブートが少しだけ遅くなるかもしれませんが、特定のドライバーを使いたい場合には必要です。
@@ -315,17 +321,15 @@ Incus の必要な機能をすべて使えるようにするには、さらに�
 
     sudo zypper install dnsmasq squashfs xz rsync tar attr acl qemu qemu-img qemu-spice qemu-hw-display-virtio-gpu-pci iptables ebtables nftables
 
-OpenSUSE は QEMU のファームウェアのファイルを変わったファイル名と場所に置いていますので、それらへのシンボリックリンクを作成する必要があります:
-
-    sudo mkdir /usr/share/OVMF
-    sudo ln -s /usr/share/qemu/ovmf-x86_64-4m-code.bin /usr/share/OVMF/OVMF_CODE.4MB.fd
-    sudo ln -s /usr/share/qemu/ovmf-x86_64-4m-vars.bin /usr/share/OVMF/OVMF_VARS.4MB.fd
-    sudo ln -s /usr/share/qemu/ovmf-x86_64-ms-4m-vars.bin /usr/share/OVMF/OVMF_VARS.4MB.ms.fd
-    sudo ln -s /usr/share/qemu/ovmf-x86_64-ms-4m-code.bin /usr/share/OVMF/OVMF_CODE.4MB.ms.fd
 ```
 
 
 ````
+
+```{note}
+ARM64のCPUではUEFIで仮想マシンを扱うためにOVMFではなくAAVMFをインストールする必要があります。
+一部のディストリビューションではこのために別のパッケージのインストールが必要です。
+```
 
 ### ソースから最新版をビルドする
 
@@ -346,8 +350,8 @@ cd incus
 Incus のリリース tarball は完全な依存ツリーと`libraft`と Incus データベースのセットアップに使用する`libcowsql`のローカルコピーをバンドルしています。
 
 ```bash
-tar zxvf incus-0.1.tar.gz
-cd incus-0.1
+tar zxvf incus-6.0.0.tar.gz
+cd incus-6.0.0
 ```
 
 これでリリース tarball を展開し、ソースツリー内に移動します。
