@@ -214,11 +214,27 @@ Incus を以下のコマンドでインストールします:
 
 ```{group-tab} macOS
 
+**Homebrew**
+
 IncusはmacOSのIncusクライアントのビルドを[Homebrew](https://brew.sh/)で公開しています。
 
 機能リリースのIncusをインストールするには、以下のようにします。
 
     brew install incus
+
+**Colima**
+
+Incus[Colima](https://github.com/abiosoft/colima)上のランタイムとしてサポートされます。
+
+Colimaを以下のコマンドでインストールします:
+
+    brew install colima
+
+ColimaをIncusをランタイムとして起動します:
+
+    colima start --runtime incus
+
+Colimaに関連する問題については、プロジェクトレポジトリ内で[イシューを登録](https://github.com/abiosoft/colima/issues/new/choose)してください。
 ```
 
 ```{group-tab} Windows

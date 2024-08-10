@@ -21,6 +21,11 @@ simple streams サーバー
   静的ファイルのみで構成されますので、これらのサーバーを動かすのに特別なソフトウェアは必要ありません。
   デフォルトの `images:` サーバーは simplestreams タイプを使っています。
 
+OCIレジストリー
+: OCIイメージを提供するアプリケーションコンテナレジストリー。
+
+  もっとも一般的なレジストリーは`Docker Hub`で、それは`incus remote add docker https://docker.io --protocol=oci`で追加できます。
+
 公開 Incus サーバー
 : イメージを配布するためだけに稼働し、このサーバー自身ではインスタンスを稼働しない Incus サーバー。
 

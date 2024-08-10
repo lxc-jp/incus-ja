@@ -15,6 +15,31 @@
 ```
 
 <!-- config group cluster-cluster end -->
+<!-- config group cluster_group-common start -->
+```{config:option} instances.vm.cpu.ARCHITECTURE.baseline cluster_group-common
+:shortdesc: "CPUベースアーキテクチャー名"
+:type: "string"
+CPUベースアーキテクチャー名は`qemu -cpu ?`で調べられます。
+
+これは`qemu64`や`kvm64`のような汎用な定義になることもありますし、`EPYC-v2`のような特定のハードウェアアーキテクチャーになることもあります。
+グループ内のすべてのサーバーがこのベースラインにマッチするようにすることが重要です。
+```
+
+```{config:option} instances.vm.cpu.ARCHITECTURE.flags cluster_group-common
+:shortdesc: "ベースラインに追加／ベースラインから削除するCPUフラグ"
+:type: "string"
+CPUベースラインに追加するフラグとCPUベースラインから削除するフラグのカンマ区切りリスト。
+
+フラグを削除するには、`-flag`とします。
+```
+
+```{config:option} user.* cluster_group-common
+:shortdesc: "自由形式のユーザーのキー/バリューストレージ"
+:type: "string"
+ユーザーキーは検索で使えます。
+```
+
+<!-- config group cluster_group-common end -->
 <!-- config group devices-disk start -->
 ```{config:option} boot.priority devices-disk
 :required: "no"
@@ -1605,6 +1630,12 @@ NVIDIA仮想GPUインスタンスUUID。
 この値はプロジェクトのすべてのインスタンスボリューム、カスタムボリューム、イメージで使用されるディスクスペース合計の最大値です。
 ```
 
+```{config:option} limits.disk.pool.POOL_NAME project-limits
+:shortdesc: "このプール上のプロジェクトで使用される最大ディスクスペース"
+:type: "string"
+この値はすべてのインスタンスボリューム、カスタムボリューム、この特定のストレージプール上のプロジェクトのイメージで使用される総計のディスクスペースの最大値です。
+```
+
 ```{config:option} limits.instances project-limits
 :shortdesc: "プロジェクト内で作成できるインスタンスの最大数"
 :type: "integer"
@@ -2257,6 +2288,20 @@ Lokiサーバーへ送るイベントのカンマ区切りリストを指定し�
 :shortdesc: "バックアップに使用できる圧縮アルゴリズム"
 :type: "string"
 設定できる値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
+```
+
+```{config:option} instances.lxcfs.per_instance server-miscellaneous
+:defaultdesc: "`false`"
+:scope: "global"
+:shortdesc: "インスタンスごとにLXCFSを動かすかどうか"
+:type: "bool"
+一般的な`/proc`と`/sys`配下のファイルへのオーバーレイを提供するのにLXCFSが使用され、コンテナに適用されるリソース制限を反映します。
+
+LXCFSは通常はホスト上の単一のファイルシステムを経由して操作し、それがすべてのコンテナで共有されます。
+これは非常に効率が良いですが、LXCFSがクラッシュするとすべてのコンテナが壊れてしまうという欠点があります。
+
+このオプションにより、代わりにコンテナごとにLXCFSのインスタンスを動かすことができます。
+この結果、より多くのシステムリソースを使いますが、クラッシュの影響範囲を狭められます。
 ```
 
 ```{config:option} instances.nic.host_name server-miscellaneous

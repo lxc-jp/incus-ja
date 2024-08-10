@@ -427,6 +427,12 @@ var APIExtensions = []string{
 	"resources_cpu_flags",
 	"disk_io_bus_cache_filesystem",
 	"instance_oci",
+	"clustering_groups_config",
+	"instances_lxcfs_per_instance",
+	"clustering_groups_vm_cpu_definition",
+	"disk_volume_subpath",
+	"projects_limits_disk_pool",
+	"network_ovn_isolated",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

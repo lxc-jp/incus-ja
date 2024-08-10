@@ -78,6 +78,7 @@ import (
 	"github.com/lxc/incus/v6/internal/version"
 	"github.com/lxc/incus/v6/shared/api"
 	agentAPI "github.com/lxc/incus/v6/shared/api/agent"
+	"github.com/lxc/incus/v6/shared/ioprogress"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/osarch"
 	"github.com/lxc/incus/v6/shared/subprocess"
@@ -194,7 +195,7 @@ func qemuInstantiate(s *state.State, args db.InstanceArgs, expandedDevices devic
 
 // qemuCreate creates a new storage volume record and returns an initialized Instance.
 // Returns a revert fail function that can be used to undo this function if a subsequent step fails.
-func qemuCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.Instance, revert.Hook, error) {
+func qemuCreate(s *state.State, args db.InstanceArgs, p api.Project, op *operations.Operation) (instance.Instance, revert.Hook, error) {
 	revert := revert.New()
 	defer revert.Fail()
 
@@ -202,6 +203,7 @@ func qemuCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.I
 	d := &qemu{
 		common: common{
 			state: s,
+			op:    op,
 
 			architecture: args.Architecture,
 			creationDate: args.CreationDate,
@@ -381,90 +383,6 @@ func (d *qemu) getAgentClient() (*http.Client, error) {
 	}
 
 	return agent, nil
-}
-
-func (d *qemu) getClusterCPUFlags() ([]string, error) {
-	// Get the list of cluster members.
-	var nodes []db.RaftNode
-	err := d.state.DB.Node.Transaction(context.TODO(), func(ctx context.Context, tx *db.NodeTx) error {
-		var err error
-		nodes, err = tx.GetRaftNodes(ctx)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Get architecture name.
-	arch, err := osarch.ArchitectureName(d.architecture)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get all the CPU flags for the architecture.
-	flagMembers := map[string]int{}
-	coreCount := 0
-
-	for _, node := range nodes {
-		// Attempt to load the cached resources.
-		resourcesPath := internalUtil.CachePath("resources", fmt.Sprintf("%s.yaml", node.Name))
-
-		data, err := os.ReadFile(resourcesPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-
-			return nil, err
-		}
-
-		res := api.Resources{}
-		err = json.Unmarshal(data, &res)
-		if err != nil {
-			return nil, err
-		}
-
-		// Skip if not the correct architecture.
-		if res.CPU.Architecture != arch {
-			continue
-		}
-
-		// Add the CPU flags to the map.
-		for _, socket := range res.CPU.Sockets {
-			for _, core := range socket.Cores {
-				coreCount += 1
-				for _, flag := range core.Flags {
-					flagMembers[flag] += 1
-				}
-			}
-		}
-	}
-
-	// Get the host flags.
-	info := DriverStatuses()[instancetype.VM].Info
-	hostFlags, ok := info.Features["flags"].(map[string]bool)
-	if !ok {
-		// No CPU flags found.
-		return nil, nil
-	}
-
-	// Build a set of flags common to all cores.
-	flags := []string{}
-
-	for k, v := range flagMembers {
-		if v != coreCount {
-			continue
-		}
-
-		hostVal, ok := hostFlags[k]
-		if !ok || hostVal {
-			continue
-		}
-
-		flags = append(flags, k)
-	}
-
-	return flags, nil
 }
 
 func (d *qemu) getMonitorEventHandler() func(event string, data map[string]any) {
@@ -676,6 +594,11 @@ func (d *qemu) onStop(target string) error {
 	// Unlock on return
 	defer op.Done(nil)
 
+	// Set operation if missing.
+	if d.op == nil {
+		d.op = op.GetOperation()
+	}
+
 	// Wait for QEMU process to end (to avoiding racing start when restarting).
 	// Wait up to 5 minutes to allow for flushing any pending data to disk.
 	d.logger.Debug("Waiting for VM process to finish")
@@ -720,7 +643,7 @@ func (d *qemu) onStop(target string) error {
 	// Log and emit lifecycle if not user triggered.
 	if op.GetInstanceInitiated() {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceShutdown.Event(d, nil))
-	} else {
+	} else if op.Action() != operationlock.ActionMigrate {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceStopped.Event(d, nil))
 	}
 
@@ -765,7 +688,7 @@ func (d *qemu) Shutdown(timeout time.Duration) error {
 	// Allow reuse when creating a new stop operation. This allows the Stop() function to inherit operation.
 	// Allow reuse of a reusable ongoing stop operation as Shutdown() may be called earlier, which allows reuse
 	// of its operations. This allow for multiple Shutdown() attempts.
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart}, true, true)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart}, true, true)
 	if err != nil {
 		if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
 			// An existing matching operation has now succeeded, return.
@@ -795,6 +718,21 @@ func (d *qemu) Shutdown(timeout time.Duration) error {
 	op.SetInstanceInitiated(true)
 
 	// Send the system_powerdown command.
+	err = monitor.Powerdown()
+	if err != nil {
+		if err == qmp.ErrMonitorDisconnect {
+			op.Done(nil)
+			return nil
+		}
+
+		op.Done(err)
+		return err
+	}
+
+	// Wait 500ms for the first event to be received by the guest.
+	time.Sleep(500 * time.Millisecond)
+
+	// Send a second system_powerdown command (required to get Windows to shutdown).
 	err = monitor.Powerdown()
 	if err != nil {
 		if err == qmp.ErrMonitorDisconnect {
@@ -948,10 +886,7 @@ func (d *qemu) restoreState(monitor *qmp.Monitor) error {
 		}
 
 		go func() {
-			_, err := io.Copy(pipeWrite, stateConn)
-			if err != nil {
-				d.logger.Warn("Failed reading from state connection", logger.Ctx{"err": err})
-			}
+			_, _ = io.Copy(pipeWrite, stateConn)
 
 			_ = pipeRead.Close()
 			_ = pipeWrite.Close()
@@ -1197,7 +1132,7 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 
 	// Setup a new operation if needed.
 	if op == nil {
-		op, err = operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionStart, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
+		op, err = operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStart, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
 		if err != nil {
 			if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
 				// An existing matching operation has now succeeded, return.
@@ -1498,16 +1433,70 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 
 	cpuType := "host"
 
-	// Get CPU flags if clustered and migration is enabled (x86_64 only for now).
-	if d.architecture != osarch.ARCH_64BIT_INTEL_X86 && d.state.ServerClustered && util.IsTrue(d.expandedConfig["migration.stateful"]) {
-		cpuFlags, err := d.getClusterCPUFlags()
+	// Handle CPU flags.
+	if d.state.ServerClustered && util.IsTrue(d.expandedConfig["migration.stateful"]) {
+		// Get the cluster group config.
+		var groupConfig map[string]string
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			// Get the group name.
+			clusterGroupName := d.localConfig["volatile.cluster.group"]
+			if clusterGroupName == "" {
+				clusterGroupName = "default"
+			}
+
+			// Try to get the cluster group.
+			group, err := dbCluster.GetClusterGroup(ctx, tx.Tx(), clusterGroupName)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+
+			// Fallback to default group.
+			if err == sql.ErrNoRows && clusterGroupName != "default" {
+				group, err = dbCluster.GetClusterGroup(ctx, tx.Tx(), "default")
+				if err != nil {
+					return err
+				}
+			}
+
+			// Get the config.
+			groupConfig, err = dbCluster.GetClusterGroupConfig(ctx, tx.Tx(), group.ID)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
 		if err != nil {
 			op.Done(err)
 			return err
 		}
 
-		cpuType = "kvm64"
-		cpuExtensions = append(cpuExtensions, cpuFlags...)
+		// Get the local architecture name.
+		archName, err := osarch.ArchitectureName(d.architecture)
+		if err != nil {
+			op.Done(err)
+			return err
+		}
+
+		// Set the cpu type and extensions.
+		groupConfigBaseline := fmt.Sprintf("instances.vm.cpu.%s.baseline", archName)
+		groupConfigFlags := fmt.Sprintf("instances.vm.cpu.%s.flags", archName)
+
+		if groupConfig[groupConfigBaseline] != "" {
+			// Apply group config if present.
+			cpuType = groupConfig[groupConfigBaseline]
+			cpuExtensions = append(cpuExtensions, util.SplitNTrimSpace(groupConfig[groupConfigFlags], ",", -1, true)...)
+		} else if d.architecture == osarch.ARCH_64BIT_INTEL_X86 {
+			// Apply automatic handling if on x86_64.
+			cpuFlags, err := GetClusterCPUFlags(context.TODO(), d.state, nil, archName)
+			if err != nil {
+				op.Done(err)
+				return err
+			}
+
+			cpuType = "kvm64"
+			cpuExtensions = append(cpuExtensions, cpuFlags...)
+		}
 	}
 
 	if len(cpuExtensions) > 0 {
@@ -2371,7 +2360,7 @@ func (d *qemu) deviceDetachPath(deviceName string, rawConfig deviceConfig.Device
 		}
 
 		if time.Now().After(waitUntil) {
-			return fmt.Errorf("Failed to detach path device after %v: %w", waitDuration, err)
+			return fmt.Errorf("Failed to detach path device after %v", waitDuration)
 		}
 	}
 
@@ -2413,7 +2402,7 @@ func (d *qemu) deviceDetachBlockDevice(deviceName string, rawConfig deviceConfig
 		}
 
 		if time.Now().After(waitUntil) {
-			return fmt.Errorf("Failed to detach block device after %v: %w", waitDuration, err)
+			return fmt.Errorf("Failed to detach block device after %v", waitDuration)
 		}
 	}
 
@@ -2610,7 +2599,7 @@ func (d *qemu) deviceDetachNIC(deviceName string) error {
 			}
 
 			if time.Now().After(waitUntil) {
-				return fmt.Errorf("Failed to detach NIC after %v: %w", waitDuration, err)
+				return fmt.Errorf("Failed to detach NIC after %v", waitDuration)
 			}
 
 			d.logger.Debug("Waiting for NIC device to be detached", logger.Ctx{"device": deviceName})
@@ -3974,7 +3963,15 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 		blockDev["image"] = rbdImageName
 		blockDev["user"] = userName
 		blockDev["server"] = []map[string]string{}
-		blockDev["conf"] = fmt.Sprintf("/etc/ceph/%s.conf", clusterName)
+
+		// Derference ceph config path.
+		cephConfPath := fmt.Sprintf("/etc/ceph/%s.conf", clusterName)
+		target, err := filepath.EvalSymlinks(cephConfPath)
+		if err == nil {
+			cephConfPath = target
+		}
+
+		blockDev["conf"] = cephConfPath
 
 		// Setup the Ceph cluster config (monitors and keyring).
 		monitors, err := storageDrivers.CephMonitors(clusterName)
@@ -4736,7 +4733,7 @@ func (d *qemu) Stop(stateful bool) error {
 	// Don't allow reuse when creating a new stop operation. This prevents other operations from intefering.
 	// Allow reuse of a reusable ongoing stop operation as Shutdown() may be called first, which allows reuse
 	// of its operations. This allow for Stop() to inherit from Shutdown() where instance is stuck.
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, true)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore, operationlock.ActionMigrate}, false, true)
 	if err != nil {
 		if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
 			// An existing matching operation has now succeeded, return.
@@ -4765,8 +4762,6 @@ func (d *qemu) Stop(stateful bool) error {
 			op.Done(err)
 			return err
 		}
-
-		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceStopped.Event(d, nil))
 
 		op.Done(nil)
 		return nil
@@ -4950,7 +4945,7 @@ func (d *qemu) Snapshot(name string, expiry time.Time, stateful bool) error {
 
 // Restore restores an instance snapshot.
 func (d *qemu) Restore(source instance.Instance, stateful bool) error {
-	op, err := operationlock.Create(d.Project().Name, d.Name(), operationlock.ActionRestore, false, false)
+	op, err := operationlock.Create(d.Project().Name, d.Name(), d.op, operationlock.ActionRestore, false, false)
 	if err != nil {
 		return fmt.Errorf("Failed to create instance restore operation: %w", err)
 	}
@@ -5000,7 +4995,7 @@ func (d *qemu) Restore(source instance.Instance, stateful bool) error {
 		}
 
 		// Refresh the operation as that one is now complete.
-		op, err = operationlock.Create(d.Project().Name, d.Name(), operationlock.ActionRestore, false, false)
+		op, err = operationlock.Create(d.Project().Name, d.Name(), d.op, operationlock.ActionRestore, false, false)
 		if err != nil {
 			return fmt.Errorf("Failed to create instance restore operation: %w", err)
 		}
@@ -5267,7 +5262,7 @@ func (d *qemu) Update(args db.InstanceArgs, userRequested bool) error {
 	defer unlock()
 
 	// Setup a new operation.
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionUpdate, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionUpdate, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
 	if err != nil {
 		return fmt.Errorf("Failed to create instance update operation: %w", err)
 	}
@@ -5995,7 +5990,7 @@ func (d *qemu) Delete(force bool) error {
 	defer unlock()
 
 	// Setup a new operation.
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionDelete, nil, false, false)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionDelete, nil, false, false)
 	if err != nil {
 		return fmt.Errorf("Failed to create instance delete operation: %w", err)
 	}
@@ -6135,7 +6130,7 @@ func (d *qemu) delete(force bool) error {
 }
 
 // Export publishes the instance.
-func (d *qemu) Export(w io.Writer, properties map[string]string, expiration time.Time) (api.ImageMetadata, error) {
+func (d *qemu) Export(w io.Writer, properties map[string]string, expiration time.Time, tracker *ioprogress.ProgressTracker) (api.ImageMetadata, error) {
 	ctxMap := logger.Ctx{
 		"created":   d.creationDate,
 		"ephemeral": d.ephemeral,
@@ -6347,7 +6342,7 @@ func (d *qemu) Export(w io.Writer, properties map[string]string, expiration time
 	// Convert to qcow2 image.
 	cmd := []string{
 		"nice", "-n19", // Run with low priority to reduce CPU impact on other processes.
-		"qemu-img", "convert", "-f", "raw", "-O", "qcow2", "-c",
+		"qemu-img", "convert", "-p", "-f", "raw", "-O", "qcow2", "-c",
 	}
 
 	revert := revert.New()
@@ -6370,7 +6365,7 @@ func (d *qemu) Export(w io.Writer, properties map[string]string, expiration time
 
 	cmd = append(cmd, mountInfo.DiskPath, fPath)
 
-	_, err = apparmor.QemuImg(d.state.OS, cmd, mountInfo.DiskPath, fPath)
+	_, err = apparmor.QemuImg(d.state.OS, cmd, mountInfo.DiskPath, fPath, tracker)
 	if err != nil {
 		return meta, fmt.Errorf("Failed converting instance to qcow2: %w", err)
 	}
@@ -6410,12 +6405,18 @@ func (d *qemu) Export(w io.Writer, properties map[string]string, expiration time
 
 // MigrateSend is not currently supported.
 func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
-	d.logger.Info("Migration send starting")
-	defer d.logger.Info("Migration send stopped")
+	d.logger.Debug("Migration send starting")
+	defer d.logger.Debug("Migration send stopped")
 
 	// Check for stateful support.
 	if args.Live && util.IsFalseOrEmpty(d.expandedConfig["migration.stateful"]) {
-		return fmt.Errorf("Stateful migration requires migration.stateful to be set to true")
+		return fmt.Errorf("Live migration requires migration.stateful to be set to true")
+	}
+
+	// Setup a new operation.
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionMigrate, nil, false, true)
+	if err != nil {
+		return err
 	}
 
 	// Wait for essential migration connections before negotiation.
@@ -6424,12 +6425,15 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 
 	filesystemConn, err := args.FilesystemConn(connectionsCtx)
 	if err != nil {
+		op.Done(err)
 		return err
 	}
 
 	pool, err := storagePools.LoadByInstance(d.state, d)
 	if err != nil {
-		return fmt.Errorf("Failed loading instance: %w", err)
+		err := fmt.Errorf("Failed loading instance: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	// The refresh argument passed to MigrationTypes() is always set
@@ -6438,7 +6442,9 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	// this, and adjust the migration types accordingly.
 	poolMigrationTypes := pool.MigrationTypes(storagePools.InstanceContentType(d), false, args.Snapshots)
 	if len(poolMigrationTypes) == 0 {
-		return fmt.Errorf("No source migration types available")
+		err := fmt.Errorf("No source migration types available")
+		op.Done(err)
+		return err
 	}
 
 	// Convert the pool's migration type options to an offer header to target.
@@ -6452,7 +6458,9 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	// For VMs, send block device size hint in offer header so that target can create the volume the same size.
 	blockSize, err := storagePools.InstanceDiskBlockSize(pool, d, d.op)
 	if err != nil {
-		return fmt.Errorf("Failed getting source disk size: %w", err)
+		err := fmt.Errorf("Failed getting source disk size: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	d.logger.Debug("Set migration offer volume size", logger.Ctx{"blockSize": blockSize})
@@ -6460,7 +6468,9 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 
 	srcConfig, err := pool.GenerateInstanceBackupConfig(d, args.Snapshots, d.op)
 	if err != nil {
-		return fmt.Errorf("Failed generating instance migration config: %w", err)
+		err := fmt.Errorf("Failed generating instance migration config: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	// If we are copying snapshots, retrieve a list of snapshots from source volume.
@@ -6486,7 +6496,9 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	d.logger.Debug("Sending migration offer to target")
 	err = args.ControlSend(offerHeader)
 	if err != nil {
-		return fmt.Errorf("Failed sending migration offer header: %w", err)
+		err := fmt.Errorf("Failed sending migration offer header: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	// Receive response from target.
@@ -6494,7 +6506,9 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	respHeader := &migration.MigrationHeader{}
 	err = args.ControlReceive(respHeader)
 	if err != nil {
-		return fmt.Errorf("Failed receiving migration offer response: %w", err)
+		err := fmt.Errorf("Failed receiving migration offer response: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	d.logger.Debug("Got migration offer response from target")
@@ -6502,7 +6516,9 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	// Negotiated migration types.
 	migrationTypes, err := localMigration.MatchTypes(respHeader, migration.MigrationFSType_RSYNC, poolMigrationTypes)
 	if err != nil {
-		return fmt.Errorf("Failed to negotiate migration type: %w", err)
+		err := fmt.Errorf("Failed to negotiate migration type: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	volSourceArgs := &localMigration.VolumeSourceArgs{
@@ -6538,6 +6554,7 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	if args.Live && respHeader.Criu != nil && *respHeader.Criu == migration.CRIUType_VM_QEMU {
 		stateConn, err = args.StateConn(connectionsCtx)
 		if err != nil {
+			op.Done(err)
 			return err
 		}
 	}
@@ -6632,8 +6649,13 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	{
 		err := g.Wait()
 		if err != nil {
+			op.Done(err)
 			return err
 		}
+
+		op.Done(nil)
+
+		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceMigrated.Event(d, nil))
 
 		return nil
 	}
@@ -6988,8 +7010,8 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 }
 
 func (d *qemu) MigrateReceive(args instance.MigrateReceiveArgs) error {
-	d.logger.Info("Migration receive starting")
-	defer d.logger.Info("Migration receive stopped")
+	d.logger.Debug("Migration receive starting")
+	defer d.logger.Debug("Migration receive stopped")
 
 	// Wait for essential migration connections before negotiation.
 	connectionsCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -7283,7 +7305,7 @@ func (d *qemu) MigrateReceive(args instance.MigrateReceiveArgs) error {
 					}
 
 					// Create the snapshot instance.
-					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, true, false)
+					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, d.op, true, false)
 					if err != nil {
 						return fmt.Errorf("Failed creating instance snapshot record %q: %w", snapArgs.Name, err)
 					}
@@ -7916,7 +7938,7 @@ func (d *qemu) LockExclusive() (*operationlock.InstanceOperation, error) {
 	}
 
 	// Prevent concurrent operations the instance.
-	op, err := operationlock.Create(d.Project().Name, d.Name(), operationlock.ActionCreate, false, false)
+	op, err := operationlock.Create(d.Project().Name, d.Name(), d.op, operationlock.ActionCreate, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -8684,7 +8706,7 @@ func (d *qemu) checkFeatures(hostArch int, qemuPath string) (map[string]any, err
 	}
 
 	// Get the host CPU model (x86_64 only for now).
-	if hostArch != osarch.ARCH_64BIT_INTEL_X86 {
+	if hostArch == osarch.ARCH_64BIT_INTEL_X86 {
 		model, err := monitor.QueryCPUModel("kvm64")
 		if err != nil {
 			return nil, err

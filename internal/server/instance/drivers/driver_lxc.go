@@ -76,6 +76,7 @@ import (
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/idmap"
+	"github.com/lxc/incus/v6/shared/ioprogress"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/osarch"
 	"github.com/lxc/incus/v6/shared/subprocess"
@@ -166,7 +167,7 @@ func lxcStatusCode(state liblxc.State) api.StatusCode {
 
 // lxcCreate creates the DB storage records and sets up instance devices.
 // Returns a revert fail function that can be used to undo this function if a subsequent step fails.
-func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.Instance, revert.Hook, error) {
+func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project, op *operations.Operation) (instance.Instance, revert.Hook, error) {
 	revert := revert.New()
 	defer revert.Fail()
 
@@ -174,6 +175,7 @@ func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project) (instance.In
 	d := &lxc{
 		common: common{
 			state: s,
+			op:    op,
 
 			architecture: args.Architecture,
 			creationDate: args.CreationDate,
@@ -2328,9 +2330,18 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 		}
 
 		// Configure the entry point.
-		err = lxcSetConfigItem(cc, "lxc.execute.cmd", shellquote.Join(config.Process.Args...))
-		if err != nil {
-			return "", nil, err
+		if len(config.Process.Args) > 0 && slices.Contains([]string{"/init", "/sbin/init", "/s6-init"}, config.Process.Args[0]) {
+			// For regular init systems, call them directly as PID1.
+			err = lxcSetConfigItem(cc, "lxc.init.cmd", shellquote.Join(config.Process.Args...))
+			if err != nil {
+				return "", nil, err
+			}
+		} else {
+			// For anything else, run them under our own PID1.
+			err = lxcSetConfigItem(cc, "lxc.execute.cmd", shellquote.Join(config.Process.Args...))
+			if err != nil {
+				return "", nil, err
+			}
 		}
 
 		err = lxcSetConfigItem(cc, "lxc.init.cwd", config.Process.Cwd)
@@ -2346,6 +2357,35 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 		err = lxcSetConfigItem(cc, "lxc.init.gid", fmt.Sprintf("%d", config.Process.User.GID))
 		if err != nil {
 			return "", nil, err
+		}
+
+		// Get all mounts so far.
+		lxcMounts := []string{"/dev", "/proc", "/sys", "/sys/fs/cgroup"}
+		for _, mount := range cc.ConfigItem("lxc.mount.entry") {
+			fields := strings.Split(mount, " ")
+			if len(fields) < 2 || fields[1][0] == '/' {
+				continue
+			}
+
+			lxcMounts = append(lxcMounts, fmt.Sprintf("/%s", fields[1]))
+		}
+
+		// Configure mounts.
+		for _, mount := range config.Mounts {
+			// We only support simple tmpfs at this stage.
+			if len(mount.UIDMappings) > 0 || len(mount.GIDMappings) > 0 || mount.Type != "tmpfs" {
+				continue
+			}
+
+			// Skip all our own mounts.
+			if slices.Contains(lxcMounts, mount.Destination) {
+				continue
+			}
+
+			err := lxcSetConfigItem(cc, "lxc.mount.entry", fmt.Sprintf("%s %s %s %s 0 0", mount.Source, strings.TrimLeft(mount.Destination, "/"), mount.Type, strings.Join(append(mount.Options, "create=dir"), ",")))
+			if err != nil {
+				return "", nil, err
+			}
 		}
 
 		// Configure network handling.
@@ -2413,6 +2453,67 @@ ff02::2 ip6-allrouters
 		// Clear OCI config key if present.
 		if d.expandedConfig["volatile.container.oci"] != "" {
 			volatileSet["volatile.container.oci"] = ""
+		}
+	}
+
+	// Check if we should start a dedicated LXCFS.
+	if d.state.GlobalConfig.InstancesLXCFSPerInstance() {
+		if !util.PathExists(filepath.Join(d.RunPath(), "lxcfs", "proc")) {
+			// Make sure all the paths exist.
+			err := os.Mkdir(filepath.Join(d.DevicesPath(), "lxcfs"), 0711)
+			if err != nil && !os.IsExist(err) {
+				return "", nil, err
+			}
+
+			err = os.Mkdir(filepath.Join(d.RunPath(), "lxcfs"), 0700)
+			if err != nil && !os.IsExist(err) {
+				return "", nil, err
+			}
+
+			// Prepare a new LXCFS instance.
+			args := []string{"-f",
+				"-p", filepath.Join(d.RunPath(), "lxcfs.pid"),
+				"--runtime-dir", filepath.Join(d.RunPath(), "lxcfs")}
+
+			if os.Getenv("LXCFS_OPTS") != "" {
+				userArgs, err := shellquote.Split(os.Getenv("LXCFS_OPTS"))
+				if err != nil {
+					return "", nil, err
+				}
+
+				args = append(args, userArgs...)
+			}
+
+			args = append(args, filepath.Join(d.DevicesPath(), "lxcfs"))
+
+			lxcfs, err := subprocess.NewProcess("lxcfs", args, "", "")
+			if err != nil {
+				return "", nil, err
+			}
+
+			// Start LXCFS.
+			err = lxcfs.Start(context.TODO())
+			if err != nil {
+				return "", nil, err
+			}
+
+			// Write down our process tracking.
+			err = lxcfs.Save(filepath.Join(d.RunPath(), "lxcfs.yaml"))
+			if err != nil {
+				return "", nil, err
+			}
+		}
+
+		// Over-mount the system LXCFS (if found).
+		for _, entry := range []string{"/var/lib/lxcfs", "/var/lib/incus-lxcfs"} {
+			if !util.PathExists(entry) {
+				continue
+			}
+
+			err = lxcSetConfigItem(cc, "lxc.hook.pre-mount", fmt.Sprintf("mount -o bind %s /var/lib/incus-lxcfs/", filepath.Join(d.DevicesPath(), "lxcfs")))
+			if err != nil {
+				return "", nil, err
+			}
 		}
 	}
 
@@ -2539,7 +2640,7 @@ func (d *lxc) Start(stateful bool) error {
 	}
 
 	// Setup a new operation.
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionStart, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStart, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
 	if err != nil {
 		if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
 			// An existing matching operation has now succeeded, return.
@@ -2793,7 +2894,7 @@ func (d *lxc) Stop(stateful bool) error {
 	}
 
 	// Setup a new operation
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, true)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore, operationlock.ActionMigrate}, false, true)
 	if err != nil {
 		if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
 			// An existing matching operation has now succeeded, return.
@@ -2969,7 +3070,7 @@ func (d *lxc) Shutdown(timeout time.Duration) error {
 	}
 
 	// Setup a new operation
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart}, true, true)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart}, true, true)
 	if err != nil {
 		if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
 			// An existing matching operation has now succeeded, return.
@@ -3131,6 +3232,11 @@ func (d *lxc) onStop(args map[string]string) error {
 		d.fromHook = false
 		err = nil
 
+		// Set operation if missing.
+		if d.op == nil {
+			d.op = op.GetOperation()
+		}
+
 		// Unlock on return
 		defer op.Done(nil)
 
@@ -3183,6 +3289,25 @@ func (d *lxc) onStop(args map[string]string) error {
 		if err != nil {
 			op.Done(fmt.Errorf("Failed to remove disk devices: %w", err))
 			return
+		}
+
+		// Stop dedicated LXCFS.
+		if util.PathExists(filepath.Join(d.DevicesPath(), "lxcfs", "proc")) && util.PathExists(filepath.Join(d.RunPath(), "lxcfs.yaml")) {
+			// Import the running LXCFS.
+			lxcfs, err := subprocess.ImportProcess(filepath.Join(d.RunPath(), "lxcfs.yaml"))
+			if err != nil && !os.IsExist(err) {
+				op.Done(fmt.Errorf("Failed to stop LXCFS: %w", err))
+				return
+			}
+
+			// Stop LXCFS.
+			err = lxcfs.Stop()
+			if err != nil && err != subprocess.ErrNotRunning {
+				op.Done(fmt.Errorf("Failed to stop LXCFS: %w", err))
+				return
+			}
+
+			_ = unix.Unmount(filepath.Join(d.DevicesPath(), "lxcfs"), unix.MNT_DETACH)
 		}
 
 		// Log and emit lifecycle if not user triggered
@@ -3290,7 +3415,7 @@ func (d *lxc) Freeze() error {
 
 	// Check if the CGroup is available
 	if !d.state.OS.CGInfo.Supports(cgroup.Freezer, cg) {
-		d.logger.Info("Unable to freeze container (lack of kernel support)", ctxMap)
+		d.logger.Warn("Unable to freeze container (lack of kernel support)", ctxMap)
 		return nil
 	}
 
@@ -3340,7 +3465,7 @@ func (d *lxc) Unfreeze() error {
 
 	// Check if the CGroup is available
 	if !d.state.OS.CGInfo.Supports(cgroup.Freezer, cg) {
-		d.logger.Info("Unable to unfreeze container (lack of kernel support)", ctxMap)
+		d.logger.Warn("Unable to unfreeze container (lack of kernel support)", ctxMap)
 		return nil
 	}
 
@@ -3663,7 +3788,7 @@ func (d *lxc) Snapshot(name string, expiry time.Time, stateful bool) error {
 func (d *lxc) Restore(sourceContainer instance.Instance, stateful bool) error {
 	var ctxMap logger.Ctx
 
-	op, err := operationlock.Create(d.Project().Name, d.Name(), operationlock.ActionRestore, false, false)
+	op, err := operationlock.Create(d.Project().Name, d.Name(), d.op, operationlock.ActionRestore, false, false)
 	if err != nil {
 		return fmt.Errorf("Failed to create instance restore operation: %w", err)
 	}
@@ -3709,7 +3834,7 @@ func (d *lxc) Restore(sourceContainer instance.Instance, stateful bool) error {
 		}
 
 		// Refresh the operation as that one is now complete.
-		op, err = operationlock.Create(d.Project().Name, d.Name(), operationlock.ActionRestore, false, false)
+		op, err = operationlock.Create(d.Project().Name, d.Name(), d.op, operationlock.ActionRestore, false, false)
 		if err != nil {
 			return fmt.Errorf("Failed to create instance restore operation: %w", err)
 		}
@@ -3884,7 +4009,7 @@ func (d *lxc) Delete(force bool) error {
 	defer unlock()
 
 	// Setup a new operation.
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionDelete, nil, false, false)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionDelete, nil, false, false)
 	if err != nil {
 		return fmt.Errorf("Failed to create instance delete operation: %w", err)
 	}
@@ -4257,7 +4382,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 	defer unlock()
 
 	// Setup a new operation
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), operationlock.ActionUpdate, []operationlock.Action{operationlock.ActionCreate, operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionUpdate, []operationlock.Action{operationlock.ActionCreate, operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
 	if err != nil {
 		return fmt.Errorf("Failed to create instance update operation: %w", err)
 	}
@@ -5061,7 +5186,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 }
 
 // Export backs up the instance.
-func (d *lxc) Export(w io.Writer, properties map[string]string, expiration time.Time) (api.ImageMetadata, error) {
+func (d *lxc) Export(w io.Writer, properties map[string]string, expiration time.Time, tracker *ioprogress.ProgressTracker) (api.ImageMetadata, error) {
 	ctxMap := logger.Ctx{
 		"created":   d.creationDate,
 		"ephemeral": d.ephemeral,
@@ -5393,8 +5518,14 @@ fi
 }
 
 func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
-	d.logger.Info("Migration send starting")
-	defer d.logger.Info("Migration send stopped")
+	d.logger.Debug("Migration send starting")
+	defer d.logger.Debug("Migration send stopped")
+
+	// Setup a new operation.
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionMigrate, nil, false, true)
+	if err != nil {
+		return err
+	}
 
 	// Wait for essential migration connections before negotiation.
 	connectionsCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -5402,6 +5533,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 
 	filesystemConn, err := args.FilesystemConn(connectionsCtx)
 	if err != nil {
+		op.Done(err)
 		return err
 	}
 
@@ -5409,13 +5541,16 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	if args.Live {
 		stateConn, err = args.StateConn(connectionsCtx)
 		if err != nil {
+			op.Done(err)
 			return err
 		}
 	}
 
 	pool, err := storagePools.LoadByInstance(d.state, d)
 	if err != nil {
-		return fmt.Errorf("Failed loading instance: %w", err)
+		err := fmt.Errorf("Failed loading instance: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	// The refresh argument passed to MigrationTypes() is always set to false here.
@@ -5423,7 +5558,9 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	// sink/receiver will know this, and adjust the migration types accordingly.
 	poolMigrationTypes := pool.MigrationTypes(storagePools.InstanceContentType(d), false, args.Snapshots)
 	if len(poolMigrationTypes) == 0 {
-		return fmt.Errorf("No source migration types available")
+		err := fmt.Errorf("No source migration types available")
+		op.Done(err)
+		return err
 	}
 
 	// Convert the pool's migration type options to an offer header to target.
@@ -5453,7 +5590,9 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	// Add idmap info to source header for containers.
 	idmapset, err := d.DiskIdmap()
 	if err != nil {
-		return fmt.Errorf("Failed getting container disk idmap: %w", err)
+		err := fmt.Errorf("Failed getting container disk idmap: %w", err)
+		op.Done(err)
+		return err
 	} else if idmapset != nil {
 		offerHeader.Idmap = make([]*migration.IDMapType, 0, len(idmapset.Entries))
 		for _, ctnIdmap := range idmapset.Entries {
@@ -5471,7 +5610,9 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 
 	srcConfig, err := pool.GenerateInstanceBackupConfig(d, args.Snapshots, d.op)
 	if err != nil {
-		return fmt.Errorf("Failed generating instance migration config: %w", err)
+		err := fmt.Errorf("Failed generating instance migration config: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	// If we are copying snapshots, retrieve a list of snapshots from source volume.
@@ -5489,7 +5630,9 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	d.logger.Debug("Sending migration offer to target")
 	err = args.ControlSend(offerHeader)
 	if err != nil {
-		return fmt.Errorf("Failed sending migration offer: %w", err)
+		err := fmt.Errorf("Failed sending migration offer: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	// Receive response from target.
@@ -5497,7 +5640,9 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	respHeader := &migration.MigrationHeader{}
 	err = args.ControlReceive(respHeader)
 	if err != nil {
-		return fmt.Errorf("Failed receiving migration offer response: %w", err)
+		err := fmt.Errorf("Failed receiving migration offer response: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	d.logger.Debug("Got migration offer response from target")
@@ -5505,7 +5650,9 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	// Negotiated migration types.
 	migrationTypes, err := localMigration.MatchTypes(respHeader, migration.MigrationFSType_RSYNC, poolMigrationTypes)
 	if err != nil {
-		return fmt.Errorf("Failed to negotiate migration type: %w", err)
+		err := fmt.Errorf("Failed to negotiate migration type: %w", err)
+		op.Done(err)
+		return err
 	}
 
 	volSourceArgs := &localMigration.VolumeSourceArgs{
@@ -5838,7 +5985,16 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 			}
 		}
 
-		return err
+		if err != nil {
+			op.Done(err)
+			return err
+		}
+
+		op.Done(nil)
+
+		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceMigrated.Event(d, nil))
+
+		return nil
 	}
 }
 
@@ -5980,8 +6136,8 @@ func (d *lxc) resetContainerDiskIdmap(srcIdmap *idmap.Set) error {
 }
 
 func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
-	d.logger.Info("Migration receive starting")
-	defer d.logger.Info("Migration receive stopped")
+	d.logger.Debug("Migration receive starting")
+	defer d.logger.Debug("Migration receive stopped")
 
 	// Wait for essential migration connections before negotiation.
 	connectionsCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -6315,7 +6471,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 					}
 
 					// Create the snapshot instance.
-					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, true, false)
+					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, d.op, true, false)
 					if err != nil {
 						return fmt.Errorf("Failed creating instance snapshot record %q: %w", snapArgs.Name, err)
 					}
@@ -6704,7 +6860,7 @@ func (d *lxc) migrate(args *instance.CriuMigrationArgs) error {
 	if migrateErr != nil {
 		log, err2 := getCRIULogErrors(finalStateDir, prettyCmd)
 		if err2 == nil {
-			d.logger.Info("Failed migrating container", ctxMap)
+			d.logger.Warn("Failed migrating container", ctxMap)
 			migrateErr = fmt.Errorf("%s %s failed\n%s", args.Function, prettyCmd, log)
 		}
 
@@ -8269,7 +8425,7 @@ func (d *lxc) LockExclusive() (*operationlock.InstanceOperation, error) {
 	}
 
 	// Prevent concurrent operations the instance.
-	op, err := operationlock.Create(d.Project().Name, d.Name(), operationlock.ActionCreate, false, false)
+	op, err := operationlock.Create(d.Project().Name, d.Name(), d.op, operationlock.ActionCreate, false, false)
 	if err != nil {
 		return nil, err
 	}

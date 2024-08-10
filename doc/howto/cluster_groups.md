@@ -26,6 +26,16 @@
 
     incus cluster group add server1 gpu
 
+## 設定オプション
+
+クラスタグループでは以下の設定オプションが利用できます:
+
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group cluster_group-common start -->
+    :end-before: <!-- config group cluster_group-common end -->
+```
+
 ## クラスタグループメンバー上でインスタンスを起動する
 
 クラスタグループがある場合、インスタンスを特定のメンバー上で動かすようにターゲットする代わりに、クラスタグループのいずれかのメンバー上で動かすようにターゲットできます。

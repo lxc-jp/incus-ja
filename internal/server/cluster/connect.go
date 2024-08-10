@@ -35,7 +35,7 @@ func Connect(address string, networkCert *localtls.CertInfo, serverCert *localtl
 		defer cancel()
 		err := EventListenerWait(ctx, address)
 		if err != nil {
-			return nil, fmt.Errorf("Missing event connection with target cluster member")
+			return nil, err
 		}
 	}
 
@@ -149,9 +149,18 @@ func ConnectIfVolumeIsRemote(s *state.State, poolName string, projectName string
 			return nil, err
 		}
 
-		remoteInstance, err := storagePools.VolumeUsedByExclusiveRemoteInstancesWithProfiles(s, poolName, projectName, &dbVolume.StorageVolume)
-		if err != nil {
-			return nil, fmt.Errorf("Failed checking if volume %q is available: %w", volumeName, err)
+		// Find if volume is attached to a remote instance.
+		var remoteInstance *db.InstanceArgs
+		err = storagePools.VolumeUsedByInstanceDevices(s, poolName, projectName, &dbVolume.StorageVolume, true, func(dbInst db.InstanceArgs, project api.Project, usedByDevices []string) error {
+			if dbInst.Node != s.ServerName {
+				remoteInstance = &dbInst
+				return db.ErrInstanceListStop // Stop the search, this volume is attached to a remote instance.
+			}
+
+			return nil
+		})
+		if err != nil && err != db.ErrInstanceListStop {
+			return nil, err
 		}
 
 		if remoteInstance != nil {
@@ -271,7 +280,17 @@ func UpdateTrust(serverCert *localtls.CertInfo, serverName string, targetAddress
 }
 
 // HasConnectivity probes the member with the given address for connectivity.
-func HasConnectivity(networkCert *localtls.CertInfo, serverCert *localtls.CertInfo, address string) bool {
+func HasConnectivity(networkCert *localtls.CertInfo, serverCert *localtls.CertInfo, address string, apiCheck bool) bool {
+	if apiCheck {
+		c, err := Connect(address, networkCert, serverCert, nil, true)
+		if err != nil {
+			return false
+		}
+
+		_, _, err = c.GetServer()
+		return err == nil
+	}
+
 	config, err := tlsClientConfig(networkCert, serverCert)
 	if err != nil {
 		return false
