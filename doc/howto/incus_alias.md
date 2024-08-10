@@ -11,19 +11,19 @@ Incus コマンドラインクライアントでは良く使うコマンドの�
 - 新しいコマンドエイリアスの追加は`incus alias add`
 - コマンドエイリアスの一覧表示は`incus alias list`
 - コマンドエイリアスの削除は`incus alias remove`
-- コマンドエイリアスの改名は`incus alias rename`
+- コマンドエイリアスのリネームは`incus alias rename`
 
 すべての利用可能なサブコマンドとパラメーターを見るには[`incus alias --help`](incus_alias.md)を実行してください。
 
 ## コマンドエイリアスを追加するには
 
-インスタンスを削除する際に必ず確認を求めるようにするには[`incus delete`](incus_delete.md)に常に`incus delete --interactive`を実行するようにエイリアスを作成します。
+インスタンスを削除する際に必ず確認を求めるようにするには、[`incus delete`](incus_delete.md)に常に`incus delete --interactive`を実行するようにエイリアスを作成します。
 
 以下のコマンドは`delete`という名前でコマンドエイリアスを_追加_し同じIncusのコマンドを`--interactive`フラグつきで実行します。
 
     incus alias add delete "delete --interactive"
 
-`myinstance`と呼ばれるインスタンスを削除するために`incus delete mycontainer`を実行した際にIncusのコマンドラインクライアントは`incus delete`を`incus delete --interactive`に置き換えて`incus delete --interactive myinstance`を実行することに注意してください。
+`myinstance`と呼ばれるインスタンスを削除するために、`incus delete mycontainer`を実行した際に、Incusのコマンドラインクライアントは`incus delete`を`incus delete --interactive`に置き換えて、`incus delete --interactive myinstance`を実行することに注意してください。
 
 コマンドエイリアスをIncusコマンドと同じ名前で登録すると、コマンドエイリアスはIncusコマンドを隠します。
 
@@ -40,9 +40,9 @@ Incus コマンドラインクライアントでは良く使うコマンドの�
 
 既存のコマンドエイリアスを削除するには[`incus alias remove`](incus_alias_remove.md)にコマンドエイリアスの名前を追加して実行します。
 
-## コマンドエイリアスを改名するには
+## コマンドエイリアスをリネームするには
 
-既存のコマンドエイリアスを改名するには、[`incus alias rename`](incus_alias_rename.md)に既存のコマンドエイリアスの名前と新しいコマンドエイリアスの名前を指定して実行します。
+既存のコマンドエイリアスをリネームするには、[`incus alias rename`](incus_alias_rename.md)に既存のコマンドエイリアスの名前と新しいコマンドエイリアスの名前を指定して実行します。
 
 ## ビルトインの`shell`エイリアス
 
@@ -63,7 +63,7 @@ $ incus alias list
 
 `--`は`-l`のようなパラメータを処理しないように指示するコマンドラインの約束事です。`--`がないと、展開された`incus exec mycontainer su -l`というコマンドは失敗します。これは`-l`を処理しないのではなくIncusコマンドラインクライアントが解釈しようとしてしまうからです。
 
-`su -l`コマンドは`su -`や`su --login`と動議です。
+`su -l`コマンドは`su -`や`su --login`と同義です。
 ログインシェルを`root`ユーザーでインスタンス内に起動します。
 コマンドは`root`ユーザーでログインシェルを起動するために必要な設定ファイルを読みます。
 
