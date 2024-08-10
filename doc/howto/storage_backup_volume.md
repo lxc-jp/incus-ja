@@ -45,7 +45,7 @@ myst:
 
 カスタムストレージボリュームのスナップショットを作成するには以下のコマンド使用します:
 
-    incus storage volume snapshot <pool_name> <volume_name> [<snapshot_name>]
+    incus storage volume snapshot create <pool_name> <volume_name> [<snapshot_name>]
 
 <!-- Include start create snapshot options -->
 既存のスナップショットを置き換えるには、スナップショット名とともに `--reuse` フラグを追加します。

@@ -2495,3 +2495,36 @@ TLS クライアント証明書を直接使う代わりに署名された `JSON 
 ## `instance_oci`
 
 OCIコンテナを稼働させる初期サポートを追加します。
+
+## `clustering_groups_config`
+
+クラスタリンググループにスタンダードなキーバリューの `config` オプションを追加します。
+これによりそれらのグループにいつくかの制限や設定をすることができます。
+
+## `instances_lxcfs_per_instance`
+
+`instances.lxcfs.per_instance` というサーバー設定キーを追加します。
+これによりシステム上でグローバルにではなくインスタンスごとにLXCFSを動かすかどうかを制御できます。
+
+## `clustering_groups_vm_cpu_definition`
+
+クラスターグループの設定を通して仮想マシンのCPU定義を制御するためのいくつかの設定オプションを追加します。
+
+追加される設定キーは:
+
+* `instances.vm.cpu.ARCHITECTURE.baseline`
+* `instances.vm.cpu.ARCHITECTURE.flag`
+
+## `disk_volume_subpath`
+
+`source=volume/path`のシンタクスを用いてファイルシステムのカスタムボリュームのサブパスにアクセスできるようにします。
+
+## `projects_limits_disk_pool`
+
+プールごとのプロジェクトのディスク制限を追加します。
+プロジェクトの制限に`limits.disk.pool.NAME`という設定オプションを追加します。
+
+## `network_ovn_isolated`
+
+OVNネットワークのアップリンクネットワークとして`none`を使えるようにします。
+これによりネットワークを隔離できます。

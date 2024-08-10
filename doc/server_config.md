@@ -109,3 +109,9 @@ key/value 設定は名前空間が分けられています。
     :start-after: <!-- config group server-miscellaneous start -->
     :end-before: <!-- config group server-miscellaneous end -->
 ```
+
+(server-options-user)=
+## ユーザーオプション
+
+追加のユーザー定義キーは`user.`ネームスペース内で利用可能です。
+`user.ui.`で始まるキーはウェブUI設定オプションで使用され、認証していないユーザーにも見えることに注意してください。
