@@ -21,6 +21,33 @@
 				]
 			}
 		},
+		"cluster_group": {
+			"common": {
+				"keys": [
+					{
+						"instances.vm.cpu.ARCHITECTURE.baseline": {
+							"longdesc": "The CPU base architecture name as can be found through `qemu -cpu ?`.\n\nThis can be a generic definition like `qemu64` or `kvm64`, or it can be a specific hardware architecture like `EPYC-v2`.\nIt's important to ensure that all servers in the group match that baseline.",
+							"shortdesc": "CPU base architecture name",
+							"type": "string"
+						}
+					},
+					{
+						"instances.vm.cpu.ARCHITECTURE.flags": {
+							"longdesc": "A comma separated list of CPU flags to add on top of CPU baseline or a list of flags to remove from it.\n\nTo remove a flag, use `-flag`.",
+							"shortdesc": "CPU flags to add/remove to/from the baseline",
+							"type": "string"
+						}
+					},
+					{
+						"user.*": {
+							"longdesc": "User keys can be used in search.",
+							"shortdesc": "Free form user key/value storage",
+							"type": "string"
+						}
+					}
+				]
+			}
+		},
 		"devices": {
 			"disk": {
 				"keys": [
@@ -1792,6 +1819,13 @@
 						}
 					},
 					{
+						"limits.disk.pool.POOL_NAME": {
+							"longdesc": "This value is the maximum value of the aggregate disk\nspace used by all instance volumes, custom volumes, and images of the\nproject on this specific storage pool.",
+							"shortdesc": "Maximum disk space used by the project on this pool",
+							"type": "string"
+						}
+					},
+					{
 						"limits.instances": {
 							"longdesc": "",
 							"shortdesc": "Maximum number of instances that can be created in the project",
@@ -2513,6 +2547,15 @@
 							"scope": "global",
 							"shortdesc": "Compression algorithm to use for backups",
 							"type": "string"
+						}
+					},
+					{
+						"instances.lxcfs.per_instance": {
+							"defaultdesc": "`false`",
+							"longdesc": "LXCFS is used to provide overlays for common `/proc` and `/sys`\nfiles which reflect the resource limits applied to the container.\n\nIt normally operates through a single file system mount on the host which is then shared by all containers.\nThis is very efficient but comes with the downside that a crash of LXCFS will break all containers.\n\nWith this option, it's now possible to run a LXCFS instance per\ncontainer instead, using more system resources but reducing the impact\nof a crash.",
+							"scope": "global",
+							"shortdesc": "Whether to run LXCFS on a per-instance basis",
+							"type": "bool"
 						}
 					},
 					{

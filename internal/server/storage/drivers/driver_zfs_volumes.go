@@ -88,7 +88,10 @@ func (d *zfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Oper
 				}
 
 				// Round to block boundary.
-				poolVolSizeBytes = d.roundVolumeBlockSizeBytes(vol, poolVolSizeBytes)
+				poolVolSizeBytes, err = d.roundVolumeBlockSizeBytes(vol, poolVolSizeBytes)
+				if err != nil {
+					return err
+				}
 
 				// If the cached volume size is different than the pool volume size, then we can't use the
 				// deleted cached image volume and instead we will rename it to a random UUID so it can't
@@ -211,7 +214,10 @@ func (d *zfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Oper
 			return err
 		}
 
-		sizeBytes = d.roundVolumeBlockSizeBytes(vol, sizeBytes)
+		sizeBytes, err = d.roundVolumeBlockSizeBytes(vol, sizeBytes)
+		if err != nil {
+			return err
+		}
 
 		// Create the volume dataset.
 		err = d.createVolume(d.dataset(vol, false), sizeBytes, opts...)
@@ -1689,7 +1695,10 @@ func (d *zfs) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, op
 			return nil
 		}
 
-		sizeBytes = d.roundVolumeBlockSizeBytes(vol, sizeBytes)
+		sizeBytes, err = d.roundVolumeBlockSizeBytes(vol, sizeBytes)
+		if err != nil {
+			return err
+		}
 
 		oldSizeBytesStr, err := d.getDatasetProperty(d.dataset(vol, false), "volsize")
 		if err != nil {
@@ -1919,7 +1928,11 @@ func (d *zfs) getVolumeDiskPathFromDataset(dataset string) (string, error) {
 
 // GetVolumeDiskPath returns the location of a root disk block device.
 func (d *zfs) GetVolumeDiskPath(vol Volume) (string, error) {
-	return d.getVolumeDiskPathFromDataset(d.dataset(vol, false))
+	// Wait up to 30 seconds for the device to appear.
+	ctx, cancel := context.WithTimeout(d.state.ShutdownCtx, 30*time.Second)
+	defer cancel()
+
+	return d.tryGetVolumeDiskPathFromDataset(ctx, d.dataset(vol, false))
 }
 
 // ListVolumes returns a list of volumes in storage pool.

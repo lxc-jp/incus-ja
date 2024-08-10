@@ -46,8 +46,9 @@ type APIHeartbeatMember struct {
 
 // APIHeartbeatVersion contains max versions for all nodes in cluster.
 type APIHeartbeatVersion struct {
-	Schema        int
-	APIExtensions int
+	Schema           int
+	APIExtensions    int
+	MinAPIExtensions int
 }
 
 // NewAPIHearbeat returns initialized APIHeartbeat.
@@ -74,7 +75,7 @@ type APIHeartbeat struct {
 // Update updates an existing APIHeartbeat struct with the raft and all node states supplied.
 // If allNodes provided is an empty set then this is considered a non-full state list.
 func (hbState *APIHeartbeat) Update(fullStateList bool, raftNodes []db.RaftNode, allNodes []db.NodeInfo, offlineThreshold time.Duration) {
-	var maxSchemaVersion, maxAPIExtensionsVersion int
+	var maxSchemaVersion, maxAPIExtensionsVersion, minAPIExtensionsVersion int
 
 	if hbState.Members == nil {
 		hbState.Members = make(map[int64]APIHeartbeatMember)
@@ -115,14 +116,19 @@ func (hbState *APIHeartbeat) Update(fullStateList bool, raftNodes []db.RaftNode,
 			maxAPIExtensionsVersion = node.APIExtensions
 		}
 
+		if minAPIExtensionsVersion == 0 || node.APIExtensions < minAPIExtensionsVersion {
+			minAPIExtensionsVersion = node.APIExtensions
+		}
+
 		if node.Schema > maxSchemaVersion {
 			maxSchemaVersion = node.Schema
 		}
 	}
 
 	hbState.Version = APIHeartbeatVersion{
-		Schema:        maxSchemaVersion,
-		APIExtensions: maxAPIExtensionsVersion,
+		Schema:           maxSchemaVersion,
+		APIExtensions:    maxAPIExtensionsVersion,
+		MinAPIExtensions: minAPIExtensionsVersion,
 	}
 
 	if len(raftNodeMap) > 0 && hbState.cluster != nil {
@@ -142,7 +148,7 @@ func (hbState *APIHeartbeat) Update(fullStateList bool, raftNodes []db.RaftNode,
 // Send sends heartbeat requests to the nodes supplied and updates heartbeat state.
 func (hbState *APIHeartbeat) Send(ctx context.Context, networkCert *localtls.CertInfo, serverCert *localtls.CertInfo, localAddress string, nodes []db.NodeInfo, spreadDuration time.Duration) {
 	heartbeatsWg := sync.WaitGroup{}
-	sendHeartbeat := func(nodeID int64, address string, spreadDuration time.Duration, heartbeatData *APIHeartbeat) {
+	sendHeartbeat := func(nodeID int64, name string, address string, spreadDuration time.Duration, heartbeatData *APIHeartbeat) {
 		defer heartbeatsWg.Done()
 
 		if spreadDuration > 0 {
@@ -183,7 +189,7 @@ func (hbState *APIHeartbeat) Send(ctx context.Context, networkCert *localtls.Cer
 				logger.Warn("Failed to resolve warning", logger.Ctx{"err": err})
 			}
 		} else {
-			logger.Warn("Failed heartbeat", logger.Ctx{"remote": address, "err": err})
+			logger.Warn("Cluster member isn't responding", logger.Ctx{"name": name})
 
 			if ctx.Err() == nil {
 				err = hbState.cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -211,7 +217,7 @@ func (hbState *APIHeartbeat) Send(ctx context.Context, networkCert *localtls.Cer
 
 		// Parallelize the rest.
 		heartbeatsWg.Add(1)
-		go sendHeartbeat(node.ID, node.Address, spreadDuration, hbState)
+		go sendHeartbeat(node.ID, node.Name, node.Address, spreadDuration, hbState)
 	}
 
 	heartbeatsWg.Wait()
@@ -352,10 +358,10 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 
 	if mode != hearbeatNormal {
 		// Log unscheduled heartbeats with a higher level than normal heartbeats.
-		logger.Info("Starting heartbeat round", logger.Ctx{"mode": modeStr, "local": localClusterAddress})
+		logger.Info("Starting instant heartbeat round", logger.Ctx{"mode": modeStr})
 	} else {
 		// Don't spam the normal log with regular heartbeat messages.
-		logger.Debug("Starting heartbeat round", logger.Ctx{"mode": modeStr, "local": localClusterAddress})
+		logger.Debug("Starting heartbeat round", logger.Ctx{"mode": modeStr})
 	}
 
 	// Replace the local raft_nodes table immediately because it
@@ -367,7 +373,7 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 		return tx.ReplaceRaftNodes(raftNodes)
 	})
 	if err != nil {
-		logger.Warn("Failed to replace local raft members", logger.Ctx{"err": err, "mode": modeStr, "local": localClusterAddress})
+		logger.Warn("Failed to replace local raft members", logger.Ctx{"err": err, "mode": modeStr})
 		return
 	}
 
@@ -423,7 +429,7 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 			return nil
 		})
 		if err != nil {
-			logger.Warn("Failed to get current cluster members", logger.Ctx{"err": err, "mode": modeStr, "local": localClusterAddress})
+			logger.Warn("Failed to get current cluster members", logger.Ctx{"err": err, "mode": modeStr})
 			return
 		}
 
@@ -487,7 +493,7 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 
 	// If the context has been cancelled, return prematurely after saving the members we did manage to ping.
 	if ctxErr != nil {
-		logger.Warn("Aborting heartbeat round", logger.Ctx{"err": ctxErr, "mode": modeStr, "local": localClusterAddress})
+		logger.Warn("Aborting heartbeat round", logger.Ctx{"err": ctxErr, "mode": modeStr})
 		return
 	}
 
@@ -498,15 +504,15 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 
 	duration := time.Since(startTime)
 	if duration > heartbeatInterval {
-		logger.Warn("Heartbeat round duration greater than heartbeat interval", logger.Ctx{"duration": duration, "interval": heartbeatInterval})
+		logger.Warn("Cluster heartbeat took too long", logger.Ctx{"duration": duration, "interval": heartbeatInterval})
 	}
 
 	if mode != hearbeatNormal {
 		// Log unscheduled heartbeats with a higher level than normal heartbeats.
-		logger.Info("Completed heartbeat round", logger.Ctx{"duration": duration, "local": localClusterAddress})
+		logger.Info("Completed instant heartbeat round", logger.Ctx{"duration": duration})
 	} else {
 		// Don't spam the normal log with regular heartbeat messages.
-		logger.Debug("Completed heartbeat round", logger.Ctx{"duration": duration, "local": localClusterAddress})
+		logger.Debug("Completed heartbeat round", logger.Ctx{"duration": duration})
 	}
 }
 

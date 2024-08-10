@@ -353,12 +353,14 @@ func (b *backend) Delete(clientType request.ClientType, op *operations.Operation
 	}
 
 	if clientType != request.ClientTypeNormal && b.driver.Info().Remote {
-		if b.driver.Info().MountedRoot {
+		if b.driver.Info().Deactivate || b.driver.Info().MountedRoot {
 			_, err := b.driver.Unmount()
 			if err != nil {
 				return err
 			}
-		} else {
+		}
+
+		if !b.driver.Info().MountedRoot {
 			// Remote storage may have leftover entries caused by
 			// volumes that were moved or delete while a particular system was offline.
 			err := os.RemoveAll(path)
@@ -1692,7 +1694,7 @@ func (b *backend) imageFiller(fingerprint string, op *operations.Operation) func
 			metadata := make(map[string]any)
 			tracker = &ioprogress.ProgressTracker{
 				Handler: func(percent, speed int64) {
-					operations.SetProgressMetadata(metadata, "create_instance_from_image_unpack", "Unpack", percent, 0, speed)
+					operations.SetProgressMetadata(metadata, "create_instance_from_image_unpack", "Unpacking image", percent, 0, speed)
 					_ = op.UpdateMetadata(metadata)
 				}}
 		}
@@ -4911,7 +4913,7 @@ func (b *backend) migrationIndexHeaderSend(l logger.Logger, indexHeaderVersion u
 			return nil, fmt.Errorf("Failed negotiating migration options: %w", err)
 		}
 
-		l.Info("Received migration index header response", logger.Ctx{"response": fmt.Sprintf("%+v", infoResp), "version": indexHeaderVersion})
+		l.Debug("Received migration index header response", logger.Ctx{"response": fmt.Sprintf("%+v", infoResp), "version": indexHeaderVersion})
 	}
 
 	return &infoResp, nil
@@ -4936,7 +4938,7 @@ func (b *backend) migrationIndexHeaderReceive(l logger.Logger, indexHeaderVersio
 			return nil, fmt.Errorf("Failed decoding migration index header: %w", err)
 		}
 
-		l.Info("Received migration index header, sending response", logger.Ctx{"version": indexHeaderVersion})
+		l.Debug("Received migration index header, sending response", logger.Ctx{"version": indexHeaderVersion})
 
 		infoResp := localMigration.InfoResponse{StatusCode: http.StatusOK, Refresh: &refresh}
 		headerJSON, err := json.Marshal(infoResp)
@@ -7004,7 +7006,7 @@ func (b *backend) CreateCustomVolumeFromISO(projectName string, volName string, 
 	}
 
 	err := b.state.DB.Cluster.Transaction(b.state.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
-		return project.AllowVolumeCreation(tx, projectName, req)
+		return project.AllowVolumeCreation(tx, projectName, b.name, req)
 	})
 	if err != nil {
 		return fmt.Errorf("Failed checking volume creation allowed: %w", err)
@@ -7094,7 +7096,7 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 	}
 
 	err := b.state.DB.Cluster.Transaction(b.state.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
-		return project.AllowVolumeCreation(tx, srcBackup.Project, req)
+		return project.AllowVolumeCreation(tx, srcBackup.Project, b.name, req)
 	})
 	if err != nil {
 		return fmt.Errorf("Failed checking volume creation allowed: %w", err)

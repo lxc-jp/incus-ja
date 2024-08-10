@@ -51,6 +51,9 @@ type nicOVN struct {
 	deviceCommon
 
 	network ovnNet // Populated in validateConfig().
+
+	ovnnb *ovn.NB
+	ovnsb *ovn.SB
 }
 
 // CanHotPlug returns whether the device can be managed whilst the instance is running.
@@ -383,9 +386,13 @@ func (d *nicOVN) validateEnvironment() error {
 
 func (d *nicOVN) init(inst instance.Instance, s *state.State, name string, conf deviceConfig.Device, volatileGet VolatileGetter, volatileSet VolatileSetter) error {
 	// Check that OVN is available.
-	if s.OVNNB == nil {
-		return fmt.Errorf("OVN isn't currently available")
+	ovnnb, ovnsb, err := s.OVN()
+	if err != nil {
+		return err
 	}
+
+	d.ovnnb = ovnnb
+	d.ovnsb = ovnsb
 
 	return d.deviceCommon.init(inst, s, name, conf, volatileGet, volatileSet)
 }
@@ -405,16 +412,20 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 
 	// Load uplink network config.
 	uplinkNetworkName := d.network.Config()["network"]
-
 	var uplink *api.Network
+	var uplinkConfig map[string]string
 
-	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-		_, uplink, _, err = tx.GetNetworkInAnyState(ctx, api.ProjectDefaultName, uplinkNetworkName)
+	if uplinkNetworkName != "none" {
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			_, uplink, _, err = tx.GetNetworkInAnyState(ctx, api.ProjectDefaultName, uplinkNetworkName)
 
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to load uplink network %q: %w", uplinkNetworkName, err)
+			return err
+		})
+		if err != nil {
+			return nil, fmt.Errorf("Failed to load uplink network %q: %w", uplinkNetworkName, err)
+		}
+
+		uplinkConfig = uplink.Config
 	}
 
 	// Setup the host network interface (if not nested).
@@ -604,7 +615,7 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 		DNSName:      d.inst.Name(),
 		DeviceName:   d.name,
 		DeviceConfig: d.config,
-		UplinkConfig: uplink.Config,
+		UplinkConfig: uplinkConfig,
 		LastStateIPs: lastStateIPs, // Pass in volatile last state IPs for use with sticky DHCPv4 hint.
 	}, nil)
 	if err != nil {
@@ -635,7 +646,7 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 
 	// Associated host side interface to OVN logical switch port (if not nested).
 	if integrationBridgeNICName != "" {
-		cleanup, err := d.setupHostNIC(integrationBridgeNICName, logicalPortName, uplink)
+		cleanup, err := d.setupHostNIC(integrationBridgeNICName, logicalPortName)
 		if err != nil {
 			return nil, err
 		}
@@ -658,7 +669,7 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 
 	// Add post start hook for setting logical switch port chassis once instance has been started.
 	runConf.PostHooks = append(runConf.PostHooks, func() error {
-		err := d.state.OVNNB.UpdateLogicalSwitchPortOptions(context.TODO(), logicalPortName, map[string]string{"requested-chassis": chassisID})
+		err := d.ovnnb.UpdateLogicalSwitchPortOptions(context.TODO(), logicalPortName, map[string]string{"requested-chassis": chassisID})
 		if err != nil {
 			return fmt.Errorf("Failed setting logical switch port chassis ID: %w", err)
 		}
@@ -775,27 +786,31 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		if isRunning {
 			// Load uplink network config.
 			uplinkNetworkName := d.network.Config()["network"]
-
 			var uplink *api.Network
+			var uplinkConfig map[string]string
 
-			err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-				var err error
+			if uplinkNetworkName != "none" {
+				err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+					var err error
 
-				_, uplink, _, err = tx.GetNetworkInAnyState(ctx, api.ProjectDefaultName, uplinkNetworkName)
+					_, uplink, _, err = tx.GetNetworkInAnyState(ctx, api.ProjectDefaultName, uplinkNetworkName)
 
-				return err
-			})
-			if err != nil {
-				return fmt.Errorf("Failed to load uplink network %q: %w", uplinkNetworkName, err)
+					return err
+				})
+				if err != nil {
+					return fmt.Errorf("Failed to load uplink network %q: %w", uplinkNetworkName, err)
+				}
+
+				uplinkConfig = uplink.Config
 			}
 
 			// Update OVN logical switch port for instance.
-			_, _, err = d.network.InstanceDevicePortStart(&network.OVNInstanceNICSetupOpts{
+			_, _, err := d.network.InstanceDevicePortStart(&network.OVNInstanceNICSetupOpts{
 				InstanceUUID: d.inst.LocalConfig()["volatile.uuid"],
 				DNSName:      d.inst.Name(),
 				DeviceName:   d.name,
 				DeviceConfig: d.config,
-				UplinkConfig: uplink.Config,
+				UplinkConfig: uplinkConfig,
 			}, removedACLs)
 			if err != nil {
 				return fmt.Errorf("Failed updating OVN port: %w", err)
@@ -803,7 +818,7 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 
 		if len(removedACLs) > 0 {
-			err := acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, d.state.OVNNB, d.network.Project(), d.inst, d.name, newACLs...)
+			err := acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, d.ovnnb, d.network.Project(), d.inst, d.name, newACLs...)
 			if err != nil {
 				return fmt.Errorf("Failed removing unused OVN port groups: %w", err)
 			}
@@ -1006,7 +1021,7 @@ func (d *nicOVN) Remove() error {
 	// Check for port groups that will become unused (and need deleting) as this NIC is deleted.
 	securityACLs := util.SplitNTrimSpace(d.config["security.acls"], ",", -1, true)
 	if len(securityACLs) > 0 {
-		err := acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, d.state.OVNNB, d.network.Project(), d.inst, d.name)
+		err := acl.OVNPortGroupDeleteIfUnused(d.state, d.logger, d.ovnnb, d.network.Project(), d.inst, d.name)
 		if err != nil {
 			return fmt.Errorf("Failed removing unused OVN port groups: %w", err)
 		}
@@ -1146,7 +1161,7 @@ func (d *nicOVN) Register() error {
 	return nil
 }
 
-func (d *nicOVN) setupHostNIC(hostName string, ovnPortName ovn.OVNSwitchPort, uplink *api.Network) (revert.Hook, error) {
+func (d *nicOVN) setupHostNIC(hostName string, ovnPortName ovn.OVNSwitchPort) (revert.Hook, error) {
 	revert := revert.New()
 	defer revert.Fail()
 

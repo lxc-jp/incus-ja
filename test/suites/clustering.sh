@@ -2747,7 +2747,7 @@ test_clustering_image_refresh() {
 
   for project in default foo bar; do
     # Copy the public image to each project
-    INCUS_DIR="${INCUS_ONE_DIR}" incus image copy public:testimage local: --alias testimage --project "${project}"
+    INCUS_DIR="${INCUS_ONE_DIR}" incus image copy public:testimage local: --alias testimage --target-project "${project}"
 
     # Diable autoupdate for testimage in project foo
     if [ "${project}" = "foo" ]; then
@@ -3437,6 +3437,12 @@ test_clustering_groups() {
 
   # Renaming the default group is not allowed
   ! incus cluster group rename cluster:default foobar || false
+
+  # User properties can be set
+  ! incus cluster group set cluster:default invalid foo || false
+  incus cluster group set cluster:default user.foo bar
+  [ "$(incus cluster group get cluster:default user.foo)" = "bar" ] || false
+  incus cluster group unset cluster:default user.foo
 
   incus cluster list cluster:
   # Nodes need to belong to at least one group, removing it from the default group should therefore fail

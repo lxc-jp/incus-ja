@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	internalInstance "github.com/lxc/incus/v6/internal/instance"
 	"github.com/lxc/incus/v6/internal/linux"
@@ -133,7 +132,7 @@ func (d *lvm) volumeGroupExists(vgName string) (bool, []string, error) {
 
 // volumeGroupExtentSize gets the volume group's physical extent size in bytes.
 func (d *lvm) volumeGroupExtentSize(vgName string) (int64, error) {
-	output, err := subprocess.RunCommand("vgs", "--noheadings", "--nosuffix", "--units", "b", "-o", "vg_extent_size", vgName)
+	output, err := subprocess.TryRunCommand("vgs", "--noheadings", "--nosuffix", "--units", "b", "-o", "vg_extent_size", vgName)
 	if err != nil {
 		if d.isLVMNotFoundExitError(err) {
 			return -1, api.StatusErrorf(http.StatusNotFound, "LVM volume group not found")
@@ -148,7 +147,7 @@ func (d *lvm) volumeGroupExtentSize(vgName string) (int64, error) {
 
 // countLogicalVolumes gets the count of volumes (both normal and thin) in a volume group.
 func (d *lvm) countLogicalVolumes(vgName string) (int, error) {
-	output, err := subprocess.RunCommand("vgs", "--noheadings", "-o", "lv_count", vgName)
+	output, err := subprocess.TryRunCommand("vgs", "--noheadings", "-o", "lv_count", vgName)
 	if err != nil {
 		if d.isLVMNotFoundExitError(err) {
 			return -1, api.StatusErrorf(http.StatusNotFound, "LVM volume group not found")
@@ -163,7 +162,7 @@ func (d *lvm) countLogicalVolumes(vgName string) (int, error) {
 
 // countThinVolumes gets the count of thin volumes in a thin pool.
 func (d *lvm) countThinVolumes(vgName, poolName string) (int, error) {
-	output, err := subprocess.RunCommand("lvs", "--noheadings", "-o", "thin_count", fmt.Sprintf("%s/%s", vgName, poolName))
+	output, err := subprocess.TryRunCommand("lvs", "--noheadings", "-o", "thin_count", fmt.Sprintf("%s/%s", vgName, poolName))
 	if err != nil {
 		if d.isLVMNotFoundExitError(err) {
 			return -1, api.StatusErrorf(http.StatusNotFound, "LVM volume group not found")
@@ -432,6 +431,23 @@ func (d *lvm) createLogicalVolumeSnapshot(vgName string, srcVol Volume, snapVol 
 
 	revert := revert.New()
 	defer revert.Fail()
+
+	// If clustered, we need to acquire exclusive write access for this operation.
+	if d.clustered && !makeThinLv {
+		parent, _, _ := api.GetParentAndSnapshotName(srcVol.Name())
+		volDevPath := d.lvmDevPath(d.config["lvm.vg_name"], srcVol.volType, srcVol.contentType, parent)
+
+		if util.PathExists(volDevPath) {
+			_, err := subprocess.TryRunCommand("lvchange", "--activate", "ey", "--ignoreactivationskip", volDevPath)
+			if err != nil {
+				return "", fmt.Errorf("Failed to acquire exclusive lock on LVM logical volume %q: %w", volDevPath, err)
+			}
+
+			defer func() {
+				_, _ = subprocess.TryRunCommand("lvchange", "--activate", "sy", "--ignoreactivationskip", volDevPath)
+			}()
+		}
+	}
 
 	_, err = subprocess.TryRunCommand("lvcreate", args...)
 	if err != nil {
@@ -821,17 +837,7 @@ func (d *lvm) deactivateVolume(vol Volume) (bool, error) {
 
 	if util.PathExists(volDevPath) {
 		// Keep trying to deactivate a few times in case the device is still being flushed.
-		var err error
-		for i := 0; i < 20; i++ {
-			_, err = subprocess.RunCommand("lvchange", "--activate", "n", "--ignoreactivationskip", volDevPath)
-			if err == nil {
-				break
-			}
-
-			logger.Debug("Failed to deactivate LVM logical volume", logger.Ctx{"path": volDevPath, "attempt": i, "err": err})
-			time.Sleep(500 * time.Millisecond)
-		}
-
+		_, err := subprocess.TryRunCommand("lvchange", "--activate", "n", "--ignoreactivationskip", volDevPath)
 		if err != nil {
 			return false, fmt.Errorf("Failed to deactivate LVM logical volume %q: %w", volDevPath, err)
 		}
