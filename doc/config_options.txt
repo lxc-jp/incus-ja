@@ -402,6 +402,13 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 
 <!-- config group image-requirements end -->
 <!-- config group instance-boot start -->
+```{config:option} boot.autorestart instance-boot
+:liveupdate: "no"
+:shortdesc: "インスタンスの異常終了時に自動的に再起動するかどうか"
+:type: "bool"
+`true`に設定するとインスタンスの異常終了時に1分間に10回まで自動で再起動します。
+```
+
 ```{config:option} boot.autostart instance-boot
 :liveupdate: "no"
 :shortdesc: "デーモンの起動時にインスタンスを常に起動するかどうか"
@@ -673,6 +680,39 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 :type: "blob"
 詳細は{ref}`instance-options-qemu`を参照してください。
 ```
+
+```{config:option} raw.qemu.qmp.early instance-raw
+:condition: "virtual machine"
+:liveupdate: "no"
+:shortdesc: "IncusのQEMUの初期化前に実行するQMPコマンド"
+:type: "blob"
+
+```
+
+```{config:option} raw.qemu.qmp.post-start instance-raw
+:condition: "virtual machine"
+:liveupdate: "no"
+:shortdesc: "VM起動後に実行するQMPコマンド"
+:type: "blob"
+
+```
+
+```{config:option} raw.qemu.qmp.pre-start instance-raw
+:condition: "virtual machine"
+:liveupdate: "no"
+:shortdesc: "IncusのQEMU初期化の後でVMの起動前に実行するQMPコマンド"
+:type: "blob"
+
+```
+
+```{config:option} raw.qemu.scriptlet instance-raw
+:condition: "virtual machine"
+:liveupdate: "no"
+:shortdesc: "early、pre-start、post-startステージに実行するスクリプトレット"
+:type: "string"
+
+```
+
 
 ```{config:option} raw.seccomp instance-raw
 :condition: "container"
@@ -1514,15 +1554,58 @@ NVIDIA仮想GPUインスタンスUUID。
 ```
 
 ```{config:option} ovn.transit.pattern network_integration-ovn
-:defaultdesc: "`ts-incus-{{ integrationName }}-{{ projectName }}-{{ networkname }}`"
+:defaultdesc: "`ts-incus-{{ integrationName }}-{{ projectName }}-{{ networkName }}`"
 :shortdesc: "トランジットのスイッチ名のテンプレート"
 :type: "string"
 トランジットのスイッチ名を表すPong2のテンプレート文字列を指定します。
-このテンプレートではプロジェクト名（`projectName`）、インテグレーション名（`integrationName`）、ネットワーク名（`networkName`）の変数が使えます。
+このテンプレートではプロジェクト名（`projectName`）、インテグレーション名（`integrationName`）、ネットワーク名（`networkName`）、ピア名（`peerName`）の変数が使えます。
 
 ```
 
 <!-- config group network_integration-ovn end -->
+<!-- config group network_load_balancer-common start -->
+```{config:option} healthcheck network_load_balancer-common
+:defaultdesc: "`false`"
+:shortdesc: "バックエンドにヘルスチェックを実行するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} healthcheck.failure_count network_load_balancer-common
+:defaultdesc: "`3`"
+:shortdesc: "バックエンドをオフラインと判定するまでのチェック失敗回数"
+:type: "integer"
+
+```
+
+```{config:option} healthcheck.interval network_load_balancer-common
+:defaultdesc: "`10`"
+:shortdesc: "ヘルスチェックの間隔を秒数で指定"
+:type: "integer"
+
+```
+
+```{config:option} healthcheck.success_count network_load_balancer-common
+:defaultdesc: "`3`"
+:shortdesc: "バックエンドがオンラインと判定するためのチェック成功回数"
+:type: "integer"
+
+```
+
+```{config:option} healthcheck.timeout network_load_balancer-common
+:defaultdesc: "`30`"
+:shortdesc: "チェックのタイムアウト"
+:type: "integer"
+
+```
+
+```{config:option} user.* network_load_balancer-common
+:shortdesc: "自由形式のユーザーキー/バリューストレージ"
+:type: "string"
+ユーザーキーは検索で使えます。
+```
+
+<!-- config group network_load_balancer-common end -->
 <!-- config group network_zone-common start -->
 ```{config:option} dns.nameservers network_zone-common
 :required: "no"
@@ -2356,9 +2439,17 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```
 
 ```{config:option} network.ovn.northbound_connection server-miscellaneous
-:defaultdesc: "`unix:/var/run/ovn/ovnnb_db.sock`"
+:defaultdesc: "`unix:/run/ovn/ovnnb_db.sock`"
 :scope: "global"
 :shortdesc: "OVN northboundデータベース接続文字列"
+:type: "string"
+
+```
+
+```{config:option} network.ovs.connection server-miscellaneous
+:defaultdesc: "`unix:/run/openvswitch/db.sock`"
+:scope: "global"
+:shortdesc: "OVSソケットパス"
 :type: "string"
 
 ```
@@ -2403,6 +2494,13 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```{config:option} oidc.issuer server-oidc
 :scope: "global"
 :shortdesc: "プロバイダーで使用するOpenID Connect Discovery URL"
+:type: "string"
+
+```
+
+```{config:option} oidc.scopes server-oidc
+:scope: "global"
+:shortdesc: "OpenID Connectスコープのカンマ区切りリスト"
 :type: "string"
 
 ```

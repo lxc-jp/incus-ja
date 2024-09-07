@@ -2528,3 +2528,51 @@ OCIコンテナを稼働させる初期サポートを追加します。
 
 OVNネットワークのアップリンクネットワークとして`none`を使えるようにします。
 これによりネットワークを隔離できます。
+
+## `qemu_raw_qmp`
+
+これは仮想マシンの起動時のさまざまなステージでQMPコマンドを直接発行する設定オプションを追加します:
+
+* `raw.qemu.qmp.early`
+* `raw.qemu.qmp.pre-start`
+* `raw.qemu.qmp.post-start`
+
+## `network_load_balancer_health_check`
+
+ロードバランサーのバックエンドにヘルスチェックを実行できるようにします。
+
+以下の新しい設定オプションが追加されます:
+
+* `healthcheck`
+* `healthcheck.interval`
+* `healthcheck.timeout`
+* `healthcheck.failure_count`
+* `healthcheck.success_count`
+
+## `oidc_scopes`
+
+`oidc.scopes`サーバー設定キーを追加します。これはアイデンティティープロバイダーからのリクエストにOIDCスコープのカンマ区切りリストを指定できます。
+
+## `network_integrations_peer_name`
+
+`ovn.transit.pattern`で`peerName`をテンプレート変数として使えるようにします。
+
+## `qemu_scriptlet`
+
+起動時のさまざまなステージで`raw.qemu.scriptlet`設定キーを使ってスクリプトを実行できるようにします。
+
+## `instance_auto_restart`
+
+`boot.autorestart`設定キーを追加します。`true`に設定するとインスタンスが異常終了したときに1分間に最大10回まで自動的に再起動されるようになります。
+
+## `storage_lvm_metadatasize`
+
+LVMストレージプールに`lvm.metadata_size`オプションを追加します。LVM物理ボリュームを作成する際のデフォルトのメタデータサイズをオーバーライドできるようにします。
+
+## `ovn_nic_promiscuous`
+
+OVN NICに`security.promiscuous`設定オプションを追加します。
+
+## `ovn_nic_ip_address_none`
+
+OVN NICの`ipv4.address`と`ipv6.address`に`none`という値を追加します。

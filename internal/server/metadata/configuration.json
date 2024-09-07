@@ -454,6 +454,14 @@
 			"boot": {
 				"keys": [
 					{
+						"boot.autorestart": {
+							"liveupdate": "no",
+							"longdesc": "If set to `true` will attempt up to 10 restarts over a 1 minute period upon unexpected instance exit.",
+							"shortdesc": "Whether to automatically restart an instance on unexpected exit",
+							"type": "bool"
+						}
+					},
+					{
 						"boot.autostart": {
 							"liveupdate": "no",
 							"longdesc": "If set to `false`, restore the last state.",
@@ -750,6 +758,42 @@
 							"longdesc": "See {ref}`instance-options-qemu` for more information.",
 							"shortdesc": "Addition/override to the generated `qemu.conf` file",
 							"type": "blob"
+						}
+					},
+					{
+						"raw.qemu.qmp.early": {
+							"condition": "virtual machine",
+							"liveupdate": "no",
+							"longdesc": "",
+							"shortdesc": "QMP commands to run before Incus QEMU initialization",
+							"type": "blob"
+						}
+					},
+					{
+						"raw.qemu.qmp.post-start": {
+							"condition": "virtual machine",
+							"liveupdate": "no",
+							"longdesc": "",
+							"shortdesc": "QMP commands to run after the VM has started",
+							"type": "blob"
+						}
+					},
+					{
+						"raw.qemu.qmp.pre-start": {
+							"condition": "virtual machine",
+							"liveupdate": "no",
+							"longdesc": "",
+							"shortdesc": "QMP commands to run after Incus QEMU initialization and before the VM has started",
+							"type": "blob"
+						}
+					},
+					{
+						"raw.qemu.scriptlet": {
+							"condition": "virtual machine",
+							"liveupdate": "no",
+							"longdesc": "",
+							"shortdesc": "QEMU scriptlet to run at early, pre-start and post-start stages",
+							"type": "string"
 						}
 					},
 					{
@@ -1680,9 +1724,62 @@
 					},
 					{
 						"ovn.transit.pattern": {
-							"defaultdesc": "`ts-incus-{{ integrationName }}-{{ projectName }}-{{ networkname }}`",
-							"longdesc": "Specify a Pongo2 template string that represents the transit switch name.\nThis template gets access to the project name (`projectName`), integration name (`integrationName`) and network name (`networkName`).\n",
+							"defaultdesc": "`ts-incus-{{ integrationName }}-{{ projectName }}-{{ networkName }}`",
+							"longdesc": "Specify a Pongo2 template string that represents the transit switch name.\nThis template gets access to the project name (`projectName`),\nintegration name (`integrationName`), network name (`networkName`)\nand peer name (`peerName`).\n",
 							"shortdesc": "Template for the transit switch name",
+							"type": "string"
+						}
+					}
+				]
+			}
+		},
+		"network_load_balancer": {
+			"common": {
+				"keys": [
+					{
+						"healthcheck": {
+							"defaultdesc": "`false`",
+							"longdesc": "",
+							"shortdesc": "Whether to perform checks on the backends",
+							"type": "bool"
+						}
+					},
+					{
+						"healthcheck.failure_count": {
+							"defaultdesc": "`3`",
+							"longdesc": "",
+							"shortdesc": "Number of failed tests to consider the backend offline",
+							"type": "integer"
+						}
+					},
+					{
+						"healthcheck.interval": {
+							"defaultdesc": "`10`",
+							"longdesc": "",
+							"shortdesc": "Interval in seconds between health checks",
+							"type": "integer"
+						}
+					},
+					{
+						"healthcheck.success_count": {
+							"defaultdesc": "`3`",
+							"longdesc": "",
+							"shortdesc": "Number of successful tests to consider the backend online",
+							"type": "integer"
+						}
+					},
+					{
+						"healthcheck.timeout": {
+							"defaultdesc": "`30`",
+							"longdesc": "",
+							"shortdesc": "Test timeout",
+							"type": "integer"
+						}
+					},
+					{
+						"user.*": {
+							"longdesc": "User keys can be used in search.",
+							"shortdesc": "Free form user key/value storage",
 							"type": "string"
 						}
 					}
@@ -2613,10 +2710,19 @@
 					},
 					{
 						"network.ovn.northbound_connection": {
-							"defaultdesc": "`unix:/var/run/ovn/ovnnb_db.sock`",
+							"defaultdesc": "`unix:/run/ovn/ovnnb_db.sock`",
 							"longdesc": "",
 							"scope": "global",
 							"shortdesc": "OVN northbound database connection string",
+							"type": "string"
+						}
+					},
+					{
+						"network.ovs.connection": {
+							"defaultdesc": "`unix:/run/openvswitch/db.sock`",
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "OVS socket path",
 							"type": "string"
 						}
 					},
@@ -2669,6 +2775,14 @@
 							"longdesc": "",
 							"scope": "global",
 							"shortdesc": "OpenID Connect Discovery URL for the provider",
+							"type": "string"
+						}
+					},
+					{
+						"oidc.scopes": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "Comma separated list of OpenID Connect scopes",
 							"type": "string"
 						}
 					}

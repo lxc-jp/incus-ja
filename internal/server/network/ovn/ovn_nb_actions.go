@@ -118,13 +118,15 @@ type OVNDHCPv6Opts struct {
 // OVNSwitchPortOpts options that can be applied to a swich port.
 type OVNSwitchPortOpts struct {
 	MAC          net.HardwareAddr   // Optional, if nil will be set to dynamic.
-	IPs          []net.IP           // Optional, if empty IPs will be set to dynamic.
+	IPV4         string             // Optional, if empty, allocate an address, if "none" then disable allocation.
+	IPV6         string             // Optional, if empty, allocate an address, if "none" then disable allocation.
 	DHCPv4OptsID OVNDHCPOptionsUUID // Optional, if empty, no DHCPv4 enabled on port.
 	DHCPv6OptsID OVNDHCPOptionsUUID // Optional, if empty, no DHCPv6 enabled on port.
 	Parent       OVNSwitchPort      // Optional, if set a nested port is created.
 	VLAN         uint16             // Optional, use with Parent to request a specific VLAN for nested port.
 	Location     string             // Optional, use to indicate the name of the server this port is bound to.
 	RouterPort   OVNRouterPort      // Optional, the name of the associated logical router port.
+	Promiscuous  bool               // Optional, controls whether to allow unknown traffic on the port.
 }
 
 // OVNACLRule represents an ACL rule that can be added to a logical switch or port group.
@@ -143,8 +145,20 @@ type OVNLoadBalancerTarget struct {
 	Port    uint64
 }
 
+// OVNLoadBalancerHealthCheck represents an OVN load balancer health checker.
+type OVNLoadBalancerHealthCheck struct {
+	Interval     int
+	Timeout      int
+	SuccessCount int
+	FailureCount int
+
+	CheckerIPV4 net.IP
+	CheckerIPV6 net.IP
+}
+
 // OVNLoadBalancerVIP represents a OVN load balancer Virtual IP entry.
 type OVNLoadBalancerVIP struct {
+	HealthCheck   *OVNLoadBalancerHealthCheck
 	Protocol      string // Either "tcp" or "udp". But only applies to port based VIPs.
 	ListenAddress net.IP
 	ListenPort    uint64
@@ -196,17 +210,33 @@ func (o *NB) CreateLogicalRouter(ctx context.Context, routerName OVNRouter, mayE
 	}
 
 	if logicalRouter.UUID != "" {
-		if mayExist {
-			return nil
+		if !mayExist {
+			return ErrExists
 		}
 
-		return ErrExists
+		if logicalRouter.Options != nil {
+			return nil
+		}
+	}
+
+	// Set some options.
+	logicalRouter.Options = map[string]string{
+		"always_learn_from_arp_request": "false",
+		"dynamic_neigh_routers":         "true",
 	}
 
 	// Create the record.
-	operations, err := o.client.Create(&logicalRouter)
-	if err != nil {
-		return err
+	var operations []ovsdb.Operation
+	if logicalRouter.UUID == "" {
+		operations, err = o.client.Create(&logicalRouter)
+		if err != nil {
+			return err
+		}
+	} else {
+		operations, err = o.client.Where(&logicalRouter).Update(&logicalRouter)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Apply the changes.
@@ -823,7 +853,9 @@ func (o *NB) UpdateLogicalRouterPort(ctx context.Context, portName OVNRouterPort
 	}
 
 	if ipv6ra != nil {
-		ipv6conf := map[string]string{}
+		ipv6conf := map[string]string{
+			"send_periodic": fmt.Sprintf("%t", ipv6ra.SendPeriodic),
+		}
 
 		if ipv6ra.AddressMode != "" {
 			ipv6conf["address_mode"] = string(ipv6ra.AddressMode)
@@ -1615,31 +1647,47 @@ func (o *NB) CreateLogicalSwitchPort(ctx context.Context, switchName OVNSwitch, 
 			logicalSwitchPort.Addresses = []string{"router"}
 			logicalSwitchPort.Options = map[string]string{"router-port": string(opts.RouterPort)}
 		} else {
-			ipStr := make([]string, 0, len(opts.IPs))
-			for _, ip := range opts.IPs {
-				ipStr = append(ipStr, ip.String())
+			if (opts.IPV4 == "none" && opts.IPV6 != "none") || (opts.IPV6 == "none" && opts.IPV4 != "none") {
+				return fmt.Errorf("OVN doesn't support disabling IP allocation on only one protocol")
 			}
 
-			var addresses string
-			if opts.MAC != nil && len(ipStr) > 0 {
-				addresses = fmt.Sprintf("%s %s", opts.MAC.String(), strings.Join(ipStr, " "))
-			} else if opts.MAC != nil && len(ipStr) <= 0 {
-				addresses = fmt.Sprintf("%s %s", opts.MAC.String(), "dynamic")
-			} else {
-				addresses = "dynamic"
+			addresses := []string{}
+			if opts.IPV4 != "none" && opts.IPV6 != "none" {
+				address := []string{}
+				if opts.MAC != nil {
+					address = append(address, opts.MAC.String())
+				}
+
+				if opts.IPV4 == "" && opts.IPV6 == "" {
+					address = append(address, "dynamic")
+				} else {
+					if opts.IPV4 != "" {
+						address = append(address, opts.IPV4)
+					}
+
+					if opts.IPV6 != "" {
+						address = append(address, opts.IPV6)
+					}
+				}
+
+				addresses = append(addresses, strings.Join(address, " "))
 			}
 
-			logicalSwitchPort.Addresses = []string{addresses}
-		}
+			if opts.DHCPv4OptsID != "" {
+				dhcp4opts := string(opts.DHCPv4OptsID)
+				logicalSwitchPort.Dhcpv4Options = &dhcp4opts
+			}
 
-		if opts.DHCPv4OptsID != "" {
-			dhcp4opts := string(opts.DHCPv4OptsID)
-			logicalSwitchPort.Dhcpv4Options = &dhcp4opts
-		}
+			if opts.DHCPv6OptsID != "" {
+				dhcp6opts := string(opts.DHCPv6OptsID)
+				logicalSwitchPort.Dhcpv6Options = &dhcp6opts
+			}
 
-		if opts.DHCPv6OptsID != "" {
-			dhcp6opts := string(opts.DHCPv6OptsID)
-			logicalSwitchPort.Dhcpv6Options = &dhcp6opts
+			if opts.Promiscuous {
+				addresses = append(addresses, "unknown")
+			}
+
+			logicalSwitchPort.Addresses = addresses
 		}
 
 		if opts.Location != "" {
@@ -2897,9 +2945,9 @@ func (o *NB) ClearPortGroupPortACLRules(ctx context.Context, portGroupName OVNPo
 	return nil
 }
 
-// CreateLoadBalancer creates a new load balancer (if doesn't exist) on the specified routers and switches.
+// CreateLoadBalancer creates a new load balancer (if doesn't exist) on the specified router and switch.
 // Providing an empty set of vips will delete the load balancer.
-func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBalancer, routers []OVNRouter, switches []OVNSwitch, vips ...OVNLoadBalancerVIP) error {
+func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBalancer, routerName OVNRouter, switchName OVNSwitch, vips ...OVNLoadBalancerVIP) error {
 	lbTCPName := fmt.Sprintf("%s-tcp", loadBalancerName)
 	lbUDPName := fmt.Sprintf("%s-udp", loadBalancerName)
 	operations := []ovsdb.Operation{}
@@ -2933,6 +2981,18 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 		}
 	}
 
+	// Get the logical router.
+	lr, err := o.GetLogicalRouter(ctx, routerName)
+	if err != nil {
+		return err
+	}
+
+	// Get the logical switch.
+	ls, err := o.GetLogicalSwitch(ctx, switchName)
+	if err != nil {
+		return err
+	}
+
 	// Define the new load-balancers.
 	lbtcp := &ovnNB.LoadBalancer{
 		UUID:     "lbtcp",
@@ -2945,6 +3005,9 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 		Name:     lbUDPName,
 		Protocol: &ovnNB.LoadBalancerProtocolUDP,
 	}
+
+	// Keep track of health check settings.
+	healthChecks := map[string]*OVNLoadBalancerHealthCheck{}
 
 	// Build up the commands to add VIPs to the load balancer.
 	for _, r := range vips {
@@ -2991,13 +3054,146 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 			}
 
 			lb.Vips[listenAddress] = strings.Join(targetAddresses, ",")
+
+			if r.HealthCheck != nil {
+				healthChecks[listenAddress] = r.HealthCheck
+			}
 		}
 	}
 
 	// Create any used load-balancer.
+	lbhcCount := 0
 	for _, lb := range []*ovnNB.LoadBalancer{lbtcp, lbudp} {
 		if len(lb.Vips) == 0 {
 			continue
+		}
+
+		// Create healthcheck records.
+		lb.HealthCheck = []string{}
+		lb.IPPortMappings = map[string]string{}
+
+		for vip, targets := range lb.Vips {
+			// Check if an health check exists for the VIP.
+			healthCheck := healthChecks[vip]
+			if healthCheck == nil {
+				continue
+			}
+
+			// Create the record.
+			lbhc := &ovnNB.LoadBalancerHealthCheck{
+				UUID:    fmt.Sprintf("lbhc%d", lbhcCount),
+				Options: map[string]string{},
+				Vip:     vip,
+			}
+
+			// Set some defaults.
+			if healthCheck.FailureCount == 0 {
+				healthCheck.FailureCount = 3
+			}
+
+			if healthCheck.SuccessCount == 0 {
+				healthCheck.SuccessCount = 3
+			}
+
+			if healthCheck.Interval == 0 {
+				healthCheck.Interval = 10
+			}
+
+			if healthCheck.Timeout == 0 {
+				healthCheck.Timeout = 30
+			}
+
+			// Apply the settings.
+			lbhc.Options = map[string]string{
+				"failure_count": fmt.Sprintf("%d", healthCheck.FailureCount),
+				"success_count": fmt.Sprintf("%d", healthCheck.SuccessCount),
+				"interval":      fmt.Sprintf("%d", healthCheck.Interval),
+				"timeout":       fmt.Sprintf("%d", healthCheck.Timeout),
+			}
+
+			// Create the load balancer health checker.
+			createOps, err := o.client.Create(lbhc)
+			if err != nil {
+				return err
+			}
+
+			operations = append(operations, createOps...)
+
+			// Link LB to LBHC.
+			lb.HealthCheck = append(lb.HealthCheck, lbhc.UUID)
+
+			// Set up the port bindings.
+			for _, target := range strings.Split(targets, ",") {
+				// Split host and port.
+				host, _, err := net.SplitHostPort(target)
+				if err == nil {
+					target = host
+				}
+
+				// Skip existing entries.
+				_, ok := lb.IPPortMappings[target]
+				if ok {
+					continue
+				}
+
+				// Lookup the logical switch port.
+				var lspName string
+				for _, port := range ls.Ports {
+					lsp := ovnNB.LogicalSwitchPort{
+						UUID: port,
+					}
+
+					err = o.get(ctx, &lsp)
+					if err != nil {
+						return err
+					}
+
+					if lsp.ExternalIDs == nil {
+						continue
+					}
+
+					if OVNSwitch(lsp.ExternalIDs[ovnExtIDIncusSwitch]) != switchName {
+						continue
+					}
+
+					if lsp.DynamicAddresses != nil {
+						fields := strings.Split(*lsp.DynamicAddresses, " ")
+						if slices.Contains(fields, target) {
+							lspName = lsp.Name
+							break
+						}
+					}
+
+					for _, address := range lsp.Addresses {
+						fields := strings.Split(address, " ")
+						if slices.Contains(fields, target) {
+							lspName = lsp.Name
+							break
+						}
+					}
+				}
+
+				if lspName == "" {
+					return fmt.Errorf("Couldn't find a logical switch port for %q", target)
+				}
+
+				ip := net.ParseIP(target)
+				if ip.To4() == nil {
+					if healthCheck.CheckerIPV6 == nil {
+						return fmt.Errorf("No IPv6 address for load balancer health check")
+					}
+
+					lb.IPPortMappings[fmt.Sprintf("[%s]", target)] = fmt.Sprintf("%s:[%s]", lspName, healthCheck.CheckerIPV6.String())
+				} else {
+					if healthCheck.CheckerIPV4 == nil {
+						return fmt.Errorf("No IPv4 address for load balancer health check")
+					}
+
+					lb.IPPortMappings[target] = fmt.Sprintf("%s:%s", lspName, healthCheck.CheckerIPV4.String())
+				}
+			}
+
+			lbhcCount++
 		}
 
 		// Create the record.
@@ -3008,43 +3204,29 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 
 		operations = append(operations, createOps...)
 
-		// Add to the routers.
-		for _, lrName := range routers {
-			lr, err := o.GetLogicalRouter(ctx, lrName)
-			if err != nil {
-				return err
-			}
-
-			updateOps, err := o.client.Where(lr).Mutate(lr, ovsModel.Mutation{
-				Field:   &lr.LoadBalancer,
-				Mutator: ovsdb.MutateOperationInsert,
-				Value:   []string{lb.UUID},
-			})
-			if err != nil {
-				return err
-			}
-
-			operations = append(operations, updateOps...)
+		// Add to the router.
+		updateOps, err := o.client.Where(lr).Mutate(lr, ovsModel.Mutation{
+			Field:   &lr.LoadBalancer,
+			Mutator: ovsdb.MutateOperationInsert,
+			Value:   []string{lb.UUID},
+		})
+		if err != nil {
+			return err
 		}
 
-		// Add to the switches.
-		for _, lsName := range switches {
-			ls, err := o.GetLogicalSwitch(ctx, lsName)
-			if err != nil {
-				return err
-			}
+		operations = append(operations, updateOps...)
 
-			updateOps, err := o.client.Where(ls).Mutate(ls, ovsModel.Mutation{
-				Field:   &ls.LoadBalancer,
-				Mutator: ovsdb.MutateOperationInsert,
-				Value:   []string{lb.UUID},
-			})
-			if err != nil {
-				return err
-			}
-
-			operations = append(operations, updateOps...)
+		// Add to the switch.
+		updateOps, err = o.client.Where(ls).Mutate(ls, ovsModel.Mutation{
+			Field:   &ls.LoadBalancer,
+			Mutator: ovsdb.MutateOperationInsert,
+			Value:   []string{lb.UUID},
+		})
+		if err != nil {
+			return err
 		}
+
+		operations = append(operations, updateOps...)
 	}
 
 	// Check if anything to delete.

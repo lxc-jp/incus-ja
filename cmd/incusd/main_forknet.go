@@ -240,12 +240,20 @@ func (c *cmdForknet) RunDHCP(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Read the hostname.
+	bb, err := os.ReadFile(filepath.Join(args[0], "hostname"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to read hostname file: %v\n", err)
+	}
+
+	hostname := strings.TrimSpace(string(bb))
+
 	// Try to get a lease.
 	client := client4.NewClient()
 	for i := 0; i < 10; i++ {
 		var err error
 
-		messages, err = client.Exchange(iface)
+		messages, err = client.Exchange(iface, dhcpv4.WithOption(dhcpv4.OptHostName(hostname)))
 		if err == nil {
 			break
 		}
@@ -269,34 +277,6 @@ func (c *cmdForknet) RunDHCP(cmd *cobra.Command, args []string) error {
 
 	if reply.YourIPAddr == nil || reply.YourIPAddr.Equal(net.IPv4zero) || reply.SubnetMask() == nil || len(reply.Router()) != 1 || len(reply.DNS()) < 1 {
 		fmt.Fprintf(os.Stderr, "Giving up on DHCP, lease for %q didn't contain required fields\n", iface)
-		return nil
-	}
-
-	// Turn into usable configuration.
-	netMask, _ := reply.SubnetMask().Size()
-
-	addr := &ip.Addr{
-		DevName: iface,
-		Address: fmt.Sprintf("%s/%d", reply.YourIPAddr, netMask),
-		Family:  ip.FamilyV4,
-	}
-
-	err = addr.Add()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Giving up on DHCP, couldn't add IP to %q\n", iface)
-		return nil
-	}
-
-	route := &ip.Route{
-		DevName: iface,
-		Route:   "default",
-		Via:     reply.Router()[0].String(),
-		Family:  ip.FamilyV4,
-	}
-
-	err = route.Add()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Giving up on DHCP, couldn't add default route to %q\n", iface)
 		return nil
 	}
 
@@ -331,6 +311,34 @@ func (c *cmdForknet) RunDHCP(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "Giving up on DHCP, couldn't prepare resolv.conf: %v\n", err)
 			return nil
 		}
+	}
+
+	// Network configuration.
+	netMask, _ := reply.SubnetMask().Size()
+
+	addr := &ip.Addr{
+		DevName: iface,
+		Address: fmt.Sprintf("%s/%d", reply.YourIPAddr, netMask),
+		Family:  ip.FamilyV4,
+	}
+
+	err = addr.Add()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Giving up on DHCP, couldn't add IP to %q\n", iface)
+		return nil
+	}
+
+	route := &ip.Route{
+		DevName: iface,
+		Route:   "default",
+		Via:     reply.Router()[0].String(),
+		Family:  ip.FamilyV4,
+	}
+
+	err = route.Add()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Giving up on DHCP, couldn't add default route to %q\n", iface)
+		return nil
 	}
 
 	return nil

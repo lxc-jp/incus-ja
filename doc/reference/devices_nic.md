@@ -225,10 +225,10 @@ VDPA ハードウェアアクセラレーション
 `boot.priority`                        | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
 `host_name`                            | string  | ランダムに割り当て | no   | ホスト内部でのインターフェース名
 `hwaddr`                               | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
-`ipv4.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv4アドレス
+`ipv4.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv4アドレス、IP割り当てを無効にするには`none`が使える
 `ipv4.routes`                          | string  | -                  | no   | NICへルーティングするIPv4静的ルートのカンマ区切りリスト
 `ipv4.routes.external`                 | string  | -                  | no   | NICへのルーティングとアップリンクネットワークでの公開に使用するIPv4静的ルートのカンマ区切りリスト
-`ipv6.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv6アドレス
+`ipv6.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv6アドレス、IP割り当てを無効にするには`none`が使える
 `ipv6.routes`                          | string  | -                  | no   | NICへルーティングするIPv6静的ルートのカンマ区切りリスト
 `ipv6.routes.external`                 | string  | -                  | no   | NICへのルーティングとアップリンクネットワークでの公開に使用するIPv6静的ルートのカンマ区切りリスト
 `name`                                 | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
@@ -239,7 +239,13 @@ VDPA ハードウェアアクセラレーション
 `security.acls.default.egress.logged`  | bool    | `false`            | no   | どのACLルールにもマッチしない外向きトラフィックをログ出力するかどうか
 `security.acls.default.ingress.action` | string  | `reject`           | no   | どのACLルールにもマッチしない内向きトラフィックに使うアクション
 `security.acls.default.ingress.logged` | bool    | `false`            | no   | どのACLルールにもマッチしない内向きトラフィックをログ出力するかどうか
+`security.promiscuous`                 | bool    | `false`            | no   | OVNに未知のネットワークトラフィックをこのネットワークインタフェースに送信させる（特定のネストしたケースで必要）
 `vlan`                                 | integer | -                  | no   | ネストする際に使用する VLAN ID （`nested`も参照）
+
+```{note}
+`ipv4.address`や`ipv6.address`に`none`を使うには、他のプロトコルも無効にする必要があることに注意してください。
+現状ではOVNがIPv4かIPv6だけのIP割り当てを無効にする方法はありません。
+```
 
 (nic-physical)=
 ### `nictype`: `physical`

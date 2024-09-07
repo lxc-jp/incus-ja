@@ -14,7 +14,7 @@
 1. OVN の統合ブリッジを設定します:
 
        sudo ovs-vsctl set open_vswitch . \
-          external_ids:ovn-remote=unix:/var/run/ovn/ovnsb_db.sock \
+          external_ids:ovn-remote=unix:/run/ovn/ovnsb_db.sock \
           external_ids:ovn-encap-type=geneve \
           external_ids:ovn-encap-ip=127.0.0.1
 

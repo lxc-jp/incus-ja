@@ -2621,20 +2621,13 @@ func (d *lxc) Start(stateful bool) error {
 		return fmt.Errorf("Stateful start requires that the instance migration.stateful be set to true")
 	}
 
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	d.logger.Debug("Start started", logger.Ctx{"stateful": stateful})
 	defer d.logger.Debug("Start finished", logger.Ctx{"stateful": stateful})
 
 	// Check that we are startable before creating an operation lock.
 	// Must happen before creating operation Start lock to avoid the status check returning Stopped due to the
 	// existence of a Start operation lock.
-	err = d.validateStartup(stateful, d.statusCode())
+	err := d.validateStartup(stateful, d.statusCode())
 	if err != nil {
 		return err
 	}
@@ -3310,8 +3303,25 @@ func (d *lxc) onStop(args map[string]string) error {
 			_ = unix.Unmount(filepath.Join(d.DevicesPath(), "lxcfs"), unix.MNT_DETACH)
 		}
 
+		// Determine if instance should be auto-restarted.
+		var autoRestart bool
+		if target != "reboot" && op.GetInstanceInitiated() && d.shouldAutoRestart() {
+			autoRestart = true
+
+			// Mark current shutdown as complete.
+			op.Done(nil)
+
+			// Create a new restart operation.
+			op, err = operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionRestart, nil, true, false)
+			if err == nil {
+				defer op.Done(nil)
+			} else {
+				d.logger.Error("Failed to setup new restart operation", logger.Ctx{"err": err})
+			}
+		}
+
 		// Log and emit lifecycle if not user triggered
-		if op.GetInstanceInitiated() {
+		if target != "reboot" && !autoRestart && op.GetInstanceInitiated() {
 			ctxMap := logger.Ctx{
 				"action":    target,
 				"created":   d.creationDate,
@@ -3325,7 +3335,7 @@ func (d *lxc) onStop(args map[string]string) error {
 		}
 
 		// Reboot the container
-		if target == "reboot" {
+		if target == "reboot" || autoRestart {
 			// Start the container again
 			err = d.Start(false)
 			if err != nil {
@@ -3774,13 +3784,6 @@ func (d *lxc) snapshot(name string, expiry time.Time, stateful bool) error {
 
 // Snapshot takes a new snapshot.
 func (d *lxc) Snapshot(name string, expiry time.Time, stateful bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	return d.snapshot(name, expiry, stateful)
 }
 
@@ -4001,13 +4004,6 @@ func (d *lxc) cleanup() {
 
 // Delete deletes the instance.
 func (d *lxc) Delete(force bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	// Setup a new operation.
 	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionDelete, nil, false, false)
 	if err != nil {
@@ -4156,13 +4152,6 @@ func (d *lxc) delete(force bool) error {
 
 // Rename renames the instance. Accepts an argument to enable applying deferred TemplateTriggerRename.
 func (d *lxc) Rename(newName string, applyTemplateTrigger bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	oldName := d.Name()
 	ctxMap := logger.Ctx{
 		"created":   d.creationDate,
@@ -4173,7 +4162,7 @@ func (d *lxc) Rename(newName string, applyTemplateTrigger bool) error {
 	d.logger.Info("Renaming instance", ctxMap)
 
 	// Quick checks.
-	err = instance.ValidName(newName, d.IsSnapshot())
+	err := instance.ValidName(newName, d.IsSnapshot())
 	if err != nil {
 		return err
 	}
@@ -4374,13 +4363,6 @@ func (d *lxc) CGroupSet(key string, value string) error {
 
 // Update applies updated config.
 func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	// Setup a new operation
 	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionUpdate, []operationlock.Action{operationlock.ActionCreate, operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
 	if err != nil {
@@ -8608,6 +8590,15 @@ func (rw *lxcCgroupReadWriter) Set(version cgroup.Backend, controller string, ke
 
 // UpdateBackupFile writes the instance's backup.yaml file to storage.
 func (d *lxc) UpdateBackupFile() error {
+	// Prevent concurent updates to the backup file.
+	unlock, err := d.updateBackupFileLock(context.Background())
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	// Write the current instance state to backup file.
 	pool, err := d.getStoragePool()
 	if err != nil {
 		return err

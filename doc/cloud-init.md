@@ -187,14 +187,14 @@ config:
 
 #### ユーザーアカウントの追加
 
-ユーザーアカウントを追加するには、`user`キーを使用します。
+ユーザーアカウントを追加するには、`users`キーを使用します。
 デフォルトユーザーやサポートされているキーに関する詳細は、`cloud-init`ドキュメント内の{ref}`cloud-init:reference/examples:including users and groups`の例を参照してください。
 
 ```yaml
 config:
   cloud-init.user-data: |
     #cloud-config
-    user:
+    users:
       - name: documentation_example
 ```
 

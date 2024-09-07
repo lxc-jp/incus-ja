@@ -112,7 +112,7 @@ sudo ufw route allow in on incusbr0 from "${CIDR6}"
 
 同じホストで Incus と Docker を動かすと接続の問題を引き起こします。
 この問題のよくある理由は Docker はグローバルの FOWARD のポリシーを `drop` に設定するので、それが Incus がトラフィックをフォワードすることを妨げインスタンスのネットワーク接続を失わせるということです。
-詳細は [Docker on a router](https://docs.docker.com/network/iptables/#docker-on-a-router) を参照してください。
+詳細は [Docker on a router](https://docs.docker.com/engine/network/packet-filtering-firewalls/#docker-on-a-router) を参照してください。
 
 この問題を回避するためのさまざまな方法があります:
 

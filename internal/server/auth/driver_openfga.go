@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"slices"
 	"time"
 
@@ -86,15 +85,9 @@ func (f *fga) load(ctx context.Context, certificateCache *certificate.Cache, opt
 		return err
 	}
 
-	u, err := url.Parse(f.apiURL)
-	if err != nil {
-		return fmt.Errorf("Failed parsing URL: %w", err)
-	}
-
 	conf := client.ClientConfiguration{
-		ApiScheme: u.Scheme,
-		ApiHost:   u.Host,
-		StoreId:   f.storeID,
+		ApiUrl:  f.apiURL,
+		StoreId: f.storeID,
 		Credentials: &credentials.Credentials{
 			Method: credentials.CredentialsMethodApiToken,
 			Config: &credentials.Config{
@@ -1128,9 +1121,9 @@ func (f *fga) GetInstanceAccess(ctx context.Context, projectName string, instanc
 
 		if err != nil {
 			fgaAPIErr, ok := err.(openfga.FgaApiValidationError)
-			if !ok || fgaAPIErr.ResponseCode() != openfga.RELATION_NOT_FOUND {
+			if !ok || fgaAPIErr.ResponseCode() != openfga.ERRORCODE_RELATION_NOT_FOUND {
 				fgaNotFoundErr, ok := err.(openfga.FgaApiNotFoundError)
-				if ok && fgaNotFoundErr.ResponseCode() == openfga.UNDEFINED_ENDPOINT {
+				if ok && fgaNotFoundErr.ResponseCode() == openfga.NOTFOUNDERRORCODE_UNDEFINED_ENDPOINT {
 					return nil, fmt.Errorf("OpenFGA server doesn't support listing users")
 				}
 
@@ -1183,9 +1176,9 @@ func (f *fga) GetProjectAccess(ctx context.Context, projectName string) (*api.Ac
 
 		if err != nil {
 			fgaAPIErr, ok := err.(openfga.FgaApiValidationError)
-			if !ok || fgaAPIErr.ResponseCode() != openfga.RELATION_NOT_FOUND {
+			if !ok || fgaAPIErr.ResponseCode() != openfga.ERRORCODE_RELATION_NOT_FOUND {
 				fgaNotFoundErr, ok := err.(openfga.FgaApiNotFoundError)
-				if ok && fgaNotFoundErr.ResponseCode() == openfga.UNDEFINED_ENDPOINT {
+				if ok && fgaNotFoundErr.ResponseCode() == openfga.NOTFOUNDERRORCODE_UNDEFINED_ENDPOINT {
 					return nil, fmt.Errorf("OpenFGA server doesn't support listing users")
 				}
 

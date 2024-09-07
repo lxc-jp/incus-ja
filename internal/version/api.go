@@ -433,6 +433,15 @@ var APIExtensions = []string{
 	"disk_volume_subpath",
 	"projects_limits_disk_pool",
 	"network_ovn_isolated",
+	"qemu_raw_qmp",
+	"network_load_balancer_health_check",
+	"oidc_scopes",
+	"network_integrations_peer_name",
+	"qemu_scriptlet",
+	"instance_auto_restart",
+	"storage_lvm_metadatasize",
+	"ovn_nic_promiscuous",
+	"ovn_nic_ip_address_none",
 }
 
 // APIExtensionsCount returns the number of available API extensions.
