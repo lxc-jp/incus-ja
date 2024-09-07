@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lxc/incus/v6/internal/linux"
@@ -25,6 +26,9 @@ import (
 )
 
 const lvmVgPoolMarker = "incus_pool" // Indicator tag used to mark volume groups as in use.
+
+var lvmExtentSize map[string]int64
+var lvmExtentSizeMu sync.Mutex
 
 var lvmLoaded bool
 var lvmVersion string
@@ -365,7 +369,20 @@ func (d *lvm) Create() error {
 				return fmt.Errorf("No name for physical volume detected")
 			}
 
-			_, err := subprocess.TryRunCommand("pvcreate", pvName)
+			args := []string{}
+
+			metadataSizeBytes, err := d.roundedSizeBytesString(d.config["lvm.metadata_size"])
+			if err != nil {
+				return fmt.Errorf("Invalid lvm.metadata_size: %w", err)
+			}
+
+			if metadataSizeBytes > 0 {
+				args = append(args, "--metadatasize", fmt.Sprintf("%db", metadataSizeBytes))
+			}
+
+			args = append(args, pvName)
+
+			_, err = subprocess.TryRunCommand("pvcreate", args...)
 			if err != nil {
 				return err
 			}
@@ -549,7 +566,8 @@ func (d *lvm) Delete(op *operations.Operation) error {
 
 func (d *lvm) Validate(config map[string]string) error {
 	rules := map[string]func(value string) error{
-		"lvm.vg_name": validate.IsAny,
+		"lvm.vg_name":       validate.IsAny,
+		"lvm.metadata_size": validate.Optional(validate.IsSize),
 	}
 
 	if !d.clustered {
@@ -588,6 +606,11 @@ func (d *lvm) Update(changedConfig map[string]string) error {
 	_, changed = changedConfig["lvm.thinpool_metadata_size"]
 	if changed {
 		return fmt.Errorf("lvm.thinpool_metadata_size cannot be changed")
+	}
+
+	_, changed = changedConfig["lvm.metadata_size"]
+	if changed {
+		return fmt.Errorf("lvm.metadata_size cannot be changed")
 	}
 
 	_, changed = changedConfig["volume.lvm.stripes"]

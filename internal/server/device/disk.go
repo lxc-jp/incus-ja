@@ -738,12 +738,13 @@ func (d *disk) UpdatableFields(oldDevice Type) []string {
 func (d *disk) Register() error {
 	d.logger.Debug("Initialising mounted disk ref counter")
 
-	if d.config["path"] == "/" {
-		pool, err := storagePools.LoadByInstance(d.state, d.inst)
-		if err != nil {
-			return err
-		}
+	// Load the pool.
+	pool, err := storagePools.LoadByInstance(d.state, d.inst)
+	if err != nil {
+		return err
+	}
 
+	if d.config["path"] == "/" {
 		// Try to mount the volume that should already be mounted to reinitialize the ref counter.
 		_, err = pool.MountInstance(d.inst, nil)
 		if err != nil {
@@ -760,7 +761,7 @@ func (d *disk) Register() error {
 		volName := volFields[0]
 
 		// Try to mount the volume that should already be mounted to reinitialize the ref counter.
-		_, err = d.pool.MountCustomVolume(storageProjectName, volName, nil)
+		_, err = pool.MountCustomVolume(storageProjectName, volName, nil)
 		if err != nil {
 			return err
 		}
@@ -1483,6 +1484,26 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 				d.logger.Warn("Could not apply quota because disk is in use, deferring until next start")
 			} else if err != nil {
 				return err
+			} else if d.inst.Type() == instancetype.VM && d.inst.IsRunning() {
+				// Get the disk size in bytes.
+				size, err := units.ParseByteSizeString(newRootDiskDeviceSize)
+				if err != nil {
+					return err
+				}
+
+				// Notify to reload disk size.
+				runConf := deviceConfig.RunConfig{}
+				runConf.Mounts = []deviceConfig.MountEntryItem{
+					{
+						DevName: d.name,
+						Size:    size,
+					},
+				}
+
+				err = d.inst.DeviceEventHandler(&runConf)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

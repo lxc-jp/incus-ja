@@ -178,25 +178,11 @@ func (m *Monitor) ping() error {
 	return nil
 }
 
-// run executes a command.
-func (m *Monitor) run(cmd string, args any, resp any) error {
+// RunJSON executes a JSON-formatted command.
+func (m *Monitor) RunJSON(request []byte, resp any) error {
 	// Check if disconnected
 	if m.disconnected {
 		return ErrMonitorDisconnect
-	}
-
-	// Run the command.
-	requestArgs := struct {
-		Execute   string `json:"execute"`
-		Arguments any    `json:"arguments,omitempty"`
-	}{
-		Execute:   cmd,
-		Arguments: args,
-	}
-
-	request, err := json.Marshal(requestArgs)
-	if err != nil {
-		return err
 	}
 
 	out, err := m.qmp.Run(request)
@@ -212,6 +198,10 @@ func (m *Monitor) run(cmd string, args any, resp any) error {
 
 	// Decode the response if needed.
 	if resp != nil {
+		// Handle weird QEMU QMP bug.
+		responses := strings.Split(string(out), "\r\n")
+		out = []byte(responses[len(responses)-1])
+
 		err = json.Unmarshal(out, &resp)
 		if err != nil {
 			// Confirm the daemon didn't die.
@@ -225,6 +215,25 @@ func (m *Monitor) run(cmd string, args any, resp any) error {
 	}
 
 	return nil
+}
+
+// run executes a command.
+func (m *Monitor) run(cmd string, args any, resp any) error {
+	// Construct the command.
+	requestArgs := struct {
+		Execute   string `json:"execute"`
+		Arguments any    `json:"arguments,omitempty"`
+	}{
+		Execute:   cmd,
+		Arguments: args,
+	}
+
+	request, err := json.Marshal(requestArgs)
+	if err != nil {
+		return err
+	}
+
+	return m.RunJSON(request, resp)
 }
 
 // Connect creates or retrieves an existing QMP monitor for the path.

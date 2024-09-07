@@ -57,6 +57,7 @@ import (
 	"github.com/lxc/incus/v6/internal/server/device/nictype"
 	"github.com/lxc/incus/v6/internal/server/instance"
 	"github.com/lxc/incus/v6/internal/server/instance/drivers/edk2"
+	"github.com/lxc/incus/v6/internal/server/instance/drivers/qemudefault"
 	"github.com/lxc/incus/v6/internal/server/instance/drivers/qmp"
 	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
 	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
@@ -68,6 +69,8 @@ import (
 	"github.com/lxc/incus/v6/internal/server/project"
 	"github.com/lxc/incus/v6/internal/server/resources"
 	"github.com/lxc/incus/v6/internal/server/response"
+	"github.com/lxc/incus/v6/internal/server/scriptlet"
+	scriptletLoad "github.com/lxc/incus/v6/internal/server/scriptlet/load"
 	"github.com/lxc/incus/v6/internal/server/state"
 	storagePools "github.com/lxc/incus/v6/internal/server/storage"
 	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
@@ -91,12 +94,6 @@ import (
 //
 //go:embed agent-loader/*
 var incusAgentLoader embed.FS
-
-// QEMUDefaultCPUCores defines the default number of cores a VM will get if no limit specified.
-const QEMUDefaultCPUCores = 1
-
-// QEMUDefaultMemSize is the default memory size for VMs if no limit specified.
-const QEMUDefaultMemSize = "1GiB"
 
 // qemuSerialChardevName is used to communicate state with QEMU via QMP.
 const qemuSerialChardevName = "qemu_serial-chardev"
@@ -640,15 +637,32 @@ func (d *qemu) onStop(target string) error {
 		return err
 	}
 
+	// Determine if instance should be auto-restarted.
+	var autoRestart bool
+	if target != "reboot" && op.GetInstanceInitiated() && d.shouldAutoRestart() {
+		autoRestart = true
+
+		// Mark current shutdown as complete.
+		op.Done(nil)
+
+		// Create a new restart operation.
+		op, err = operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionRestart, nil, true, false)
+		if err == nil {
+			defer op.Done(nil)
+		} else {
+			d.logger.Error("Failed to setup new restart operation", logger.Ctx{"err": err})
+		}
+	}
+
 	// Log and emit lifecycle if not user triggered.
-	if op.GetInstanceInitiated() {
+	if target != "reboot" && !autoRestart && op.GetInstanceInitiated() {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceShutdown.Event(d, nil))
-	} else if op.Action() != operationlock.ActionMigrate {
+	} else if !autoRestart && op.Action() != operationlock.ActionMigrate {
 		d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceStopped.Event(d, nil))
 	}
 
 	// Reboot the instance.
-	if target == "reboot" {
+	if target == "reboot" || autoRestart {
 		err = d.Start(false)
 		if err != nil {
 			op.Done(err)
@@ -828,7 +842,7 @@ func (d *qemu) restoreStateHandle(ctx context.Context, monitor *qmp.Monitor, f *
 		return err
 	}
 
-	err = monitor.MigrateIncoming(ctx, "fd:migration")
+	err = monitor.MigrateIncoming(ctx, "migration")
 	if err != nil {
 		return err
 	}
@@ -952,7 +966,7 @@ func (d *qemu) saveStateHandle(monitor *qmp.Monitor, f *os.File) error {
 	}
 
 	// Issue the migration command.
-	err = monitor.Migrate("fd:migration")
+	err = monitor.Migrate("migration")
 	if err != nil {
 		return err
 	}
@@ -1088,7 +1102,7 @@ func (d *qemu) checkStateStorage() error {
 		return err
 	}
 
-	memoryLimitStr := QEMUDefaultMemSize
+	memoryLimitStr := qemudefault.MemSize
 	if d.expandedConfig["limits.memory"] != "" {
 		memoryLimitStr = d.expandedConfig["limits.memory"]
 	}
@@ -1107,14 +1121,43 @@ func (d *qemu) checkStateStorage() error {
 
 // Start starts the instance.
 func (d *qemu) Start(stateful bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
+	return d.start(stateful, nil)
+}
+
+// startupHook executes QMP commands and runs startup scriptlets at early, pre-stard and post-start
+// stages.
+func (d *qemu) startupHook(monitor *qmp.Monitor, stage string) error {
+	commands, ok := d.expandedConfig["raw.qemu.qmp."+stage]
+	if ok {
+		var commandList []map[string]any
+		err := json.Unmarshal([]byte(commands), &commandList)
+		if err != nil {
+			err = fmt.Errorf("Failed to parse QMP commands at %s stage (expected JSON list of objects): %w", stage, err)
+			return err
+		}
+
+		for _, command := range commandList {
+			jsonCommand, _ := json.Marshal(command)
+			err = monitor.RunJSON(jsonCommand, nil)
+			if err != nil {
+				err = fmt.Errorf("Failed to run QMP command %s at %s stage: %w", jsonCommand, stage, err)
+				return err
+			}
+		}
 	}
 
-	defer unlock()
+	_, ok = d.expandedConfig["raw.qemu.scriptlet"]
+	if ok {
+		instanceName := d.Name()
 
-	return d.start(stateful, nil)
+		err := scriptlet.QEMURun(logger.Log, monitor, instanceName, stage)
+		if err != nil {
+			err = fmt.Errorf("Failed running QEMU scriptlet at %s stage: %w", stage, err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 // start starts the instance and can use an existing InstanceOperation lock.
@@ -1707,11 +1750,30 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	// onStop hook isn't triggered prematurely (as this function's reverter will clean up on failure to start).
 	monitor.SetOnDisconnectEvent(false)
 
+	// Precompile the QEMU scriptlet
+	src, ok := d.expandedConfig["raw.qemu.scriptlet"]
+	if ok {
+		instanceName := d.Name()
+
+		err := scriptletLoad.QEMUSet(src, instanceName)
+		if err != nil {
+			err = fmt.Errorf("Failed loading QEMU scriptlet: %w", err)
+			return err
+		}
+	}
+
+	// Early startup hook
+	err = d.startupHook(monitor, "early")
+	if err != nil {
+		op.Done(err)
+		return err
+	}
+
 	// Apply CPU pinning.
 	if cpuInfo.vcpus == nil {
 		if d.architectureSupportsCPUHotplug() && cpuInfo.cores > 1 {
 			// Hotplug the CPUs.
-			err := d.setCPUs(cpuInfo.cores)
+			err := d.setCPUs(monitor, cpuInfo.cores)
 			if err != nil {
 				err = fmt.Errorf("Failed to add CPUs: %w", err)
 				op.Done(err)
@@ -1762,6 +1824,13 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 			op.Done(err)
 			return fmt.Errorf("Failed setting up device via monitor: %w", err)
 		}
+	}
+
+	// Pre-start startup hook
+	err = d.startupHook(monitor, "pre-start")
+	if err != nil {
+		op.Done(err)
+		return err
 	}
 
 	// Due to a bug in QEMU, devices added using QMP's device_add command do not have their bootindex option
@@ -1831,6 +1900,16 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	}
 
 	revert.Success()
+
+	// Post-start startup hook
+	err = d.startupHook(monitor, "post-start")
+	if err != nil {
+		op.Done(err)
+
+		// Shut down the VM if the post-start commands fail.
+		_ = d.Stop(false)
+		return err
+	}
 
 	// Run any post-start hooks.
 	err = d.runHooks(postStartHooks)
@@ -2062,14 +2141,13 @@ func (d *qemu) setupNvram() error {
 		return err
 	}
 
-	// Generate a symlink if needed.
+	// Generate a symlink.
 	// This is so qemu.nvram can always be assumed to be the EDK2 vars file.
 	// The real file name is then used to determine what firmware must be selected.
-	if !util.PathExists(d.nvramPath()) {
-		err = os.Symlink(efiVarsName, d.nvramPath())
-		if err != nil {
-			return err
-		}
+	_ = os.Remove(d.nvramPath())
+	err = os.Symlink(efiVarsName, d.nvramPath())
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -2168,7 +2246,7 @@ func (d *qemu) deviceStart(dev device.Device, instanceRunning bool) (*deviceConf
 	if runConf != nil {
 		// If instance is running and then live attach device.
 		if instanceRunning {
-			// Attach network interface if requested.
+			// Attach NIC to running instance.
 			if len(runConf.NetworkInterface) > 0 {
 				err = d.deviceAttachNIC(dev.Name(), configCopy, runConf.NetworkInterface)
 				if err != nil {
@@ -2176,6 +2254,7 @@ func (d *qemu) deviceStart(dev device.Device, instanceRunning bool) (*deviceConf
 				}
 			}
 
+			// Attach disk to running instance.
 			for _, mount := range runConf.Mounts {
 				if mount.FSType == "9p" {
 					err = d.deviceAttachPath(dev.Name(), configCopy, mount)
@@ -2190,8 +2269,17 @@ func (d *qemu) deviceStart(dev device.Device, instanceRunning bool) (*deviceConf
 				}
 			}
 
+			// Attach USB to running instance.
 			for _, usbDev := range runConf.USBDevice {
 				err = d.deviceAttachUSB(usbDev)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// Attach PCI to running instance.
+			if len(runConf.PCIDevice) > 0 {
+				err = d.deviceAttachPCI(dev.Name(), configCopy, runConf.PCIDevice)
 				if err != nil {
 					return nil, err
 				}
@@ -2275,21 +2363,12 @@ func (d *qemu) deviceAttachPath(deviceName string, configCopy map[string]string,
 
 	reverter.Add(func() { _ = monitor.RemoveCharDevice(mountTag) })
 
-	// Figure out a hotplug slot.
-	pciDevID := qemuPCIDeviceIDStart
-
-	// Iterate through all the instance devices in the same sorted order as is used when allocating the
-	// boot time devices in order to find the PCI bus slot device we would have used at boot time.
-	// Then attempt to use that same device, assuming it is available.
-	for _, dev := range d.expandedDevices.Sorted() {
-		if dev.Name == deviceName {
-			break // Found our device.
-		}
-
-		pciDevID++
+	// Try to get a PCI address for hotplugging.
+	pciDeviceName, err := d.getPCIHotplug()
+	if err != nil {
+		return err
 	}
 
-	pciDeviceName := fmt.Sprintf("%s%d", busDevicePortPrefix, pciDevID)
 	d.logger.Debug("Using PCI bus device to hotplug virtiofs into", logger.Ctx{"device": deviceName, "port": pciDeviceName})
 
 	qemuDev := map[string]string{
@@ -2438,20 +2517,12 @@ func (d *qemu) deviceAttachNIC(deviceName string, configCopy map[string]string, 
 
 	// PCIe and PCI require a port device name to hotplug the NIC into.
 	if slices.Contains([]string{"pcie", "pci"}, qemuBus) {
-		pciDevID := qemuPCIDeviceIDStart
-
-		// Iterate through all the instance devices in the same sorted order as is used when allocating the
-		// boot time devices in order to find the PCI bus slot device we would have used at boot time.
-		// Then attempt to use that same device, assuming it is available.
-		for _, dev := range d.expandedDevices.Sorted() {
-			if dev.Name == deviceName {
-				break // Found our device.
-			}
-
-			pciDevID++
+		// Try to get a PCI address for hotplugging.
+		pciDeviceName, err := d.getPCIHotplug()
+		if err != nil {
+			return err
 		}
 
-		pciDeviceName := fmt.Sprintf("%s%d", busDevicePortPrefix, pciDevID)
 		d.logger.Debug("Using PCI bus device to hotplug NIC into", logger.Ctx{"device": deviceName, "port": pciDeviceName})
 		qemuDev["bus"] = pciDeviceName
 		qemuDev["addr"] = "00.0"
@@ -2465,6 +2536,107 @@ func (d *qemu) deviceAttachNIC(deviceName string, configCopy map[string]string, 
 	err = monHook(monitor)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (d *qemu) getPCIHotplug() (string, error) {
+	// Check if the agent is running.
+	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
+	if err != nil {
+		return "", err
+	}
+
+	// Get the current PCI devices.
+	devices, err := monitor.QueryPCI()
+	if err != nil {
+		return "", err
+	}
+
+	for _, dev := range devices {
+		// Skip built-in devices.
+		if dev.DevID == "" {
+			continue
+		}
+
+		// Skip used bridges.
+		if len(dev.Bridge.Devices) > 0 {
+			continue
+		}
+
+		// Found an empty slot.
+		return dev.DevID, nil
+	}
+
+	return "", fmt.Errorf("No available PCI hotplug slots could be found")
+}
+
+// deviceAttachPCI live attaches a generic PCI device to the instance.
+func (d *qemu) deviceAttachPCI(deviceName string, configCopy map[string]string, pciConfig []deviceConfig.RunConfigItem) error {
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	// Check if the agent is running.
+	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
+	if err != nil {
+		return err
+	}
+
+	// Get the device config.
+	var devName, pciSlotName, pciIOMMUGroup string
+	for _, pciItem := range pciConfig {
+		if pciItem.Key == "devName" {
+			devName = pciItem.Value
+		} else if pciItem.Key == "pciSlotName" {
+			pciSlotName = pciItem.Value
+		} else if pciItem.Key == "pciIOMMUGroup" {
+			pciIOMMUGroup = pciItem.Value
+		}
+	}
+
+	// PCIe and PCI require a port device name to hotplug the NIC into.
+	_, qemuBus, err := d.qemuArchConfig(d.architecture)
+	if err != nil {
+		return err
+	}
+
+	if !slices.Contains([]string{"pcie", "pci"}, qemuBus) {
+		return fmt.Errorf("Attempting PCI passthrough on a non-PCI system")
+	}
+
+	// Try to get a PCI address for hotplugging.
+	pciDeviceName, err := d.getPCIHotplug()
+	if err != nil {
+		return err
+	}
+
+	qemuDev := make(map[string]string)
+	escapedDeviceName := linux.PathNameEncode(devName)
+
+	d.logger.Debug("Using PCI bus device to hotplug NIC into", logger.Ctx{"device": deviceName, "port": pciDeviceName})
+
+	qemuDev["bus"] = pciDeviceName
+	qemuDev["addr"] = "00.0"
+	qemuDev["driver"] = "vfio-pci"
+	qemuDev["id"] = fmt.Sprintf("%s%s", qemuDeviceIDPrefix, escapedDeviceName)
+	qemuDev["host"] = pciSlotName
+
+	if d.state.OS.UnprivUser != "" {
+		if pciIOMMUGroup == "" {
+			return fmt.Errorf("No PCI IOMMU group supplied")
+		}
+
+		vfioGroupFile := fmt.Sprintf("/dev/vfio/%s", pciIOMMUGroup)
+		err := os.Chown(vfioGroupFile, int(d.state.OS.UnprivUID), -1)
+		if err != nil {
+			return fmt.Errorf("Failed to chown vfio group device %q: %w", vfioGroupFile, err)
+		}
+	}
+
+	err = monitor.AddDevice(qemuDev)
+	if err != nil {
+		return fmt.Errorf("Failed setting up device %q: %w", devName, err)
 	}
 
 	return nil
@@ -2525,6 +2697,14 @@ func (d *qemu) deviceStop(dev device.Device, instanceRunning bool, _ string) err
 				}
 			}
 		}
+
+		// Detach generic PCI device from running instance.
+		if configCopy["type"] == "pci" {
+			err = d.deviceDetachPCI(dev.Name())
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	if runConf != nil {
@@ -2544,24 +2724,6 @@ func (d *qemu) deviceDetachNIC(deviceName string) error {
 	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
 	if err != nil {
 		return err
-	}
-
-	// pciDeviceExists checks if the deviceID exists as a bridged PCI device.
-	pciDeviceExists := func(deviceID string) (bool, error) {
-		pciDevs, err := monitor.QueryPCI()
-		if err != nil {
-			return false, err
-		}
-
-		for _, pciDev := range pciDevs {
-			for _, bridgeDev := range pciDev.Bridge.Devices {
-				if bridgeDev.DevID == deviceID {
-					return true, nil
-				}
-			}
-		}
-
-		return false, nil
 	}
 
 	escapedDeviceName := linux.PathNameEncode(deviceName)
@@ -2589,7 +2751,7 @@ func (d *qemu) deviceDetachNIC(deviceName string) error {
 		waitDuration := time.Duration(time.Second * time.Duration(10))
 		waitUntil := time.Now().Add(waitDuration)
 		for {
-			devExists, err := pciDeviceExists(deviceID)
+			devExists, err := monitor.CheckPCIDevice(deviceID)
 			if err != nil {
 				return fmt.Errorf("Failed getting PCI devices to check for NIC detach: %w", err)
 			}
@@ -2603,6 +2765,54 @@ func (d *qemu) deviceDetachNIC(deviceName string) error {
 			}
 
 			d.logger.Debug("Waiting for NIC device to be detached", logger.Ctx{"device": deviceName})
+			time.Sleep(time.Second * time.Duration(2))
+		}
+	}
+
+	return nil
+}
+
+// deviceDetachPCI detaches a generic PCI device from a running instance.
+func (d *qemu) deviceDetachPCI(deviceName string) error {
+	// Check if the agent is running.
+	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
+	if err != nil {
+		return err
+	}
+
+	escapedDeviceName := linux.PathNameEncode(deviceName)
+	deviceID := fmt.Sprintf("%s%s", qemuDeviceIDPrefix, escapedDeviceName)
+
+	// Request removal of device.
+	err = monitor.RemoveDevice(deviceID)
+	if err != nil {
+		return fmt.Errorf("Failed removing PCI device: %w", err)
+	}
+
+	_, qemuBus, err := d.qemuArchConfig(d.architecture)
+	if err != nil {
+		return err
+	}
+
+	if slices.Contains([]string{"pcie", "pci"}, qemuBus) {
+		// Wait until the device is actually removed (or we timeout waiting).
+		waitDuration := time.Duration(time.Second * time.Duration(10))
+		waitUntil := time.Now().Add(waitDuration)
+		for {
+			devExists, err := monitor.CheckPCIDevice(deviceID)
+			if err != nil {
+				return fmt.Errorf("Failed getting PCI devices to check for detach: %w", err)
+			}
+
+			if !devExists {
+				break
+			}
+
+			if time.Now().After(waitUntil) {
+				return fmt.Errorf("Failed to detach PCI device after %v", waitDuration)
+			}
+
+			d.logger.Debug("Waiting for PCI device to be detached", logger.Ctx{"device": deviceName})
 			time.Sleep(time.Second * time.Duration(2))
 		}
 	}
@@ -3452,8 +3662,8 @@ func (d *qemu) generateQemuConfigFile(cpuInfo *cpuTopology, mountInfo *storagePo
 		}
 	}
 
-	// Allocate 4 PCI slots for hotplug devices.
-	for i := 0; i < 4; i++ {
+	// Allocate 8 PCI slots for hotplug devices.
+	for i := 0; i < 8; i++ {
 		bus.allocate(busFunctionGroupNone)
 	}
 
@@ -3582,7 +3792,7 @@ func (d *qemu) addCPUMemoryConfig(cfg *[]cfgSection, cpuInfo *cpuTopology) error
 	// Configure memory limit.
 	memSize := d.expandedConfig["limits.memory"]
 	if memSize == "" {
-		memSize = QEMUDefaultMemSize // Default if no memory limit specified.
+		memSize = qemudefault.MemSize // Default if no memory limit specified.
 	}
 
 	memSizeBytes, err := units.ParseByteSizeString(memSize)
@@ -3878,9 +4088,11 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 	noFlushCache := false // Don't ignore any flush requests for the device.
 
 	if cacheMode == "unsafe" {
+		aioMode = "threads"
 		directCache = false
 		noFlushCache = true
 	} else if cacheMode == "writeback" {
+		aioMode = "threads"
 		directCache = false
 	}
 
@@ -4026,21 +4238,12 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 		}
 	} else if slices.Contains([]string{"nvme", "virtio-blk"}, bus) {
 		if qemuDev["bus"] == "" {
-			// Figure out a hotplug slot.
-			pciDevID := qemuPCIDeviceIDStart
-
-			// Iterate through all the instance devices in the same sorted order as is used when allocating the
-			// boot time devices in order to find the PCI bus slot device we would have used at boot time.
-			// Then attempt to use that same device, assuming it is available.
-			for _, dev := range d.expandedDevices.Sorted() {
-				if dev.Name == driveConf.DevName {
-					break // Found our device.
-				}
-
-				pciDevID++
+			// Try to get a PCI address for hotplugging.
+			pciDeviceName, err := d.getPCIHotplug()
+			if err != nil {
+				return nil, err
 			}
 
-			pciDeviceName := fmt.Sprintf("%s%d", busDevicePortPrefix, pciDevID)
 			d.logger.Debug("Using PCI bus device to hotplug drive into", logger.Ctx{"device": driveConf.DevName, "port": pciDeviceName})
 			qemuDev["bus"] = pciDeviceName
 			qemuDev["addr"] = "00.0"
@@ -4057,7 +4260,7 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 		revert := revert.New()
 		defer revert.Fail()
 
-		nodeName := fmt.Sprintf("%s%s", qemuBlockDevIDPrefix, escapedDeviceName)
+		nodeName := d.blockNodeName(escapedDeviceName)
 
 		if isRBDImage {
 			secretID := fmt.Sprintf("pool_%s_%s", blockDev["pool"], blockDev["user"])
@@ -4073,6 +4276,10 @@ func (d *qemu) addDriveConfig(qemuDev map[string]string, bootIndexes map[string]
 
 			if readonly {
 				permissions = unix.O_RDONLY
+			}
+
+			if directCache {
+				permissions |= unix.O_DIRECT
 			}
 
 			f, err := os.OpenFile(driveConf.DevPath, permissions, 0)
@@ -4933,13 +5140,6 @@ func (d *qemu) snapshot(name string, expiry time.Time, stateful bool) error {
 
 // Snapshot takes a new snapshot.
 func (d *qemu) Snapshot(name string, expiry time.Time, stateful bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	return d.snapshot(name, expiry, stateful)
 }
 
@@ -5065,13 +5265,6 @@ func (d *qemu) Restore(source instance.Instance, stateful bool) error {
 
 // Rename the instance. Accepts an argument to enable applying deferred TemplateTriggerRename.
 func (d *qemu) Rename(newName string, applyTemplateTrigger bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	oldName := d.Name()
 	ctxMap := logger.Ctx{
 		"created":   d.creationDate,
@@ -5082,7 +5275,7 @@ func (d *qemu) Rename(newName string, applyTemplateTrigger bool) error {
 	d.logger.Info("Renaming instance", ctxMap)
 
 	// Quick checks.
-	err = instance.ValidName(newName, d.IsSnapshot())
+	err := instance.ValidName(newName, d.IsSnapshot())
 	if err != nil {
 		return err
 	}
@@ -5254,13 +5447,6 @@ func (d *qemu) Rename(newName string, applyTemplateTrigger bool) error {
 
 // Update the instance config.
 func (d *qemu) Update(args db.InstanceArgs, userRequested bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	// Setup a new operation.
 	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionUpdate, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
 	if err != nil {
@@ -5602,7 +5788,7 @@ func (d *qemu) Update(args db.InstanceArgs, userRequested bool) error {
 				}
 
 				// Hotplug the CPUs.
-				err = d.setCPUs(limit)
+				err = d.setCPUs(nil, limit)
 				if err != nil {
 					return fmt.Errorf("Failed updating cpu limit: %w", err)
 				}
@@ -5982,13 +6168,6 @@ func (d *qemu) init() error {
 
 // Delete the instance.
 func (d *qemu) Delete(force bool) error {
-	unlock, err := d.updateBackupFileLock(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer unlock()
-
 	// Setup a new operation.
 	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionDelete, nil, false, false)
 	if err != nil {
@@ -7992,7 +8171,7 @@ func (d *qemu) DeviceEventHandler(runConf *deviceConfig.RunConfig) error {
 
 	// Handle disk reconfiguration.
 	for _, mount := range runConf.Mounts {
-		if mount.Limits == nil {
+		if mount.Limits == nil && mount.Size == 0 {
 			continue
 		}
 
@@ -8005,10 +8184,20 @@ func (d *qemu) DeviceEventHandler(runConf *deviceConfig.RunConfig) error {
 		// Figure out the QEMU device ID.
 		devID := fmt.Sprintf("%s%s", qemuDeviceIDPrefix, linux.PathNameEncode(mount.DevName))
 
-		// Apply the limits.
-		err = m.SetBlockThrottle(devID, int(mount.Limits.ReadBytes), int(mount.Limits.WriteBytes), int(mount.Limits.ReadIOps), int(mount.Limits.WriteIOps))
-		if err != nil {
-			return fmt.Errorf("Failed applying limits for disk device %q: %w", mount.DevName, err)
+		if mount.Limits != nil {
+			// Apply the limits.
+			err = m.SetBlockThrottle(devID, int(mount.Limits.ReadBytes), int(mount.Limits.WriteBytes), int(mount.Limits.ReadIOps), int(mount.Limits.WriteIOps))
+			if err != nil {
+				return fmt.Errorf("Failed applying limits for disk device %q: %w", mount.DevName, err)
+			}
+		}
+
+		if mount.Size > 0 {
+			// Update the size.
+			err = m.UpdateBlockSize(strings.SplitN(devID, "-", 2)[1])
+			if err != nil {
+				return fmt.Errorf("Failed updating disk size %q: %w", mount.DevName, err)
+			}
 		}
 	}
 
@@ -8264,6 +8453,15 @@ func (d *qemu) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConf
 
 // UpdateBackupFile writes the instance's backup.yaml file to storage.
 func (d *qemu) UpdateBackupFile() error {
+	// Prevent concurent updates to the backup file.
+	unlock, err := d.updateBackupFileLock(context.Background())
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	// Write the current instance state to backup file.
 	pool, err := d.getStoragePool()
 	if err != nil {
 		return err
@@ -8880,30 +9078,34 @@ func (d *qemu) deviceDetachUSB(usbDev deviceConfig.USBDeviceItem) error {
 
 // Block node names may only be up to 31 characters long, so use a hash if longer.
 func (d *qemu) blockNodeName(name string) string {
-	if len(name) > 27 {
+	if len(name) > 25 {
 		// If the name is too long, hash it as SHA-256 (32 bytes).
-		// Then encode the SHA-256 binary hash as Base64 Raw URL format and trim down to 27 chars.
+		// Then encode the SHA-256 binary hash as Base64 Raw URL format and trim down to 25 chars.
 		// Raw URL avoids the use of "+" character and the padding "=" character which QEMU doesn't allow.
 		hash := sha256.New()
 		hash.Write([]byte(name))
 		binaryHash := hash.Sum(nil)
 		name = base64.RawURLEncoding.EncodeToString(binaryHash)
-		name = name[0:27]
+		name = name[0:25]
 	}
 
 	// Apply the prefix.
 	return fmt.Sprintf("%s%s", qemuBlockDevIDPrefix, name)
 }
 
-func (d *qemu) setCPUs(count int) error {
+func (d *qemu) setCPUs(monitor *qmp.Monitor, count int) error {
 	if count == 0 {
 		return nil
 	}
 
 	// Check if the agent is running.
-	monitor, err := qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
-	if err != nil {
-		return err
+	if monitor == nil {
+		var err error
+
+		monitor, err = qmp.Connect(d.monitorPath(), qemuSerialChardevName, d.getMonitorEventHandler())
+		if err != nil {
+			return err
+		}
 	}
 
 	cpus, err := monitor.QueryHotpluggableCPUs()

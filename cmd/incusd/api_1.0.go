@@ -224,7 +224,7 @@ func api10Get(d *Daemon, r *http.Request) response.Response {
 	// Get the authentication methods.
 	authMethods := []string{api.AuthenticationMethodTLS}
 
-	oidcIssuer, oidcClientID, _, _ := s.GlobalConfig.OIDCServer()
+	oidcIssuer, oidcClientID, _, _, _ := s.GlobalConfig.OIDCServer()
 	if oidcIssuer != "" && oidcClientID != "" {
 		authMethods = append(authMethods, api.AuthenticationMethodOIDC)
 	}
@@ -801,6 +801,7 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 	oidcChanged := false
 	openFGAChanged := false
 	ovnChanged := false
+	ovsChanged := false
 	syslogChanged := false
 
 	for key := range clusterChanged {
@@ -856,6 +857,9 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 
 		case "core.syslog_socket":
 			syslogChanged = true
+
+		case "network.ovs.connection":
+			ovsChanged = true
 		}
 	}
 
@@ -965,13 +969,13 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 	}
 
 	if oidcChanged {
-		oidcIssuer, oidcClientID, oidcAudience, oidcClaim := clusterConfig.OIDCServer()
+		oidcIssuer, oidcClientID, oidcScope, oidcAudience, oidcClaim := clusterConfig.OIDCServer()
 
 		if oidcIssuer == "" || oidcClientID == "" {
 			d.oidcVerifier = nil
 		} else {
 			var err error
-			d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcAudience, oidcClaim)
+			d.oidcVerifier, err = oidc.NewVerifier(oidcIssuer, oidcClientID, oidcScope, oidcAudience, oidcClaim)
 			if err != nil {
 				return fmt.Errorf("Failed creating verifier: %w", err)
 			}
@@ -988,6 +992,13 @@ func doApi10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 
 	if ovnChanged {
 		err := d.setupOVN()
+		if err != nil {
+			return err
+		}
+	}
+
+	if ovsChanged {
+		err := d.setupOVS()
 		if err != nil {
 			return err
 		}
