@@ -34,9 +34,19 @@ incus network load-balancer create <network_name> <listen_address> [configuratio
 :--              | :--          | :--  | :--
 `listen_address` | string       | yes  | リッスンする IP アドレス
 `description`    | string       | no   | ネットワークロードバランサーの説明
-`config`         | string set   | no   | キー/バリュー形式の設定オプション（`user.*` カスタムキーのみがサポートされます）
+`config`         | string set   | no   | キー/バリュー形式の設定オプション（下記参照）
 `backends`       | backend list | no   | {ref}`バックエンド仕様 <network-load-balancers-backend-specifications>` のリスト
 `ports`          | port list    | no   | {ref}`ポート仕様 <network-load-balancers-port-specifications>` のリスト
+
+### 設定オプション
+
+ロードバランサーには以下のオプションが利用できます:
+
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_load_balancer-common start -->
+    :end-before: <!-- config group network_load_balancer-common end -->
+```
 
 (network-load-balancers-listen-addresses)=
 ### リッスンアドレスの要件
