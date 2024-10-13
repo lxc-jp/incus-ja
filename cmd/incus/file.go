@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"net"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/sftp"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
 
@@ -300,6 +303,8 @@ func (c *cmdFileCreate) Run(cmd *cobra.Command, args []string) error {
 type cmdFileDelete struct {
 	global *cmdGlobal
 	file   *cmdFile
+
+	flagForce bool
 }
 
 func (c *cmdFileDelete) Command() *cobra.Command {
@@ -309,6 +314,8 @@ func (c *cmdFileDelete) Command() *cobra.Command {
 	cmd.Short = i18n.G("Delete files in instances")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Delete files in instances`))
+
+	cmd.Flags().BoolVarP(&c.flagForce, "force", "f", false, i18n.G("Force deleting files, directories, and subdirectories")+"``")
 
 	cmd.RunE = c.Run
 
@@ -328,14 +335,41 @@ func (c *cmdFileDelete) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Store clients.
+	sftpClients := map[string]*sftp.Client{}
+
+	defer func() {
+		for _, sftpClient := range sftpClients {
+			_ = sftpClient.Close()
+		}
+	}()
+
 	for _, resource := range resources {
 		pathSpec := strings.SplitN(resource.name, "/", 2)
 		if len(pathSpec) != 2 {
 			return fmt.Errorf(i18n.G("Invalid path %s"), resource.name)
 		}
 
-		// Delete the file
-		err = resource.server.DeleteInstanceFile(pathSpec[0], pathSpec[1])
+		sftpConn, ok := sftpClients[pathSpec[0]]
+		if !ok {
+			sftpConn, err = resource.server.GetInstanceFileSFTP(pathSpec[0])
+			if err != nil {
+				return err
+			}
+
+			sftpClients[pathSpec[0]] = sftpConn
+		}
+
+		if c.flagForce {
+			err = sftpConn.RemoveAll(pathSpec[1])
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		err = sftpConn.Remove(pathSpec[1])
 		if err != nil {
 			return err
 		}
@@ -451,7 +485,7 @@ func (c *cmdFilePull) Run(cmd *cobra.Command, args []string) error {
 
 	targetIsDir := false
 	sb, err := os.Stat(target)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 

@@ -118,6 +118,7 @@ Incus はさまざまな異なるタイプのネットワークデバイス（*N
 `boot.priority` | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
 `gvrp`          | bool    | `false`            | no   | GARP VLAN Registration Protocolを使ってVLANを登録する
 `hwaddr`        | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
+`mode`          | string  | `bridge`           | no   | Macvlanモード（`bridge`、`vepa`、`passthru`、`private`のいずれか）
 `mtu`           | integer | 親の MTU           | yes  | 新しいインターフェースのMTU
 `name`          | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
 `network`       | string  | -                  | no   | （`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク

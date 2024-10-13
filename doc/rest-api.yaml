@@ -2161,6 +2161,8 @@ definitions:
                 description: Network usage key/value pairs
                 type: object
                 x-go-name: Network
+            os_info:
+                $ref: '#/definitions/InstanceStateOSInfo'
             pid:
                 description: PID of the runtime
                 example: 7281
@@ -2373,6 +2375,36 @@ definitions:
                 format: int64
                 type: integer
                 x-go-name: PacketsSent
+        type: object
+        x-go-package: github.com/lxc/incus/v6/shared/api
+    InstanceStateOSInfo:
+        properties:
+            fqdn:
+                description: FQDN of the instance.
+                example: myhost.mydomain.local
+                type: string
+                x-go-name: FQDN
+            hostname:
+                description: Hostname of the instance.
+                example: myhost
+                type: string
+                x-go-name: Hostname
+            kernel_version:
+                description: Version of the kernel running in the instance.
+                example: 6.1.0-25-amd64
+                type: string
+                x-go-name: KernelVersion
+            os:
+                description: Operating system running in the instance.
+                example: Debian GNU/Linux
+                type: string
+                x-go-name: OS
+            os_version:
+                description: Version of the operating system.
+                example: 12 (bookworm)
+                type: string
+                x-go-name: OSVersion
+        title: InstanceStateOSInfo represents the operating system information section of an instance's state.
         type: object
         x-go-package: github.com/lxc/incus/v6/shared/api
     InstanceStatePut:
@@ -3212,6 +3244,44 @@ definitions:
                     $ref: '#/definitions/NetworkLoadBalancerPort'
                 type: array
                 x-go-name: Ports
+        type: object
+        x-go-package: github.com/lxc/incus/v6/shared/api
+    NetworkLoadBalancerState:
+        description: NetworkLoadBalancerState is used for showing current state of a load balancer
+        properties:
+            backend_health:
+                additionalProperties:
+                    $ref: '#/definitions/NetworkLoadBalancerStateBackendHealth'
+                type: object
+                x-go-name: BackendHealth
+        type: object
+        x-go-package: github.com/lxc/incus/v6/shared/api
+    NetworkLoadBalancerStateBackendHealth:
+        description: NetworkLoadBalancerStateBackendHealth represents the health of a particular load-balancer backend
+        properties:
+            address:
+                type: string
+                x-go-name: Address
+            ports:
+                items:
+                    $ref: '#/definitions/NetworkLoadBalancerStateBackendHealthPort'
+                type: array
+                x-go-name: Ports
+        type: object
+        x-go-package: github.com/lxc/incus/v6/shared/api
+    NetworkLoadBalancerStateBackendHealthPort:
+        properties:
+            port:
+                format: int64
+                type: integer
+                x-go-name: Port
+            protocol:
+                type: string
+                x-go-name: Protocol
+            status:
+                type: string
+                x-go-name: Status
+        title: NetworkLoadBalancerStateBackendHealthPort represents the health status of a particular load-balancer backend port.
         type: object
         x-go-package: github.com/lxc/incus/v6/shared/api
     NetworkLoadBalancersPost:
@@ -12453,6 +12523,46 @@ paths:
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Update the network address load balancer
+            tags:
+                - network-load-balancers
+    /1.0/networks/{networkName}/load-balancers/{listenAddress}/state:
+        get:
+            description: Get the current state of a specific network address load balancer.
+            operationId: network_load_balancer_state_get
+            parameters:
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: Load Balancer state
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                $ref: '#/definitions/NetworkLoadBalancerState'
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the network address load balancer state
             tags:
                 - network-load-balancers
     /1.0/networks/{networkName}/load-balancers?recursion=1:

@@ -442,6 +442,11 @@ var APIExtensions = []string{
 	"storage_lvm_metadatasize",
 	"ovn_nic_promiscuous",
 	"ovn_nic_ip_address_none",
+	"instances_state_os_info",
+	"network_load_balancer_state",
+	"instance_nic_macvlan_mode",
+	"storage_lvm_cluster_create",
+	"network_ovn_external_interfaces",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

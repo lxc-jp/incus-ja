@@ -77,6 +77,7 @@ EDK
 EiB
 Eibit
 endian
+EPEL
 ES
 ESA
 ETag
@@ -296,6 +297,7 @@ UIDs
 unconfigured
 unevictable
 unixgram
+uncomment
 unmanaged
 unmount
 unmounting

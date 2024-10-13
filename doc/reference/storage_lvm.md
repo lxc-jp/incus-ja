@@ -53,7 +53,6 @@ Thin provisioning はクラスタ LVM とは互換性がないので、ディス
 - `/etc/lvm/lvm.conf` 内で `use_lvmlockd = 1` と設定し `lvmlockd` を有効にする
 - `/etc/lvm/lvmlocal.conf` 内に (クラスタ内で) ユニークな `host_id` の値を設定する
 - `lvmlockd` と `sanlock` デーモンの両方を稼働する
-- 共有された VG を作成し、すべてのサーバーでアクセス可能にする
 
 ## 設定オプション
 

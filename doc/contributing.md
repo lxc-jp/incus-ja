@@ -81,6 +81,13 @@ GitHub はドキュメントのスペル、リンク先が正しいか、Markdow
 - Markdown のフォーマットをチェックする：`make doc-lint`
 - 差別用語を使っていないかをチェックする：`make doc-woke`
 
+上記を実行するためには、以下のものが必要です:
+
+- Python 3.8以降
+- `venv` pythonパッケージ
+- スペルチェック用に`aspell`ツール
+- `mdl` markdown lintツール
+
 ### ドキュメントの設定オプション
 
 ```{note}

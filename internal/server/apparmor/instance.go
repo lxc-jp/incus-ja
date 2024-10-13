@@ -1,7 +1,9 @@
 package apparmor
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,7 +125,7 @@ func instanceProfileGenerate(sysOS *sys.OS, inst instance, extraBinaries []strin
 	 */
 	profile := filepath.Join(aaPath, "profiles", instanceProfileFilename(inst))
 	content, err := os.ReadFile(profile)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 
@@ -159,11 +161,6 @@ func instanceProfile(sysOS *sys.OS, inst instance, extraBinaries []string) (stri
 		return "", err
 	}
 
-	nosymfollowSupported, err := parserSupports(sysOS, "nosymfollow")
-	if err != nil {
-		return "", err
-	}
-
 	// Deref the extra binaries.
 	for i, entry := range extraBinaries {
 		fullPath, err := filepath.EvalSymlinks(entry)
@@ -178,19 +175,18 @@ func instanceProfile(sysOS *sys.OS, inst instance, extraBinaries []string) (stri
 	var sb *strings.Builder = &strings.Builder{}
 	if inst.Type() == instancetype.Container {
 		err = lxcProfileTpl.Execute(sb, map[string]any{
-			"extra_binaries":      extraBinaries,
-			"feature_cgns":        sysOS.CGInfo.Namespacing,
-			"feature_cgroup2":     sysOS.CGInfo.Layout == cgroup.CgroupsUnified || sysOS.CGInfo.Layout == cgroup.CgroupsHybrid,
-			"feature_nosymfollow": nosymfollowSupported,
-			"feature_stacking":    sysOS.AppArmorStacking && !sysOS.AppArmorStacked,
-			"feature_unix":        unixSupported,
-			"kernel_binfmt":       util.IsFalseOrEmpty(inst.ExpandedConfig()["security.privileged"]) && sysOS.UnprivBinfmt,
-			"name":                InstanceProfileName(inst),
-			"namespace":           InstanceNamespaceName(inst),
-			"nesting":             util.IsTrue(inst.ExpandedConfig()["security.nesting"]),
-			"raw":                 rawContent,
-			"unprivileged":        util.IsFalseOrEmpty(inst.ExpandedConfig()["security.privileged"]) || sysOS.RunningInUserNS,
-			"zfs_delegation":      !inst.IsPrivileged() && storageDrivers.ZFSSupportsDelegation() && util.PathExists("/dev/zfs"),
+			"extra_binaries":   extraBinaries,
+			"feature_cgns":     sysOS.CGInfo.Namespacing,
+			"feature_cgroup2":  sysOS.CGInfo.Layout == cgroup.CgroupsUnified || sysOS.CGInfo.Layout == cgroup.CgroupsHybrid,
+			"feature_stacking": sysOS.AppArmorStacking && !sysOS.AppArmorStacked,
+			"feature_unix":     unixSupported,
+			"kernel_binfmt":    util.IsFalseOrEmpty(inst.ExpandedConfig()["security.privileged"]) && sysOS.UnprivBinfmt,
+			"name":             InstanceProfileName(inst),
+			"namespace":        InstanceNamespaceName(inst),
+			"nesting":          util.IsTrue(inst.ExpandedConfig()["security.nesting"]),
+			"raw":              rawContent,
+			"unprivileged":     util.IsFalseOrEmpty(inst.ExpandedConfig()["security.privileged"]) || sysOS.RunningInUserNS,
+			"zfs_delegation":   !inst.IsPrivileged() && storageDrivers.ZFSSupportsDelegation() && util.PathExists("/dev/zfs"),
 		})
 		if err != nil {
 			return "", err

@@ -26,7 +26,7 @@ NAT モードではない場合、Unix ソケット間のトラフィックを�
 
 `proxy`デバイスを追加するには、以下のコマンドを使用します:
 
-    incus config device add <instance_name> <device_name> proxy listen=<type>:<addr>:<port>[-<port>][,<port>] connect=<type>:<addr>:<port> bind=<host/instance_name>
+    incus config device add <instance_name> <device_name> proxy listen=<type>:<addr>:<port>[-<port>][,<port>] connect=<type>:<addr>:<port> bind=<host/instance>
 
 (devices-proxy-nat-mode)=
 ## NATモード

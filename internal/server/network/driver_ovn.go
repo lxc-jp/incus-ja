@@ -350,9 +350,10 @@ func (n *ovn) getExternalSubnetInUse(uplinkNetworkName string) ([]externalSubnet
 // Validate network config.
 func (n *ovn) Validate(config map[string]string) error {
 	rules := map[string]func(value string) error{
-		"network":       validate.IsAny,
-		"bridge.hwaddr": validate.Optional(validate.IsNetworkMAC),
-		"bridge.mtu":    validate.Optional(validate.IsNetworkMTU),
+		"network":                    validate.IsAny,
+		"bridge.hwaddr":              validate.Optional(validate.IsNetworkMAC),
+		"bridge.mtu":                 validate.Optional(validate.IsNetworkMTU),
+		"bridge.external_interfaces": validate.Optional(validateExternalInterfaces),
 		"ipv4.address": validate.Optional(func(value string) error {
 			if validate.IsOneOf("none", "auto")(value) == nil {
 				return nil
@@ -410,7 +411,7 @@ func (n *ovn) Validate(config map[string]string) error {
 	_, ipv6Net, _ := net.ParseCIDR(config["ipv6.address"])
 	if ipv6Net != nil {
 		ones, _ := ipv6Net.Mask.Size()
-		if ones < 64 {
+		if ones > 64 {
 			return fmt.Errorf("IPv6 subnet must be at least a /64")
 		}
 	}
@@ -2352,6 +2353,115 @@ func (n *ovn) setup(update bool) error {
 		revert.Add(func() { _ = n.ovnnb.DeleteLogicalSwitch(context.TODO(), n.getIntSwitchName()) })
 	}
 
+	// Add any listed existing external interface.
+	if n.config["bridge.external_interfaces"] != "" {
+		for _, entry := range strings.Split(n.config["bridge.external_interfaces"], ",") {
+			entry = strings.TrimSpace(entry)
+
+			// Test for extended configuration of external interface.
+			entryParts := strings.Split(entry, "/")
+			ifParent := ""
+			vlanID := 0
+
+			if len(entryParts) == 3 {
+				vlanID, err = strconv.Atoi(entryParts[2])
+				if err != nil || vlanID < 1 || vlanID > 4094 {
+					vlanID = 0
+					n.logger.Warn("Ignoring invalid VLAN ID", logger.Ctx{"interface": entry, "vlanID": entryParts[2]})
+				} else {
+					entry = strings.TrimSpace(entryParts[0])
+					ifParent = strings.TrimSpace(entryParts[1])
+				}
+			}
+
+			iface, err := net.InterfaceByName(entry)
+			if err != nil {
+				if vlanID == 0 {
+					n.logger.Warn("Skipping attaching missing external interface", logger.Ctx{"interface": entry})
+					continue
+				}
+
+				// If the interface doesn't exist and VLAN ID was provided, create the missing interface.
+				ok, err := VLANInterfaceCreate(ifParent, entry, strconv.Itoa(vlanID), false)
+				if ok {
+					iface, err = net.InterfaceByName(entry)
+				}
+
+				if !ok || err != nil {
+					return fmt.Errorf("Failed to create external interface %q", entry)
+				}
+			} else if vlanID > 0 {
+				// If the interface exists and VLAN ID was provided, ensure it has the same parent and VLAN ID and is not attached to a different network.
+				linkInfo, err := ip.GetLinkInfoByName(entry)
+				if err != nil {
+					return fmt.Errorf("Failed to get link info for external interface %q", entry)
+				}
+
+				if linkInfo.Info.Kind != "vlan" || linkInfo.Link != ifParent || linkInfo.Info.Data.ID != vlanID || !(linkInfo.Master == "" || linkInfo.Master == n.name) {
+					return fmt.Errorf("External interface %q already in use", entry)
+				}
+			}
+
+			unused := true
+			addrs, err := iface.Addrs()
+			if err == nil {
+				for _, addr := range addrs {
+					ipAddr, _, err := net.ParseCIDR(addr.String())
+					if ipAddr != nil && err == nil && ipAddr.IsGlobalUnicast() {
+						unused = false
+						break
+					}
+				}
+			}
+
+			if !unused {
+				return fmt.Errorf("Only unconfigured network interfaces can be bridged")
+			}
+
+			lspName := networkOVN.OVNSwitchPort(fmt.Sprintf("%s-external-n%d-%s", n.getNetworkPrefix(), n.state.DB.Cluster.GetNodeID(), entry))
+			err = n.ovnnb.CreateLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), lspName, &networkOVN.OVNSwitchPortOpts{
+				IPV4:        "none",
+				IPV6:        "none",
+				Promiscuous: true,
+			}, false)
+			if err != nil {
+				return fmt.Errorf("Failed to create logical switch port for %s: %w", entry, err)
+			}
+
+			revert.Add(func() {
+				_ = n.ovnnb.DeleteLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), lspName)
+			})
+
+			// Attach host side veth interface to bridge.
+			integrationBridge := n.state.GlobalConfig.NetworkOVNIntegrationBridge()
+
+			vswitch, err := n.state.OVS()
+			if err != nil {
+				return fmt.Errorf("Failed to connect to OVS: %w", err)
+			}
+
+			err = vswitch.CreateBridgePort(context.TODO(), integrationBridge, entry, true)
+			if err != nil {
+				return err
+			}
+
+			revert.Add(func() { _ = vswitch.DeleteBridgePort(context.TODO(), integrationBridge, entry) })
+
+			// Link OVS port to OVN logical port.
+			err = vswitch.AssociateInterfaceOVNSwitchPort(context.TODO(), entry, string(lspName))
+			if err != nil {
+				return err
+			}
+
+			// Make sure the port is up.
+			link := &ip.Link{Name: entry}
+			err = link.SetUp()
+			if err != nil {
+				return fmt.Errorf("Failed to bring up the host interface %s: %w", entry, err)
+			}
+		}
+	}
+
 	// Setup IP allocation config on logical switch.
 	err = n.ovnnb.UpdateLogicalSwitchIPAllocation(context.TODO(), n.getIntSwitchName(), &networkOVN.OVNIPAllocationOpts{
 		PrefixIPv4:  routerIntPortIPv4Net,
@@ -2449,13 +2559,14 @@ func (n *ovn) setup(update bool) error {
 		}
 
 		opts := &networkOVN.OVNDHCPv4Opts{
-			ServerID:   routerIntPortIPv4,
-			ServerMAC:  routerMAC,
-			Router:     routerIntPortIPv4,
-			DomainName: n.getDomainName(),
-			LeaseTime:  time.Duration(time.Hour * 1),
-			MTU:        bridgeMTU,
-			Netmask:    dhcpV4Netmask,
+			ServerID:      routerIntPortIPv4,
+			ServerMAC:     routerMAC,
+			Router:        routerIntPortIPv4,
+			DomainName:    n.getDomainName(),
+			LeaseTime:     time.Duration(time.Hour * 1),
+			MTU:           bridgeMTU,
+			Netmask:       dhcpV4Netmask,
+			DNSSearchList: n.getDNSSearchList(),
 		}
 
 		if uplinkNet != nil {
@@ -5279,6 +5390,61 @@ func (n *ovn) LoadBalancerUpdate(listenAddress string, req api.NetworkLoadBalanc
 	return nil
 }
 
+// LoadBalancerState returns the current state of the load balancer.
+func (n *ovn) LoadBalancerState(lb api.NetworkLoadBalancer) (*api.NetworkLoadBalancerState, error) {
+	lbState := &api.NetworkLoadBalancerState{}
+
+	if util.IsTrue(lb.Config["healthcheck"]) {
+		lbState.BackendHealth = map[string]api.NetworkLoadBalancerStateBackendHealth{}
+
+		for _, backend := range lb.Backends {
+			backendHealth := api.NetworkLoadBalancerStateBackendHealth{}
+			backendHealth.Address = backend.TargetAddress
+			backendHealth.Ports = []api.NetworkLoadBalancerStateBackendHealthPort{}
+
+			for _, lbPort := range lb.Ports {
+				if !slices.Contains(lbPort.TargetBackend, backend.Name) {
+					continue
+				}
+
+				// Check valid listen port(s) supplied.
+				listenPortRanges := util.SplitNTrimSpace(lbPort.ListenPort, ",", -1, true)
+				if len(listenPortRanges) <= 0 {
+					return nil, fmt.Errorf("Missing listen port in port specification %q", lbPort.ListenPort)
+				}
+
+				for _, pr := range listenPortRanges {
+					portFirst, portRange, err := ParsePortRange(pr)
+					if err != nil {
+						return nil, fmt.Errorf("Invalid listen port in port specification %q: %w", lbPort.ListenPort, err)
+					}
+
+					for i := int64(0); i < portRange; i++ {
+						port := portFirst + i
+
+						status, err := n.ovnsb.GetServiceHealth(context.TODO(), backend.TargetAddress, lbPort.Protocol, int(port))
+						if err != nil {
+							return nil, fmt.Errorf("Failed retrieving OVN load-balancer health: %w", err)
+						}
+
+						portHealth := api.NetworkLoadBalancerStateBackendHealthPort{
+							Protocol: lbPort.Protocol,
+							Port:     int(port),
+							Status:   status,
+						}
+
+						backendHealth.Ports = append(backendHealth.Ports, portHealth)
+					}
+				}
+			}
+
+			lbState.BackendHealth[backend.Name] = backendHealth
+		}
+	}
+
+	return lbState, nil
+}
+
 // LoadBalancerDelete deletes a network load balancer.
 func (n *ovn) LoadBalancerDelete(listenAddress string, clientType request.ClientType) error {
 	if clientType == request.ClientTypeNormal {
@@ -5352,14 +5518,14 @@ func (n *ovn) getHealthCheck(loadBalancer api.NetworkLoadBalancerPut) (*networkO
 	// Get IPv4 checker.
 	var checkerIPV4 net.IP
 	_, ipv4Net, err := n.parseRouterIntPortIPv4Net()
-	if err == nil {
+	if err == nil && ipv4Net != nil {
 		checkerIPV4 = dhcpalloc.GetIP(ipv4Net, -2)
 	}
 
 	// Get IPv6 checker.
 	var checkerIPV6 net.IP
 	_, ipv6Net, err := n.parseRouterIntPortIPv6Net()
-	if err == nil {
+	if err == nil && ipv6Net != nil {
 		checkerIPV6 = dhcpalloc.GetIP(ipv6Net, -2)
 	}
 

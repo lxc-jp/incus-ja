@@ -1133,24 +1133,9 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 
 		// Configure the memory limits
 		if memory != "" {
-			var valueInt int64
-			if strings.HasSuffix(memory, "%") {
-				percent, err := strconv.ParseInt(strings.TrimSuffix(memory, "%"), 10, 64)
-				if err != nil {
-					return nil, err
-				}
-
-				memoryTotal, err := linux.DeviceTotalMemory()
-				if err != nil {
-					return nil, err
-				}
-
-				valueInt = int64((memoryTotal / 100) * percent)
-			} else {
-				valueInt, err = units.ParseByteSizeString(memory)
-				if err != nil {
-					return nil, err
-				}
+			valueInt, err := ParseMemoryStr(memory)
+			if err != nil {
+				return nil, err
 			}
 
 			if memoryEnforce == "soft" {
@@ -2022,7 +2007,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	if util.PathExists(logfile) {
 		_ = os.Remove(logfile + ".old")
 		err := os.Rename(logfile, logfile+".old")
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return "", nil, err
 		}
 	}
@@ -2383,6 +2368,16 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			}
 
 			err := lxcSetConfigItem(cc, "lxc.mount.entry", fmt.Sprintf("%s %s %s %s 0 0", mount.Source, strings.TrimLeft(mount.Destination, "/"), mount.Type, strings.Join(append(mount.Options, "create=dir"), ",")))
+			if err != nil {
+				return "", nil, err
+			}
+
+			lxcMounts = append(lxcMounts, mount.Destination)
+		}
+
+		// Mount /run as a tmpfs if it exists and isn't already mounted.
+		if !slices.Contains(lxcMounts, "/run") {
+			err := lxcSetConfigItem(cc, "lxc.mount.entry", "none run tmpfs none,mode=755,optional")
 			if err != nil {
 				return "", nil, err
 			}
@@ -3955,7 +3950,7 @@ func (d *lxc) Restore(sourceContainer instance.Instance, stateful bool) error {
 
 		// Remove the state from the parent container; we only keep this in snapshots.
 		err2 := os.RemoveAll(d.StatePath())
-		if err2 != nil && !os.IsNotExist(err) {
+		if err2 != nil && !errors.Is(err, fs.ErrNotExist) {
 			op.Done(err)
 			return err
 		}
@@ -4804,20 +4799,8 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 				// Parse memory
 				if memory == "" {
 					memoryInt = -1
-				} else if strings.HasSuffix(memory, "%") {
-					percent, err := strconv.ParseInt(strings.TrimSuffix(memory, "%"), 10, 64)
-					if err != nil {
-						return err
-					}
-
-					memoryTotal, err := linux.DeviceTotalMemory()
-					if err != nil {
-						return err
-					}
-
-					memoryInt = int64((memoryTotal / 100) * percent)
 				} else {
-					memoryInt, err = units.ParseByteSizeString(memory)
+					memoryInt, err = ParseMemoryStr(memory)
 					if err != nil {
 						return err
 					}
@@ -5088,7 +5071,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 	}
 
 	err = d.UpdateBackupFile()
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("Failed to write backup file: %w", err)
 	}
 

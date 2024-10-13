@@ -33,7 +33,11 @@ Incus デーモンは Linux でのみ稼働します。
 ````{tabs}
 
 ```{group-tab} Alpine
-Incus と全ての依存ソフトウェアは Alpine Linux のメインレポジトリ内で `incus` として利用できます。
+Incus と全ての依存ソフトウェアは Alpine Linux のedge mainとcommunityレポジトリ内で `incus` として利用できます。
+
+`/etc/apk/repositories`内のedge mainとcommunityのレポジトリのコメントアウトを外して以下を実行します:
+
+    apk update
 
 Incus を以下のコマンドでインストールします:
 
@@ -57,6 +61,8 @@ Incus と全ての依存ソフトウェアは Arch Linux のメインレポジ�
 Incus を以下のコマンドでインストールします:
 
     pacman -S incus
+
+インストール、設定、トラブルシューティングに関するさらに詳しい情報は[the Incus documentation page at Arch Linux](https://wiki.archlinux.org/title/Incus)も参照してください。
 
 パッケージに問題があれば[こちら](https://gitlab.archlinux.org/archlinux/packaging/packages/incus)に報告してください。
 ```
@@ -164,6 +170,26 @@ Incus の初期化は手動で `incus admin init` を使ってもできますし
     users.users.YOUR_USERNAME.extraGroups = ["incus-admin"];
 
 NixOS 固有の問題については、パッケージレポジトリ内で[イシューを起票](https://github.com/NixOS/nixpkgs/issues/new/choose)してください。
+```
+
+```{group-tab} Rocky Linux
+RPMパッケージとその依存ライブラリはExtra Packages for Enterprise Linux (EPEL)レポジトリにはまだありませんが、Rocky Linux 9用の[`neil/incus`](https://copr.fedorainfracloud.org/coprs/neil/incus/) Community Project (COPR)レポジトリで利用できます。
+
+依存パッケージのためにEPELレポジトリをインストールし、その後COPRレポジトリをインストールしてください:
+
+    dnf -y install epel-release
+    dnf copr enable neil/incus
+
+他の依存パッケージのために`CodeReady Builder` (`CRB`)を有効にしてください:
+
+    dnf config-manager --enable crb
+
+その後Incusと任意選択でIncus toolsをインストールします:
+
+    dnf install incus incus-tools
+
+これはIncusやRocky Linuxの公式プロジェクトではないことに注意してください。
+パッケージングの問題は[こちら](https://github.com/NeilHanlon/incus-rpm/issues)に報告してください。
 ```
 
 ```{group-tab} Ubuntu
@@ -336,6 +362,10 @@ Incus の必要な機能をすべて使えるようにするには、さらに�
 さらに、通常の運用方法であれば、以下のコマンドも必要になるでしょう:
 
     sudo zypper install dnsmasq squashfs xz rsync tar attr acl qemu qemu-img qemu-spice qemu-hw-display-virtio-gpu-pci iptables ebtables nftables
+
+コンテナ内部でNVIDIAのGPUを使うためには、NVIDIAコンテナツールとLXCフックが必要です:
+
+    sudo zypper install libnvidia-container-tools lxc
 
 ```
 

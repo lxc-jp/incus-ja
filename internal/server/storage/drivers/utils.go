@@ -1,6 +1,7 @@
 package drivers
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -36,7 +37,7 @@ func wipeDirectory(path string) error {
 	// List all entries.
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
 
@@ -47,7 +48,7 @@ func wipeDirectory(path string) error {
 	for _, entry := range entries {
 		entryPath := filepath.Join(path, entry.Name())
 		err := os.RemoveAll(entryPath)
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("Failed removing %q: %w", entryPath, err)
 		}
 	}
@@ -293,7 +294,7 @@ func deleteParentSnapshotDirIfEmpty(poolName string, volType VolumeType, volName
 
 		if isEmpty {
 			err := os.Remove(snapshotsPath)
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("Failed to remove '%s': %w", snapshotsPath, err)
 			}
 		}
@@ -514,21 +515,20 @@ func growFileSystem(fsType string, devPath string, vol Volume) error {
 	}
 
 	return vol.MountTask(func(mountPath string, op *operations.Operation) error {
-		var msg string
 		var err error
 		switch fsType {
 		case "ext4":
-			msg, err = subprocess.TryRunCommand("resize2fs", devPath)
+			_, err = subprocess.TryRunCommand("resize2fs", devPath)
 		case "xfs":
-			msg, err = subprocess.TryRunCommand("xfs_growfs", mountPath)
+			_, err = subprocess.TryRunCommand("xfs_growfs", mountPath)
 		case "btrfs":
-			msg, err = subprocess.TryRunCommand("btrfs", "filesystem", "resize", "max", mountPath)
+			_, err = subprocess.TryRunCommand("btrfs", "filesystem", "resize", "max", mountPath)
 		default:
 			return fmt.Errorf("Unrecognised filesystem type %q", fsType)
 		}
 
 		if err != nil {
-			return fmt.Errorf("Could not grow underlying %q filesystem for %q: %s", fsType, devPath, msg)
+			return fmt.Errorf("Could not grow underlying %q filesystem for %q: %w", fsType, devPath, err)
 		}
 
 		return nil
