@@ -6,7 +6,9 @@ import (
 	"context"
 	cryptoRand "crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"math/big"
 	"math/rand"
 	"net"
@@ -469,7 +471,7 @@ func UpdateDNSMasqStatic(s *state.State, networkName string) error {
 			if (util.IsTrue(d["security.ipv4_filtering"]) && d["ipv4.address"] == "") || (util.IsTrue(d["security.ipv6_filtering"]) && d["ipv6.address"] == "") {
 				deviceStaticFileName := dnsmasq.StaticAllocationFileName(inst.Project().Name, inst.Name(), deviceName)
 				_, curIPv4, curIPv6, err := dnsmasq.DHCPStaticAllocation(d["parent"], deviceStaticFileName)
-				if err != nil && !os.IsNotExist(err) {
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
 
@@ -1439,4 +1441,43 @@ func ProxyParseAddr(data string) (*deviceConfig.ProxyAddress, error) {
 	}
 
 	return newProxyAddr, nil
+}
+
+func validateExternalInterfaces(value string) error {
+	for _, entry := range strings.Split(value, ",") {
+		entry = strings.TrimSpace(entry)
+
+		// Test for extended configuration of external interface.
+		entryParts := strings.Split(entry, "/")
+		if len(entryParts) == 3 {
+			// The first part is the interface name.
+			entry = strings.TrimSpace(entryParts[0])
+		}
+
+		err := validate.IsInterfaceName(entry)
+		if err != nil {
+			return fmt.Errorf("Invalid interface name %q: %w", entry, err)
+		}
+
+		if len(entryParts) == 3 {
+			// Check if the parent interface is valid.
+			parent := strings.TrimSpace(entryParts[1])
+			err := validate.IsInterfaceName(parent)
+			if err != nil {
+				return fmt.Errorf("Invalid interface name %q: %w", parent, err)
+			}
+
+			// Check if the VLAN ID is valid.
+			vlanID, err := strconv.Atoi(entryParts[2])
+			if err != nil {
+				return fmt.Errorf("Invalid VLAN ID %q: %w", entryParts[2], err)
+			}
+
+			if vlanID < 1 || vlanID > 4094 {
+				return fmt.Errorf("Invalid VLAN ID %q", entryParts[2])
+			}
+		}
+	}
+
+	return nil
 }

@@ -2,8 +2,10 @@ package apparmor
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,7 +116,7 @@ func deleteNamespace(sysOS *sys.OS, name string) error {
 
 	p := filepath.Join("/sys/kernel/security/apparmor/policy/namespaces", name)
 	err := os.Remove(p)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 
@@ -181,7 +183,7 @@ func unloadProfile(sysOS *sys.OS, fullName string, name string) error {
 
 // deleteProfile unloads and delete profile and cache for a profile.
 func deleteProfile(sysOS *sys.OS, fullName string, name string) error {
-	if !sysOS.AppArmorAdmin {
+	if !sysOS.AppArmorAvailable || !sysOS.AppArmorAdmin {
 		return nil
 	}
 
@@ -195,12 +197,12 @@ func deleteProfile(sysOS *sys.OS, fullName string, name string) error {
 	}
 
 	err = os.Remove(filepath.Join(aaCacheDir, name))
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("Failed to remove %s: %w", filepath.Join(aaCacheDir, name), err)
 	}
 
 	err = os.Remove(filepath.Join(aaPath, "profiles", name))
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("Failed to remove %s: %w", filepath.Join(aaPath, "profiles", name), err)
 	}
 
@@ -219,15 +221,6 @@ func parserSupports(sysOS *sys.OS, feature string) (bool, error) {
 
 	if feature == "unix" {
 		minVer, err := version.NewDottedVersion("2.10.95")
-		if err != nil {
-			return false, err
-		}
-
-		return aaVersion.Compare(minVer) >= 0, nil
-	}
-
-	if feature == "nosymfollow" {
-		minVer, err := version.NewDottedVersion("4.0.0")
 		if err != nil {
 			return false, err
 		}

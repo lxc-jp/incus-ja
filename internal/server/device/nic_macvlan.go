@@ -1,10 +1,11 @@
 package device
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/lxc/incus/v6/internal/revert"
@@ -50,13 +51,14 @@ func (d *nicMACVLAN) validateConfig(instConf instance.ConfigReader) error {
 		"vlan",
 		"boot.priority",
 		"gvrp",
+		"mode",
 	}
 
 	// Check that if network proeperty is set that conflicting keys are not present.
 	if d.config["network"] != "" {
 		requiredFields = append(requiredFields, "network")
 
-		bannedKeys := []string{"nictype", "parent", "mtu", "vlan", "gvrp"}
+		bannedKeys := []string{"nictype", "parent", "mtu", "vlan", "gvrp", "mode"}
 		for _, bannedKey := range bannedKeys {
 			if d.config[bannedKey] != "" {
 				return fmt.Errorf("Cannot use %q property in conjunction with %q property", bannedKey, "network")
@@ -179,7 +181,20 @@ func (d *nicMACVLAN) Start() (*deviceConfig.RunConfig, error) {
 			Name:   saveData["host_name"],
 			Parent: actualParentName,
 		},
-		Mode: "bridge",
+	}
+
+	mode := d.config["mode"]
+	if mode != "" {
+		// Validate the provided mode.
+		switch mode {
+		case "bridge", "vepa", "passthru", "private":
+			link.Mode = mode
+		default:
+			return nil, fmt.Errorf("Invalid MACVLAN mode specified: %q", mode)
+		}
+	} else {
+		// Default to bridge mode if not specified.
+		link.Mode = "bridge"
 	}
 
 	// Set the MAC address.
@@ -231,7 +246,7 @@ func (d *nicMACVLAN) Start() (*deviceConfig.RunConfig, error) {
 	if d.inst.Type() == instancetype.VM {
 		// Disable IPv6 on host interface to avoid getting IPv6 link-local addresses unnecessarily.
 		err = localUtil.SysctlSet(fmt.Sprintf("net/ipv6/conf/%s/disable_ipv6", link.Name), "1")
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("Failed to disable IPv6 on host interface %q: %w", link.Name, err)
 		}
 	}
