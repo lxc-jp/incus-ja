@@ -42,6 +42,7 @@ OVN ネットワークをセットアップする基本的な手順について�
 キー                                   | 型      | 条件                   | デフォルト                                                       | 説明
 :--                                    | :--     | :--                    | :--                                                              | :--
 `network`                              | string  | -                      | -                                                                | 外部ネットワークへのアクセスに使うアップリンクのネットワークまたは``none`で隔離されたままにする
+`bridge.external_interfaces`           | string  | -                      | -                                                                | ブリッジに含む未設定のネットワークインタフェースのカンマ区切りリスト
 `bridge.hwaddr`                        | string  | -                      | -                                                                | ブリッジのMACアドレス
 `bridge.mtu`                           | integer | -                      | `1442`                                                           | ブリッジのMTU（デフォルトではホストからホストへのGeneveトンネルを許可します）
 `dns.domain`                           | string  | -                      | `incus`                                                          | DHCPのクライアントに広告しDNSの名前解決に使用するドメイン

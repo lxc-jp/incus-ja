@@ -436,8 +436,10 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 :defaultdesc: "stop"
 :liveupdate: "yes"
 :shortdesc: "ホストが停止される際にインスタンスにどのアクションを行うか"
-:type: "integer"
+:type: "string"
 ホストの停止の際に行うアクション
+
+有効な値は`stop`、`force-stop`、`stateful-stop`。
 ```
 
 ```{config:option} boot.host_shutdown_timeout instance-boot
@@ -822,7 +824,7 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 ```
 
 ```{config:option} limits.memory instance-resource-limits
-:defaultdesc: "`1Gib` (VMs)"
+:defaultdesc: "`1GiB` (VMs)"
 :liveupdate: "yes"
 :shortdesc: "ホストのメモリの使用制限"
 :type: "string"
@@ -1172,7 +1174,9 @@ FUSE実装にリダイレクトすべきファイルシステムのマウント�
 :liveupdate: "no"
 :shortdesc: "自動インスタンススナップショットのスケジュール"
 :type: "string"
-cronの式（`<minute> <hour> <dom> <month> <dow>`）かスケジュールのエイリアス（`@hourly`, `@daily`, `@midnight`, `@weekly`, `@monthly`, `@annually`, `@yearly`）のカンマ区切りリストを設定するか、あるいは自動スナップショットを無効にするためには空にしてください。
+cronの式（`<minute> <hour> <dom> <month> <dow>`）かスケジュールのエイリアス（`@startup`、`@hourly`、`@daily`、`@midnight`、`@weekly`、`@monthly`、`@annually`、`@yearly`）のカンマと空白区切りリストを設定するか、あるいは自動スナップショットを無効にするためには空にしてください。
+
+cron設定自体がカンマを含むため、他の多くの設定キーと異なり、この設定は単なるカンマ区切りではなくカンマと空白区切りであることに注意してください。
 ```
 
 ```{config:option} snapshots.schedule.stopped instance-snapshots

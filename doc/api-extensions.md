@@ -2576,3 +2576,24 @@ OVN NICに`security.promiscuous`設定オプションを追加します。
 ## `ovn_nic_ip_address_none`
 
 OVN NICの`ipv4.address`と`ipv6.address`に`none`という値を追加します。
+
+## `instances_state_os_info`
+
+この拡張はインスタンスの状態APIに`InstanceStateOSInfo 構造体へのポインターを追加します。
+
+## `network_load_balancer_state`
+
+`/1.0/networks/NAME/load-balancers/IP/state` APIエンドポイントを追加します。
+これは（設定された際は）ロードバランサーのヘルスチェック情報を返します。
+
+## `instance_nic_macvlan_mode`
+
+これはmacvlanネットワークインタフェースに`mode`キーを追加し、Macvlanモードを設定できるようにします。
+
+## `storage_lvm_cluster_create`
+
+`source`を共有されたブロックデバイスに設定することで新しいLVMクラスタプールを作成できるようにします。
+
+## `network_ovn_external_interfaces`
+
+OVNネットワークに`bridge.external_interfaces`のサポートを追加します。
