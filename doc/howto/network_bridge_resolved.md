@@ -46,7 +46,7 @@ DNS ドメイン
 
 DNSSEC と DNS over TLS
 
-: `incus` DNSサーバーはDNSSEC や DNS over TLS をサポートしません。
+: `incus`のDNSサーバーはDNSSEC や DNS over TLS をサポートしません。
 
   resolved の設定によってはサーバーがDNSSEC や DNS over TLS をサポートしないため、設定がエラーになります。
 
