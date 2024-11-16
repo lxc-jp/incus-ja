@@ -18,7 +18,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/revert"
 	"github.com/lxc/incus/v6/internal/server/cluster"
 	"github.com/lxc/incus/v6/internal/server/db"
 	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
@@ -35,6 +34,7 @@ import (
 	apiScriptlet "github.com/lxc/incus/v6/shared/api/scriptlet"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/subprocess"
 )
 
@@ -607,20 +607,12 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, inst insta
 
 	// If target member not specified yet, then find the least loaded cluster member which
 	// supports the instance's architecture.
+	if targetMemberInfo == nil && len(candidateMembers) > 0 {
+		targetMemberInfo = &candidateMembers[0]
+	}
+
 	if targetMemberInfo == nil {
-		var err error
-
-		err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
-			targetMemberInfo, err = tx.GetNodeWithLeastInstances(ctx, candidateMembers)
-			if err != nil {
-				return err
-			}
-
-			return nil
-		})
-		if err != nil {
-			return nil, nil, err
-		}
+		return nil, nil, fmt.Errorf("Couldn't find a cluster member for the instance")
 	}
 
 	return sourceMemberInfo, targetMemberInfo, nil

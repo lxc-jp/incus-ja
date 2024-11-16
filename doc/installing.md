@@ -67,6 +67,27 @@ Incus を以下のコマンドでインストールします:
 パッケージに問題があれば[こちら](https://gitlab.archlinux.org/archlinux/packaging/packages/incus)に報告してください。
 ```
 
+```{group-tab} Chimera Linux
+Incusと依存パッケージはChimera Linuxの`user`レポジトリ内で`incus`として利用できます。以下のようにuserレポジトリを有効化します:
+
+    apk add chimera-repo-user
+    apk update
+
+次に`incus`パッケージを追加します。これにより`incus-client`などの他の依存パッケージもインストールします。その後サービスを有効化します。
+
+    apk add incus
+    dinitctl enable incus
+
+仮想マシンを動かす場合は、さらにEDK2ファームウェアを追加します。Chimera Linuxは完全なセキュアブートのサポートを提供しないことに注意してください。そのため、以下の例のようにこの機能を無効にして仮想マシンを起動する必要があります。
+
+    apk add qemu-edk2-firmware
+    dinitctl restart incus
+    # セキュアブートを無効にして仮想マシンを起動する例:
+    # incus launch images:debian/12 --vm -c security.secureboot=false
+
+パッケージの問題は[こちら](https://github.com/chimera-linux/cports/issues)に報告してください。
+```
+
 ```{group-tab} Debian
 Debian ユーザーには現在 3 つの選択肢があります。
 

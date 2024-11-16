@@ -203,7 +203,7 @@ Incus は対象のカーネルがサポートするすべての利用可能な�
 (instance-options-migration)=
 ## マイグレーションオプション
 
-以下のインスタンスオプションはインスタンスが{ref}`あるLXDサーバーから別のサーバーに移動される <move-instances>`場合の挙動を制御します:
+以下のインスタンスオプションはインスタンスが{ref}`あるIncusサーバーから別のサーバーに移動される <move-instances>`場合の挙動を制御します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
@@ -324,6 +324,51 @@ driver = "ICH9-LPC"
 property = "disable_s4"
 value = "0"
 ```
+
+### QEMUランタイムオブジェクトをオーバーライド
+QEMUに渡す引数や設定ファイルを変更するのに`raw.qemu`と`raw.qemu.conf`が使えますが、代わりにQMPを通して今では多くのデバイスが追加されます。
+
+これらは実行時に再設定する必要があるデバイスのためにIncusに使用され、実質的にはどんなものでもホットプラグできます。
+
+これらのデバイスは設定やコマンドラインではオーバーライドできませんが、代わりに追加の設定キーがQMPコマンドを直接実行するのに使えます。
+
+固定のコマンドを`raw.qemu.early`、`raw.qemu.pre-start`、`raw.qemu.post-start`設定キーで提供できます。
+これらは実行するQMPのコマンドのリストをJSONでエンコードしたものを指定します。
+
+以下のフックがあります:
+
+- `early`はQMPを通してIncusによってデバイスが追加される前に実行されます
+- `pre-start`はVMの起動前にIncusがすべてのデバイスを追加した後に実行されます
+- `post-start`はVMの起動直後に実行されます
+
+ダイナミックなQMPのインタラクションが必要、例えばあるオブジェクトの値を変更したり新しいオブジェクトを生成する前に現在の値を取得するような場合には、スクリプトレットを使ってこれらの同じフックにアタッチすることもできます。
+
+これは`raw.qemu.scriptlet`によって行います。スクリプトレットは`qemu_hook(hook_name)`関数を定義する必要があります。
+
+以下のコマンドがスクリプトレットで利用可能です:
+
+- `log_info`は`INFO`メッセージをログ出力します
+- `log_warn`は`WARNING`メッセージをログ出力します
+- `log_error`は`ERROR`メッセージをログ出力します
+- `run_qmp`は任意のQMPコマンド（JSON形式で指定）を実行し、その出力を返します
+- `run_command`はオプショナルな引数のリストとともに指定したコマンドを実行し、その出力を返します
+
+さらに以下のエイリアスコマンド（内部では`run_command`を使用）がスクリプトを単純化するために使えます:
+
+- `blockdev_add`
+- `blockdev_del`
+- `chardev_add`
+- `chardev_change`
+- `chardev_remove`
+- `device_add`
+- `device_del`
+- `netdev_add`
+- `netdev_del`
+- `object_add`
+- `object_del`
+- `qom_get`
+- `qom_list`
+- `qom_set`
 
 (instance-options-security)=
 ## セキュリティーポリシー

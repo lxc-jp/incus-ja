@@ -1,11 +1,13 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"slices"
 	"sort"
@@ -16,10 +18,10 @@ import (
 	"github.com/flosch/pongo2"
 	"github.com/mdlayher/netx/eui64"
 	ovsClient "github.com/ovn-org/libovsdb/client"
+	ovsdbModel "github.com/ovn-org/libovsdb/model"
 
 	"github.com/lxc/incus/v6/client"
 	"github.com/lxc/incus/v6/internal/iprange"
-	"github.com/lxc/incus/v6/internal/revert"
 	"github.com/lxc/incus/v6/internal/server/cluster"
 	"github.com/lxc/incus/v6/internal/server/cluster/request"
 	"github.com/lxc/incus/v6/internal/server/db"
@@ -31,6 +33,7 @@ import (
 	"github.com/lxc/incus/v6/internal/server/locking"
 	"github.com/lxc/incus/v6/internal/server/network/acl"
 	networkOVN "github.com/lxc/incus/v6/internal/server/network/ovn"
+	ovnSB "github.com/lxc/incus/v6/internal/server/network/ovn/schema/ovn-sb"
 	"github.com/lxc/incus/v6/internal/server/network/ovs"
 	"github.com/lxc/incus/v6/internal/server/project"
 	"github.com/lxc/incus/v6/internal/server/state"
@@ -38,6 +41,7 @@ import (
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/util"
 	"github.com/lxc/incus/v6/shared/validate"
 )
@@ -361,7 +365,8 @@ func (n *ovn) Validate(config map[string]string) error {
 
 			return validate.IsNetworkAddressCIDRV4(value)
 		}),
-		"ipv4.dhcp": validate.Optional(validate.IsBool),
+		"ipv4.dhcp":        validate.Optional(validate.IsBool),
+		"ipv4.dhcp.ranges": validate.Optional(validate.IsListOf(validate.IsNetworkRangeV4)),
 		"ipv6.address": validate.Optional(func(value string) error {
 			if validate.IsOneOf("none", "auto")(value) == nil {
 				return nil
@@ -1957,13 +1962,57 @@ func (n *ovn) getDHCPv4Reservations() ([]iprange.Range, error) {
 
 	var dhcpReserveIPv4s []iprange.Range
 	if routerIntPortIPv4 != nil {
-		dhcpReserveIPv4s = []iprange.Range{{Start: routerIntPortIPv4}, {Start: dhcpalloc.GetIP(ipv4Net, -2)}}
+		if n.config["ipv4.dhcp.ranges"] == "" {
+			dhcpReserveIPv4s = []iprange.Range{{Start: routerIntPortIPv4}, {Start: dhcpalloc.GetIP(ipv4Net, -2)}}
+		} else {
+			allowedNets := []*net.IPNet{n.DHCPv4Subnet()}
+			dhcpRanges, err := parseIPRanges(n.config["ipv4.dhcp.ranges"], allowedNets...)
+			if err != nil {
+				return nil, err
+			}
+
+			lastIP := routerIntPortIPv4
+
+			sort.Slice(dhcpRanges, func(i, j int) bool {
+				return bytes.Compare(dhcpRanges[i].Start, dhcpRanges[j].Start) < 0
+			})
+
+			for _, dhcpRange := range dhcpRanges {
+				startRangeAddr, err := netip.ParseAddr(dhcpRange.Start.String())
+				if err != nil {
+					return nil, err
+				}
+
+				endRangeAddr, err := netip.ParseAddr(dhcpRange.End.String())
+				if err != nil {
+					return nil, err
+				}
+
+				prevStartRangeIP, nextEndRangeIP := startRangeAddr.Prev().String(), endRangeAddr.Next().String()
+				complementRange := iprange.Range{Start: lastIP, End: net.ParseIP(prevStartRangeIP)}
+
+				lastIP = net.ParseIP(nextEndRangeIP)
+				dhcpReserveIPv4s = append(dhcpReserveIPv4s, complementRange)
+			}
+
+			dhcpReserveIPv4s = append(dhcpReserveIPv4s, iprange.Range{Start: lastIP, End: dhcpalloc.GetIP(ipv4Net, -2)})
+		}
 	}
 
 	err = UsedByInstanceDevices(n.state, n.Project(), n.Name(), n.Type(), func(inst db.InstanceArgs, nicName string, nicConfig map[string]string) error {
 		ip := net.ParseIP(nicConfig["ipv4.address"])
 		if ip != nil {
-			dhcpReserveIPv4s = append(dhcpReserveIPv4s, iprange.Range{Start: ip})
+			containsIP := false
+			for _, reservedDhcpRange := range dhcpReserveIPv4s {
+				containsIP = reservedDhcpRange.ContainsIP(ip)
+				if containsIP {
+					break
+				}
+			}
+
+			if !containsIP {
+				dhcpReserveIPv4s = append(dhcpReserveIPv4s, iprange.Range{Start: ip})
+			}
 		}
 
 		return nil
@@ -3088,6 +3137,111 @@ func (n *ovn) Start() error {
 		return err
 	}
 
+	err = n.loadBalancerBGPSetupPrefixes()
+	if err != nil {
+		return fmt.Errorf("Failed applying BGP prefixes for load balancers: %w", err)
+	}
+
+	// Setup event handler for monitored services.
+	handler := networkOVN.EventHandler{
+		Tables: []string{"Service_Monitor"},
+		Hook: func(action string, table string, oldObject ovsdbModel.Model, newObject ovsdbModel.Model) {
+			// Skip invalid notifications.
+			if oldObject == nil && newObject == nil {
+				return
+			}
+
+			// Get the object.
+			dbObject := newObject
+			if dbObject == nil {
+				dbObject = oldObject
+			}
+
+			srvStatus, ok := dbObject.(*ovnSB.ServiceMonitor)
+			if !ok {
+				return
+			}
+
+			// Check if this is our network.
+			if !strings.HasPrefix(srvStatus.LogicalPort, fmt.Sprintf("incus-net%d-instance-", n.id)) {
+				return
+			}
+
+			// Locate affected load-balancers.
+			lbs, err := n.ovnnb.GetLoadBalancersByStatusUpdate(context.TODO(), *srvStatus)
+			if err != nil {
+				return
+			}
+
+			for _, lb := range lbs {
+				// Check for status of all backends on this load-balancer.
+				online, err := n.ovnsb.CheckLoadBalancerOnline(context.TODO(), lb)
+				if err != nil {
+					return
+				}
+
+				// Parse the name.
+				fields := strings.Split(lb.Name, "-")
+				listenAddr := net.ParseIP(fields[3])
+				if listenAddr == nil {
+					return
+				}
+
+				// Check if we have a matching UDP load-balancer.
+				fields[4] = "udp"
+				lbUDP, _ := n.ovnnb.GetLoadBalancer(context.TODO(), networkOVN.OVNLoadBalancer(strings.Join(fields, "-")))
+				if lbUDP != nil {
+					// UDP backends can't be checked, so have to assume online.
+					online = true
+				}
+
+				// Prepare advertisement.
+				ipVersion := uint(4)
+				if listenAddr.To4() == nil {
+					ipVersion = 6
+				}
+
+				bgpOwner := fmt.Sprintf("network_%d_load_balancer", n.id)
+				nextHopAddr := n.bgpNextHopAddress(ipVersion)
+				natEnabled := util.IsTrue(n.config[fmt.Sprintf("ipv%d.nat", ipVersion)])
+				_, netSubnet, _ := net.ParseCIDR(n.config[fmt.Sprintf("ipv%d.address", ipVersion)])
+
+				routeSubnetSize := 128
+				if ipVersion == 4 {
+					routeSubnetSize = 32
+				}
+
+				// Don't export internal address forwards (those inside the NAT enabled network's subnet).
+				if natEnabled && netSubnet != nil && netSubnet.Contains(listenAddr) {
+					return
+				}
+
+				_, ipRouteSubnet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", listenAddr.String(), routeSubnetSize))
+				if err != nil {
+					return
+				}
+
+				// Update the BGP state.
+				if online {
+					err = n.state.BGP.AddPrefix(*ipRouteSubnet, nextHopAddr, bgpOwner)
+					if err != nil {
+						return
+					}
+				} else {
+					err = n.state.BGP.RemovePrefix(*ipRouteSubnet, nextHopAddr)
+					if err != nil {
+						return
+					}
+				}
+			}
+		},
+	}
+
+	err = networkOVN.AddOVNSBHandler(fmt.Sprintf("network_%d", n.id), handler)
+	if err != nil {
+		return err
+	}
+
 	revert.Success()
 
 	// Ensure network is marked as available now its started.
@@ -3115,6 +3269,12 @@ func (n *ovn) Stop() error {
 
 	// Clear BGP.
 	err = n.bgpClear(n.config)
+	if err != nil {
+		return err
+	}
+
+	// Clear event handler for monitored services.
+	err = networkOVN.RemoveOVNSBHandler(fmt.Sprintf("network_%d", n.id))
 	if err != nil {
 		return err
 	}
@@ -3431,6 +3591,11 @@ func (n *ovn) Update(newNetwork api.NetworkPut, targetNode string, clientType re
 	err = n.bgpSetup(oldNetwork.Config)
 	if err != nil {
 		return err
+	}
+
+	err = n.loadBalancerBGPSetupPrefixes()
+	if err != nil {
+		return fmt.Errorf("Failed applying BGP prefixes for load balancers: %w", err)
 	}
 
 	revert.Success()
@@ -6402,6 +6567,103 @@ func (n *ovn) forPeers(f func(targetOVNNet *ovn) error) error {
 		err = f(targetOVNNet)
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// loadBalancerBGPSetupPrefixes exports external load balancer addresses as prefixes.
+func (n *ovn) loadBalancerBGPSetupPrefixes() error {
+	var listenAddresses map[int64]string
+
+	err := n.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+
+		// Retrieve network forwards before clearing existing prefixes, and separate them by IP family.
+		listenAddresses, err = tx.GetNetworkLoadBalancerListenAddresses(ctx, n.ID(), true)
+
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("Failed loading network forwards: %w", err)
+	}
+
+	listenAddressesByFamily := map[uint][]string{
+		4: make([]string, 0),
+		6: make([]string, 0),
+	}
+
+	for _, listenAddress := range listenAddresses {
+		if strings.Contains(listenAddress, ":") {
+			listenAddressesByFamily[6] = append(listenAddressesByFamily[6], listenAddress)
+		} else {
+			listenAddressesByFamily[4] = append(listenAddressesByFamily[4], listenAddress)
+		}
+	}
+
+	// Use load balancer specific owner string (different from the network prefixes) so that these can be
+	// reapplied independently of the network's own prefixes.
+	bgpOwner := fmt.Sprintf("network_%d_load_balancer", n.id)
+
+	// Clear existing address load balancer prefixes for network.
+	err = n.state.BGP.RemovePrefixByOwner(bgpOwner)
+	if err != nil {
+		return err
+	}
+
+	// Add the new prefixes.
+	for _, ipVersion := range []uint{4, 6} {
+		nextHopAddr := n.bgpNextHopAddress(ipVersion)
+		natEnabled := util.IsTrue(n.config[fmt.Sprintf("ipv%d.nat", ipVersion)])
+		_, netSubnet, _ := net.ParseCIDR(n.config[fmt.Sprintf("ipv%d.address", ipVersion)])
+
+		routeSubnetSize := 128
+		if ipVersion == 4 {
+			routeSubnetSize = 32
+		}
+
+		// Export external forward listen addresses.
+		for _, listenAddress := range listenAddressesByFamily[ipVersion] {
+			listenAddr := net.ParseIP(listenAddress)
+
+			// Don't export internal address forwards (those inside the NAT enabled network's subnet).
+			if natEnabled && netSubnet != nil && netSubnet.Contains(listenAddr) {
+				continue
+			}
+
+			// Check health of load-balancer (if enabled).
+			online := false
+			for _, protocol := range []string{"tcp", "udp"} {
+				lb, err := n.ovnnb.GetLoadBalancer(context.TODO(), networkOVN.OVNLoadBalancer(fmt.Sprintf("incus-net%d-lb-%s-%s", n.id, listenAddr.String(), protocol)))
+				if err != nil {
+					continue
+				}
+
+				lbOnline, err := n.ovnsb.CheckLoadBalancerOnline(context.TODO(), *lb)
+				if err != nil {
+					continue
+				}
+
+				if lbOnline {
+					online = true
+					break
+				}
+			}
+
+			if !online {
+				continue
+			}
+
+			_, ipRouteSubnet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", listenAddr.String(), routeSubnetSize))
+			if err != nil {
+				return err
+			}
+
+			err = n.state.BGP.AddPrefix(*ipRouteSubnet, nextHopAddr, bgpOwner)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

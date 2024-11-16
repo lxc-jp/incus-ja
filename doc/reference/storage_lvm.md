@@ -63,7 +63,7 @@ Thin provisioning はクラスタ LVM とは互換性がないので、ディス
 
 キー                         | 型     | ドライバ | デフォルト値                                               | 説明
 :--                          | :---   | :-----   | :------                                                    | :----------
-`lvm.thinpool_name`          | string | `lvm`    | `LXDThinPool`                                              | ボリュームが作成される thin pool
+`lvm.thinpool_name`          | string | `lvm`    | `IncusThinPool`                                            | ボリュームが作成される thin pool
 `lvm.thinpool_metadata_size` | string | `lvm`    | `0`（auto）                                                | thin pool メタデータボリュームのサイズ（デフォルトは LVM が適切なサイズを計算）
 `lvm.metadata_size`          | string | `lvm`    |`0` (auto)                                                  | 物理ボリュームのメタデータ空間のサイズ
 `lvm.use_thinpool`           | bool   | `lvm`    | `true`                                                     | ストレージプールは論理ボリュームに thin pool を使うかどうか

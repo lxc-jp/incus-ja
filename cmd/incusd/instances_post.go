@@ -14,7 +14,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/revert"
 	"github.com/lxc/incus/v6/internal/server/backup"
 	"github.com/lxc/incus/v6/internal/server/cluster"
 	"github.com/lxc/incus/v6/internal/server/db"
@@ -39,6 +38,7 @@ import (
 	"github.com/lxc/incus/v6/shared/archive"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/util"
 )
 
@@ -362,6 +362,7 @@ func createFromMigration(ctx context.Context, s *state.State, r *http.Request, p
 		InstanceOnly:          instanceOnly,
 		ClusterMoveSourceName: clusterMoveSourceName,
 		Refresh:               req.Source.Refresh,
+		RefreshExcludeOlder:   req.Source.RefreshExcludeOlder,
 	}
 
 	sink, err := newMigrationSink(&migrationArgs)
@@ -549,6 +550,7 @@ func createFromCopy(ctx context.Context, s *state.State, r *http.Request, projec
 			targetInstance:       args,
 			instanceOnly:         req.Source.InstanceOnly,
 			refresh:              req.Source.Refresh,
+			refreshExcludeOlder:  req.Source.RefreshExcludeOlder,
 			applyTemplateTrigger: true,
 			allowInconsistent:    req.Source.AllowInconsistent,
 		}, op)
@@ -830,6 +832,7 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 
 	targetProjectName := request.ProjectParam(r)
 	clusterNotification := isClusterNotification(r)
+	clusterInternal := isClusterInternal(r)
 
 	logger.Debug("Responding to instance create")
 
@@ -993,6 +996,11 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 				return err
 			}
 
+			dbProfileConfigs, err := dbCluster.GetConfig(ctx, tx.Tx(), "profile")
+			if err != nil {
+				return err
+			}
+
 			dbProfileDevices, err := dbCluster.GetDevices(ctx, tx.Tx(), "profile")
 			if err != nil {
 				return err
@@ -1009,7 +1017,7 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 					return fmt.Errorf("Requested profile %q doesn't exist", profileName)
 				}
 
-				apiProfile, err := profile.ToAPI(ctx, tx.Tx(), dbProfileDevices)
+				apiProfile, err := profile.ToAPI(ctx, tx.Tx(), dbProfileConfigs, dbProfileDevices)
 				if err != nil {
 					return err
 				}
@@ -1095,7 +1103,7 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(err)
 	}
 
-	if s.ServerClustered && !clusterNotification {
+	if s.ServerClustered && !clusterNotification && !clusterInternal {
 		// If a target was specified, limit the list of candidates to that target.
 		if targetMemberInfo != nil {
 			candidateMembers = []db.NodeInfo{*targetMemberInfo}
@@ -1125,19 +1133,17 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 		}
 
 		// If no target member was selected yet, pick the member with the least number of instances.
+		if targetMemberInfo == nil && len(candidateMembers) > 0 {
+			targetMemberInfo = &candidateMembers[0]
+		}
+
 		if targetMemberInfo == nil {
-			err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
-				targetMemberInfo, err = tx.GetNodeWithLeastInstances(ctx, candidateMembers)
-				return err
-			})
-			if err != nil {
-				return response.SmartError(err)
-			}
+			return response.InternalError(fmt.Errorf("Couldn't find a cluster member for the instance"))
 		}
 	}
 
 	// Record the cluster group as a volatile config key if present.
-	if !clusterNotification && targetGroupName != "" {
+	if !clusterNotification && !clusterInternal && targetGroupName != "" {
 		req.Config["volatile.cluster.group"] = targetGroupName
 	}
 

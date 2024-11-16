@@ -14,6 +14,7 @@ import (
 	internalInstance "github.com/lxc/incus/v6/internal/instance"
 	"github.com/lxc/incus/v6/internal/server/auth"
 	"github.com/lxc/incus/v6/internal/server/cluster"
+	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
 	"github.com/lxc/incus/v6/internal/server/db"
 	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
 	"github.com/lxc/incus/v6/internal/server/db/operationtype"
@@ -336,7 +337,7 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 						Devices: inst.ExpandedDevices().CloneNative(),
 					},
 				},
-				Project: projectName,
+				Project: instProject,
 				Reason:  apiScriptlet.InstancePlacementReasonRelocation,
 			}
 
@@ -367,13 +368,11 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 				}
 			}
 
-			err := s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
-				targetMemberInfo, err = tx.GetNodeWithLeastInstances(ctx, filteredCandidateMembers)
-				return err
-			})
-			if err != nil {
-				return response.SmartError(err)
+			if len(filteredCandidateMembers) == 0 {
+				return response.InternalError(fmt.Errorf("Couldn't find a cluster member for the instance"))
 			}
+
+			targetMemberInfo = &filteredCandidateMembers[0]
 		}
 
 		if targetMemberInfo.IsOffline(s.GlobalConfig.OfflineThreshold()) {
@@ -597,7 +596,12 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 	// Handle pool and project moves.
 	if req.Project != "" || req.Pool != "" {
 		// Get a local client.
-		target, err := incus.ConnectIncusUnix(s.OS.GetUnixSocket(), nil)
+		args := &incus.ConnectionArgs{
+			SkipGetServer: true,
+			UserAgent:     clusterRequest.UserAgentClient,
+		}
+
+		target, err := incus.ConnectIncusUnix(s.OS.GetUnixSocket(), args)
 		if err != nil {
 			return err
 		}
@@ -636,13 +640,18 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 					return err
 				}
 
+				profileConfigs, err := dbCluster.GetConfig(ctx, tx.Tx(), "profile")
+				if err != nil {
+					return err
+				}
+
 				profileDevices, err := dbCluster.GetDevices(ctx, tx.Tx(), "profile")
 				if err != nil {
 					return err
 				}
 
 				for _, profile := range rawProfiles {
-					apiProfile, err := profile.ToAPI(ctx, tx.Tx(), profileDevices)
+					apiProfile, err := profile.ToAPI(ctx, tx.Tx(), profileConfigs, profileDevices)
 					if err != nil {
 						return err
 					}

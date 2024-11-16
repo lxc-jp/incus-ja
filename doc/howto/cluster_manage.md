@@ -96,6 +96,20 @@ Incusはハートビートのパケットに反応せずさらにICMPパケッ�
 これを自動的に実現する一つの方法はIncusの`cluster-member-healed`イベントを監視するソフトウェアを稼働させ問題のあるサーバーをBMCやPDUを操作して即座に電源を切ることです。
 ```
 
+(cluster-automatic-balancing)=
+### クラスタのリバランシング
+
+Incusはクラスタメンバー間で負荷を自動的に分散できます。
+
+これはいくつかの設定オプションにより行います:
+
+- {config:option}`server-cluster:cluster.rebalance.batch`
+- {config:option}`server-cluster:cluster.rebalance.cooldown`
+- {config:option}`server-cluster:cluster.rebalance.interval`
+- {config:option}`server-cluster:cluster.rebalance.threshold`
+
+Incusはすべてのサーバーの負荷を比較し、差異のパーセントがしきい値を超えたら、安全にライブマイグレーションできる仮想マシンの選定を開始し、もっとも負荷の低いサーバーに移動します。
+
 (cluster-manage-delete-members)=
 ## クラスタメンバーを削除する
 

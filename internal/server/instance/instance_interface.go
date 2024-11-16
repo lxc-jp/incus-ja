@@ -100,7 +100,7 @@ type Instance interface {
 	Update(newConfig db.InstanceArgs, userRequested bool) error
 
 	Delete(force bool) error
-	Export(w io.Writer, properties map[string]string, expiration time.Time, tracker *ioprogress.ProgressTracker) (api.ImageMetadata, error)
+	Export(w io.Writer, properties map[string]string, expiration time.Time, tracker *ioprogress.ProgressTracker) (*api.ImageMetadata, error)
 
 	// Live configuration.
 	CGroup() (*cgroup.CGroup, error)
@@ -238,6 +238,7 @@ type MigrateSendArgs struct {
 type MigrateReceiveArgs struct {
 	MigrateArgs
 
-	InstanceOperation *operationlock.InstanceOperation
-	Refresh           bool
+	InstanceOperation   *operationlock.InstanceOperation
+	Refresh             bool
+	RefreshExcludeOlder bool
 }
