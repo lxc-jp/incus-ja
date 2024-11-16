@@ -30,7 +30,6 @@ import (
 	internalIO "github.com/lxc/incus/v6/internal/io"
 	"github.com/lxc/incus/v6/internal/linux"
 	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/revert"
 	"github.com/lxc/incus/v6/internal/server/backup"
 	backupConfig "github.com/lxc/incus/v6/internal/server/backup/config"
 	"github.com/lxc/incus/v6/internal/server/cluster/request"
@@ -55,6 +54,7 @@ import (
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/ioprogress"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/units"
 	"github.com/lxc/incus/v6/shared/util"
 )
@@ -1227,7 +1227,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 // RefreshCustomVolume refreshes custom volumes (and optionally snapshots) during the custom volume copy operations.
 // Snapshots that are not present in the source but are in the destination are removed from the
 // destination if snapshots are included in the synchronization.
-func (b *backend) RefreshCustomVolume(projectName string, srcProjectName string, volName string, desc string, config map[string]string, srcPoolName, srcVolName string, snapshots bool, op *operations.Operation) error {
+func (b *backend) RefreshCustomVolume(projectName string, srcProjectName string, volName string, desc string, config map[string]string, srcPoolName, srcVolName string, snapshots bool, excludeOlder bool, op *operations.Operation) error {
 	l := b.logger.AddContext(logger.Ctx{"project": projectName, "srcProjectName": srcProjectName, "volName": volName, "desc": desc, "config": config, "srcPoolName": srcPoolName, "srcVolName": srcVolName, "snapshots": snapshots})
 	l.Debug("RefreshCustomVolume started")
 	defer l.Debug("RefreshCustomVolume finished")
@@ -1327,7 +1327,7 @@ func (b *backend) RefreshCustomVolume(projectName string, srcProjectName string,
 			})
 		}
 
-		syncSourceSnapshotIndexes, deleteTargetSnapshotIndexes := CompareSnapshots(sourceSnapshotComparable, targetSnapshotsComparable)
+		syncSourceSnapshotIndexes, deleteTargetSnapshotIndexes := CompareSnapshots(sourceSnapshotComparable, targetSnapshotsComparable, excludeOlder)
 
 		// Delete extra snapshots first.
 		for _, deleteTargetSnapIndex := range deleteTargetSnapshotIndexes {

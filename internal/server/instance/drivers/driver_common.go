@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 
 	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/revert"
 	"github.com/lxc/incus/v6/internal/server/backup"
 	"github.com/lxc/incus/v6/internal/server/db"
 	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
@@ -38,6 +37,7 @@ import (
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/subprocess"
 	"github.com/lxc/incus/v6/shared/util"
 )
@@ -1264,6 +1264,9 @@ func (d *common) devicesAdd(inst instance.Instance, instanceRunning bool) (rever
 				continue
 			}
 
+			// Clear any volatile key that could have been set during validation.
+			_ = d.deviceVolatileReset(entry.Name, entry.Config, nil)
+
 			return nil, fmt.Errorf("Failed add validation for device %q: %w", entry.Name, err)
 		}
 
@@ -1352,6 +1355,9 @@ func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfi
 			}
 
 			if userRequested {
+				// Clear any volatile key that could have been set during validation.
+				_ = d.deviceVolatileReset(entry.Name, entry.Config, nil)
+
 				return fmt.Errorf("Failed add validation for device %q: %w", entry.Name, err)
 			}
 
