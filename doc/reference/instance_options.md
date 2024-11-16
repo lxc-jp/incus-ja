@@ -203,7 +203,7 @@ Incus は対象のカーネルがサポートするすべての利用可能な�
 (instance-options-migration)=
 ## マイグレーションオプション
 
-以下のインスタンスオプションはインスタンスが{ref}`あるLXDサーバーから別のサーバーに移動される <move-instances>`場合の挙動を制御します:
+以下のインスタンスオプションはインスタンスが{ref}`あるIncusサーバーから別のサーバーに移動される <move-instances>`場合の挙動を制御します:
 
 % Include content from [../config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt

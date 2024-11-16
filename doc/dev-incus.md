@@ -213,7 +213,7 @@ HTTP であり、 Incus プロトコルのローカル版に非常に似てい�
 
 戻り値:
 
-    LXD デーモン API の /1.0/images/<FINGERPRINT>/export を参照してください。
+    デーモン API の /1.0/images/<FINGERPRINT>/export を参照してください。
 
 #### `/1.0/meta-data`
 
