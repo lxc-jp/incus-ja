@@ -50,11 +50,21 @@ YAML ファイルの必要な文法を見るには既存のインスタンス設
 
 以下の例では [`incus launch`](incus_launch.md) を使用しますが、同じように [`incus init`](incus_create.md) も使用できます。
 
-### コンテナを起動する
+### システムコンテナを起動する
 
-`images` サーバーの Ubuntu 22.04 のイメージで `ubuntu-container` というインスタンス名でコンテナを起動するには、以下のコマンドを入力します:
+`images` サーバーの Ubuntu 22.04 のイメージで `ubuntu-container` というインスタンス名でシステムコンテナを起動するには、以下のコマンドを入力します:
 
     incus launch images:ubuntu/22.04 ubuntu-container
+
+### アプリケーションコンテナを起動する
+
+アプリケーション（OCI）コンテナを起動するには、まずイメージレジストリを追加する必要があります:
+
+    incus remote add oci-docker https://docker.io --protocol=oci
+
+次にレジストリに含まれるイメージの1つからコンテナを起動します:
+
+    incus launch oci-docker:hello-world --ephemeral --console
 
 ### 仮想マシンを起動する
 

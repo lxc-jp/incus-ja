@@ -1407,6 +1407,12 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```
 
+```{config:option} volatile.rebalance.last_move instance-volatile
+:shortdesc: "自動ライブマイグレーションで最後に移動したタイムスタンプ"
+:type: "integer"
+
+```
+
 ```{config:option} volatile.uuid instance-volatile
 :shortdesc: "インスタンスUUID"
 :type: "string"
@@ -2105,6 +2111,38 @@ See {ref}`cluster-https-address`.
 :shortdesc: "反応しないメンバーがオフラインと判定されるまでの時間の閾値"
 :type: "integer"
 反応しないメンバーがオフラインと判定されるまでの秒数を指定します。
+```
+
+```{config:option} cluster.rebalance.batch server-cluster
+:defaultdesc: "`1`"
+:scope: "global"
+:shortdesc: "1回のリバランスの実行で移動するインスタンスの最大数"
+:type: "integer"
+
+```
+
+```{config:option} cluster.rebalance.cooldown server-cluster
+:defaultdesc: "`6H`"
+:scope: "global"
+:shortdesc: "一度動かしたインスタンスを再度動かさないように維持する期間"
+:type: "string"
+
+```
+
+```{config:option} cluster.rebalance.interval server-cluster
+:defaultdesc: "`0`"
+:scope: "global"
+:shortdesc: "リバランスを検討する頻度（分単位）。無効にするには0を指定（デフォルト）"
+:type: "integer"
+
+```
+
+```{config:option} cluster.rebalance.threshold server-cluster
+:defaultdesc: "`20`"
+:scope: "global"
+:shortdesc: "マイグレーションをトリガーするのに必要なもっとも忙しいサーバーともっとも暇なサーバーの負荷の差異のパーセンテージ"
+:type: "integer"
+
 ```
 
 <!-- config group server-cluster end -->

@@ -6,9 +6,6 @@ Incus を実行するシステムが DNS ルックアップの実行に `systemd
 
 ```{note}
 この機能を使いたい場合、 `dns.mode` オプション ({ref}`network-bridge-options` 参照) を `managed` か `dynamic` に設定する必要があります。
-
-`dns.domain` の設定によっては、 DNS 名前解決を許可するため `resolved` の DNSSEC を無効化する必要があるかもしれません。
-これは `resolved.conf` 内の `DNSSEC` オプションにより実現できます。
 ```
 
 (network-bridge-resolved-configure)=
@@ -47,16 +44,29 @@ DNS ドメイン
 ご利用のシェルによっては `~` が展開されるのを防ぐために DNS ドメインを引用符で囲む必要があるかもしれません。
 ```
 
+DNSSEC と DNS over TLS
+
+: `incus` DNSサーバーはDNSSEC や DNS over TLS をサポートしません。
+
+  resolved の設定によってはサーバーがDNSSEC や DNS over TLS をサポートしないため、設定がエラーになります。
+
+  ブリッジでのみ両方を無効化するには、次のコマンドを実行します:
+
+      resolvectl dnssec <network_bridge> off
+      resolvectl dnsovertls <network_bridge> off
+
 たとえば:
 
     resolvectl dns incusbr0 192.0.2.10
     resolvectl domain incusbr0 '~incus'
+    resolvectl dnssec incusbr0 off
+    resolvectl dnsovertls incusbr0 off
 
 ```{note}
 別の方法として、 `systemd-resolve` コマンドを使用することもできます。
 このコマンドは `systemd` の新しいリリースでは廃止予定となっていますが、後方互換性のため引き続き提供されています。
 
-    systemd-resolve --interface <network_bridge> --set-domain ~<dns_domain> --set-dns <dns_address>
+    systemd-resolve --interface <network_bridge> --set-domain ~<dns_domain> --set-dns <dns_address> --set-dnsovertls=off --set-dnssec=off
 ```
 
 `resolved` の設定はブリッジが存在する限り残ります。
@@ -78,6 +88,8 @@ After=sys-subsystem-net-devices-<network_bridge>.device
 Type=oneshot
 ExecStart=/usr/bin/resolvectl dns <network_bridge> <dns_address>
 ExecStart=/usr/bin/resolvectl domain <network_bridge> ~<dns_domain>
+ExecStart=/usr/bin/resolvectl dnssec <network_bridge> off
+ExecStart=/usr/bin/resolvectl dnsovertls <network_bridge> off
 ExecStopPost=/usr/bin/resolvectl revert <network_bridge>
 RemainAfterExit=yes
 

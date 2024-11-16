@@ -2597,3 +2597,22 @@ OVN NICの`ipv4.address`と`ipv6.address`に`none`という値を追加します
 ## `network_ovn_external_interfaces`
 
 OVNネットワークに`bridge.external_interfaces`のサポートを追加します。
+
+## `instances_scriptlet_get_instances_count`
+
+これはインスタンス・スクリプトレットでオプショナルなProjectまたはLocationのフィルターで絞ったインスタンス数と起動中のインスタンス数を取得できるようにします。
+
+## `cluster_rebalance`
+
+これはクラスターの負荷を分散するために自動ライブマイグレーションを再び追加します。
+
+この一環として、以下の設定オプションが追加されます:
+
+* `cluster.rebalance.batch`
+* `cluster.rebalance.cooldown`
+* `cluster.rebalance.interval`
+* `cluster.rebalance.threshold`
+
+## `custom_volume_refresh_exclude_older_snapshots`
+
+これは最新のターゲット（コピー先）のスナップショットより古いソース（コピー元）のスナップショットを除外するサポートを追加します。
