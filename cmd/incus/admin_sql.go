@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/client"
+	incus "github.com/lxc/incus/v6/client"
 	cli "github.com/lxc/incus/v6/internal/cmd"
 	"github.com/lxc/incus/v6/internal/i18n"
 	internalSQL "github.com/lxc/incus/v6/internal/sql"
@@ -166,5 +166,5 @@ func (c *cmdAdminSQL) sqlPrintSelectResult(result internalSQL.SQLResult) error {
 		data = append(data, rowData)
 	}
 
-	return cli.RenderTable(c.flagFormat, result.Columns, data, result)
+	return cli.RenderTable(os.Stdout, c.flagFormat, result.Columns, data, result)
 }

@@ -2616,3 +2616,34 @@ OVNネットワークに`bridge.external_interfaces`のサポートを追加し�
 ## `custom_volume_refresh_exclude_older_snapshots`
 
 これは最新のターゲット（コピー先）のスナップショットより古いソース（コピー元）のスナップショットを除外するサポートを追加します。
+
+## `storage_initial_owner`
+
+カスタムボリュームの初期オーナーを設定できるようにします。
+
+以下の設定オプションが追加されました:
+
+* `initial.gid`
+* `initial.mode`
+* `initial.uid`
+
+## `storage_live_migration`
+
+ストレージプール間での仮想マシンのライブマイグレーションのサポートを追加します。
+
+## `instance_console_screenshot`
+
+仮想マシンの現在のVGAコンソールのスナップショットを取れるようにします。
+
+## `image_import_alias`
+
+イメージをアップロードする際にエイリアスを設定するために `X-Incus-aliases` HTTP ヘッダーを追加します。
+
+## `authorization_scriptlet`
+
+Incusクラスターでの認可を管理するために、`authorization.scriptlet`という新しい設定キーでスクリプトレットを定義できるようにします。
+
+## `console_force`
+
+アクティブなセッションが既にあっても、コンソールへの接続を強制するサポートを追加します。
+インスタンスコンソールへの接続に`--force`という新しいフラグを追加します。

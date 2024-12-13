@@ -15,7 +15,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/lxc/incus/v6/client"
+	incus "github.com/lxc/incus/v6/client"
 	internalInstance "github.com/lxc/incus/v6/internal/instance"
 	"github.com/lxc/incus/v6/internal/server/auth"
 	"github.com/lxc/incus/v6/internal/server/certificate"
@@ -177,7 +177,11 @@ func certificatesGet(d *Daemon, r *http.Request) response.Response {
 
 	body := []string{}
 
-	trustedCertificates := d.getTrustedCertificates()
+	trustedCertificates, err := d.getTrustedCertificates()
+	if err != nil {
+		return response.SmartError(err)
+	}
+
 	for _, certs := range trustedCertificates {
 		for _, cert := range certs {
 			fingerprint := localtls.CertFingerprint(&cert)

@@ -13,12 +13,42 @@
 * - プロパティ
   - 読み取り専用
   - 説明
-* - `name`
-  - yes
-  - インスタンス名 (see {ref}`instance-name-requirements`)
 * - `architecture`
   - no
   - インスタンスアーキテクチャ
+* - `created_at`
+  - yes
+  - インスタンス作成日時
+* - `description`
+  - no
+  - ユーザーが設定したインスタンスの説明
+* - `ephemeral`
+  - no
+  - インスタンスが一時的（停止時に削除される）かどうか
+* - `last_used_at`
+  - yes
+  - インスタンスの最終利用日時
+* - `location`
+  - no
+  - クラスタ内でのインスタンスの現在の配置
+* - `name`
+  - yes
+  - インスタンス名（{ref}`instance-name-requirements`参照）
+* - `project`
+  - yes
+  - インスタンスが属するプロジェクト
+* - `stateful`
+  - yes
+  - 保存されたランタイムの状態が現在存在するかどうか
+* - `status`
+  - yes
+  - インスタンスの人間が読める形式の状態
+* - `status_code`
+  - yes
+  - インスタンスのマシンが読める形式の状態
+* - `type`
+  - yes
+  - インスタンスの種別（コンテナか仮想マシン）
 ```
 
 (instance-name-requirements)=

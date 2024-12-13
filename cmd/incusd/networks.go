@@ -16,7 +16,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/lxc/incus/v6/client"
+	incus "github.com/lxc/incus/v6/client"
 	"github.com/lxc/incus/v6/internal/server/auth"
 	"github.com/lxc/incus/v6/internal/server/cluster"
 	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
@@ -716,10 +716,7 @@ func networksPostCluster(ctx context.Context, s *state.State, projectName string
 
 		// Clone the network config for this node so we don't modify it and potentially end up sending
 		// this node's config to another node.
-		nodeConfig := make(map[string]string, len(netConfig))
-		for k, v := range netConfig {
-			nodeConfig[k] = v
-		}
+		nodeConfig := util.CloneMap(netConfig)
 
 		// Merge node specific config items into global config.
 		for key, value := range nodeConfigs[server.Environment.ServerName] {

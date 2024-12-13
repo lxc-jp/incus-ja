@@ -450,6 +450,12 @@ var APIExtensions = []string{
 	"instances_scriptlet_get_instances_count",
 	"cluster_rebalance",
 	"custom_volume_refresh_exclude_older_snapshots",
+	"storage_initial_owner",
+	"storage_live_migration",
+	"instance_console_screenshot",
+	"image_import_alias",
+	"authorization_scriptlet",
+	"console_force",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

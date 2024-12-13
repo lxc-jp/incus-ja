@@ -556,7 +556,7 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 ```{config:option} agent.nic_config instance-miscellaneous
 :condition: "virtual machine"
 :defaultdesc: "`false`"
-:liveupdate: "no"
+:liveupdate: "yes"
 :shortdesc: "デフォルトネットワークインタフェースの名前とMTUを使うかどうか"
 :type: "bool"
 コンテナでは、デフォルトネットワークインタフェースの名前とMTUを使うようになります。
@@ -2407,6 +2407,13 @@ Lokiサーバーへ送るイベントのカンマ区切りリストを指定し�
 
 <!-- config group server-loki end -->
 <!-- config group server-miscellaneous start -->
+```{config:option} authorization.scriptlet server-miscellaneous
+:scope: "global"
+:shortdesc: "認可スクリプトレット"
+:type: "string"
+スクリプトレットベースの認可を使用する際に、このオプションにスクリプトレットを保管します。
+```
+
 ```{config:option} backups.compression_algorithm server-miscellaneous
 :defaultdesc: "`gzip`"
 :scope: "global"

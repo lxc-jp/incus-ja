@@ -143,6 +143,8 @@ type Instance interface {
 	ExpiryDate() time.Time
 	FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfig.Device, error)
 
+	ETag() []any
+
 	// Paths.
 	Path() string
 	ExecOutputPath() string
@@ -191,6 +193,7 @@ type VM interface {
 
 	AgentCertificate() *x509.Certificate
 	ConsoleLog() (string, error)
+	ConsoleScreenshot(screenshotFile *os.File) error
 }
 
 // CriuMigrationArgs arguments for CRIU migration.
@@ -225,6 +228,7 @@ type MigrateArgs struct {
 	Live                  bool
 	Disconnect            func()
 	ClusterMoveSourceName string // Will be empty if not a cluster move, othwise indicates the source instance.
+	StoragePool           string
 }
 
 // MigrateSendArgs represent arguments for instance migration send.

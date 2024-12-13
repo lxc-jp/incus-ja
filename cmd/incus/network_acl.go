@@ -99,7 +99,7 @@ func (c *cmdNetworkACLList) Command() *cobra.Command {
 
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return c.global.cmpRemotes(false)
+			return c.global.cmpRemotes(toComplete, false)
 		}
 
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -174,7 +174,7 @@ func (c *cmdNetworkACLList) Run(cmd *cobra.Command, args []string) error {
 		header = append([]string{i18n.G("PROJECT")}, header...)
 	}
 
-	return cli.RenderTable(c.flagFormat, header, data, acls)
+	return cli.RenderTable(os.Stdout, c.flagFormat, header, data, acls)
 }
 
 // Show.
