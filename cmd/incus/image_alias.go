@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -67,6 +68,23 @@ func (c *cmdImageAliasCreate) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 1 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		if len(args) == 0 {
+			return c.global.cmpRemotes(toComplete, true)
+		}
+
+		remote, _, found := strings.Cut(args[0], ":")
+		if !found {
+			remote = ""
+		}
+
+		return c.global.cmpImageFingerprintsFromRemote(toComplete, remote)
+	}
+
 	return cmd
 }
 
@@ -113,6 +131,14 @@ func (c *cmdImageAliasDelete) Command() *cobra.Command {
 		`Delete image aliases`))
 
 	cmd.RunE = c.Run
+
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return c.global.cmpImages(toComplete)
+	}
 
 	return cmd
 }
@@ -180,6 +206,14 @@ Pre-defined column shorthand chars:
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultImageAliasColumns, i18n.G("Columns")+"``")
 
 	cmd.RunE = c.Run
+
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return c.global.cmpRemotes(toComplete, true)
+	}
 
 	return cmd
 }
@@ -316,7 +350,7 @@ func (c *cmdImageAliasList) Run(cmd *cobra.Command, args []string) error {
 		header = append(header, column.Name)
 	}
 
-	return cli.RenderTable(c.flagFormat, header, data, aliases)
+	return cli.RenderTable(os.Stdout, c.flagFormat, header, data, aliases)
 }
 
 // Rename.
@@ -335,6 +369,14 @@ func (c *cmdImageAliasRename) Command() *cobra.Command {
 		`Rename aliases`))
 
 	cmd.RunE = c.Run
+
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return c.global.cmpImages(toComplete)
+	}
 
 	return cmd
 }

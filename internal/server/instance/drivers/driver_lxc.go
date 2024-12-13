@@ -566,12 +566,13 @@ func (d *lxc) findIdmap() (*idmap.Set, int64, error) {
 			continue
 		}
 
-		cBase := int64(0)
-		if container.ExpandedConfig()["volatile.idmap.base"] != "" {
-			cBase, err = strconv.ParseInt(container.ExpandedConfig()["volatile.idmap.base"], 10, 64)
-			if err != nil {
-				return nil, 0, err
-			}
+		if container.ExpandedConfig()["volatile.idmap.base"] == "" {
+			continue
+		}
+
+		cBase, err := strconv.ParseInt(container.ExpandedConfig()["volatile.idmap.base"], 10, 64)
+		if err != nil {
+			return nil, 0, err
 		}
 
 		cSize, err := idmapSize(container.ExpandedConfig()["security.idmap.size"])
@@ -3228,6 +3229,17 @@ func (d *lxc) onStop(args map[string]string) error {
 		// Clean up devices.
 		d.cleanupDevices(false, "")
 
+		// Stop DHCP client if any.
+		if util.PathExists(filepath.Join(d.Path(), "network", "dhcp.pid")) {
+			dhcpPIDStr, err := os.ReadFile(filepath.Join(d.Path(), "network", "dhcp.pid"))
+			if err == nil {
+				dhcpPID, err := strconv.Atoi(strings.TrimSpace(string(dhcpPIDStr)))
+				if err == nil {
+					_ = unix.Kill(dhcpPID, unix.SIGTERM)
+				}
+			}
+		}
+
 		// Remove directory ownership (to avoid issue if uidmap is re-used)
 		err := os.Chown(d.Path(), 0, 0)
 		if err != nil {
@@ -3520,9 +3532,7 @@ func (d *lxc) Render(options ...func(response any) error) (any, any, error) {
 	}
 
 	if d.IsSnapshot() {
-		// Prepare the ETag
-		etag := []any{d.expiryDate}
-
+		// Prepare the response.
 		snapState := api.InstanceSnapshot{
 			CreatedAt:       d.creationDate,
 			ExpandedConfig:  d.expandedConfig,
@@ -3547,12 +3557,10 @@ func (d *lxc) Render(options ...func(response any) error) (any, any, error) {
 			}
 		}
 
-		return &snapState, etag, nil
+		return &snapState, d.ETag(), nil
 	}
 
-	// Prepare the ETag
-	etag := []any{d.architecture, d.localConfig, d.localDevices, d.ephemeral, d.profiles}
-
+	// Prepare the response.
 	statusCode := d.statusCode()
 	instState := api.Instance{
 		ExpandedConfig:  d.expandedConfig,
@@ -3582,7 +3590,7 @@ func (d *lxc) Render(options ...func(response any) error) (any, any, error) {
 		}
 	}
 
-	return &instState, etag, nil
+	return &instState, d.ETag(), nil
 }
 
 // RenderFull renders the full state of the instance.

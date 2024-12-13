@@ -116,7 +116,7 @@ Pre-defined column shorthand chars:
 
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return c.global.cmpRemotes(false)
+			return c.global.cmpRemotes(toComplete, false)
 		}
 
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -238,7 +238,7 @@ func (c *cmdNetworkZoneList) Run(cmd *cobra.Command, args []string) error {
 		header = append(header, column.Name)
 	}
 
-	return cli.RenderTable(c.flagFormat, header, data, zones)
+	return cli.RenderTable(os.Stdout, c.flagFormat, header, data, zones)
 }
 
 // Show.
@@ -918,7 +918,7 @@ func (c *cmdNetworkZoneRecordList) Run(cmd *cobra.Command, args []string) error 
 		i18n.G("ENTRIES"),
 	}
 
-	return cli.RenderTable(c.flagFormat, header, data, records)
+	return cli.RenderTable(os.Stdout, c.flagFormat, header, data, records)
 }
 
 // Show.

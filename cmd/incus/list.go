@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"slices"
 	"sort"
@@ -12,7 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/client"
+	incus "github.com/lxc/incus/v6/client"
 	cli "github.com/lxc/incus/v6/internal/cmd"
 	"github.com/lxc/incus/v6/internal/i18n"
 	"github.com/lxc/incus/v6/internal/instance"
@@ -138,7 +139,7 @@ incus list -c ns,user.comment:comment
 
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return c.global.cmpRemotes(false)
+			return c.global.cmpRemotes(toComplete, false)
 		}
 
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -453,7 +454,7 @@ func (c *cmdList) showInstances(instances []api.InstanceFull, filters []string, 
 		headers = append(headers, column.Name)
 	}
 
-	return cli.RenderTable(c.flagFormat, headers, data, instancesFiltered)
+	return cli.RenderTable(os.Stdout, c.flagFormat, headers, data, instancesFiltered)
 }
 
 func (c *cmdList) Run(cmd *cobra.Command, args []string) error {

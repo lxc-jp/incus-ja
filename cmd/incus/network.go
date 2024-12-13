@@ -354,7 +354,7 @@ incus network create bar network=baz --type ovn
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		return c.global.cmpRemotes(false)
+		return c.global.cmpRemotes(toComplete, false)
 	}
 
 	return cmd
@@ -1079,7 +1079,7 @@ u - Used by (count)`))
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		return c.global.cmpRemotes(false)
+		return c.global.cmpRemotes(toComplete, false)
 	}
 
 	return cmd
@@ -1227,7 +1227,7 @@ func (c *cmdNetworkList) Run(cmd *cobra.Command, args []string) error {
 		header = append(header, column.Name)
 	}
 
-	return cli.RenderTable(c.flagFormat, header, data, networks)
+	return cli.RenderTable(os.Stdout, c.flagFormat, header, data, networks)
 }
 
 // List leases.
@@ -1388,7 +1388,7 @@ func (c *cmdNetworkListLeases) Run(cmd *cobra.Command, args []string) error {
 		header = append(header, column.Name)
 	}
 
-	return cli.RenderTable(c.flagFormat, header, data, leases)
+	return cli.RenderTable(os.Stdout, c.flagFormat, header, data, leases)
 }
 
 // Rename.

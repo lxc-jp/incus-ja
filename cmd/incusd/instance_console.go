@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"slices"
 	"strconv"
 	"sync"
@@ -321,7 +323,6 @@ func (s *consoleWs) doConsole(op *operations.Operation) error {
 	s.connsLock.Unlock()
 
 	defer func() {
-		_ = consoleConn.WriteMessage(websocket.BinaryMessage, []byte("\n\r"))
 		_ = consoleConn.Close()
 		_ = ctrlConn.Close()
 	}()
@@ -329,14 +330,10 @@ func (s *consoleWs) doConsole(op *operations.Operation) error {
 	// Write a reset escape sequence to the console to cancel any ongoing reads to the handle
 	// and then close it. This ordering is important, close the console before closing the
 	// websocket to ensure console doesn't get stuck reading.
-	_, err = console.Write([]byte("\x1bc"))
-	if err != nil {
-		_ = console.Close()
-		return err
-	}
+	_, _ = console.Write([]byte("\x1bc"))
 
 	err = console.Close()
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrClosed) {
 		return err
 	}
 
@@ -389,6 +386,27 @@ func (s *consoleWs) doVGA(op *operations.Operation) error {
 	close(s.controlConnected)
 
 	return err
+}
+
+// Cancel is responsible for closing websocket connections.
+func (s *consoleWs) Cancel(op *operations.Operation) error {
+	s.connsLock.Lock()
+	conn := s.conns[-1]
+	s.connsLock.Unlock()
+
+	if conn == nil {
+		return nil
+	}
+
+	_ = conn.Close()
+
+	// Close all dynamic connections.
+	for conn, console := range s.dynamic {
+		_ = conn.Close()
+		_ = console.Close()
+	}
+
+	return nil
 }
 
 // swagger:operation POST /1.0/instances/{name}/console instances instance_console_post
@@ -500,6 +518,40 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(fmt.Errorf("Instance is frozen"))
 	}
 
+	// Find any running 'ConsoleShow' operation for the instance.
+	// If the '--force' flag was used, cancel the running operation. Otherwise, notify the user about the operation.
+	for _, op := range operations.Clone() {
+		// Consider only console show operations with Running status.
+		if op.Type() != operationtype.ConsoleShow || op.Project() != projectName || op.Status() != api.Running {
+			continue
+		}
+
+		// Fetch instance name from operation.
+		r := op.Resources()
+		apiUrls := r["instances"]
+		if len(apiUrls) < 1 {
+			return response.SmartError(fmt.Errorf("Operation does not have an instance URL defined"))
+		}
+
+		urlPrefix, instanceName := path.Split(apiUrls[0].URL.Path)
+		if urlPrefix == "" || instanceName == "" {
+			return response.SmartError(fmt.Errorf("Instance URL has incorrect format"))
+		}
+
+		if instanceName != inst.Name() {
+			continue
+		}
+
+		if !post.Force {
+			return response.SmartError(fmt.Errorf("This console is already connected. Force is required to take it over."))
+		}
+
+		_, err = op.Cancel()
+		if err != nil {
+			return response.SmartError(err)
+		}
+	}
+
 	ws := &consoleWs{}
 	ws.fds = map[int]string{}
 	ws.conns = map[int]*websocket.Conn{}
@@ -523,7 +575,7 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 	resources := map[string][]api.URL{}
 	resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", ws.instance.Name())}
 
-	op, err := operations.OperationCreate(s, projectName, operations.OperationClassWebsocket, operationtype.ConsoleShow, resources, ws.Metadata(), ws.Do, nil, ws.Connect, r)
+	op, err := operations.OperationCreate(s, projectName, operations.OperationClassWebsocket, operationtype.ConsoleShow, resources, ws.Metadata(), ws.Do, ws.Cancel, ws.Connect, r)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -533,9 +585,10 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 
 // swagger:operation GET /1.0/instances/{name}/console instances instance_console_get
 //
-//	Get console log
+//	Get console output
 //
-//	Gets the console log for the instance.
+//	Gets the console output for the instance either as text log or as vga
+//	screendump.
 //
 //	---
 //	produces:
@@ -546,14 +599,27 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 //	    description: Project name
 //	    type: string
 //	    example: default
+//	  - in: query
+//	    name: type
+//	    description: Console type
+//	    type: string
+//	    enum: [log, vga]
+//	    default: log
+//	    example: vga
 //	responses:
 //	  "200":
-//	     description: Raw console log
+//	     description: |
+//	       Console output either as raw console log or as vga screendump in PNG
+//	       format depending on the `type` parameter provided with the request.
 //	     content:
 //	       application/octet-stream:
 //	         schema:
 //	           type: string
 //	           example: some-text
+//	       image/png:
+//	         schema:
+//	           type: string
+//	           format: binary
 //	  "400":
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
@@ -574,6 +640,11 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	consoleLogType := request.QueryParam(r, "type")
+	if consoleLogType != "" && consoleLogType != "log" && consoleLogType != "vga" {
+		return response.SmartError(fmt.Errorf("Invalid value for type parameter: %s", consoleLogType))
 	}
 
 	if internalInstance.IsSnapshot(name) {
@@ -649,16 +720,48 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 			return response.SmartError(fmt.Errorf("Failed to cast inst to VM"))
 		}
 
-		logContents, err := v.ConsoleLog()
-		if err != nil {
-			return response.SmartError(err)
+		var headers map[string]string
+		if consoleLogType == "vga" {
+			screenshotFile, err := os.CreateTemp(v.Path(), "screenshot-*.png")
+			if err != nil {
+				return response.SmartError(fmt.Errorf("Couldn't create screenshot file: %w", err))
+			}
+
+			ent.Cleanup = func() {
+				_ = screenshotFile.Close()
+				_ = os.Remove(screenshotFile.Name())
+			}
+
+			err = v.ConsoleScreenshot(screenshotFile)
+			if err != nil {
+				return response.SmartError(err)
+			}
+
+			fileInfo, err := screenshotFile.Stat()
+			if err != nil {
+				return response.SmartError(fmt.Errorf("Couldn't stat screenshot file for filesize: %w", err))
+			}
+
+			headers = map[string]string{
+				"Content-Type": "image/png",
+			}
+
+			ent.File = screenshotFile
+			ent.FileSize = fileInfo.Size()
+			ent.Filename = screenshotFile.Name()
+		} else {
+			logContents, err := v.ConsoleLog()
+			if err != nil {
+				return response.SmartError(err)
+			}
+
+			ent.File = bytes.NewReader([]byte(logContents))
+			ent.FileSize = int64(len(logContents))
 		}
 
-		ent.File = bytes.NewReader([]byte(logContents))
 		ent.FileModified = time.Now()
-		ent.FileSize = int64(len(logContents))
 
-		return response.FileResponse(r, []response.FileResponseEntry{ent}, nil)
+		return response.FileResponse(r, []response.FileResponseEntry{ent}, headers)
 	}
 
 	return response.SmartError(fmt.Errorf("Unsupported instance type %q", inst.Type()))

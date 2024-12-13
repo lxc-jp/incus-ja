@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v2"
 
-	"github.com/lxc/incus/v6/client"
+	incus "github.com/lxc/incus/v6/client"
 	internalInstance "github.com/lxc/incus/v6/internal/instance"
 	"github.com/lxc/incus/v6/internal/instancewriter"
 	internalIO "github.com/lxc/incus/v6/internal/io"
@@ -2719,7 +2719,11 @@ func (b *backend) GetInstanceUsage(inst instance.Instance) (*VolumeUsage, error)
 	}
 
 	sizeStr, ok := rootDiskConf["size"]
-	if ok {
+	if !ok && volType == drivers.VolumeTypeVM {
+		sizeStr = drivers.DefaultBlockSize
+	}
+
+	if sizeStr != "" {
 		total, err := units.ParseByteSizeString(sizeStr)
 		if err != nil {
 			return nil, err
@@ -4032,10 +4036,7 @@ func (b *backend) ImportBucket(projectName string, poolVol *backupConfig.Config,
 	defer revert.Fail()
 
 	// Copy bucket config from backup file if present (so BucketDBCreate can safely modify the copy if needed).
-	bucketConfig := make(map[string]string, len(poolVol.Bucket.Config))
-	for k, v := range poolVol.Bucket.Config {
-		bucketConfig[k] = v
-	}
+	bucketConfig := util.CloneMap(poolVol.Bucket.Config)
 
 	bucket := &api.StorageBucketsPost{
 		Name:             poolVol.Bucket.Name,
@@ -5810,10 +5811,7 @@ func (b *backend) ImportCustomVolume(projectName string, poolVol *backupConfig.C
 	defer revert.Fail()
 
 	// Copy volume config from backup file if present (so VolumeDBCreate can safely modify the copy if needed).
-	volumeConfig := make(map[string]string, len(poolVol.Volume.Config))
-	for k, v := range poolVol.Volume.Config {
-		volumeConfig[k] = v
-	}
+	volumeConfig := util.CloneMap(poolVol.Volume.Config)
 
 	// Validate config and create database entry for restored storage volume.
 	err := VolumeDBCreate(b, projectName, poolVol.Volume.Name, poolVol.Volume.Description, drivers.VolumeTypeCustom, false, volumeConfig, poolVol.Volume.CreatedAt, time.Time{}, drivers.ContentType(poolVol.Volume.ContentType), false, true)
@@ -5829,10 +5827,7 @@ func (b *backend) ImportCustomVolume(projectName string, poolVol *backupConfig.C
 
 		// Copy volume config from backup file if present
 		// (so VolumeDBCreate can safely modify the copy if needed).
-		snapVolumeConfig := make(map[string]string, len(poolVolSnap.Config))
-		for k, v := range poolVolSnap.Config {
-			snapVolumeConfig[k] = v
-		}
+		snapVolumeConfig := util.CloneMap(poolVolSnap.Config)
 
 		// Validate config and create database entry for restored storage volume.
 		err = VolumeDBCreate(b, projectName, fullSnapName, poolVolSnap.Description, drivers.VolumeTypeCustom, true, snapVolumeConfig, poolVolSnap.CreatedAt, time.Time{}, drivers.ContentType(poolVolSnap.ContentType), false, true)
@@ -6220,6 +6215,7 @@ func (b *backend) GenerateCustomVolumeBackupConfig(projectName string, volName s
 				Name:        snapName, // Snapshot only name, not full name.
 				Config:      dbVolSnaps[i].Config,
 				ContentType: dbVolSnaps[i].ContentType,
+				CreatedAt:   dbVolSnaps[i].CreationDate,
 			}
 
 			config.VolumeSnapshots = append(config.VolumeSnapshots, &snapshot)
@@ -6881,10 +6877,7 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 		// Copy volume config from backup file config if present,
 		// so VolumeDBCreate can safely modify the copy if needed.
 		if poolVol.Volume != nil {
-			volumeConfig = make(map[string]string, len(poolVol.Volume.Config))
-			for k, v := range poolVol.Volume.Config {
-				volumeConfig[k] = v
-			}
+			volumeConfig = util.CloneMap(poolVol.Volume.Config)
 
 			if !poolVol.Volume.CreatedAt.IsZero() {
 				creationDate = poolVol.Volume.CreatedAt
@@ -6906,10 +6899,7 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 
 				// Copy volume config from backup file if present,
 				// so VolumeDBCreate can safely modify the copy if needed.
-				snapVolumeConfig := make(map[string]string, len(poolVolSnap.Config))
-				for k, v := range poolVolSnap.Config {
-					snapVolumeConfig[k] = v
-				}
+				snapVolumeConfig := util.CloneMap(poolVolSnap.Config)
 
 				// Validate config and create database entry for recovered storage volume.
 				err = VolumeDBCreate(b, inst.Project().Name, fullSnapName, poolVolSnap.Description, volType, true, snapVolumeConfig, poolVolSnap.CreatedAt, time.Time{}, contentType, false, true)

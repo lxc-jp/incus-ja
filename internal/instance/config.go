@@ -377,7 +377,7 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	// ---
 	//  type: string
 	//  shortdesc: Instance NUMA node
-	"volatile.cpu.nodes": validate.Optional(validate.IsValidCPUSet),
+	"volatile.cpu.nodes": validate.Optional(validate.Or(validate.IsValidCPUSet, validate.IsOneOf("0", "balanced"))),
 
 	// gendoc:generate(entity=instance, group=volatile, key=volatile.evacuate.origin)
 	// The cluster member that the instance lived on before evacuation.
@@ -1065,7 +1065,7 @@ var InstanceConfigKeysVM = map[string]func(value string) error{
 	// User keys can be used in search.
 	// ---
 	//  type: string
-	//  liveupdate: no
+	//  liveupdate: yes
 	//  shortdesc: Free-form user key/value storage
 
 	// gendoc:generate(entity=instance, group=miscellaneous, key=agent.nic_config)
