@@ -123,21 +123,13 @@ Zabblyのパッケージレポジトリをベースにした、IncusのDocker/Po
 ```
 
 ```{group-tab} Fedora
-Incus の RPM パッケージとその依存パッケージはまだ公式の Fedora リポジトリでは利用できませんが、[`ganto/lxc4`](https://copr.fedorainfracloud.org/coprs/ganto/lxc4/) の Community Project (COPR) リポジトリでは利用できます。
-
-`dnf` の COPR プラグインをインストールし、次に COPR レポジトリを有効にしてください:
-
-    dnf install 'dnf-command(copr)'
-    dnf copr enable ganto/lxc4
+Incusとその依存パッケージはすべてFedoraで利用できます。
 
 Incus を以下のコマンドでインストールします:
 
     dnf install incus
 
-追加のセットアップ手順については[Getting started with Incus on Fedora](https://github.com/ganto/copr-lxc4/wiki/Getting-Started-with-Incus-on-Fedora)を参照してください。
-
-これは Incus や Fedora の公式なプロジェクトでないことに注意してください。
-パッケージの問題は[こちら](https://github.com/ganto/copr-lxc4/issues)に報告してください。
+パッケージの問題は[こちら](https://bugzilla.redhat.com/)に報告してください。
 ```
 
 ```{group-tab} Gentoo
@@ -191,6 +183,21 @@ Incus の初期化は手動で `incus admin init` を使ってもできますし
     users.users.YOUR_USERNAME.extraGroups = ["incus-admin"];
 
 NixOS 固有の問題については、パッケージレポジトリ内で[イシューを起票](https://github.com/NixOS/nixpkgs/issues/new/choose)してください。
+```
+
+```{group-tab} openSUSE
+Incusとその依存パッケージはopenSUSE TumbleweedとopenSUSE Leap 15.6以降（これはopenSUSE Backportsを通じて利用可能ですので、PackageHub for SUSE Linux Enterprise Server 15 SP6以降で同じパッケージをインストールできます。ただし、これらのパッケージについてSUSEによるサポートの提供はありません）の両方で利用可能です。
+
+Incus を以下のコマンドでインストールします:
+
+    zypper in incus
+
+LXDからマイグレートする場合は、`lxd-to-incus`コマンドのために`incus-tools`もインストールしてください。
+
+ほとんどのユーザーにはデフォルトの設定で大丈夫ですが、システム上で多数のコンテナを稼働させる場合は、[プロダクション・デプロイメント・ガイドで推奨される](./reference/server_settings.md)いくつかのカスタムの`sysctl`設定を適用するのが良いかもしれません。
+
+パッケージの問題は[こちら](https://bugzilla.opensuse.org/)に報告してください。
+正しいパッケージメンテナーがバグを見つけられるように、"containers"コンポーネント内にバグを登録するようにしてください。
 ```
 
 ```{group-tab} Rocky Linux

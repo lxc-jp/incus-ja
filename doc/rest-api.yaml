@@ -1511,6 +1511,11 @@ definitions:
         x-go-package: github.com/lxc/incus/v6/shared/api
     InstanceConsolePost:
         properties:
+            force:
+                description: Forces a connection to the console
+                example: true
+                type: boolean
+                x-go-name: Force
             height:
                 description: Console height in rows (console type only)
                 example: 24
@@ -7834,6 +7839,13 @@ paths:
                   name: X-Incus-fingerprint
                   schema:
                     type: string
+                - description: List of aliases to assign
+                  in: header
+                  name: X-Incus-aliases
+                  schema:
+                    items:
+                        type: string
+                    type: array
                 - description: Descriptive properties
                   in: header
                   name: X-Incus-properties
@@ -9297,7 +9309,9 @@ paths:
             tags:
                 - instances
         get:
-            description: Gets the console log for the instance.
+            description: |-
+                Gets the console output for the instance either as text log or as vga
+                screendump.
             operationId: instance_console_get
             parameters:
                 - description: Project name
@@ -9305,11 +9319,22 @@ paths:
                   in: query
                   name: project
                   type: string
+                - default: log
+                  description: Console type
+                  enum:
+                    - log
+                    - vga
+                  example: vga
+                  in: query
+                  name: type
+                  type: string
             produces:
                 - application/json
             responses:
                 "200":
-                    description: Raw console log
+                    description: |
+                        Console output either as raw console log or as vga screendump in PNG
+                        format depending on the `type` parameter provided with the request.
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
@@ -9318,7 +9343,7 @@ paths:
                     $ref: '#/responses/NotFound'
                 "500":
                     $ref: '#/responses/InternalServerError'
-            summary: Get console log
+            summary: Get console output
             tags:
                 - instances
         post:

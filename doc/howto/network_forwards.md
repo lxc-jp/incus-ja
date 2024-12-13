@@ -36,21 +36,32 @@ incus network forward create <network_name> <listen_address> [configuration_opti
 :--              | :--        | :--  | :--
 `listen_address` | string     | yes  | リッスンする IP アドレス
 `description`    | string     | no   | ネットワークフォワードの説明
-`config`         | string set | no   | キー/バリューペア形式の設定オプション（`target_address` と `user.*` カスタムキーのみサポート）
+`config`         | string set | no   | 下記のテーブル参照
 `ports`          | port list  | no   | {ref}`ポート指定 <network-forwards-port-specifications>` のリスト
+
+### フォワードの設定
+
+ネットワークフォワードには以下の設定オプションがあります:
+
+キー             | 型     | デフォルト値 | 説明
+:--              | :---   | :------      | :----------
+`user.*`         | string | -            | ユーザー定義のキー/バリュー設定
+`target_address` | string | -            | ポート設定でカバーされないすべてのもののデフォルトのターゲットアドレス
 
 (network-forwards-listen-addresses)=
 ### リッスンアドレスの要件
 
 有効なリッスンアドレスの要件はフォワードがどのネットワークタイプに割り当てられるかに応じて異なります。
 
-ブリッジネットワーク
-: - 任意の衝突しないリッスンアドレスが使用できます。
-  - リッスンアドレスは他のネットワークで使用中のサブネットとオーバーラップはできません。
+#### ブリッジネットワーク
 
-OVN ネットワーク
-: - 利用可能なリッスンアドレスはアップリンクネットワークの `ipv{n}.routes` 設定か（設定されている場合は）プロジェクトの `restricted.networks.subnets` 設定で定義されていなければなりません。
-  - リッスンアドレスは他のネットワークで使用中のサブネットとオーバーラップはできません。
+- 任意の衝突しないリッスンアドレスが使用できます。
+- リッスンアドレスは他のネットワークで使用中のサブネットとオーバーラップはできません。
+
+#### OVN ネットワーク
+
+- 利用可能なリッスンアドレスはアップリンクネットワークの `ipv{n}.routes` 設定か（設定されている場合は）プロジェクトの `restricted.networks.subnets` 設定で定義されていなければなりません。
+- リッスンアドレスは他のネットワークで使用中のサブネットとオーバーラップはできません。
 
 (network-forwards-port-specifications)=
 ## ポートを設定する

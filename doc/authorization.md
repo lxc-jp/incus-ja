@@ -5,10 +5,11 @@ Unix ソケットで Incus とやり取りする際、`incus-admin`グループ�
 一方、`incus` グループのみのメンバーはそのユーザーに割り当てられた単一のプロジェクトに制限されます。
 
 ネットワーク越しに Incus とやり取りする際は（手順は{ref}`server-expose`参照）、さらに認証しユーザーアクセスを制限できます。
-以下の 2 つの認可の方法がサポートされます:
+以下の 3 つの認可の方法がサポートされます:
 
 - {ref}`authorization-tls`
 - {ref}`authorization-openfga`
+- {ref}`authorization-scriptlet`
 
 (authorization-tls)=
 ## TLS 認可
@@ -20,7 +21,7 @@ Incus はネイティブで {ref}`authentication-trusted-clients` を 1 つま�
 `restricted`キーを`true`に設定し、クライアントのアクセスを制限するプロジェクトのリストを指定します。
 プロジェクトのリストが空の場合、クライアントはどのプロジェクトへのアクセスも許可されません。
 
-この認可の方法はクライアントが TLS で認証する場合は、他の認可の方法が設定されているかどうかによらず、必ず使用されます。
+{ref}`OpenFGA authorization <authorization-openfga>`が設定されている場合でも、クライアントが TLS で認証する場合は、この認可の方法が使われます。
 
 (authorization-openfga)=
 ## Open Fine-Grained Authorization (OpenFGA)
@@ -39,18 +40,12 @@ Incus は OpenFGA サーバーに接続し、{ref}`openfga-model` を書き込�
 OpenFGA では、特定の API リソースへのアクセスはユーザーとそのリソースの関連によって決定されます。
 これらの関連は [OpenFGA 認可モデル](https://openfga.dev/docs/concepts#what-is-an-authorization-model)で決まります。
 Incus の OpenFGA 認可モデルは API リソースを他のリソースとの関連とユーザーやグループのそのリソースへの関連に基づいて記述します。
-いくつかの便利な関連がモデルに組み込まれています:
 
-- `server -> admin`: Incus へのフルアクセス。
-- `server -> operator`: サーバー設定、証明書、ストレージプールの編集権限を除いた、Incus へのフルアクセス。
-- `server -> viewer`: サーバーレベルの設定を参照できるが変種出来ない。プロジェクトやその中身は参照できない。
-- `project -> manager`: 編集権限を含む、単一プロジェクトへのフルアクセス。
-- `project -> operator`: 編集権限を除いた、単一プロジェクトへのフルアクセス。
-- `project -> viewer`: 単一プロジェクトへの参照権限。
-- `instance -> manager`: 編集権限を含む、単一インスタンスへのフルアクセス。
-- `instance -> operator`: 編集権限を除いた、単一インスタンスへのフルアクセス。
-- `instance -> user`: 単一インスタンスへの参照権限に加えて、 `exec`、`console`、`file` APIの権限。
-- `instance -> viewer`: 単一インスタンスへの参照権限。
+```{literalinclude} ../internal/server/auth/driver_openfga_model.openfga
+---
+language: none
+---
+```
 
 ```{important}
 ホストへのルート権限を信頼して与えられないユーザーに対しては以下の関連は許可すべきではありません:
@@ -71,8 +66,20 @@ Incus の OpenFGA 認可モデルは API リソースを他のリソースとの
 
 完全な Incus の OpenFGA の認可モデル `internal/server/auth/driver_openfga_model.openfga` 内で定義されます:
 
-```{literalinclude} ../internal/server/auth/driver_openfga_model.openfga
----
-language: none
----
-```
+(authorization-scriptlet)=
+## 認可スクリプトレット
+
+Incusはきめ細やかな認可を管理するスクリプトレットの定義をサポートします。これにより外部ツールに依存することなく詳細な認可のルールを書くことができます。
+
+認可スクリプトレットを使うためには、`authorization.scriptlet`サーバー設定オプションに`authorize`という関数を実装するスクリプトレットを書きます。この関数は3つの引数を取ります:
+
+- `details`：`Username`（ユーザー名あるいは証明書のフィンガープリント）、`Protocol`（認可のプロトコル）、`IsAllProjectsRequest`（リクエストがすべてのプロジェクトに対してされるかどうか）、`ProjectName`（プロジェクト名）のアトリビュートを持つオブジェクト
+- `object`：ユーザーが認可をリクエストする対象のオブジェクト
+- `entitlement`：ユーザーが希望する認可レベル
+
+この関数はユーザーが対象のオブジェクトに指定の認可レベルでアクセスできるかできないかを示すBooleanの値を返す必要があります。
+
+さらに、アクセスAPIを使ってユーザーが一覧表示できるように、2つのオプショナルな関数を定義できます:
+
+- `get_instance_access`：2つの引数（`project_name`と`instance_name`）を取り、指定のインスタンスにアクセスできるユーザー一覧を返す
+- `get_project_access`：1つの引数（`project_name`）を取り、指定のプロジェクトにアクセスできるユーザー一覧を返す
