@@ -51,5 +51,6 @@ self
 API </api>
 セキュリティ </security>
 内部動作 </internals>
+コントリビュート </contributing>
 外部リソース </external_resources>
 ```

@@ -337,13 +337,14 @@ QEMUに渡す引数や設定ファイルを変更するのに`raw.qemu`と`raw.q
 
 以下のフックがあります:
 
-- `early`はQMPを通してIncusによってデバイスが追加される前に実行されます
-- `pre-start`はVMの起動前にIncusがすべてのデバイスを追加した後に実行されます
+- `early`はQEMNUの起動後、QMPを通してIncusによってデバイスが追加される前に実行されます
+- `pre-start`はIncusがすべてのデバイスを追加した後、VMの起動前に実行されます
 - `post-start`はVMの起動直後に実行されます
 
+### 高度な使い方
 ダイナミックなQMPのインタラクションが必要、例えばあるオブジェクトの値を変更したり新しいオブジェクトを生成する前に現在の値を取得するような場合には、スクリプトレットを使ってこれらの同じフックにアタッチすることもできます。
 
-これは`raw.qemu.scriptlet`によって行います。スクリプトレットは`qemu_hook(hook_name)`関数を定義する必要があります。
+これは`raw.qemu.scriptlet`によって行います。スクリプトレットは`qemu_hook(instance, stage)`関数を定義する必要があります。`instance`引数はVMを表すオブジェクトで、属性は`api.Instance`構造体と同じです。`stage`引数はフックの名前（`config`、`early`、`pre-start`、`post-start`）で`config`はQEMNUの起動前に実行され、他のフックは上記のとおりです。
 
 以下のコマンドがスクリプトレットで利用可能です:
 
@@ -352,6 +353,10 @@ QEMUに渡す引数や設定ファイルを変更するのに`raw.qemu`と`raw.q
 - `log_error`は`ERROR`メッセージをログ出力します
 - `run_qmp`は任意のQMPコマンド（JSON形式で指定）を実行し、その出力を返します
 - `run_command`はオプショナルな引数のリストとともに指定したコマンドを実行し、その出力を返します
+- `get_qemu_cmdline`はQEMNUに渡されるコマンドライン引数の一覧を返します
+- `set_qemu_cmdline`はQEMNUに渡されるコマンドライン引数の一覧を設定します
+- `get_qemu_conf`はQEMNU設定をディクショナリとして返します
+- `set_qemu_conf`はディクショナリからQEMNU設定を設定します
 
 さらに以下のエイリアスコマンド（内部では`run_command`を使用）がスクリプトを単純化するために使えます:
 
@@ -369,6 +374,8 @@ QEMUに渡す引数や設定ファイルを変更するのに`raw.qemu`と`raw.q
 - `qom_get`
 - `qom_list`
 - `qom_set`
+
+QEMU設定を変更できる関数は`config`フック内でのみ実行できます。一方、QMPコマンドを実行する関数は`config`フック内では実行できません。
 
 (instance-options-security)=
 ## セキュリティーポリシー

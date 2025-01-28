@@ -1122,7 +1122,7 @@ FUSE実装にリダイレクトすべきファイルシステムのマウント�
 
 ```
 
-```{config:option} security.syscalls.intercept.sched_setcheduler instance-security
+```{config:option} security.syscalls.intercept.sched_setscheduler instance-security
 :condition: "container"
 :defaultdesc: "`false`"
 :liveupdate: "no"

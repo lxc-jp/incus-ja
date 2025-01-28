@@ -2647,3 +2647,25 @@ Incusクラスターでの認可を管理するために、`authorization.script
 
 アクティブなセッションが既にあっても、コンソールへの接続を強制するサポートを追加します。
 インスタンスコンソールへの接続に`--force`という新しいフラグを追加します。
+
+## `network_ovn_state_addresses`
+
+これはOVNネットワークの状態を保持する構造体にアップリンクで使われるIPv4とIPv6アドレス用のフィールドを追加します。
+
+## `qemu_scriptlet_config`
+
+QEMUスクリプトレットの機能を拡張し、VM起動前にQEMUの設定を変更し、インスタンスからスクリプトレットで情報を渡せるようにします。
+
+## `network_bridge_acl_devices`
+
+デバイスがブリッジネットワークにアタッチされたときにACLを設定できるようにします。
+
+## `instance_debug_memory`
+
+`/1.0/instances/NAME/debug/memory`にメモリダンプAPIを追加します。
+
+## `init_preseed_storage_volumes`
+このAPI拡張はpreseed initでストレージボリュームを設定できるようにします。
+
+## `init_preseed_profile_project`
+このAPI拡張はpreseed initでプロファイルの定義の一部としてプロジェクトを指定できるようにします。

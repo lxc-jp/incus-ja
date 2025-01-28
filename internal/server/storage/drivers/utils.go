@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 
@@ -797,6 +798,26 @@ func BlockDiskSizeBytes(blockDiskPath string) (int64, error) {
 	return fi.Size(), nil
 }
 
+// GetPhysicalBlockSize returns the physical block size for the device.
+func GetPhysicalBlockSize(blockDiskPath string) (int, error) {
+	// Open the block device.
+	f, err := os.Open(blockDiskPath)
+	if err != nil {
+		return -1, err
+	}
+
+	defer func() { _ = f.Close() }()
+
+	// Query the physical block size.
+	var res int32
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(f.Fd()), unix.BLKPBSZGET, uintptr(unsafe.Pointer(&res)))
+	if errno != 0 {
+		return -1, fmt.Errorf("Failed to BLKPBSZGET: %w", unix.Errno(errno))
+	}
+
+	return int(res), nil
+}
+
 // OperationLockName returns the storage specific lock name to use with locking package.
 func OperationLockName(operationName string, poolName string, volType VolumeType, contentType ContentType, volName string) string {
 	return fmt.Sprintf("%s/%s/%s/%s/%s", operationName, poolName, volType, contentType, volName)
@@ -836,6 +857,16 @@ func loopDeviceSetup(sourcePath string) (string, error) {
 		} else {
 			return "", err
 		}
+	}
+
+	return strings.TrimSpace(out), nil
+}
+
+// loopDeviceSetupAlign creates a forced 512-byte aligned loop device.
+func loopDeviceSetupAlign(sourcePath string) (string, error) {
+	out, err := subprocess.RunCommand("losetup", "-b", "512", "--find", "--nooverlap", "--show", sourcePath)
+	if err != nil {
+		return "", err
 	}
 
 	return strings.TrimSpace(out), nil
@@ -956,39 +987,4 @@ func roundAbove(above, val int64) int64 {
 	}
 
 	return rounded
-}
-
-// clearDiskData resets a disk file or device to a zero value.
-func clearDiskData(diskPath string, disk *os.File) error {
-	st, err := disk.Stat()
-	if err != nil {
-		return err
-	}
-
-	if linux.IsBlockdev(st.Mode()) {
-		// If dealing with a block device, discard its current content.
-		// This saves space and avoids issues with leaving zero blocks to their original value.
-		_, err = subprocess.RunCommand("blkdiscard", diskPath)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Otherwise truncate the file.
-		err = disk.Truncate(0)
-		if err != nil {
-			return err
-		}
-
-		err = disk.Truncate(st.Size())
-		if err != nil {
-			return err
-		}
-
-		_, err = disk.Seek(0, 0)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
