@@ -92,9 +92,10 @@ func (c *cmdProject) Command() *cobra.Command {
 
 // Create.
 type cmdProjectCreate struct {
-	global     *cmdGlobal
-	project    *cmdProject
-	flagConfig []string
+	global          *cmdGlobal
+	project         *cmdProject
+	flagConfig      []string
+	flagDescription string
 }
 
 func (c *cmdProjectCreate) Command() *cobra.Command {
@@ -110,6 +111,7 @@ incus project create p1 < config.yaml
     Create a project named p1 with configuration from config.yaml`))
 
 	cmd.Flags().StringArrayVarP(&c.flagConfig, "config", "c", nil, i18n.G("Config key/value to apply to the new project")+"``")
+	cmd.Flags().StringVar(&c.flagDescription, "description", "", i18n.G("Project description")+"``")
 
 	cmd.RunE = c.Run
 
@@ -173,6 +175,10 @@ func (c *cmdProjectCreate) Run(cmd *cobra.Command, args []string) error {
 
 			project.Config[key] = value
 		}
+	}
+
+	if c.flagDescription != "" {
+		project.Description = c.flagDescription
 	}
 
 	err = resource.server.CreateProject(project)
@@ -530,7 +536,11 @@ u - Used By`))
 
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultProjectColumns, i18n.G("Columns")+"``")
 
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G("Format (csv|json|table|yaml|compact)")+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
+	}
 
 	cmd.RunE = c.Run
 
@@ -1053,7 +1063,11 @@ func (c *cmdProjectInfo) Command() *cobra.Command {
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Get a summary of resource allocations`))
 	cmd.Flags().BoolVar(&c.flagShowAccess, "show-access", false, i18n.G("Show the instance's access list"))
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G("Format (csv|json|table|yaml|compact)")+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
+	}
 
 	cmd.RunE = c.Run
 

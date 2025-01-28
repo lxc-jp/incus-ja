@@ -348,6 +348,8 @@ func (c *cmdProfileCopy) Run(cmd *cobra.Command, args []string) error {
 type cmdProfileCreate struct {
 	global  *cmdGlobal
 	profile *cmdProfile
+
+	flagDescription string
 }
 
 func (c *cmdProfileCreate) Command() *cobra.Command {
@@ -363,6 +365,8 @@ incus profile create p1 < config.yaml
     Create a profile named p1 with configuration from config.yaml`))
 
 	cmd.RunE = c.Run
+
+	cmd.Flags().StringVar(&c.flagDescription, "description", "", i18n.G("Profile description")+"``")
 
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -413,6 +417,10 @@ func (c *cmdProfileCreate) Run(cmd *cobra.Command, args []string) error {
 	profile := api.ProfilesPost{}
 	profile.Name = resource.name
 	profile.ProfilePut = stdinData
+
+	if c.flagDescription != "" {
+		profile.Description = c.flagDescription
+	}
 
 	err = resource.server.CreateProfile(profile)
 	if err != nil {
@@ -723,8 +731,12 @@ u - Used By`))
 
 	cmd.RunE = c.Run
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultProfileColumns, i18n.G("Columns")+"``")
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G("Format (csv|json|table|yaml|compact)")+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Display profiles from all projects"))
+
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
+	}
 
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {

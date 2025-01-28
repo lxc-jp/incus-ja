@@ -57,6 +57,8 @@ type cmdImageAliasCreate struct {
 	global     *cmdGlobal
 	image      *cmdImage
 	imageAlias *cmdImageAlias
+
+	flagDescription string
 }
 
 func (c *cmdImageAliasCreate) Command() *cobra.Command {
@@ -65,6 +67,8 @@ func (c *cmdImageAliasCreate) Command() *cobra.Command {
 	cmd.Short = i18n.G("Create aliases for existing images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Create aliases for existing images`))
+
+	cmd.Flags().StringVar(&c.flagDescription, "description", "", i18n.G("Image alias description")+"``")
 
 	cmd.RunE = c.Run
 
@@ -111,6 +115,7 @@ func (c *cmdImageAliasCreate) Run(cmd *cobra.Command, args []string) error {
 	alias := api.ImageAliasesPost{}
 	alias.Name = resource.name
 	alias.Target = args[1]
+	alias.Description = c.flagDescription
 
 	return resource.server.CreateImageAlias(alias)
 }
@@ -202,8 +207,12 @@ Pre-defined column shorthand chars:
   f - Fingerprint
   t - Type
   d - Description`))
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G("Format (csv|json|table|yaml|compact)")+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultImageAliasColumns, i18n.G("Columns")+"``")
+
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
+	}
 
 	cmd.RunE = c.Run
 
