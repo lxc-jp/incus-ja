@@ -10,7 +10,6 @@ Incusのインストール </installing>
 Incusの初期化 </howto/initialize>
 サポートを受ける </support>
 よく聞かれる質問 </faq>
-Incusへのコントリビュート </contributing>
 ```
 
 YouTube に一連のデモとチュートリアルがあります。

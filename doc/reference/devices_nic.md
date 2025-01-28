@@ -70,32 +70,37 @@ Incus はさまざまな異なるタイプのネットワークデバイス（*N
 
 `bridged` タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー                      | 型      | デフォルト値       | 管理 | 説明
-:--                       | :--     | :--                | :--  | :--
-`boot.priority`           | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
-`host_name`               | string  | ランダムに割り当て | no   | ホスト内でのインターフェースの名前
-`hwaddr`                  | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
-`ipv4.address`            | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能）
-`ipv4.routes`             | string  | -                  | no   | ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト
-`ipv4.routes.external`    | string  | -                  | no   | NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv4静的ルートのカンマ区切りリスト
-`ipv6.address`            | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にすべてのIPv6トラフィックを制限するには`none`と設定可能）
-`ipv6.routes`             | string  | -                  | no   | ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト
-`ipv6.routes.external`    | string  | -                  | no   | NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv6静的ルートのカンマ区切りリスト
-`limits.egress`           | string  | -                  | no   | 外向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
-`limits.ingress`          | string  | -                  | no   | 内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
-`limits.max`              | string  | -                  | no   | 内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）
-`limits.priority`         | integer | -                  | no   | 外向きトラフィックへの `skb->priority` の値（32-bit 符号なし整数）、カーネルでネットワークパケットに優先度をつけるために kernel queuing discipline （qdisc） によって使用される（この値の効果は特定の qdisc 実装、たとえば、`SKBPRIO` または `QFQ` によって異なる。この値を設定する前に kernel qdisc ドキュメントを参照のこと）
-`mtu`                     | integer | 親の MTU           | yes  | 新しいインターフェースのMTU
-`name`                    | string  | カーネルが割り当て | no   | インスタンス内でのインターフェースの名前
-`network`                 | string  | -                  | no   | （`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク
-`parent`                  | string  | -                  | yes  | ホストデバイスの名前（`nictype`を直接設定する場合は必須）
-`queue.tx.length`         | integer | -                  | no   | NICの送信キューの長さ
-`security.ipv4_filtering` | bool    | `false`            | no   | インスタンスが他のインスタンスのIPv4アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）
-`security.ipv6_filtering` | bool    | `false`            | no   | インスタンスが他のインスタンスのIPv6アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）
-`security.mac_filtering`  | bool    | `false`            | no   | インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ
-`security.port_isolation` | bool    | `false`            | no   | NICがポート隔離を有効にしたネットワーク内の他のNICと通信するのを防ぐ
-`vlan`                    | integer | -                  | no   | タグなしのトラフィックに使用するVLAN ID（デフォルトのVLANからポートを削除するには`none`を指定）
-`vlan.tagged`             | integer | -                  | no   | タグありのトラフィックに参加するVLAN IDまたはVLANの範囲のカンマ区切りリスト
+キー                                   | 型      | デフォルト値       | 管理 | 説明
+:--                                    | :--     | :--                | :--  | :--
+`boot.priority`                        | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
+`host_name`                            | string  | ランダムに割り当て | no   | ホスト内でのインターフェースの名前
+`hwaddr`                               | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
+`ipv4.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能）
+`ipv4.routes`                          | string  | -                  | no   | ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト
+`ipv4.routes.external`                 | string  | -                  | no   | NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv4静的ルートのカンマ区切りリスト
+`ipv6.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にすべてのIPv6トラフィックを制限するには`none`と設定可能）
+`ipv6.routes`                          | string  | -                  | no   | ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト
+`ipv6.routes.external`                 | string  | -                  | no   | NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv6静的ルートのカンマ区切りリスト
+`limits.egress`                        | string  | -                  | no   | 外向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
+`limits.ingress`                       | string  | -                  | no   | 内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
+`limits.max`                           | string  | -                  | no   | 内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）
+`limits.priority`                      | integer | -                  | no   | 外向きトラフィックへの `skb->priority` の値（32-bit 符号なし整数）、カーネルでネットワークパケットに優先度をつけるために kernel queuing discipline （qdisc） によって使用される（この値の効果は特定の qdisc 実装、たとえば、`SKBPRIO` または `QFQ` によって異なる。この値を設定する前に kernel qdisc ドキュメントを参照のこと）
+`mtu`                                  | integer | 親の MTU           | yes  | 新しいインターフェースのMTU
+`name`                                 | string  | カーネルが割り当て | no   | インスタンス内でのインターフェースの名前
+`network`                              | string  | -                  | no   | （`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク
+`parent`                               | string  | -                  | yes  | ホストデバイスの名前（`nictype`を直接設定する場合は必須）
+`queue.tx.length`                      | integer | -                  | no   | NICの送信キューの長さ
+`security.acls`                        | string  | -                  | no   | 適用するネットワークACLのカンマ区切りリスト
+`security.acls.default.egress.action`  | string  | `drop`             | no   | どのACLルールにもマッチしないエグレス・トラフィックに使うアクション
+`security.acls.default.egress.logged`  | bool    | `false`            | no   | どのACLルールにもマッチしないエグレス・トラフィックをログ出力するかどうか
+`security.acls.default.ingress.action` | string  | `drop`             | no   | どのACLルールにもマッチしないイングレス・トラフィックに使うアクション
+`security.acls.default.ingress.logged` | bool    | `false`            | no   | どのACLルールにもマッチしないイングレス・トラフィックをログ出力するかどうか
+`security.ipv4_filtering`              | bool    | `false`            | no   | インスタンスが他のインスタンスのIPv4アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）
+`security.ipv6_filtering`              | bool    | `false`            | no   | インスタンスが他のインスタンスのIPv6アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）
+`security.mac_filtering`               | bool    | `false`            | no   | インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ
+`security.port_isolation`              | bool    | `false`            | no   | NICがポート隔離を有効にしたネットワーク内の他のNICと通信するのを防ぐ
+`vlan`                                 | integer | -                  | no   | タグなしのトラフィックに使用するVLAN ID（デフォルトのVLANからポートを削除するには`none`を指定）
+`vlan.tagged`                          | integer | -                  | no   | タグありのトラフィックに参加するVLAN IDまたはVLANの範囲のカンマ区切りリスト
 
 (nic-macvlan)=
 ### `nictype`: `macvlan`

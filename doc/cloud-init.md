@@ -48,7 +48,7 @@ Incus は、`cloud-init`の設定に対して`cloud-init.*`と`user.*`の 2 つ�
 
 以下の設定オプションがサポートされています。
 
-* `cloud-init.vendor-data`または`user.vendor-data` （{ref}`cloud-init:vendordata`を参照）
+* `cloud-init.vendor-data`または`user.vendor-data` （{ref}`cloud-init:vendor-data`を参照）
 * `cloud-init.user-data`または`user.user-data` （{ref}`cloud-init:user_data_formats`を参照）
 * `cloud-init.network-config`または`user.network-config` （{ref}`cloud-init:network_config`を参照）
 

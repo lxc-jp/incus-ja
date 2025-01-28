@@ -4,11 +4,9 @@ Incus の日本語ドキュメントは、<https://incus-ja.readthedocs.io/ja/la
 
 GitHub でもドキュメントの基本的なレンダリングを提供していますが、include やクリッカブルリンクなどの重要な機能が欠落しています。そのため、[公開ドキュメント](https://incus-ja.readthedocs.io/ja/latest/)を読むことをお勧めします。
 
-## どのように動作するか
-
 <!-- Include start docs -->
 
-### ドキュメントのフレームワーク
+## ドキュメントのフレームワーク
 
 Incus のドキュメントは[Sphinx](https://www.sphinx-doc.org/en/master/index.html)でビルドされます。
 
@@ -17,7 +15,7 @@ Incus のドキュメントは[Sphinx](https://www.sphinx-doc.org/en/master/inde
 
 構成に関しては、このドキュメントでは[Diátaxis](https://diataxis.fr/)アプローチを採用しています。
 
-### ドキュメントのビルド
+## ドキュメントのビルド
 
 ドキュメントをビルドするには、リポジトリのルートディレクトリーから`make doc`を実行します。このコマンドは必要なツールをインストールして、出力を`doc/html/`ディレクトリーにレンダリングします。
 変更されたファイルのみを対象に（ツールを再インストールすることなく）ドキュメントを更新するには、`make doc-incremental`を実行します。
