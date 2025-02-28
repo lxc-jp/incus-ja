@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/checkpoint-restore/go-criu/v6/crit"
-	"github.com/flosch/pongo2"
+	"github.com/flosch/pongo2/v6"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/kballard/go-shellquote"
@@ -1913,9 +1913,9 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	revert := revert.New()
 	defer revert.Fail()
 
-	// Assign a NUMA node if needed.
+	// Assign NUMA node(s) if needed.
 	if d.expandedConfig["limits.cpu.nodes"] == "balanced" {
-		err := d.setNUMANode()
+		err := d.balanceNUMANodes()
 		if err != nil {
 			return "", nil, err
 		}
