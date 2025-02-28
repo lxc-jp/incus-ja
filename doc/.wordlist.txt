@@ -83,6 +83,7 @@ ES
 ESA
 ETag
 failover
+frontend
 FQDNs
 Furo
 gapped
@@ -225,6 +226,7 @@ RBD
 README
 reconfiguring
 requestor
+resolvers
 RESTful
 RHEL
 rootfs
@@ -326,6 +328,7 @@ VMs
 VPD
 VPN
 VPS
+VRF
 vSwitch
 VXLAN
 WebSocket

@@ -168,19 +168,23 @@ Incus に関連して 2 つのグループが作成されます:
 ```
 
 ```{group-tab} NixOS
-Incus とその依存ソフトウェアは NixOS でパッケージされていて NixOS のオプションで設定できます。利用可能なオプション一式については [`virtualisation.incus`](https://search.nixos.org/options?query=virtualisation.incus) を参照してください。
+Incus とその依存ソフトウェアはNixOSでパッケージされていてNixOSのオプションで設定できます。利用可能なオプション一式については [`virtualisation.incus`](https://search.nixos.org/options?query=virtualisation.incus) を参照してください。
 
 NixOS 設定に以下を加えるとサービスを有効化し開始できます。
 
     virtualisation.incus.enable = true;
 
-Incus の初期化は手動で `incus admin init` を使ってもできますし、 NixOS 設定のプリシードオプションでもできます。プリシードの例は NixOS のドキュメントを参照してください。
+Incus の初期化は手動で `incus admin init` を使ってもできますし、NixOS設定のプリシードオプションでもできます。プリシードの例はNixOSのドキュメントを参照してください。
 
     virtualisation.incus.preseed = {};
 
-最後に、ユーザーを `incus-admin` グループに追加して、非ルートユーザーに Incus ソケットへのアクセス権を追加できます。それには NixOS 設定に以下を追加します:
+最後に、ユーザーを `incus-admin` グループに追加して、非ルートユーザーに Incus ソケットへのアクセス権を追加できます。それにはNixOS設定に以下を追加します:
 
     users.users.YOUR_USERNAME.extraGroups = ["incus-admin"];
+
+ユーザーにIncusデーモンへの完全なアクセスを与える代わりに、`incus`グループにユーザーを追加することもできます。これはIncusのユーザーソケットへの権限のみを許可します。それにはNixOS設定に以下を追加します:
+
+    users.users.YOUR_USERNAME.extraGroups = ["incus"];
 
 NixOS 固有の問題については、パッケージレポジトリ内で[イシューを起票](https://github.com/NixOS/nixpkgs/issues/new/choose)してください。
 ```
