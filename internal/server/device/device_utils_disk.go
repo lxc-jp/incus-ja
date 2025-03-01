@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/lxc/incus/v6/internal/server/instance"
 	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
 	"github.com/lxc/incus/v6/shared/idmap"
-	"github.com/lxc/incus/v6/shared/osarch"
 	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/subprocess"
 	"github.com/lxc/incus/v6/shared/util"
@@ -30,25 +30,35 @@ const RBDFormatPrefix = "rbd"
 // RBDFormatSeparator is the field separate used in disk paths for RBD devices.
 const RBDFormatSeparator = " "
 
-// DiskParseRBDFormat parses an rbd formatted string, and returns the pool name, volume name, and list of options.
-func DiskParseRBDFormat(rbd string) (string, string, []string, error) {
-	if !strings.HasPrefix(rbd, fmt.Sprintf("%s%s", RBDFormatPrefix, RBDFormatSeparator)) {
-		return "", "", nil, fmt.Errorf("Invalid rbd format, missing prefix")
+// DiskParseRBDFormat parses an rbd formatted string, and returns the pool name, volume name, and map of options.
+func DiskParseRBDFormat(rbd string) (string, string, map[string]string, error) {
+	// Remove and check the prefix.
+	prefix, rbd, _ := strings.Cut(rbd, RBDFormatSeparator)
+	if prefix != RBDFormatPrefix {
+		return "", "", nil, fmt.Errorf("Invalid rbd format, wrong prefix: %q", prefix)
 	}
 
-	fields := strings.SplitN(rbd, RBDFormatSeparator, 3)
-	if len(fields) != 3 {
-		return "", "", nil, fmt.Errorf("Invalid rbd format, invalid number of fields")
+	// Split the path and options.
+	path, rawOpts, _ := strings.Cut(rbd, RBDFormatSeparator)
+
+	// Check for valid RBD path.
+	pool, volume, validPath := strings.Cut(path, "/")
+	if !validPath {
+		return "", "", nil, fmt.Errorf("Invalid rbd format, missing pool and/or volume: %q", path)
 	}
 
-	opts := fields[2]
+	// Parse options.
+	opts := make(map[string]string)
+	for _, o := range strings.Split(rawOpts, ":") {
+		k, v, isValid := strings.Cut(o, "=")
+		if !isValid {
+			return "", "", nil, fmt.Errorf("Invalid rbd format, bad option: %q", o)
+		}
 
-	fields = strings.SplitN(fields[1], "/", 2)
-	if len(fields) != 2 {
-		return "", "", nil, fmt.Errorf("Invalid rbd format, invalid pool or volume")
+		opts[k] = v
 	}
 
-	return fields[0], fields[1], strings.Split(opts, ":"), nil
+	return pool, volume, opts, nil
 }
 
 // DiskGetRBDFormat returns a rbd formatted string with the given values.
@@ -59,7 +69,6 @@ func DiskGetRBDFormat(clusterName string, userName string, poolName string, volu
 	opts := []string{
 		fmt.Sprintf("id=%s", optEscaper.Replace(userName)),
 		fmt.Sprintf("pool=%s", optEscaper.Replace(poolName)),
-		fmt.Sprintf("conf=/etc/ceph/%s.conf", optEscaper.Replace(clusterName)),
 	}
 
 	return fmt.Sprintf("%s%s%s/%s%s%s", RBDFormatPrefix, RBDFormatSeparator, optEscaper.Replace(poolName), optEscaper.Replace(volumeName), RBDFormatSeparator, strings.Join(opts, ":"))
@@ -77,7 +86,7 @@ func BlockFsDetect(dev string) (string, error) {
 
 // IsBlockdev returns boolean indicating whether device is block type.
 func IsBlockdev(path string) bool {
-	// Get a stat struct from the provided path
+	// Get a stat struct from the provided path.
 	stat := unix.Stat_t{}
 	err := unix.Stat(path, &stat)
 	if err != nil {
@@ -240,6 +249,12 @@ again:
 
 // diskCephfsOptions returns the mntSrcPath and fsOptions to use for mounting a cephfs share.
 func diskCephfsOptions(clusterName string, userName string, fsName string, fsPath string) (string, []string, error) {
+	// Get the FSID.
+	fsid, err := storageDrivers.CephFsid(clusterName)
+	if err != nil {
+		return "", nil, err
+	}
+
 	// Get the monitor list.
 	monAddresses, err := storageDrivers.CephMonitors(clusterName)
 	if err != nil {
@@ -252,52 +267,16 @@ func diskCephfsOptions(clusterName string, userName string, fsName string, fsPat
 		return "", nil, err
 	}
 
-	// Prepare mount entry.
-	fsOptions := []string{
-		fmt.Sprintf("name=%v", userName),
-		fmt.Sprintf("secret=%v", secret),
-		fmt.Sprintf("mds_namespace=%v", fsName),
-	}
+	srcPath, fsOptions := storageDrivers.CephBuildMount(
+		userName,
+		secret,
+		fsid,
+		monAddresses,
+		fsName,
+		fsPath,
+	)
 
-	srcPath := strings.Join(monAddresses, ",") + ":/" + fsPath
 	return srcPath, fsOptions, nil
-}
-
-// diskAddRootUserNSEntry takes a set of idmap entries, and adds host -> userns root uid/gid mappings if needed.
-// Returns the supplied idmap entries with any added root entries.
-func diskAddRootUserNSEntry(idmaps []idmap.Entry, hostRootID int64) []idmap.Entry {
-	needsNSUIDRootEntry := true
-	needsNSGIDRootEntry := true
-
-	for _, idmap := range idmaps {
-		// Check if the idmap entry contains the userns root user.
-		if idmap.NSID == 0 {
-			if idmap.IsUID {
-				needsNSUIDRootEntry = false // Root UID mapping already present.
-			}
-
-			if idmap.IsGID {
-				needsNSGIDRootEntry = false // Root GID mapping already present.
-			}
-
-			if !needsNSUIDRootEntry && needsNSGIDRootEntry {
-				break // If we've found a root entry for UID and GID then we don't need to add one.
-			}
-		}
-	}
-
-	// Add UID/GID/both mapping entry if needed.
-	if needsNSUIDRootEntry || needsNSGIDRootEntry {
-		idmaps = append(idmaps, idmap.Entry{
-			HostID:   hostRootID,
-			IsUID:    needsNSUIDRootEntry,
-			IsGID:    needsNSGIDRootEntry,
-			NSID:     0,
-			MapRange: 1,
-		})
-	}
-
-	return idmaps
 }
 
 // DiskVMVirtiofsdStart starts a new virtiofsd process.
@@ -330,12 +309,6 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 
 	if cmd == "" {
 		return nil, nil, ErrMissingVirtiofsd
-	}
-
-	// Currently, virtiofs is broken on at least the ARM architecture.
-	// We therefore restrict virtiofs to 64BIT_INTEL_X86.
-	if inst.Architecture() != osarch.ARCH_64BIT_INTEL_X86 {
-		return nil, nil, UnsupportedError{msg: "Architecture unsupported"}
 	}
 
 	if util.IsTrue(inst.ExpandedConfig()["migration.stateful"]) {
@@ -388,15 +361,43 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 	}
 
 	// Start the virtiofsd process in non-daemon mode.
-	args := []string{"--fd=3", fmt.Sprintf("--cache=%s", cacheOption), "-o", fmt.Sprintf("source=%s", sharePath)}
-	proc, err := subprocess.NewProcess(cmd, args, logPath, logPath)
-	if err != nil {
-		return nil, nil, err
-	}
+	args := []string{"--fd=3", fmt.Sprintf("--cache=%s", cacheOption), fmt.Sprintf("--shared-dir=%s", sharePath)}
 
 	if len(idmaps) > 0 {
 		idmapSet := &idmap.Set{Entries: idmaps}
-		proc.SetUserns(idmapSet.ToUIDMappings(), idmapSet.ToGIDMappings())
+		sort.Sort(idmapSet)
+
+		var lastUID int64
+		var lastGID int64
+
+		for _, entry := range idmapSet.Entries {
+			if entry.IsUID {
+				args = append(args, fmt.Sprintf("--translate-uid=map:%d:%d:%d", entry.NSID, entry.HostID, entry.MapRange))
+
+				args = append(args, fmt.Sprintf("--translate-uid=forbid-guest:%d:%d", lastUID, entry.NSID-lastUID))
+				lastUID = entry.NSID + entry.MapRange
+			}
+
+			if entry.IsGID {
+				args = append(args, fmt.Sprintf("--translate-gid=map:%d:%d:%d", entry.NSID, entry.HostID, entry.MapRange))
+
+				args = append(args, fmt.Sprintf("--translate-gid=forbid-guest:%d:%d", lastGID, entry.NSID-lastGID))
+				lastGID = entry.NSID + entry.MapRange
+			}
+		}
+
+		if lastUID < 4294967295 {
+			args = append(args, fmt.Sprintf("--translate-uid=forbid-guest:%d:%d", lastUID, 4294967295-lastUID))
+		}
+
+		if lastGID < 4294967295 {
+			args = append(args, fmt.Sprintf("--translate-gid=forbid-guest:%d:%d", lastGID, 4294967295-lastGID))
+		}
+	}
+
+	proc, err := subprocess.NewProcess(cmd, args, logPath, logPath)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	err = proc.StartWithFiles(context.Background(), []*os.File{unixFile})

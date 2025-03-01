@@ -29,7 +29,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/flosch/pongo2"
+	"github.com/flosch/pongo2/v6"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/kballard/go-shellquote"
@@ -1205,9 +1205,9 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 
 	defer op.Done(err)
 
-	// Assign a NUMA node if needed.
+	// Assign NUMA node(s) if needed.
 	if d.expandedConfig["limits.cpu.nodes"] == "balanced" {
-		err := d.setNUMANode()
+		err := d.balanceNUMANodes()
 		if err != nil {
 			op.Done(err)
 			return err
@@ -1627,6 +1627,14 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	// SMBIOS only on x86_64 and aarch64.
 	if d.architectureSupportsUEFI(d.architecture) {
 		qemuArgs = append(qemuArgs, "-smbios", "type=2,manufacturer=LinuxContainers,product=Incus")
+
+		for k, v := range d.expandedConfig {
+			if !strings.HasPrefix(k, "smbios11.") {
+				continue
+			}
+
+			qemuArgs = append(qemuArgs, "-smbios", fmt.Sprintf("type=11,value=%s=%s", strings.TrimPrefix(k, "smbios11."), qemuEscapeCmdline(v)))
+		}
 	}
 
 	// Attempt to drop privileges (doesn't work when restoring state).
@@ -2609,7 +2617,7 @@ func (d *qemu) getPCIHotplug() (string, error) {
 
 	for _, dev := range devices {
 		// Skip built-in devices.
-		if dev.DevID == "" {
+		if dev.DevID == "" || dev.DevID == "qemu_iommu" {
 			continue
 		}
 
@@ -3391,6 +3399,19 @@ func (d *qemu) generateQemuConfig(cpuInfo *cpuTopology, mountInfo *storagePools.
 
 	// Setup the bus allocator.
 	bus := qemuNewBus(busName, &conf)
+
+	// Windows doesn't support virtio-iommu.
+	if !strings.Contains(strings.ToLower(d.expandedConfig["image.os"]), "windows") && d.architectureSupportsUEFI(d.architecture) {
+		devBus, devAddr, multi := bus.allocateDirect()
+		iommuOpts := qemuDevOpts{
+			busName:       bus.name,
+			devBus:        devBus,
+			devAddr:       devAddr,
+			multifunction: multi,
+		}
+
+		conf = append(conf, qemuIOMMU(&iommuOpts)...)
+	}
 
 	// Now add the fixed set of devices. The multi-function groups used for these fixed internal devices are
 	// specifically chosen to ensure that we consume exactly 4 PCI bus ports (on PCIe bus). This ensures that
@@ -4179,7 +4200,7 @@ func (d *qemu) addDriveConfig(qemuDev map[string]any, bootIndexes map[string]int
 	} else if isRBDImage {
 		blockDev["driver"] = "rbd"
 
-		_, volName, opts, err := device.DiskParseRBDFormat(driveConf.DevPath)
+		poolName, volName, opts, err := device.DiskParseRBDFormat(driveConf.DevPath)
 		if err != nil {
 			return nil, fmt.Errorf("Failed parsing rbd string: %w", err)
 		}
@@ -4204,68 +4225,20 @@ func (d *qemu) addDriveConfig(qemuDev map[string]any, bootIndexes map[string]int
 		vol := storageDrivers.NewVolume(nil, "", volumeType, rbdContentType, volumeName, nil, nil)
 		rbdImageName := storageDrivers.CephGetRBDImageName(vol, "", false)
 
-		// Parse the options (ceph credentials).
-		userName := storageDrivers.CephDefaultUser
-		clusterName := storageDrivers.CephDefaultCluster
-		poolName := ""
-
-		for _, option := range opts {
-			fields := strings.Split(option, "=")
-			if len(fields) != 2 {
-				return nil, fmt.Errorf("Unexpected volume rbd option %q", option)
+		// Scan & pass through options.
+		blockDev["pool"] = poolName
+		blockDev["image"] = rbdImageName
+		for key, val := range opts {
+			// We use 'id' where qemu uses 'user'.
+			if key == "id" {
+				blockDev["user"] = val
+			} else {
+				blockDev[key] = val
 			}
-
-			if fields[0] == "id" {
-				userName = fields[1]
-			} else if fields[0] == "pool" {
-				poolName = fields[1]
-			} else if fields[0] == "conf" {
-				baseName := filepath.Base(fields[1])
-				clusterName = strings.TrimSuffix(baseName, ".conf")
-			}
-		}
-
-		if poolName == "" {
-			return nil, fmt.Errorf("Missing pool name")
 		}
 
 		// The aio option isn't available when using the rbd driver.
 		delete(blockDev, "aio")
-		blockDev["pool"] = poolName
-		blockDev["image"] = rbdImageName
-		blockDev["user"] = userName
-		blockDev["server"] = []map[string]string{}
-
-		// Derference ceph config path.
-		cephConfPath := fmt.Sprintf("/etc/ceph/%s.conf", clusterName)
-		target, err := filepath.EvalSymlinks(cephConfPath)
-		if err == nil {
-			cephConfPath = target
-		}
-
-		blockDev["conf"] = cephConfPath
-
-		// Setup the Ceph cluster config (monitors and keyring).
-		monitors, err := storageDrivers.CephMonitors(clusterName)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, monitor := range monitors {
-			idx := strings.LastIndex(monitor, ":")
-			host := monitor[:idx]
-			port := monitor[idx+1:]
-
-			blockDev["server"] = append(blockDev["server"].([]map[string]string), map[string]string{
-				"host": strings.Trim(host, "[]"),
-				"port": port,
-			})
-		}
-
-		rbdSecret, err = storageDrivers.CephKeyring(clusterName, userName)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	readonly := slices.Contains(driveConf.Opts, "ro")
@@ -7028,6 +7001,11 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 			return fmt.Errorf("Failed loading storage pool: %w", err)
 		}
 
+		// Check that we're on shared storage.
+		if !diskPool.Driver().Info().Remote {
+			continue
+		}
+
 		// Setup the volume entry.
 		extraSourceArgs := &localMigration.VolumeSourceArgs{
 			ClusterMove: true,
@@ -7546,6 +7524,11 @@ func (d *qemu) MigrateReceive(args instance.MigrateReceiveArgs) error {
 			diskPool, err := storagePools.LoadByName(d.state, dev.Config["pool"])
 			if err != nil {
 				return fmt.Errorf("Failed loading storage pool: %w", err)
+			}
+
+			// Check that we're on shared storage.
+			if !diskPool.Driver().Info().Remote {
+				continue
 			}
 
 			// Setup the volume entry.
@@ -8800,7 +8783,7 @@ func (d *qemu) checkFeatures(hostArch int, qemuPath string) (map[string]any, err
 		"-nographic",
 		"-nodefaults",
 		"-no-user-config",
-		"-chardev", fmt.Sprintf("socket,id=monitor,path=%s,server=on,wait=off", monitorPath.Name()),
+		"-chardev", fmt.Sprintf("socket,id=monitor,path=%s,server=on,wait=off", qemuEscapeCmdline(monitorPath.Name())),
 		"-mon", "chardev=monitor,mode=control",
 		"-machine", qemuMachineType(hostArch),
 	}
@@ -8827,7 +8810,7 @@ func (d *qemu) checkFeatures(hostArch int, qemuPath string) (map[string]any, err
 			return nil, fmt.Errorf("Unable to locate a UEFI firmware")
 		}
 
-		qemuArgs = append(qemuArgs, "-drive", fmt.Sprintf("if=pflash,format=raw,readonly=on,file=%s", efiPath))
+		qemuArgs = append(qemuArgs, "-drive", fmt.Sprintf("if=pflash,format=raw,readonly=on,file=%s", qemuEscapeCmdline(efiPath)))
 	}
 
 	var stderr bytes.Buffer

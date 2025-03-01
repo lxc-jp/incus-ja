@@ -65,11 +65,11 @@ incus network load-balancer create <network_name> <listen_address> [configuratio
 バックエンド仕様を追加するには以下のコマンドを使用します:
 
 ```bash
-incus network load-balancer backend add <network_name> <listen_address> <backend_name> <listen_ports> <target_address> [<target_ports>]
+incus network load-balancer backend add <network_name> <listen_address> <backend_name> <target_address> [<target_ports>]
 ```
 
 ターゲットポートは省略可能です。
-省略した場合、ロードバランサーはバックエンドのリッスンポートをバックエンドのターゲットポートとして使用します。
+省略した場合、ロードバランサーはデフォルトでフロントエンドのポートをバックエンドのターゲットポートとして使用します。
 
 トラフィックを別のポートにフォワードしたい場合、2 つの選択肢があります。
 

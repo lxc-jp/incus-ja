@@ -2669,3 +2669,16 @@ QEMUスクリプトレットの機能を拡張し、VM起動前にQEMUの設定�
 
 ## `init_preseed_profile_project`
 このAPI拡張はpreseed initでプロファイルの定義の一部としてプロジェクトを指定できるようにします。
+
+## `instance_nic_routed_host_address`
+ルートを追加するVRFを指定するサポートを追加。
+
+## `instance_smbios11`
+新しいカテゴリの設定オプション、`smbios11.XYZ`が追加されました。
+これは`SMBIOS Type 11`をサポートするシステム上で`SMBIOS Type 11`を通してキー・バリュー・ペアを渡せるようにします。
+
+## `api_filtering_extended`
+これはすべてのAPIのコレクションにAPIのフィルタリングのメカニズムを拡張します。
+
+## `acme_dns01`
+証明書生成のためのIncusのACMEサポートに`DNS-01`チャレンジのサポートを追加します。
