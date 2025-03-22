@@ -451,7 +451,7 @@ IP アドレス、ゲートウェイ、ルーティング
 `parent`              | string  | -                  | インスタンスが参加するホストデバイス名
 `queue.tx.length`     | integer | -                  | NICの送信キューの長さ
 `vlan`                | integer | -                  | アタッチ先の VLAN ID
-`vrf`                 | string  | -                  | ホスト側のインターフェースとルート作成時に実行されるホスト上のVRF
+`vrf`                 | string  | -                  | ホスト側のインターフェースが接続されており、ルートが作成されるホスト上のVRF
 
 ## `bridge`、`macvlan`、`ipvlan`を使った物理ネットワークへの接続
 
