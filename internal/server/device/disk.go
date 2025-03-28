@@ -351,6 +351,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		// - `nvme`
 		// - `virtio-blk`
 		// - `virtio-scsi` (default)
+		// - `usb`
 		//
 		// For file systems (shared directories or custom volumes), this is one of:
 		// - `9p`
@@ -361,7 +362,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		//  default: `virtio-scsi` for block, `auto` for file system
 		//  required: no
 		//  shortdesc: Only for VMs: Override the bus for the device
-		"io.bus": validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "auto", "9p", "virtiofs")),
+		"io.bus": validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "auto", "9p", "virtiofs", "usb")),
 	}
 
 	err := d.config.Validate(rules)
@@ -540,9 +541,10 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 					}
 				}
 
+				// Parse the volume name and path.
+				volFields := strings.SplitN(d.config["source"], "/", 2)
+
 				if dbVolume == nil {
-					// Parse the volume name and path.
-					volFields := strings.SplitN(d.config["source"], "/", 2)
 					volName := volFields[0]
 
 					// GetStoragePoolVolume returns a volume with an empty Location field for remote drivers.
@@ -579,6 +581,11 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 					if d.config["path"] != "" {
 						return fmt.Errorf("Custom block volumes cannot have a path defined")
 					}
+
+					if len(volFields) > 1 {
+						return fmt.Errorf("Custom block volume snapshots cannot be used directly")
+					}
+
 				} else if contentType == db.StoragePoolVolumeContentTypeISO {
 					if instConf.Type() == instancetype.Container {
 						return fmt.Errorf("Custom ISO volumes cannot be used on containers")
@@ -1344,7 +1351,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				}
 			} else {
 				// Confirm we're dealing with block options.
-				err := validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi"))(d.config["io.bus"])
+				err := validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "usb"))(d.config["io.bus"])
 				if err != nil {
 					return nil, err
 				}
@@ -1857,7 +1864,7 @@ func (d *disk) createDevice(srcPath string) (func(), string, bool, error) {
 
 	// Create the devices directory if missing.
 	if !util.PathExists(d.inst.DevicesPath()) {
-		err := os.Mkdir(d.inst.DevicesPath(), 0711)
+		err := os.Mkdir(d.inst.DevicesPath(), 0o711)
 		if err != nil {
 			return nil, "", false, err
 		}
@@ -1880,7 +1887,7 @@ func (d *disk) createDevice(srcPath string) (func(), string, bool, error) {
 
 		_ = f.Close()
 	} else {
-		err := os.Mkdir(devPath, 0700)
+		err := os.Mkdir(devPath, 0o700)
 		if err != nil {
 			return nil, "", false, err
 		}
@@ -2599,7 +2606,7 @@ func (d *disk) generateVMAgentDrive() (string, error) {
 	}
 
 	// Create agent drive dir.
-	err = os.MkdirAll(scratchDir, 0100)
+	err = os.MkdirAll(scratchDir, 0o100)
 	if err != nil {
 		return "", err
 	}
@@ -2622,7 +2629,7 @@ func (d *disk) generateVMAgentDrive() (string, error) {
 			return "", err
 		}
 
-		err = os.Chmod(agentInstallPath, 0500)
+		err = os.Chmod(agentInstallPath, 0o500)
 		if err != nil {
 			return "", err
 		}
@@ -2657,7 +2664,7 @@ func (d *disk) generateVMConfigDrive() (string, error) {
 	}
 
 	// Create config drive dir.
-	err = os.MkdirAll(scratchDir, 0100)
+	err = os.MkdirAll(scratchDir, 0o100)
 	if err != nil {
 		return "", err
 	}
@@ -2673,7 +2680,7 @@ func (d *disk) generateVMConfigDrive() (string, error) {
 		}
 	}
 
-	err = os.WriteFile(filepath.Join(scratchDir, "vendor-data"), []byte(vendorData), 0400)
+	err = os.WriteFile(filepath.Join(scratchDir, "vendor-data"), []byte(vendorData), 0o400)
 	if err != nil {
 		return "", err
 	}
@@ -2687,7 +2694,7 @@ func (d *disk) generateVMConfigDrive() (string, error) {
 		}
 	}
 
-	err = os.WriteFile(filepath.Join(scratchDir, "user-data"), []byte(userData), 0400)
+	err = os.WriteFile(filepath.Join(scratchDir, "user-data"), []byte(userData), 0o400)
 	if err != nil {
 		return "", err
 	}
@@ -2699,7 +2706,7 @@ func (d *disk) generateVMConfigDrive() (string, error) {
 	}
 
 	if networkConfig != "" {
-		err = os.WriteFile(filepath.Join(scratchDir, "network-config"), []byte(networkConfig), 0400)
+		err = os.WriteFile(filepath.Join(scratchDir, "network-config"), []byte(networkConfig), 0o400)
 		if err != nil {
 			return "", err
 		}
@@ -2711,7 +2718,7 @@ local-hostname: %s
 %s
 `, d.inst.Name(), d.inst.Name(), instanceConfig["user.meta-data"])
 
-	err = os.WriteFile(filepath.Join(scratchDir, "meta-data"), []byte(metaData), 0400)
+	err = os.WriteFile(filepath.Join(scratchDir, "meta-data"), []byte(metaData), 0o400)
 	if err != nil {
 		return "", err
 	}

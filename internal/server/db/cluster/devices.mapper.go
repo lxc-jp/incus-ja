@@ -51,7 +51,7 @@ func getDevices(ctx context.Context, stmt *sql.Stmt, parent string, args ...any)
 }
 
 // getDevicesRaw can be used to run handwritten query strings to return a slice of objects.
-func getDevicesRaw(ctx context.Context, tx *sql.Tx, sql string, parent string, args ...any) ([]Device, error) {
+func getDevicesRaw(ctx context.Context, db dbtx, sql string, parent string, args ...any) ([]Device, error) {
 	objects := make([]Device, 0)
 
 	dest := func(scan func(dest ...any) error) error {
@@ -66,7 +66,7 @@ func getDevicesRaw(ctx context.Context, tx *sql.Tx, sql string, parent string, a
 		return nil
 	}
 
-	err := scan(ctx, tx, sql, dest, args...)
+	err := scan(ctx, db, sql, dest, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to fetch from \"%s_devices\" table: %w", parent, err)
 	}
@@ -76,7 +76,7 @@ func getDevicesRaw(ctx context.Context, tx *sql.Tx, sql string, parent string, a
 
 // GetDevices returns all available devices for the parent entity.
 // generator: device GetMany
-func GetDevices(ctx context.Context, tx *sql.Tx, parent string, filters ...DeviceFilter) (_ map[int][]Device, _err error) {
+func GetDevices(ctx context.Context, db tx, parentTablePrefix string, parentColumnPrefix string, filters ...DeviceFilter) (_ map[int][]Device, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Device")
 	}()
@@ -86,10 +86,10 @@ func GetDevices(ctx context.Context, tx *sql.Tx, parent string, filters ...Devic
 	// Result slice.
 	objects := make([]Device, 0)
 
-	deviceObjectsLocal := strings.Replace(deviceObjects, "%s_id", fmt.Sprintf("%s_id", parent), -1)
+	deviceObjectsLocal := strings.Replace(deviceObjects, "%s_id", fmt.Sprintf("%s_id", parentColumnPrefix), -1)
 	fillParent := make([]any, strings.Count(deviceObjectsLocal, "%s"))
 	for i := range fillParent {
-		fillParent[i] = strings.Replace(strings.Replace(parent, "_", "s_", -1), "clusters_", "cluster_", -1) + "s"
+		fillParent[i] = parentTablePrefix
 	}
 
 	queryStr := fmt.Sprintf(deviceObjectsLocal, fillParent...)
@@ -124,9 +124,9 @@ func GetDevices(ctx context.Context, tx *sql.Tx, parent string, filters ...Devic
 
 	queryStr = strings.Join(queryParts, " ORDER BY")
 	// Select.
-	objects, err = getDevicesRaw(ctx, tx, queryStr, parent, args...)
+	objects, err = getDevicesRaw(ctx, db, queryStr, parentTablePrefix, args...)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to fetch from \"%s_devices\" table: %w", parent, err)
+		return nil, fmt.Errorf("Failed to fetch from \"%s_devices\" table: %w", parentTablePrefix, err)
 	}
 
 	configFilters := []ConfigFilter{}
@@ -141,7 +141,7 @@ func GetDevices(ctx context.Context, tx *sql.Tx, parent string, filters ...Devic
 		}
 	}
 
-	config, err := GetConfig(ctx, tx, parent+"_device", configFilters...)
+	config, err := GetConfig(ctx, db, parentTablePrefix+"_devices", parentColumnPrefix+"_device", configFilters...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,22 +170,22 @@ func GetDevices(ctx context.Context, tx *sql.Tx, parent string, filters ...Devic
 
 // CreateDevices adds a new device to the database.
 // generator: device Create
-func CreateDevices(ctx context.Context, tx *sql.Tx, parent string, objects map[string]Device) (_err error) {
+func CreateDevices(ctx context.Context, db tx, parentTablePrefix string, parentColumnPrefix string, objects map[string]Device) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Device")
 	}()
 
-	deviceCreateLocal := strings.Replace(deviceCreate, "%s_id", fmt.Sprintf("%s_id", parent), -1)
+	deviceCreateLocal := strings.Replace(deviceCreate, "%s_id", fmt.Sprintf("%s_id", parentColumnPrefix), -1)
 	fillParent := make([]any, strings.Count(deviceCreateLocal, "%s"))
 	for i := range fillParent {
-		fillParent[i] = strings.Replace(strings.Replace(parent, "_", "s_", -1), "clusters_", "cluster_", -1) + "s"
+		fillParent[i] = parentTablePrefix
 	}
 
 	queryStr := fmt.Sprintf(deviceCreateLocal, fillParent...)
 	for _, object := range objects {
-		result, err := tx.ExecContext(ctx, queryStr, object.ReferenceID, object.Name, object.Type)
+		result, err := db.ExecContext(ctx, queryStr, object.ReferenceID, object.Name, object.Type)
 		if err != nil {
-			return fmt.Errorf("Insert failed for \"%s_devices\" table: %w", parent, err)
+			return fmt.Errorf("Insert failed for \"%s_devices\" table: %w", parentTablePrefix, err)
 		}
 
 		id, err := result.LastInsertId()
@@ -201,7 +201,7 @@ func CreateDevices(ctx context.Context, tx *sql.Tx, parent string, objects map[s
 				Value:       value,
 			}
 
-			err = CreateConfig(ctx, tx, parent+"_device", insert)
+			err = CreateConfig(ctx, db, parentTablePrefix+"_devices", parentColumnPrefix+"_device", insert)
 			if err != nil {
 				return fmt.Errorf("Insert Config failed for Device: %w", err)
 			}
@@ -213,13 +213,13 @@ func CreateDevices(ctx context.Context, tx *sql.Tx, parent string, objects map[s
 
 // UpdateDevices updates the device matching the given key parameters.
 // generator: device Update
-func UpdateDevices(ctx context.Context, tx *sql.Tx, parent string, referenceID int, devices map[string]Device) (_err error) {
+func UpdateDevices(ctx context.Context, db tx, parentTablePrefix string, parentColumnPrefix string, referenceID int, devices map[string]Device) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Device")
 	}()
 
 	// Delete current entry.
-	err := DeleteDevices(ctx, tx, parent, referenceID)
+	err := DeleteDevices(ctx, db, parentTablePrefix, parentColumnPrefix, referenceID)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func UpdateDevices(ctx context.Context, tx *sql.Tx, parent string, referenceID i
 		devices[key] = object
 	}
 
-	err = CreateDevices(ctx, tx, parent, devices)
+	err = CreateDevices(ctx, db, parentTablePrefix, parentColumnPrefix, devices)
 	if err != nil {
 		return err
 	}
@@ -240,21 +240,21 @@ func UpdateDevices(ctx context.Context, tx *sql.Tx, parent string, referenceID i
 
 // DeleteDevices deletes the device matching the given key parameters.
 // generator: device DeleteMany
-func DeleteDevices(ctx context.Context, tx *sql.Tx, parent string, referenceID int) (_err error) {
+func DeleteDevices(ctx context.Context, db tx, parentTablePrefix string, parentColumnPrefix string, referenceID int) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Device")
 	}()
 
-	deviceDeleteLocal := strings.Replace(deviceDelete, "%s_id", fmt.Sprintf("%s_id", parent), -1)
+	deviceDeleteLocal := strings.Replace(deviceDelete, "%s_id", fmt.Sprintf("%s_id", parentColumnPrefix), -1)
 	fillParent := make([]any, strings.Count(deviceDeleteLocal, "%s"))
 	for i := range fillParent {
-		fillParent[i] = strings.Replace(strings.Replace(parent, "_", "s_", -1), "clusters_", "cluster_", -1) + "s"
+		fillParent[i] = parentTablePrefix
 	}
 
 	queryStr := fmt.Sprintf(deviceDeleteLocal, fillParent...)
-	result, err := tx.ExecContext(ctx, queryStr, referenceID)
+	result, err := db.ExecContext(ctx, queryStr, referenceID)
 	if err != nil {
-		return fmt.Errorf("Delete entry for \"%s_device\" failed: %w", parent, err)
+		return fmt.Errorf("Delete entry for \"%s_device\" failed: %w", parentTablePrefix, err)
 	}
 
 	_, err = result.RowsAffected()

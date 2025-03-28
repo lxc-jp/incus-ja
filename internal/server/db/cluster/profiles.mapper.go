@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 var profileObjects = RegisterStmt(`
@@ -78,12 +80,12 @@ DELETE FROM profiles WHERE project_id = (SELECT projects.id FROM projects WHERE 
 
 // GetProfileID return the ID of the profile with the given key.
 // generator: profile ID
-func GetProfileID(ctx context.Context, tx *sql.Tx, project string, name string) (_ int64, _err error) {
+func GetProfileID(ctx context.Context, db tx, project string, name string) (_ int64, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	stmt, err := Stmt(tx, profileID)
+	stmt, err := Stmt(db, profileID)
 	if err != nil {
 		return -1, fmt.Errorf("Failed to get \"profileID\" prepared statement: %w", err)
 	}
@@ -104,12 +106,12 @@ func GetProfileID(ctx context.Context, tx *sql.Tx, project string, name string) 
 
 // ProfileExists checks if a profile with the given key exists.
 // generator: profile Exists
-func ProfileExists(ctx context.Context, tx *sql.Tx, project string, name string) (_ bool, _err error) {
+func ProfileExists(ctx context.Context, db dbtx, project string, name string) (_ bool, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	stmt, err := Stmt(tx, profileID)
+	stmt, err := Stmt(db, profileID)
 	if err != nil {
 		return false, fmt.Errorf("Failed to get \"profileID\" prepared statement: %w", err)
 	}
@@ -159,7 +161,7 @@ func getProfiles(ctx context.Context, stmt *sql.Stmt, args ...any) ([]Profile, e
 }
 
 // getProfilesRaw can be used to run handwritten query strings to return a slice of objects.
-func getProfilesRaw(ctx context.Context, tx *sql.Tx, sql string, args ...any) ([]Profile, error) {
+func getProfilesRaw(ctx context.Context, db dbtx, sql string, args ...any) ([]Profile, error) {
 	objects := make([]Profile, 0)
 
 	dest := func(scan func(dest ...any) error) error {
@@ -174,7 +176,7 @@ func getProfilesRaw(ctx context.Context, tx *sql.Tx, sql string, args ...any) ([
 		return nil
 	}
 
-	err := scan(ctx, tx, sql, dest, args...)
+	err := scan(ctx, db, sql, dest, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to fetch from \"profiles\" table: %w", err)
 	}
@@ -184,7 +186,7 @@ func getProfilesRaw(ctx context.Context, tx *sql.Tx, sql string, args ...any) ([
 
 // GetProfiles returns all available profiles.
 // generator: profile GetMany
-func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ []Profile, _err error) {
+func GetProfiles(ctx context.Context, db dbtx, filters ...ProfileFilter) (_ []Profile, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
@@ -200,7 +202,7 @@ func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ [
 	queryParts := [2]string{}
 
 	if len(filters) == 0 {
-		sqlStmt, err = Stmt(tx, profileObjects)
+		sqlStmt, err = Stmt(db, profileObjects)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get \"profileObjects\" prepared statement: %w", err)
 		}
@@ -210,7 +212,7 @@ func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ [
 		if filter.Project != nil && filter.Name != nil && filter.ID == nil {
 			args = append(args, []any{filter.Project, filter.Name}...)
 			if len(filters) == 1 {
-				sqlStmt, err = Stmt(tx, profileObjectsByProjectAndName)
+				sqlStmt, err = Stmt(db, profileObjectsByProjectAndName)
 				if err != nil {
 					return nil, fmt.Errorf("Failed to get \"profileObjectsByProjectAndName\" prepared statement: %w", err)
 				}
@@ -234,7 +236,7 @@ func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ [
 		} else if filter.Project != nil && filter.ID == nil && filter.Name == nil {
 			args = append(args, []any{filter.Project}...)
 			if len(filters) == 1 {
-				sqlStmt, err = Stmt(tx, profileObjectsByProject)
+				sqlStmt, err = Stmt(db, profileObjectsByProject)
 				if err != nil {
 					return nil, fmt.Errorf("Failed to get \"profileObjectsByProject\" prepared statement: %w", err)
 				}
@@ -258,7 +260,7 @@ func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ [
 		} else if filter.Name != nil && filter.ID == nil && filter.Project == nil {
 			args = append(args, []any{filter.Name}...)
 			if len(filters) == 1 {
-				sqlStmt, err = Stmt(tx, profileObjectsByName)
+				sqlStmt, err = Stmt(db, profileObjectsByName)
 				if err != nil {
 					return nil, fmt.Errorf("Failed to get \"profileObjectsByName\" prepared statement: %w", err)
 				}
@@ -282,7 +284,7 @@ func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ [
 		} else if filter.ID != nil && filter.Project == nil && filter.Name == nil {
 			args = append(args, []any{filter.ID}...)
 			if len(filters) == 1 {
-				sqlStmt, err = Stmt(tx, profileObjectsByID)
+				sqlStmt, err = Stmt(db, profileObjectsByID)
 				if err != nil {
 					return nil, fmt.Errorf("Failed to get \"profileObjectsByID\" prepared statement: %w", err)
 				}
@@ -315,7 +317,7 @@ func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ [
 		objects, err = getProfiles(ctx, sqlStmt, args...)
 	} else {
 		queryStr := strings.Join(queryParts[:], "ORDER BY")
-		objects, err = getProfilesRaw(ctx, tx, queryStr, args...)
+		objects, err = getProfilesRaw(ctx, db, queryStr, args...)
 	}
 
 	if err != nil {
@@ -327,12 +329,12 @@ func GetProfiles(ctx context.Context, tx *sql.Tx, filters ...ProfileFilter) (_ [
 
 // GetProfileDevices returns all available Profile Devices
 // generator: profile GetMany
-func GetProfileDevices(ctx context.Context, tx *sql.Tx, profileID int, filters ...DeviceFilter) (_ map[string]Device, _err error) {
+func GetProfileDevices(ctx context.Context, db tx, profileID int, filters ...DeviceFilter) (_ map[string]Device, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	profileDevices, err := GetDevices(ctx, tx, "profile", filters...)
+	profileDevices, err := GetDevices(ctx, db, "profiles", "profile", filters...)
 	if err != nil {
 		return nil, err
 	}
@@ -352,12 +354,12 @@ func GetProfileDevices(ctx context.Context, tx *sql.Tx, profileID int, filters .
 
 // GetProfileConfig returns all available Profile Config
 // generator: profile GetMany
-func GetProfileConfig(ctx context.Context, tx *sql.Tx, profileID int, filters ...ConfigFilter) (_ map[string]string, _err error) {
+func GetProfileConfig(ctx context.Context, db tx, profileID int, filters ...ConfigFilter) (_ map[string]string, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	profileConfig, err := GetConfig(ctx, tx, "profile", filters...)
+	profileConfig, err := GetConfig(ctx, db, "profiles", "profile", filters...)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +374,7 @@ func GetProfileConfig(ctx context.Context, tx *sql.Tx, profileID int, filters ..
 
 // GetProfile returns the profile with the given key.
 // generator: profile GetOne
-func GetProfile(ctx context.Context, tx *sql.Tx, project string, name string) (_ *Profile, _err error) {
+func GetProfile(ctx context.Context, db dbtx, project string, name string) (_ *Profile, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
@@ -381,7 +383,7 @@ func GetProfile(ctx context.Context, tx *sql.Tx, project string, name string) (_
 	filter.Project = &project
 	filter.Name = &name
 
-	objects, err := GetProfiles(ctx, tx, filter)
+	objects, err := GetProfiles(ctx, db, filter)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to fetch from \"profiles\" table: %w", err)
 	}
@@ -398,20 +400,10 @@ func GetProfile(ctx context.Context, tx *sql.Tx, project string, name string) (_
 
 // CreateProfile adds a new profile to the database.
 // generator: profile Create
-func CreateProfile(ctx context.Context, tx *sql.Tx, object Profile) (_ int64, _err error) {
+func CreateProfile(ctx context.Context, db dbtx, object Profile) (_ int64, _err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
-
-	// Check if a profile with the same key exists.
-	exists, err := ProfileExists(ctx, tx, object.Project, object.Name)
-	if err != nil {
-		return -1, fmt.Errorf("Failed to check for duplicates: %w", err)
-	}
-
-	if exists {
-		return -1, ErrConflict
-	}
 
 	args := make([]any, 3)
 
@@ -421,13 +413,20 @@ func CreateProfile(ctx context.Context, tx *sql.Tx, object Profile) (_ int64, _e
 	args[2] = object.Description
 
 	// Prepared statement to use.
-	stmt, err := Stmt(tx, profileCreate)
+	stmt, err := Stmt(db, profileCreate)
 	if err != nil {
 		return -1, fmt.Errorf("Failed to get \"profileCreate\" prepared statement: %w", err)
 	}
 
 	// Execute the statement.
 	result, err := stmt.Exec(args...)
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		if sqliteErr.Code == sqlite3.ErrConstraint {
+			return -1, ErrConflict
+		}
+	}
+
 	if err != nil {
 		return -1, fmt.Errorf("Failed to create \"profiles\" entry: %w", err)
 	}
@@ -442,7 +441,7 @@ func CreateProfile(ctx context.Context, tx *sql.Tx, object Profile) (_ int64, _e
 
 // CreateProfileDevices adds new profile Devices to the database.
 // generator: profile Create
-func CreateProfileDevices(ctx context.Context, tx *sql.Tx, profileID int64, devices map[string]Device) (_err error) {
+func CreateProfileDevices(ctx context.Context, db tx, profileID int64, devices map[string]Device) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
@@ -452,7 +451,7 @@ func CreateProfileDevices(ctx context.Context, tx *sql.Tx, profileID int64, devi
 		devices[key] = device
 	}
 
-	err := CreateDevices(ctx, tx, "profile", devices)
+	err := CreateDevices(ctx, db, "profiles", "profile", devices)
 	if err != nil {
 		return fmt.Errorf("Insert Device failed for Profile: %w", err)
 	}
@@ -462,7 +461,7 @@ func CreateProfileDevices(ctx context.Context, tx *sql.Tx, profileID int64, devi
 
 // CreateProfileConfig adds new profile Config to the database.
 // generator: profile Create
-func CreateProfileConfig(ctx context.Context, tx *sql.Tx, profileID int64, config map[string]string) (_err error) {
+func CreateProfileConfig(ctx context.Context, db dbtx, profileID int64, config map[string]string) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
@@ -475,7 +474,7 @@ func CreateProfileConfig(ctx context.Context, tx *sql.Tx, profileID int64, confi
 			Value:       value,
 		}
 
-		err := CreateConfig(ctx, tx, "profile", insert)
+		err := CreateConfig(ctx, db, "profiles", "profile", insert)
 		if err != nil {
 			return fmt.Errorf("Insert Config failed for Profile: %w", err)
 		}
@@ -487,12 +486,12 @@ func CreateProfileConfig(ctx context.Context, tx *sql.Tx, profileID int64, confi
 
 // RenameProfile renames the profile matching the given key parameters.
 // generator: profile Rename
-func RenameProfile(ctx context.Context, tx *sql.Tx, project string, name string, to string) (_err error) {
+func RenameProfile(ctx context.Context, db dbtx, project string, name string, to string) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	stmt, err := Stmt(tx, profileRename)
+	stmt, err := Stmt(db, profileRename)
 	if err != nil {
 		return fmt.Errorf("Failed to get \"profileRename\" prepared statement: %w", err)
 	}
@@ -516,17 +515,17 @@ func RenameProfile(ctx context.Context, tx *sql.Tx, project string, name string,
 
 // UpdateProfile updates the profile matching the given key parameters.
 // generator: profile Update
-func UpdateProfile(ctx context.Context, tx *sql.Tx, project string, name string, object Profile) (_err error) {
+func UpdateProfile(ctx context.Context, db tx, project string, name string, object Profile) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	id, err := GetProfileID(ctx, tx, project, name)
+	id, err := GetProfileID(ctx, db, project, name)
 	if err != nil {
 		return err
 	}
 
-	stmt, err := Stmt(tx, profileUpdate)
+	stmt, err := Stmt(db, profileUpdate)
 	if err != nil {
 		return fmt.Errorf("Failed to get \"profileUpdate\" prepared statement: %w", err)
 	}
@@ -550,12 +549,12 @@ func UpdateProfile(ctx context.Context, tx *sql.Tx, project string, name string,
 
 // UpdateProfileDevices updates the profile Device matching the given key parameters.
 // generator: profile Update
-func UpdateProfileDevices(ctx context.Context, tx *sql.Tx, profileID int64, devices map[string]Device) (_err error) {
+func UpdateProfileDevices(ctx context.Context, db tx, profileID int64, devices map[string]Device) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	err := UpdateDevices(ctx, tx, "profile", int(profileID), devices)
+	err := UpdateDevices(ctx, db, "profiles", "profile", int(profileID), devices)
 	if err != nil {
 		return fmt.Errorf("Replace Device for Profile failed: %w", err)
 	}
@@ -565,12 +564,12 @@ func UpdateProfileDevices(ctx context.Context, tx *sql.Tx, profileID int64, devi
 
 // UpdateProfileConfig updates the profile Config matching the given key parameters.
 // generator: profile Update
-func UpdateProfileConfig(ctx context.Context, tx *sql.Tx, profileID int64, config map[string]string) (_err error) {
+func UpdateProfileConfig(ctx context.Context, db tx, profileID int64, config map[string]string) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	err := UpdateConfig(ctx, tx, "profile", int(profileID), config)
+	err := UpdateConfig(ctx, db, "profiles", "profile", int(profileID), config)
 	if err != nil {
 		return fmt.Errorf("Replace Config for Profile failed: %w", err)
 	}
@@ -580,12 +579,12 @@ func UpdateProfileConfig(ctx context.Context, tx *sql.Tx, profileID int64, confi
 
 // DeleteProfile deletes the profile matching the given key parameters.
 // generator: profile DeleteOne-by-Project-and-Name
-func DeleteProfile(ctx context.Context, tx *sql.Tx, project string, name string) (_err error) {
+func DeleteProfile(ctx context.Context, db dbtx, project string, name string) (_err error) {
 	defer func() {
 		_err = mapErr(_err, "Profile")
 	}()
 
-	stmt, err := Stmt(tx, profileDeleteByProjectAndName)
+	stmt, err := Stmt(db, profileDeleteByProjectAndName)
 	if err != nil {
 		return fmt.Errorf("Failed to get \"profileDeleteByProjectAndName\" prepared statement: %w", err)
 	}

@@ -56,6 +56,7 @@ type OS struct {
 	MockMode        bool   // If true some APIs will be mocked (for testing)
 	Nodev           bool
 	RunningInUserNS bool
+	Hostname        string
 
 	// Privilege dropping
 	UnprivUser  string
@@ -172,13 +173,17 @@ func (s *OS) Init() ([]cluster.Warning, error) {
 	s.IdmapSet = getIdmapset()
 	s.ExecPath = localUtil.GetExecPath()
 	s.RunningInUserNS = linux.RunningInUserNS()
+	s.Hostname, err = os.Hostname()
+	if err != nil {
+		return nil, err
+	}
 
 	dbWarnings = s.initAppArmor()
 	cgroup.Init()
 	s.CGInfo = cgroup.GetInfo()
 
 	// Fill in the OS release info.
-	osInfo, err := osarch.GetLSBRelease()
+	osInfo, err := osarch.GetOSRelease()
 	if err != nil {
 		return nil, err
 	}

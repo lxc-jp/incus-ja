@@ -14,12 +14,14 @@ import (
 
 // Mapping holds information for mapping database tables to a Go structure.
 type Mapping struct {
-	Package    string    // Package of the Go struct
-	Name       string    // Name of the Go struct.
-	Fields     []*Field  // Metadata about the Go struct.
-	Filterable bool      // Whether the Go struct has a Filter companion struct for filtering queries.
-	Filters    []*Field  // Metadata about the Go struct used for filter fields.
-	Type       TableType // Type of table structure for this Go struct.
+	Local       bool      // Whether the entity is in the same package as the generated code.
+	FilterLocal bool      // Whether the entity is in the same package as the generated code.
+	Package     string    // Package of the Go struct
+	Name        string    // Name of the Go struct.
+	Fields      []*Field  // Metadata about the Go struct.
+	Filterable  bool      // Whether the Go struct has a Filter companion struct for filtering queries.
+	Filters     []*Field  // Metadata about the Go struct used for filter fields.
+	Type        TableType // Type of table structure for this Go struct.
 }
 
 // TableType represents the logical type of the table defined by the Go struct.
@@ -240,7 +242,7 @@ func (m *Mapping) FieldParamsMarshal(fields []*Field) string {
 			name = lex.Minuscule(m.Name) + field.Name
 		}
 
-		if util.IsTrue(field.Config.Get("marshal")) {
+		if util.IsNeitherFalseNorEmpty(field.Config.Get("marshal")) {
 			name = fmt.Sprintf("marshaled%s", field.Name)
 		}
 
@@ -248,6 +250,26 @@ func (m *Mapping) FieldParamsMarshal(fields []*Field) string {
 	}
 
 	return strings.Join(args, ", ")
+}
+
+// ImportType returns the type of the entity for the mapping, prefixing the import package if necessary.
+func (m *Mapping) ImportType() string {
+	name := lex.PascalCase(m.Name)
+	if m.Local {
+		return name
+	}
+
+	return m.Package + "." + lex.PascalCase(name)
+}
+
+// ImportFilterType returns the Filter type of the entity for the mapping, prefixing the import package if necessary.
+func (m *Mapping) ImportFilterType() string {
+	name := lex.PascalCase(entityFilter(m.Name))
+	if m.FilterLocal {
+		return name
+	}
+
+	return m.Package + "." + name
 }
 
 // Field holds all information about a field in a Go struct that is relevant
@@ -434,7 +456,7 @@ func (f *Field) JoinClause(mapping *Mapping, table string) (string, error) {
 // to select the ID to insert into this table.
 // - If a 'joinon' tag is present, but this table is not among the conditions, then the join will be considered indirect,
 // and an empty string will be returned.
-func (f *Field) InsertColumn(pkg *types.Package, mapping *Mapping, primaryTable string, defs map[*ast.Ident]types.Object, registeredSQLStmts map[string]string) (string, string, error) {
+func (f *Field) InsertColumn(mapping *Mapping, primaryTable string, defs map[*ast.Ident]types.Object, registeredSQLStmts map[string]string) (string, string, error) {
 	var column string
 	var value string
 	var err error

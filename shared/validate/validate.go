@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kballard/go-shellquote"
@@ -512,6 +513,30 @@ func IsNetworkPortRange(value string) error {
 	return nil
 }
 
+// IsDHCPRouteList validates a comma-separated list of alternating CIDR networks and IP addresses.
+func IsDHCPRouteList(value string) error {
+	parts := strings.Split(value, ",")
+	for i, s := range parts {
+		// routes are pairs of subnet and gateway
+		var err error
+		if i%2 == 0 { // subnet part
+			err = IsNetworkV4(s)
+		} else { // gateway part
+			err = IsNetworkAddressV4(s)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(parts)%2 != 0 { // uneven number of parts means the gateway of the last route is missing
+		return fmt.Errorf("missing gateway for route %v", parts[len(parts)-1])
+	}
+
+	return nil
+}
+
 // IsURLSegmentSafe validates whether value can be used in a URL segment.
 func IsURLSegmentSafe(value string) error {
 	for _, char := range []string{"/", "?", "&", "+"} {
@@ -857,4 +882,31 @@ func IsValidCPUSet(value string) error {
 	}
 
 	return nil
+}
+
+// IsShorterThan checks whether a string is shorter than a specific length.
+func IsShorterThan(length int) func(value string) error {
+	return func(value string) error {
+		if len(value) > length {
+			return fmt.Errorf("Value is too long. Must be within %d characters", length)
+		}
+
+		return nil
+	}
+}
+
+// IsMinimumDuration validates whether a value is a duration longer than a specific minimum.
+func IsMinimumDuration(minimum time.Duration) func(value string) error {
+	return func(value string) error {
+		duration, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("Invalid duration")
+		}
+
+		if duration < minimum {
+			return fmt.Errorf("Duration must be greater than %s", minimum)
+		}
+
+		return nil
+	}
 }

@@ -79,36 +79,6 @@ var clusterNodeStateCmd = APIEndpoint{
 	Post: APIEndpointAction{Handler: clusterNodeStatePost, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
 }
 
-var internalClusterAcceptCmd = APIEndpoint{
-	Path: "cluster/accept",
-
-	Post: APIEndpointAction{Handler: internalClusterPostAccept, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
-}
-
-var internalClusterRebalanceCmd = APIEndpoint{
-	Path: "cluster/rebalance",
-
-	Post: APIEndpointAction{Handler: internalClusterPostRebalance, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
-}
-
-var internalClusterAssignCmd = APIEndpoint{
-	Path: "cluster/assign",
-
-	Post: APIEndpointAction{Handler: internalClusterPostAssign, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
-}
-
-var internalClusterHandoverCmd = APIEndpoint{
-	Path: "cluster/handover",
-
-	Post: APIEndpointAction{Handler: internalClusterPostHandover, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
-}
-
-var internalClusterRaftNodeCmd = APIEndpoint{
-	Path: "cluster/raft-node/{address}",
-
-	Delete: APIEndpointAction{Handler: internalClusterRaftNodeDelete, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
-}
-
 // swagger:operation GET /1.0/cluster cluster cluster_get
 //
 //	Get the cluster configuration
@@ -2190,8 +2160,8 @@ func internalClusterPostAccept(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(fmt.Errorf("No name provided"))
 	}
 
-	// Redirect all requests to the leader, which is the one with
-	// knowning what nodes are part of the raft cluster.
+	// Redirect all requests to the leader, which is the one
+	// knowing what nodes are part of the raft cluster.
 	localClusterAddress := s.LocalConfig.ClusterAddress()
 
 	leader, err := s.Cluster.LeaderAddress()

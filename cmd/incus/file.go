@@ -35,9 +35,9 @@ import (
 
 const (
 	// DirMode represents the file mode for creating dirs on `incus file pull/push`.
-	DirMode = 0755
+	DirMode = 0o755
 	// FileMode represents the file mode for creating files on `incus file create`.
-	FileMode = 0644
+	FileMode = 0o644
 )
 
 type cmdFile struct {
@@ -412,7 +412,7 @@ func (c *cmdFileEdit) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create temp file
-	f, err := os.CreateTemp("", "incus_file_edit_")
+	f, err := os.CreateTemp("", fmt.Sprintf("incus_file_edit_*%s", filepath.Ext(args[0])))
 	if err != nil {
 		return fmt.Errorf(i18n.G("Unable to create a temporary file: %v"), err)
 	}
@@ -645,7 +645,8 @@ func (c *cmdFilePull) Run(cmd *cobra.Command, args []string) error {
 					progress.UpdateProgress(ioprogress.ProgressData{
 						Text: fmt.Sprintf("%s (%s/s)",
 							units.GetByteSizeString(bytesReceived, 2),
-							units.GetByteSizeString(speed, 2))})
+							units.GetByteSizeString(speed, 2)),
+					})
 				},
 			},
 		}
@@ -1006,9 +1007,16 @@ func (c *cmdFile) sftpCreateFile(sftpConn *sftp.Client, targetPath string, args 
 		defer func() { _ = file.Close() }()
 
 		if push {
-			_, err = io.Copy(file, args.Content)
-			if err != nil {
-				return err
+			for {
+				// Read 1MB at a time.
+				_, err = io.CopyN(file, args.Content, 1024*1024)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+
+					return err
+				}
 			}
 		}
 
@@ -1121,15 +1129,23 @@ func (c *cmdFile) recursivePullFile(sftpConn *sftp.Client, p string, targetDir s
 					progress.UpdateProgress(ioprogress.ProgressData{
 						Text: fmt.Sprintf("%s (%s/s)",
 							units.GetByteSizeString(bytesReceived, 2),
-							units.GetByteSizeString(speed, 2))})
+							units.GetByteSizeString(speed, 2)),
+					})
 				},
 			},
 		}
 
-		_, err = io.Copy(writer, src)
-		if err != nil {
-			progress.Done("")
-			return err
+		for {
+			// Read 1MB at a time.
+			_, err = io.CopyN(writer, src, 1024*1024)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+
+				progress.Done("")
+				return err
+			}
 		}
 
 		err = src.Close()
@@ -1164,8 +1180,14 @@ func (c *cmdFile) recursivePullFile(sftpConn *sftp.Client, p string, targetDir s
 
 func (c *cmdFile) recursivePushFile(sftpConn *sftp.Client, source string, target string) error {
 	source = filepath.Clean(source)
+
 	sourceDir, _ := filepath.Split(source)
 	sourceLen := len(sourceDir)
+
+	// Special handling for relative paths.
+	if source == ".." {
+		sourceLen = 1
+	}
 
 	sendFile := func(p string, fInfo os.FileInfo, err error) error {
 		if err != nil {
@@ -1238,7 +1260,8 @@ func (c *cmdFile) recursivePushFile(sftpConn *sftp.Client, source string, target
 					Handler: func(percent int64, speed int64) {
 						progress.UpdateProgress(ioprogress.ProgressData{
 							Text: fmt.Sprintf("%d%% (%s/s)", percent,
-								units.GetByteSizeString(speed, 2))})
+								units.GetByteSizeString(speed, 2)),
+						})
 					},
 				},
 			}, args.Content)
@@ -1519,7 +1542,7 @@ func (c *cmdFileMount) sshSFTPServer(ctx context.Context, instName string, resou
 	}
 
 	randString := func(length int) string {
-		var chars = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0987654321")
+		chars := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0987654321")
 		randStr := make([]rune, length)
 		for i := range randStr {
 			randStr[i] = chars[rand.Intn(len(chars))]

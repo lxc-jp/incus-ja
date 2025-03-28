@@ -233,7 +233,7 @@ func (d *btrfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcDat
 
 	defer func() { _ = os.RemoveAll(tmpUnpackDir) }()
 
-	err = os.Chmod(tmpUnpackDir, 0100)
+	err = os.Chmod(tmpUnpackDir, 0o100)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to chmod temporary directory %q: %w", tmpUnpackDir, err)
 	}
@@ -300,7 +300,7 @@ func (d *btrfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcDat
 
 			tmpUnpackDir := filepath.Join(tmpUnpackDir, snapName)
 
-			err := os.MkdirAll(tmpUnpackDir, 0100)
+			err := os.MkdirAll(tmpUnpackDir, 0o100)
 			if err != nil {
 				return fmt.Errorf("Failed creating directory %q: %w", tmpUnpackDir, err)
 			}
@@ -532,9 +532,9 @@ func (d *btrfs) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, v
 		d.logger.Debug("Received BTRFS migration meta data header", logger.Ctx{"name": vol.name})
 	} else {
 		// Populate the migrationHeader subvolumes with root volumes only to support older sources.
-		for _, snapName := range volTargetArgs.Snapshots {
+		for _, snapshot := range volTargetArgs.Snapshots {
 			migrationHeader.Subvolumes = append(migrationHeader.Subvolumes, BTRFSSubVolume{
-				Snapshot: snapName,
+				Snapshot: snapshot.GetName(),
 				Path:     string(filepath.Separator),
 				Readonly: true, // Snapshots are made readonly.
 			})
@@ -554,7 +554,7 @@ func (d *btrfs) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, v
 		}
 
 		// Reset list of snapshots which are to be received.
-		volTargetArgs.Snapshots = []string{}
+		volTargetArgs.Snapshots = []*migration.Snapshot{}
 
 		// Map of local subvolumes with their received UUID.
 		localSubvolumes := make(map[string]string)
@@ -579,7 +579,7 @@ func (d *btrfs) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, v
 			}
 
 			if migrationSnap.Path == "/" && migrationSnap.Snapshot != "" {
-				volTargetArgs.Snapshots = append(volTargetArgs.Snapshots, migrationSnap.Snapshot)
+				volTargetArgs.Snapshots = append(volTargetArgs.Snapshots, &migration.Snapshot{Name: &migrationSnap.Snapshot})
 			}
 
 			syncSubvolumes = append(syncSubvolumes, BTRFSSubVolume{Path: migrationSnap.Path, Snapshot: migrationSnap.Snapshot, UUID: migrationSnap.UUID})
@@ -597,7 +597,7 @@ func (d *btrfs) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, v
 			return fmt.Errorf("Failed sending BTRFS migration header: %w", err)
 		}
 
-		err = conn.Close() //End the frame.
+		err = conn.Close() // End the frame.
 		if err != nil {
 			return fmt.Errorf("Failed closing BTRFS migration header frame: %w", err)
 		}
@@ -641,7 +641,7 @@ func (d *btrfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWrite
 
 			receivePath := filepath.Join(receivePath, snapName)
 
-			err := os.MkdirAll(receivePath, 0100)
+			err := os.MkdirAll(receivePath, 0o100)
 			if err != nil {
 				return fmt.Errorf("Failed creating %q: %w", receivePath, err)
 			}
@@ -686,7 +686,7 @@ func (d *btrfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWrite
 
 	defer func() { _ = os.RemoveAll(tmpVolumesMountPoint) }()
 
-	err = os.Chmod(tmpVolumesMountPoint, 0100)
+	err = os.Chmod(tmpVolumesMountPoint, 0o100)
 	if err != nil {
 		return fmt.Errorf("Failed to chmod %q: %w", tmpVolumesMountPoint, err)
 	}
@@ -702,8 +702,8 @@ func (d *btrfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWrite
 		revert.Add(func() { _ = deleteParentSnapshotDirIfEmpty(d.name, vol.volType, vol.name) })
 
 		// Transfer the snapshots.
-		for _, snapName := range volTargetArgs.Snapshots {
-			snapVol, _ := vol.NewSnapshot(snapName)
+		for _, snapshot := range volTargetArgs.Snapshots {
+			snapVol, _ := vol.NewSnapshot(snapshot.GetName())
 			err = receiveVolume(snapVol, tmpVolumesMountPoint)
 			if err != nil {
 				return err
@@ -1249,7 +1249,7 @@ func (d *btrfs) readonlySnapshot(vol Volume) (string, revert.Hook, error) {
 		_ = os.RemoveAll(tmpDir)
 	})
 
-	err = os.Chmod(tmpDir, 0100)
+	err = os.Chmod(tmpDir, 0o100)
 	if err != nil {
 		return "", nil, err
 	}
@@ -1345,7 +1345,7 @@ func (d *btrfs) MigrateVolume(vol Volume, conn io.ReadWriteCloser, volSrcArgs *l
 			return fmt.Errorf("Failed sending BTRFS migration header: %w", err)
 		}
 
-		err = conn.Close() //End the frame.
+		err = conn.Close() // End the frame.
 		if err != nil {
 			return fmt.Errorf("Failed closing BTRFS migration header frame: %w", err)
 		}
@@ -1507,7 +1507,7 @@ func (d *btrfs) migrateVolumeOptimized(vol Volume, conn io.ReadWriteCloser, volS
 
 	defer func() { _ = os.RemoveAll(tmpVolumesMountPoint) }()
 
-	err = os.Chmod(tmpVolumesMountPoint, 0100)
+	err = os.Chmod(tmpVolumesMountPoint, 0o100)
 	if err != nil {
 		return fmt.Errorf("Failed to chmod %q: %w", tmpVolumesMountPoint, err)
 	}
@@ -1576,7 +1576,7 @@ func (d *btrfs) BackupVolume(vol Volume, tarWriter *instancewriter.InstanceTarWr
 	indexFileInfo := instancewriter.FileInfo{
 		FileName:    "backup/optimized_header.yaml",
 		FileSize:    int64(len(optimizedHeaderYAML)),
-		FileMode:    0644,
+		FileMode:    0o644,
 		FileModTime: time.Now(),
 	}
 
@@ -1736,7 +1736,7 @@ func (d *btrfs) BackupVolume(vol Volume, tarWriter *instancewriter.InstanceTarWr
 
 	defer func() { _ = os.RemoveAll(tmpInstanceMntPoint) }()
 
-	err = os.Chmod(tmpInstanceMntPoint, 0100)
+	err = os.Chmod(tmpInstanceMntPoint, 0o100)
 	if err != nil {
 		return fmt.Errorf("Failed to chmod %q: %w", tmpInstanceMntPoint, err)
 	}

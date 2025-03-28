@@ -82,14 +82,14 @@ func activeCriteria(filter []string, ignoredFilter []string) string {
 
 // Return the code for a "dest" function, to be passed as parameter to
 // selectObjects in order to scan a single row.
-func destFunc(slice string, typ string, fields []*Field) string {
+func destFunc(slice string, entity string, importType string, fields []*Field) string {
 	var builder strings.Builder
 	writeLine := func(line string) { builder.WriteString(fmt.Sprintf("%s\n", line)) }
 
 	writeLine(`func(scan func(dest ...any) error) error {`)
 
-	varName := lex.Minuscule(string(typ[0]))
-	writeLine(fmt.Sprintf("%s := %s{}", varName, typ))
+	varName := lex.Minuscule(string(entity[0]))
+	writeLine(fmt.Sprintf("%s := %s{}", varName, importType))
 
 	checkErr := func() {
 		writeLine("if err != nil {\nreturn err\n}")
@@ -97,7 +97,12 @@ func destFunc(slice string, typ string, fields []*Field) string {
 	}
 
 	unmarshal := func(declVarName string, field *Field) {
-		writeLine(fmt.Sprintf("err = unmarshal(%s, &%s.%s)", declVarName, varName, field.Name))
+		unmarshalFunc := "unmarshal"
+		if field.Config.Get("marshal") == "json" {
+			unmarshalFunc = "unmarshalJSON"
+		}
+
+		writeLine(fmt.Sprintf("err = %s(%s, &%s.%s)", unmarshalFunc, declVarName, varName, field.Name))
 		checkErr()
 	}
 
@@ -106,7 +111,7 @@ func destFunc(slice string, typ string, fields []*Field) string {
 	declVarNames := make([]string, 0, len(fields))
 	for i, field := range fields {
 		var arg string
-		if util.IsTrue(field.Config.Get("marshal")) {
+		if util.IsNeitherFalseNorEmpty(field.Config.Get("marshal")) {
 			declVarName := fmt.Sprintf("%sStr", lex.Minuscule(field.Name))
 			declVarNames = append(declVarNames, declVarName)
 			declVars[declVarName] = field

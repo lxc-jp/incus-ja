@@ -652,6 +652,42 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  shortdesc: Required driver version
 	"nvidia.require.driver": validate.IsAny,
 
+	// gendoc:generate(entity=instance, group=oci, key=oci.entrypoint)
+	// Override the entry point of an OCI container.
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: OCI container
+	//  shortdesc: OCI container entry point
+	"oci.entrypoint": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=oci, key=oci.cwd)
+	// Override the working directory of an OCI container.
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: OCI container
+	//  shortdesc: OCI container working directory
+	"oci.cwd": validate.Optional(validate.IsAbsFilePath),
+
+	// gendoc:generate(entity=instance, group=oci, key=oci.gid)
+	// Override the GID of the process run in an OCI container.
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: OCI container
+	//  shortdesc: OCI container GID
+	"oci.gid": validate.Optional(validate.IsUint32),
+
+	// gendoc:generate(entity=instance, group=oci, key=oci.uid)
+	// Override the UID of the process run in an OCI container.
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: OCI container
+	//  shortdesc: OCI container UID
+	"oci.uid": validate.Optional(validate.IsUint32),
+
 	// Caller is responsible for full validation of any raw.* value.
 
 	// gendoc:generate(entity=instance, group=raw, key=raw.lxc)
@@ -1011,6 +1047,16 @@ var InstanceConfigKeysVM = map[string]func(value string) error{
 	//  shortdesc: Whether to use a firmware that supports UEFI-incompatible operating systems
 	"security.csm": validate.Optional(validate.IsBool),
 
+	// gendoc:generate(entity=instance, group=security, key=security.iommu)
+	//
+	// ---
+	//  type: bool
+	//  defaultdesc: `false`
+	//  liveupdate: no
+	//  condition: virtual machine
+	//  shortdesc: Whether to enable virtual IOMMU, useful for device passthrough and nesting
+	"security.iommu": validate.Optional(validate.IsBool),
+
 	// gendoc:generate(entity=instance, group=security, key=security.secureboot)
 	// When disabling this option, consider enabling {config:option}`instance-security:security.csm`.
 	// ---
@@ -1018,7 +1064,7 @@ var InstanceConfigKeysVM = map[string]func(value string) error{
 	//  defaultdesc: `true`
 	//  liveupdate: no
 	//  condition: virtual machine
-	//  shortdesc: Whether UEFI secure boot is enabled with the default Microsoft keys
+	//  shortdesc: Whether UEFI secure boot is enforced with the default Microsoft keys
 	"security.secureboot": validate.Optional(validate.IsBool),
 
 	// gendoc:generate(entity=instance, group=security, key=security.sev)
@@ -1078,6 +1124,13 @@ var InstanceConfigKeysVM = map[string]func(value string) error{
 	//  type: bool
 	//  shortdesc: Whether to regenerate VM NVRAM the next time the instance starts
 	"volatile.apply_nvram": validate.Optional(validate.IsBool),
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.vm.definition)
+	//
+	// ---
+	//  type: string
+	//  shortdesc: QEMU VM definition name (used for migration between versions)
+	"volatile.vm.definition": validate.Optional(validate.IsAny),
 
 	// gendoc:generate(entity=instance, group=volatile, key=volatile.vsock_id)
 	//

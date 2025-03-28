@@ -60,7 +60,7 @@ func TestShouldShow(t *testing.T) {
 					},
 					{
 						Family:  "inet6",
-						Address: "fd42:72a:89ac:e457:216:3eff:fe83:8301",
+						Address: "fd42:72a:89ac:e457:1266:6aff:fe83:8301",
 					},
 				},
 			},
@@ -135,16 +135,16 @@ func TestShouldShow(t *testing.T) {
 		t.Errorf("net=10.29.85.156 filter did not work")
 	}
 
-	if !list.shouldShow([]string{"ipv6=fd42:72a:89ac:e457:216:3eff:fe83:8301"}, inst, state, false) {
-		t.Errorf("net=fd42:72a:89ac:e457:216:3eff:fe83:8301 filter didn't work")
+	if !list.shouldShow([]string{"ipv6=fd42:72a:89ac:e457:1266:6aff:fe83:8301"}, inst, state, false) {
+		t.Errorf("net=fd42:72a:89ac:e457:1266:6aff:fe83:8301 filter didn't work")
 	}
 
-	if list.shouldShow([]string{"ipv6=fd42:072a:89ac:e457:0216:3eff:fe83:ffff/128"}, inst, state, false) {
-		t.Errorf("net=1net=fd42:072a:89ac:e457:0216:3eff:fe83:ffff/128 filter did work but should not")
+	if list.shouldShow([]string{"ipv6=fd42:072a:89ac:e457:1266:6aff:fe83:ffff/128"}, inst, state, false) {
+		t.Errorf("net=1net=fd42:072a:89ac:e457:1266:6aff:fe83:ffff/128 filter did work but should not")
 	}
 
-	if !list.shouldShow([]string{"ipv6=fd42:72a:89ac:e457:216:3eff:fe83:ffff/1"}, inst, state, false) {
-		t.Errorf("net=fd42:72a:89ac:e457:216:3eff:fe83:ffff/1 filter filter didn't work")
+	if !list.shouldShow([]string{"ipv6=fd42:72a:89ac:e457:1266:6aff:fe83:ffff/1"}, inst, state, false) {
+		t.Errorf("net=fd42:72a:89ac:e457:1266:6aff:fe83:ffff/1 filter filter didn't work")
 	}
 
 	if list.shouldShow([]string{"user.blah=abc", "status=stopped"}, inst, nil, false) {
@@ -153,8 +153,10 @@ func TestShouldShow(t *testing.T) {
 }
 
 // Used by TestColumns and TestInvalidColumns.
-const shorthand = "46abcdDefFlmMnNpPsStuUL"
-const alphanum = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+const (
+	shorthand = "46abcdDefFlmMnNpPsStuUL"
+	alphanum  = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+)
 
 func TestColumns(t *testing.T) {
 	keys := make([]string, 0, len(instance.InstanceConfigKeysAny)+len(instance.InstanceConfigKeysContainer)+len(instance.InstanceConfigKeysVM))
@@ -299,7 +301,6 @@ func TestColumns(t *testing.T) {
 func removeDuplicatesFromString(s string, sep string) string {
 	dup := sep + sep
 	for s = strings.Replace(s, dup, sep, -1); strings.Contains(s, dup); s = strings.Replace(s, dup, sep, -1) {
-
 	}
 
 	return s

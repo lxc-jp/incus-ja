@@ -73,7 +73,7 @@ Examples:
   - "type=container" will list all container instances
   - "type=container status=running" will list all running container instances
 
-A regular expression matching a configuration item or its value. (e.g. volatile.eth0.hwaddr=00:16:3e:.*).
+A regular expression matching a configuration item or its value. (e.g. volatile.eth0.hwaddr=10:66:6a:.*).
 
 When multiple filters are passed, they are added one on top of the other,
 selecting instances which satisfy them all.
@@ -151,10 +151,12 @@ incus list -c ns,user.comment:comment
 	return cmd
 }
 
-const defaultColumns = "ns46tSL"
-const defaultColumnsAllProjects = "ens46tSL"
-const configColumnType = "config"
-const deviceColumnType = "devices"
+const (
+	defaultColumns            = "ns46tSL"
+	defaultColumnsAllProjects = "ens46tSL"
+	configColumnType          = "config"
+	deviceColumnType          = "devices"
+)
 
 // This seems a little excessive.
 func (c *cmdList) dotPrefixMatch(short string, full string) bool {
@@ -250,22 +252,22 @@ func (c *cmdList) evaluateShorthandFilter(key string, value string, inst *api.In
 	const shorthandValueDelimiter = ","
 	shorthandFilterFunction, isShorthandFilter := c.shorthandFilters[strings.ToLower(key)]
 
-	if isShorthandFilter {
-		if strings.Contains(value, shorthandValueDelimiter) {
-			matched := false
-			for _, curValue := range strings.Split(value, shorthandValueDelimiter) {
-				if shorthandFilterFunction(inst, state, curValue) {
-					matched = true
-				}
-			}
+	if !isShorthandFilter {
+		return false
+	}
 
-			return matched
-		}
-
+	if !strings.Contains(value, shorthandValueDelimiter) {
 		return shorthandFilterFunction(inst, state, value)
 	}
 
-	return false
+	matched := false
+	for _, curValue := range strings.Split(value, shorthandValueDelimiter) {
+		if shorthandFilterFunction(inst, state, curValue) {
+			matched = true
+		}
+	}
+
+	return matched
 }
 
 func (c *cmdList) listInstances(d incus.InstanceServer, instances []api.Instance, filters []string, columns []column) error {
@@ -618,7 +620,8 @@ func (c *cmdList) parseColumns(clustered bool) ([]column, bool, error) {
 
 	if clustered {
 		columnsShorthandMap['L'] = column{
-			i18n.G("LOCATION"), c.locationColumnData, false, false}
+			i18n.G("LOCATION"), c.locationColumnData, false, false,
+		}
 	} else {
 		if c.flagColumns != defaultColumns && c.flagColumns != defaultColumnsAllProjects {
 			if strings.ContainsAny(c.flagColumns, "L") {

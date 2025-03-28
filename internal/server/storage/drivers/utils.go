@@ -24,7 +24,6 @@ import (
 	"github.com/lxc/incus/v6/shared/idmap"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/units"
 	"github.com/lxc/incus/v6/shared/util"
 )
 
@@ -271,7 +270,7 @@ func createParentSnapshotDirIfMissing(poolName string, volType VolumeType, volNa
 
 	// If it's missing, create it.
 	if !util.PathExists(snapshotsPath) {
-		err := os.Mkdir(snapshotsPath, 0700)
+		err := os.Mkdir(snapshotsPath, 0o700)
 		if err != nil {
 			return fmt.Errorf("Failed to create parent snapshot directory %q: %w", snapshotsPath, err)
 		}
@@ -308,7 +307,7 @@ func deleteParentSnapshotDirIfEmpty(poolName string, volType VolumeType, volName
 // ensureSparseFile creates a sparse empty file at specified location with specified size.
 // If the path already exists, the file is truncated to the requested size.
 func ensureSparseFile(filePath string, sizeBytes int64) error {
-	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0600)
+	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return fmt.Errorf("Failed to open %s: %w", filePath, err)
 	}
@@ -391,14 +390,9 @@ func ensureVolumeBlockFile(vol Volume, path string, sizeBytes int64, allowUnsafe
 }
 
 // enlargeVolumeBlockFile enlarges the raw block file for a volume to the specified size.
-func enlargeVolumeBlockFile(vol Volume, path string) error {
+func enlargeVolumeBlockFile(path string, volSize int64) error {
 	if linux.IsBlockdevPath(path) {
 		return nil
-	}
-
-	volSize, err := units.ParseByteSizeString(vol.ConfigSize())
-	if err != nil {
-		return err
 	}
 
 	actualSize, err := BlockDiskSizeBytes(path)
@@ -924,7 +918,7 @@ func wipeBlockHeaders(path string) error {
 	defer fdZero.Close()
 
 	// Open the target disk.
-	fdDisk, err := os.OpenFile(path, os.O_RDWR, 0600)
+	fdDisk, err := os.OpenFile(path, os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
