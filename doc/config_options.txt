@@ -82,6 +82,7 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 - `nvme`
 - `virtio-blk`
 - `virtio-scsi` （デフォルト）
+- `usb`
 
 ファイルシステム（共有ディレクトリまたはカスタムボリューム）では、これは以下のいずれかです:
 - `9p`
@@ -657,6 +658,40 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 ```
 
 <!-- config group instance-nvidia end -->
+<!-- config group instance-oci start -->
+```{config:option} oci.cwd instance-oci
+:condition: "OCIコンテナ"
+:liveupdate: "no"
+:shortdesc: "OCIコンテナのワーキングディレクトリ"
+:type: "string"
+OCIコンテナのワーキングディレクトリを上書きします。
+```
+
+```{config:option} oci.entrypoint instance-oci
+:condition: "OCIコンテナ"
+:liveupdate: "no"
+:shortdesc: "OCIコンテナのエントリポイント"
+:type: "string"
+OCIコンテナのエントリポイントを上書きします。
+```
+
+```{config:option} oci.gid instance-oci
+:condition: "OCIコンテナ"
+:liveupdate: "no"
+:shortdesc: "OCIコンテナのGID"
+:type: "string"
+OCIコンテナ内で稼働するプロセスのGIDを上書きします。
+```
+
+```{config:option} oci.uid instance-oci
+:condition: "OCIコンテナ"
+:liveupdate: "no"
+:shortdesc: "OCIコンテナのUID"
+:type: "string"
+OCIコンテナ内で稼働するプロセスのUIDを上書きします。
+```
+
+<!-- config group instance-oci end -->
 <!-- config group instance-raw start -->
 ```{config:option} raw.apparmor instance-raw
 :liveupdate: "yes"
@@ -911,7 +946,7 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 :condition: "virtual machine"
 :defaultdesc: "`false`"
 :liveupdate: "no"
-:shortdesc: "UEFI互換のオペレーティングシステムをサポートするファームウェアを使用するかどうか"
+:shortdesc: "UEFI互換のオペレーティングシステムをサポートするファームウェアを強制するかどうか"
 :type: "bool"
 このオプションを有効にする際は、{config:option}`instance-security:security.secureboot`を`false`に設定してください。
 ```
@@ -1440,6 +1475,12 @@ NVIDIA仮想GPUインスタンスUUID。
 全てのサーバーとプロジェクトに対してグローバルにユニークです。
 ```
 
+```{config:option} volatile.vm.definition instance-volatile
+:shortdesc: "QEMU VM定義名（バージョン間のマイグレーションに使われます）"
+:type: "string"
+
+```
+
 ```{config:option} volatile.vsock_id instance-volatile
 :shortdesc: "前回起動時点でのインスタンスの`vsock ID`"
 :type: "string"
@@ -1834,7 +1875,7 @@ NVIDIA仮想GPUインスタンスUUID。
 :type: "string"
 設定できる値は`unprivileged`、`isolated`、`allow`です。
 
-- `unpriviliged`に設定すると、このオプションは{config:option}`instance-security:security.privileged`を`true`に設定するのを禁止します。
+- `unprivileged`に設定すると、このオプションは{config:option}`instance-security:security.privileged`を`true`に設定するのを禁止します。
 - `isolated`に設定すると、このオプションは{config:option}`instance-security:security.privileged`と{config:option}`instance-security:security.idmap.isolated`を`true`に設定するのを禁止します。
 - `allow`に設定すると、制限はありません。
 ```
@@ -2072,6 +2113,14 @@ Possible values are `allow` or `block`.
 :shortdesc: "アカウント登録に使用するEmailアドレス"
 :type: "string"
 
+```
+
+```{config:option} acme.http.port server-acme
+:defaultdesc: "`:80`"
+:scope: "global"
+:shortdesc: "（HTTP-01で使われる）HTTPサーバのポートとインターフェース"
+:type: "string"
+HTTPベースのチャレンジでリッスンするポートとインターフェースを設定します。
 ```
 
 ```{config:option} acme.provider server-acme
@@ -2561,6 +2610,41 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :shortdesc: "イメージtarballを保管するのに使用するボリューム"
 :type: "string"
 `POOL/VOLUME`の形式でボリュームを指定します。
+```
+
+```{config:option} storage.linstor.ca_cert server-miscellaneous
+:scope: "global"
+:shortdesc: "LINSTOR SSL証明書認証局"
+:type: "string"
+
+```
+
+```{config:option} storage.linstor.client_cert server-miscellaneous
+:scope: "global"
+:shortdesc: "LINSTOR SSLクライアント証明書"
+:type: "string"
+
+```
+
+```{config:option} storage.linstor.client_key server-miscellaneous
+:scope: "global"
+:shortdesc: "LINSTOR SSLクライアント鍵"
+:type: "string"
+
+```
+
+```{config:option} storage.linstor.controller_connection server-miscellaneous
+:scope: "global"
+:shortdesc: "LINSTORコントローラー接続文字列"
+:type: "string"
+
+```
+
+```{config:option} storage.linstor.satellite.name server-miscellaneous
+:scope: "global"
+:shortdesc: "LINSTORサテライトノード名のオーバーライド"
+:type: "string"
+このオプションをローカルのLINSTORサテライトノードの名前に設定します。Incusのサーバー名とは異なる必要があります。
 ```
 
 <!-- config group server-miscellaneous end -->

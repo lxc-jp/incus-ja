@@ -2665,20 +2665,82 @@ QEMUスクリプトレットの機能を拡張し、VM起動前にQEMUの設定�
 `/1.0/instances/NAME/debug/memory`にメモリダンプAPIを追加します。
 
 ## `init_preseed_storage_volumes`
+
 このAPI拡張はpreseed initでストレージボリュームを設定できるようにします。
 
 ## `init_preseed_profile_project`
+
 このAPI拡張はpreseed initでプロファイルの定義の一部としてプロジェクトを指定できるようにします。
 
 ## `instance_nic_routed_host_address`
+
 ルートを追加するVRFを指定するサポートを追加。
 
 ## `instance_smbios11`
+
 新しいカテゴリの設定オプション、`smbios11.XYZ`が追加されました。
 これは`SMBIOS Type 11`をサポートするシステム上で`SMBIOS Type 11`を通してキー・バリュー・ペアを渡せるようにします。
 
 ## `api_filtering_extended`
+
 これはすべてのAPIのコレクションにAPIのフィルタリングのメカニズムを拡張します。
 
 ## `acme_dns01`
+
 証明書生成のためのIncusのACMEサポートに`DNS-01`チャレンジのサポートを追加します。
+
+## `security_iommu`
+
+IOMMUエミュレーションを有効にするかどうか制御するための`security.iommu`設定キーを導入します。
+これはLinuxでは`virtio_iommu`、WindowsではエミュレートされたIntel IOMMU経由で実行されます。
+
+## `network_ipv4_dhcp_routes`
+
+ブリッジネットワークとOVNネットワークに`ipv4.dhcp.routes`設定オプションを導入します。
+これによりDHCPサーバで広告されるCIDRネットワークとゲートウェイアドレスの組を指定できるようになります。
+
+## `network_state_ovn_ls`
+
+`NetworkStateOVN`構造体に`LogicalSwitch`フィールドを追加します。これは`GET /1.0/networks/NAME/state` APIの一部になります。
+
+これはOVN論理スイッチ名を取得するのに使われます。
+
+## `network_dns_nameservers`
+
+ブリッジネットワークとOVNネットワークに`dns.nameservers`設定オプションを導入します。
+これによりDHCPサーバによりルーターアドバイズメント経由で広告されるIPv4とIPv6 DNSサーバアドレスを指定できるようになります。
+
+## `acme_http01_port`
+
+`HTTP-01`のバリデーションに使用する別のHTTPポートを制御するための`acme.http.port`を追加します。
+
+## `network_ovn_ipv4_dhcp_expiry`
+
+OVNネットワークに`ipv4.dhcp.expiry`を導入します。
+
+## `instance_state_cpu_time`
+
+インスタンスの状態APIの`CPU`の下に`allocated_time`フィールドを追加します。
+
+## `network_io_bus`
+
+互換のあるネットワークデバイスに`io.bus`プロパティを追加し、`virtio`（デフォルト）と`usb`から選べるようにします。
+
+## `disk_io_bus_usb`
+
+`disk`デバイスの`io.bus`上に`usb`という値を追加します。
+
+## `storage_driver_linstor`
+
+LINSTORストレージドライバを追加します。
+
+## `instance_oci_entrypoint`
+
+コンテナにOCIエントリポイントを設定するための新しい設定オプションの組を導入します。
+
+* `oci.entrypoint`
+* `oci.cwd`
+* `oci.uid`
+* `oci.gid`
+
+これらはOCIイメージからの値を使って作成時に初期化されます。

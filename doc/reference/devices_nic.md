@@ -10,6 +10,11 @@
 ネットワークデバイス（*ネットワークインタフェースコントローラー*や*NIC*とも呼びます）はネットワークへの接続を提供します。
 Incus はさまざまな異なるタイプのネットワークデバイス（*NICタイプ*）をサポートします。
 
+```{note}
+VMでUSBネットワークアダプターを使用する場合、メインラインのQEMUはMACアドレスの先頭2バイトを`40:`で置き換えます。
+この影響を受ける方はホストとゲストでMACの報告をそろえるために、手動で`hwaddr`プロパティを`40:`から始まるMACアドレスに設定したいかもしれません。
+```
+
 ## `nictype` 対 `network`
 
 インスタンスにネットワークデバイスを追加する際には、追加したいデバイスのタイプを選択するのに 2 つの方法があります。`nictype`プロパティを指定するか`network`プロパティを使うかです。
@@ -75,6 +80,7 @@ Incus はさまざまな異なるタイプのネットワークデバイス（*N
 `boot.priority`                        | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
 `host_name`                            | string  | ランダムに割り当て | no   | ホスト内でのインターフェースの名前
 `hwaddr`                               | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
+`io.bus`                               | string  | `virtio`           | no   | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
 `ipv4.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能）
 `ipv4.routes`                          | string  | -                  | no   | ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト
 `ipv4.routes.external`                 | string  | -                  | no   | NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv4静的ルートのカンマ区切りリスト
@@ -123,6 +129,7 @@ Incus はさまざまな異なるタイプのネットワークデバイス（*N
 `boot.priority` | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
 `gvrp`          | bool    | `false`            | no   | GARP VLAN Registration Protocolを使ってVLANを登録する
 `hwaddr`        | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
+`io.bus`        | string  | `virtio`           | no   | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
 `mode`          | string  | `bridge`           | no   | Macvlanモード（`bridge`、`vepa`、`passthru`、`private`のいずれか）
 `mtu`           | integer | 親の MTU           | yes  | 新しいインターフェースのMTU
 `name`          | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
@@ -351,6 +358,7 @@ DNS
 `boot.priority`   | integer | -                  | VMのブート優先度 （高いほうが先にブート）
 `host_name`       | string  | ランダムに割り当て | ホスト内でのインターフェースの名前
 `hwaddr`          | string  | ランダムに割り当て | 新しいインターフェースのMACアドレス
+`io.bus`          | string  | `virtio`           | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
 `ipv4.routes`     | string  | -                  | ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト
 `ipv6.routes`     | string  | -                  | ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト
 `limits.egress`   | string  | -                  | 外向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
@@ -430,6 +438,7 @@ IP アドレス、ゲートウェイ、ルーティング
 `gvrp`                | bool    | `false`            | GARP VLAN Registration Protocolを使ってVLANを登録する
 `host_name`           | string  | ランダムに割り当て | ホスト内でのインターフェース名
 `hwaddr`              | string  | ランダムに割り当て | 新しいインターフェースのMACアドレス
+`io.bus`              | string  | `virtio`           | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
 `ipv4.address`        | string  | -                  | インスタンスに追加するIPv4静的アドレスのカンマ区切りリスト
 `ipv4.gateway`        | string  | `auto`             | 自動的にIPv4デフォルトゲートウェイを追加するかどうか（`auto`か`none`を指定可能）
 `ipv4.host_address`   | string  | `169.254.0.1`      | ホスト側の`veth`インターフェースに追加するIPv4アドレス
