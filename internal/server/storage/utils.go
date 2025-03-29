@@ -597,7 +597,7 @@ func ImageUnpack(imageFile string, vol drivers.Volume, destBlockFile string, sys
 
 		// Check for separate root file.
 		if util.PathExists(imageRootfsFile) {
-			err = os.MkdirAll(rootfsPath, 0755)
+			err = os.MkdirAll(rootfsPath, 0o755)
 			if err != nil {
 				return -1, fmt.Errorf("Error creating rootfs directory")
 			}
@@ -819,7 +819,7 @@ func VolumeUsedByProfileDevices(s *state.State, poolName string, projectName str
 		for _, project := range projects {
 			projectMap[project.Name], err = project.ToAPI(ctx, tx.Tx())
 			if err != nil {
-				return fmt.Errorf("Failed loading config for projec %q: %w", project.Name, err)
+				return fmt.Errorf("Failed loading config for project %q: %w", project.Name, err)
 			}
 		}
 
@@ -829,13 +829,13 @@ func VolumeUsedByProfileDevices(s *state.State, poolName string, projectName str
 		}
 
 		// Get all the profile configs.
-		profileConfigs, err := cluster.GetConfig(ctx, tx.Tx(), "profile")
+		profileConfigs, err := cluster.GetAllProfileConfigs(ctx, tx.Tx())
 		if err != nil {
 			return fmt.Errorf("Failed loading profile configs: %w", err)
 		}
 
 		// Get all the profile devices.
-		profileDevices, err := cluster.GetDevices(ctx, tx.Tx(), "profile")
+		profileDevices, err := cluster.GetAllProfileDevices(ctx, tx.Tx())
 		if err != nil {
 			return fmt.Errorf("Failed loading profile devices: %w", err)
 		}
@@ -1183,4 +1183,64 @@ func CompareSnapshots(sourceSnapshots []ComparableSnapshot, targetSnapshots []Co
 	}
 
 	return syncFromSource, deleteFromTarget
+}
+
+// CalculateVolumeSnapshotSize returns the size of a volume snapshot in bytes.
+func CalculateVolumeSnapshotSize(projectName string, pool Pool, contentType drivers.ContentType, volumeType drivers.VolumeType, volName string, snapName string) (int64, error) {
+	if contentType != drivers.ContentTypeBlock {
+		return 0, nil
+	}
+
+	var volSize int64
+
+	snapVolumeName := drivers.GetSnapshotVolumeName(volName, snapName)
+	var fullSnapVolName string
+	if volumeType == drivers.VolumeTypeCustom {
+		fullSnapVolName = project.StorageVolume(projectName, snapVolumeName)
+	} else {
+		fullSnapVolName = project.Instance(projectName, snapVolumeName)
+	}
+
+	snapVol := pool.GetVolume(volumeType, contentType, fullSnapVolName, nil)
+	err := snapVol.MountTask(func(mountPath string, op *operations.Operation) error {
+		poolBackend, ok := pool.(*backend)
+		if !ok {
+			return fmt.Errorf("Pool is not a backend")
+		}
+
+		volDiskPath, err := poolBackend.driver.GetVolumeDiskPath(snapVol)
+		if err != nil {
+			return err
+		}
+
+		volSize, err = drivers.BlockDiskSizeBytes(volDiskPath)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	return volSize, nil
+}
+
+// VolumeSnapshotsToMigrationSnapshots converts a *api.StorageVolumeSnapshot to a *migration.Snapshot.
+func VolumeSnapshotsToMigrationSnapshots(snapshots []*api.StorageVolumeSnapshot, projectName string, pool Pool, contentType drivers.ContentType, volumeType drivers.VolumeType, volName string) ([]*migration.Snapshot, error) {
+	migrationSnapshots := make([]*migration.Snapshot, 0, len(snapshots))
+	for _, snap := range snapshots {
+		mSnapshot := &migration.Snapshot{Name: &snap.Name}
+
+		volSize, err := CalculateVolumeSnapshotSize(projectName, pool, contentType, volumeType, volName, snap.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		migration.SetSnapshotConfigValue(mSnapshot, "size", fmt.Sprintf("%d", volSize))
+		migrationSnapshots = append(migrationSnapshots, mSnapshot)
+	}
+
+	return migrationSnapshots, nil
 }

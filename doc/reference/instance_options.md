@@ -14,6 +14,7 @@ key/value 形式の設定は、名前空間で分けられています。
 - {ref}`instance-options-limits`
 - {ref}`instance-options-migration`
 - {ref}`instance-options-nvidia`
+- {ref}`instance-options-oci`
 - {ref}`instance-options-raw`
 - {ref}`instance-options-security`
 - {ref}`instance-options-snapshots`
@@ -222,6 +223,17 @@ Incus は対象のカーネルがサポートするすべての利用可能な�
     :end-before: <!-- config group instance-nvidia end -->
 ```
 
+(instance-options-oci)=
+## OCI設定
+
+以下のインスタンスオプションはインスタンスのOCI設定を指定します:
+
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group instance-oci start -->
+    :end-before: <!-- config group instance-oci end -->
+```
+
 (instance-options-raw)=
 ## rawインスタンス設定のオーバーライド
 
@@ -299,16 +311,17 @@ value = "1"
 [global]
 driver = "ICH9-LPC"
 property = "disable_s4"
-value = "1"
+value = "0"
 ```
 
 オーバーライドするセクションを指定するには、インデクスを指定します。
 たとえば:
+最初の`global`セクションはS3（RAMへのサスペンド）を無効化し、2番目の`global`セクションはS4（ディスクへのサスペンド）を有効にしました。S4を無効にするには、2番目の`global`セクションを以下のように指定する必要があります:
 
 ```
 raw.qemu.conf: |-
     [global][1]
-    value = "0"
+    value = "1"
 ```
 
 セクションのインデクスは 0（指定しない場合のデフォルト値）から始まりますので、上の例は以下の設定を生成します:
@@ -322,7 +335,7 @@ value = "1"
 [global]
 driver = "ICH9-LPC"
 property = "disable_s4"
-value = "0"
+value = "1"
 ```
 
 ### QEMUランタイムオブジェクトをオーバーライド

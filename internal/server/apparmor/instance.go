@@ -135,7 +135,7 @@ func instanceProfileGenerate(sysOS *sys.OS, inst instance, extraBinaries []strin
 	}
 
 	if string(content) != string(updated) {
-		err = os.WriteFile(profile, []byte(updated), 0600)
+		err = os.WriteFile(profile, []byte(updated), 0o600)
 		if err != nil {
 			return err
 		}
@@ -200,7 +200,11 @@ func instanceProfile(sysOS *sys.OS, inst instance, extraBinaries []string) (stri
 
 		var edk2Paths []string
 
-		edk2Path := edk2.GetenvEdk2Path()
+		edk2Path, err := edk2.GetenvEdk2Path()
+		if err != nil {
+			return "", err
+		}
+
 		if edk2Path != "" {
 			edk2Path, err := filepath.EvalSymlinks(edk2Path)
 			if err != nil {

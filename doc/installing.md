@@ -91,28 +91,30 @@ Incusと依存パッケージはChimera Linuxの`user`レポジトリ内で`incu
 ```{group-tab} Debian
 Debian ユーザーには現在 3 つの選択肢があります。
 
-1. ネイティブの `incus` パッケージ
+1. ネイティブの`incus`と`incus-base`パッケージ
 
-    ネイティブの `incus` パッケージは現在 Debian の testing と unstable レポジトリ内で利用できます。
+    ネイティブの`incus`と`incus-base`パッケージは現在 Debian の testing と unstable レポジトリ内で利用できます。
     このパッケージは次回の Debian 13 (`trixie`) リリース内に含まれる予定です。
 
-    それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
-    仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
+    Debianのリリースサイクルとサポートポリシーにより適合するので、DebianのパッケージングではIncusのLTSリリースを追跡します。
+
+    それらのシステムでは、`apt install incus`と実行すればIncusがコンテナと仮想マシンを動かすのに必要なすべての依存パッケージとともにインストールされます。
+    Incusでコンテナを動かしたいだけであれば、単に`apt install incus-base`と実行すればよいです。
     LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
 
-1. ネイティブの `incus` のバックポートされたパッケージ
+1. ネイティブの`incus`と`incus-base`のバックポートされたパッケージ
 
-   ネイティブの `incus` のバックポートされたパッケージが現在 Debian 12 (`bookworm`) ユーザーに提供されています。
+   ネイティブの`incus`と`incus-base`のバックポートされたパッケージが現在 Debian 12 (`bookworm`) ユーザーに提供されています。
 
-    Debian 12 のシステムでは、単に `apt install incus/bookworm-backports` と実行すれば Incus がインストールされます。
-    仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
-    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
+    それらのシステムでは、`apt install incus/bookworm-backports`と実行すればIncusがコンテナと仮想マシンを動かすのに必要なすべての依存パッケージとともにインストールされます。
+    Incusでコンテナを動かしたいだけであれば、単に`apt install incus-base/bookworm-backports`と実行すればよいです。
+    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-extra/bookworm-backports`も実行します。
 
    ****NOTE:**** バックポートされたパッケージのユーザーは Debian Bug Tracker にはバグ報告しないでください。代わりに [Incus のフォーラム](https://discuss.linuxcontainers.org) に報告するか Debian のパッケージ作成者に直接報告してください。
 
 1. Zabbly パッケージレポジトリ
 
-    [Zabbly](https://zabbly.com) は Debian の安定版リリース (11 と 12) 用の最新でありサポート対象である Incus のパッケージを提供します。
+    [Zabbly](https://zabbly.com) は Debian の安定版リリース(11と12)と次期のDebian 13 (`trixie`)リリース用の最新でありサポート対象である Incus のパッケージを提供します。
     これらのパッケージは Incus の全ての機能を使用するために必要なすべてを含んでいます。
 
     最新のインストール手順はこちらを参照してください: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)

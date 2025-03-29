@@ -81,6 +81,7 @@ func (d *nicRouted) validateConfig(instConf instance.ConfigReader) error {
 		"ipv6.host_table",
 		"gvrp",
 		"vrf",
+		"io.bus",
 	}
 
 	rules := nicValidationRules(requiredFields, optionalFields, instConf)
@@ -192,7 +193,7 @@ func (d *nicRouted) validateEnvironment() error {
 			}
 		}
 
-		// Check necessary devic specific sysctls are configured for use with l2proxy parent for routed mode.
+		// Check necessary device specific sysctls are configured for use with l2proxy parent for routed mode.
 		if d.config["ipv6.address"] != "" {
 			ipv6FwdPath := fmt.Sprintf("net/ipv6/conf/%s/forwarding", d.effectiveParentName)
 			sysctlVal, err := localUtil.SysctlGet(ipv6FwdPath)
@@ -508,6 +509,10 @@ func (d *nicRouted) Start() (*deviceConfig.RunConfig, error) {
 		{Key: "flags", Value: "up"},
 		{Key: "link", Value: peerName},
 		{Key: "hwaddr", Value: d.config["hwaddr"]},
+	}
+
+	if d.config["io.bus"] == "usb" {
+		runConf.UseUSBBus = true
 	}
 
 	if d.inst.Type() == instancetype.Container {

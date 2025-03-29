@@ -45,6 +45,8 @@ OCIコンテナを動かすには、Incusは現状では`skopeo`と`umoci`の両
 
 仮想マシンを利用するには QEMU 6.0 以降が必要です。
 
+`virtiofsd`を使用する場合、`virtiofsd`の[Rustでのリライト](https://gitlab.com/virtio-fs/virtiofsd)のみサポートされます。
+
 ## 追加のライブラリ（と開発用のヘッダ）
 
 Incus はデータベースとして`cowsql`を使用しています。

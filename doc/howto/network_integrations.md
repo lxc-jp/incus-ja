@@ -45,7 +45,17 @@ incus network integration set ovn-region ovn.southbound_connection tcp:[192.0.2.
 incus network peer create default region ovn-region --type=remote
 ```
 
-## 設定オプション
+## インテグレーションプロパティ
+
+アドレスセットは以下のプロパティを持ちます:
+
+プロパティ    | 型     | 必須 | 説明
+:--           | :--    | :--  | :--
+`name`        | string | yes  | ネットワークインテグレーション名
+`description` | string | no   | ネットワークインテグレーションの説明
+`type`        | string | yes  | ネットワークインテグレーションのタイプ（現状は`ovn`のみ）
+
+## インテグレーション設定オプション
 
 以下の設定オプションがすべてのネットワーク統合で利用できます:
 

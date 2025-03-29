@@ -64,6 +64,7 @@ Incus ブリッジネットワークでファイアウォールを設定する�
 `bridge.external_interfaces`           | string  | -                  | -                                                               | ブリッジに含める未設定のネットワークインターフェースのカンマ区切りリスト
 `bridge.hwaddr`                        | string  | -                  | -                                                               | ブリッジのMACアドレス
 `bridge.mtu`                           | integer | -                  | `1500`                                                          | ブリッジのMTU（tunnel使用時はデフォルト値は変わる）
+`dns.nameservers`                      | string  | -                  | IPv4とIPv6のアドレス                                            | DHCPクライアントへとルーターアドバータイズメント経由で広告するDNSサーバーのIPアドレス。IPv4とIPv6の両方のアドレスがDHCPクライアントに広告され、IPv6アドレスはさらにRA経由のRDNSSとしても広告されます。
 `dns.domain`                           | string  | -                  | `incus`                                                         | DHCPのクライアントに広告しDNSの名前解決に使用するドメイン
 `dns.mode`                             | string  | -                  | `managed`                                                       | DNSの登録モード: `none`はDNSレコード無し、`managed`はIncusが静的レコードを生成、`dynamic`はクライアントがレコードを生成
 `dns.search`                           | string  | -                  | -                                                               | 完全なドメインサーチのカンマ区切りリスト、デフォルトは`dns.domain`の値
@@ -75,6 +76,7 @@ Incus ブリッジネットワークでファイアウォールを設定する�
 `ipv4.dhcp.expiry`                     | string  | IPv4 DHCP          | `1h`                                                            | DHCPリースの有効期限
 `ipv4.dhcp.gateway`                    | string  | IPv4 DHCP          | IPv4 アドレス                                                   | サブネットのゲートウェイのアドレス
 `ipv4.dhcp.ranges`                     | string  | IPv4 DHCP          | すべてのアドレス                                                | DHCPに使用するIPv4の範囲（開始-終了の形式）のカンマ区切りリスト
+`ipv4.dhcp.routes`                     | string  | IPv4 DHCP          | -                                                               | DHCPオプション121経由で提供する静的ルート、代替のサブネット（CIDR）とゲートウェイアドレスのカンマ区切りリスト（dnsmasqと同じ形式）
 `ipv4.firewall`                        | bool    | IPv4 アドレス      | `true`                                                          | このネットワークに対するファイアウォールのフィルタリングルールを生成するかどうか
 `ipv4.nat`                             | bool    | IPv4 アドレス      | `false`（`ipv4.address`が`auto`の場合の作成時の初期値: `true`） | NATにするかどうか
 `ipv4.nat.address`                     | string  | IPv4 アドレス      | -                                                               | ブリッジからの送信時に使うソースアドレス

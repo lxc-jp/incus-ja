@@ -64,10 +64,15 @@ DHCPv
 Diátaxis
 Diffie
 Distrobuilder
+diskful
+Diskless
+diskless
 DNS
+dnsmasq
 DNSSEC
 DoS
 DRM
+DRBD
 EB
 Ebit
 eBPF
@@ -103,8 +108,10 @@ GPUs
 Grafana
 HAProxy
 hardcoded
+HDDs
 Hellman
 Homebrew
+hostname
 hotplug
 hotplugged
 hotplugging
@@ -122,6 +129,7 @@ InfluxDB
 init
 initramfs
 integrations
+IOMMU
 IOPS
 IOV
 IPAM
@@ -149,6 +157,9 @@ LXCFS
 LXC's
 LXD
 LXD's
+LINBIT
+LINSTOR
+LINSTOR's
 macOS
 macvlan
 Makefile
@@ -176,6 +187,7 @@ NIC
 NICs
 NixOS
 NUMA
+NVMe
 NVRAM
 OCI
 OData
@@ -195,6 +207,7 @@ OVMF
 OVN
 OVS
 PackageHub
+passthrough
 Pbit
 PCI
 PCIe
@@ -209,6 +222,7 @@ PKI
 PNG
 Pongo
 POSIX
+PPA
 pre
 preseed
 proxied
@@ -223,6 +237,7 @@ qgroups
 RADOS
 RBAC
 RBD
+RDNSS
 README
 reconfiguring
 requestor
@@ -231,6 +246,7 @@ RESTful
 RHEL
 rootfs
 RSA
+RTC
 rST
 runtime
 SATA
