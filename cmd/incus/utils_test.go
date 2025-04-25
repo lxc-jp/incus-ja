@@ -14,7 +14,7 @@ type utilsTestSuite struct {
 }
 
 func TestUtilsTestSuite(t *testing.T) {
-	suite.Run(t, new(utilsTestSuite))
+	suite.Run(t, &utilsTestSuite{})
 }
 
 func (s *utilsTestSuite) TestIsAliasesSubsetTrue() {
@@ -78,7 +78,15 @@ func (s *utilsTestSuite) TestGetServerSupportedFilters() {
 		"foo", "type=container", "user.blah=a", "status=running,stopped",
 	}
 
-	supportedFilters, unsupportedFilters := getServerSupportedFilters(filters, api.InstanceFull{})
-	s.Equal([]string{"type=container"}, supportedFilters)
-	s.Equal([]string{"foo", "user.blah=a", "status=running,stopped"}, unsupportedFilters)
+	supportedFilters, unsupportedFilters := getServerSupportedFilters(filters, []string{}, false)
+	s.Equal([]string{"type=container", "user.blah=a", "status=running,stopped"}, supportedFilters)
+	s.Equal([]string{"foo"}, unsupportedFilters)
+
+	supportedFilters, unsupportedFilters = getServerSupportedFilters(filters, []string{}, true)
+	s.Equal([]string{"foo", "type=container", "user.blah=a", "status=running,stopped"}, supportedFilters)
+	s.Equal([]string{}, unsupportedFilters)
+
+	supportedFilters, unsupportedFilters = getServerSupportedFilters(filters, []string{"type", "status"}, true)
+	s.Equal([]string{"foo", "user.blah=a"}, supportedFilters)
+	s.Equal([]string{"type=container", "status=running,stopped"}, unsupportedFilters)
 }

@@ -310,5 +310,5 @@ Grafana のドキュメントを参照して、インストールとサインイ
 
 ```{note}
 ダッシュボードの Loki の部分を適切に動かすには、`instance`フィールドをPrometheusのジョブ名と一致させる必要があります。
-`instance`フィールドは`loki.instance`設定キーで変更できます。
+`instance`フィールドは`logging.*.target.instance`設定キーで変更できます。
 ```

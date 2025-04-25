@@ -32,15 +32,11 @@ VM では、各デバイスは1つの GPU にしかマッチできません。
 
 `physical` タイプのデバイスには以下のデバイスオプションがあります:
 
-キー        | 型     | デフォルト値 | 説明
-:--         | :--    | :--          | :--
-`gid`       | int    | `0`          | インスタンス（コンテナのみ）内のデバイス所有者のGID
-`id`        | string | -            | GPUデバイスのDRMカードID
-`mode`      | int    | `0660`       | インスタンス（コンテナのみ）内のデバイスのモード
-`pci`       | string | -            | GPUデバイスのPCIアドレス
-`productid` | string | -            | GPUデバイスのプロダクトID
-`uid`       | int    | `0`          | インスタンス（コンテナのみ）内のデバイス所有者のUID
-`vendorid`  | string | -            | GPUデバイスのベンダーID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-gpu_physical start -->
+    :end-before: <!-- config group devices-gpu_physical end -->
+```
 
 (gpu-mdev)=
 ## `gputype`: `mdev`
@@ -57,13 +53,11 @@ VM では、各デバイスは1つの GPU にしかマッチできません。
 
 `mdev` タイプのデバイスには以下のデバイスオプションがあります:
 
-キー        | 型     | デフォルト値 | 説明
-:--         | :--    | :--          | :--
-`id`        | string | -            | GPUデバイスのDRMカードID
-`mdev`      | string | -            | 使用する`mdev`プロファイル（必須 - 例:`i915-GVTg_V5_4`）
-`pci`       | string | -            | GPUデバイスのPCIアドレス
-`productid` | string | -            | GPUデバイスのプロダクトID
-`vendorid`  | string | -            | GPUデバイスのベンダーID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-gpu_mdev start -->
+    :end-before: <!-- config group devices-gpu_mdev end -->
+```
 
 (gpu-mig)=
 ## `gputype`: `mig`
@@ -80,15 +74,11 @@ VM では、各デバイスは1つの GPU にしかマッチできません。
 
 `mig` タイプのデバイスには以下のデバイスオプションがあります:
 
-キー        | 型     | デフォルト値 | 説明
-:--         | :--    | :--          | :--
-`id`        | string | -            | GPUデバイスのDRMカードID
-`mig.ci`    | int    | -            | 既存のMIGコンピュートインスタンスID
-`mig.gi`    | int    | -            | 既存のMIG GPUインスタンスID
-`mig.uuid`  | string | -            | 既存のMIGデバイスUUID（`MIG-`接頭辞は省略可）
-`pci`       | string | -            | GPUデバイスのPCIアドレス
-`productid` | string | -            | GPUデバイスのプロダクトID
-`vendorid`  | string | -            | GPUデバイスのベンダーID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-gpu_mig start -->
+    :end-before: <!-- config group devices-gpu_mig end -->
+```
 
 `mig.uuid`（NVIDIA drivers 470+）か、`mig.ci`と`mig.gi`（古い NVIDIA ドライバー）の両方を設定する必要があります。
 
@@ -106,9 +96,8 @@ VM では、各デバイスは1つの GPU にしかマッチできません。
 
 `sriov`タイプのデバイスには以下のデバイスオプションがあります:
 
-キー        | 型     | デフォルト値 | 説明
-:--         | :--    | :--          | :--
-`id`        | string | -            | GPUデバイスのDRMカードID
-`pci`       | string | -            | 親GPUデバイスのPCIアドレス
-`productid` | string | -            | 親GPUデバイスのプロダクトID
-`vendorid`  | string | -            | 親GPUデバイスのベンダーID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-gpu_sriov start -->
+    :end-before: <!-- config group devices-gpu_sriov end -->
+```

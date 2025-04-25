@@ -20,7 +20,7 @@
 複数のインスタンスを一覧表示するには、名前の正規表現を使います。
 例えば以下のようにします:
 
-    incus list ubuntu.*
+    incus list debian.*
 
 全てのフィルターオプションを見るには [`incus list --help`](incus_list.md) と入力します。
 ```
@@ -33,7 +33,7 @@
 
 表示するインスタンスを名前、インスタンスタイプ、状態またはインスタンスが配置されているクラスタメンバで {ref}`フィルタ <rest-api-filtering>` できます:
 
-    incus query /1.0/instances?filter=name+eq+ubuntu
+    incus query /1.0/instances?filter=name+eq+debian
     incus query /1.0/instances?filter=type+eq+container
     incus query /1.0/instances?filter=status+eq+running
     incus query /1.0/instances?filter=location+eq+server1
@@ -41,7 +41,7 @@
 複数のインスタンスを一覧表示するには、名前の正規表現を使います。
 たとえば:
 
-    incus query /1.0/instances?filter=name+eq+ubuntu.*
+    incus query /1.0/instances?filter=name+eq+debian.*
 
 詳細は [`GET /1.0/instances`](swagger:/instances/instances_get) を参照してください。
 ```

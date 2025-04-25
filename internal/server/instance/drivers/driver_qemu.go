@@ -1228,7 +1228,7 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	defer revert.Fail()
 
 	// Rotate the log files.
-	for _, logfile := range []string{d.LogFilePath(), d.common.ConsoleBufferLogPath(), d.QMPLogFilePath()} {
+	for _, logfile := range []string{d.LogFilePath(), d.ConsoleBufferLogPath(), d.QMPLogFilePath()} {
 		if util.PathExists(logfile) {
 			_ = os.Remove(logfile + ".old")
 			err := os.Rename(logfile, logfile+".old")
@@ -1246,6 +1246,11 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 			op.Done(err)
 			return fmt.Errorf("Failed removing old PID file %q: %w", d.pidFilePath(), err)
 		}
+	}
+
+	// Cleanup old sockets.
+	for _, socketPath := range []string{d.consolePath(), d.spicePath(), d.monitorPath()} {
+		_ = os.Remove(socketPath)
 	}
 
 	// Mount the instance's config volume.
@@ -1653,7 +1658,15 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 
 	// Attempt to drop privileges (doesn't work when restoring state).
 	if !stateful && d.state.OS.UnprivUser != "" {
-		qemuArgs = append(qemuArgs, "-runas", d.state.OS.UnprivUser)
+		qemuVer, _ := d.version()
+		qemuVer91, _ := version.NewDottedVersion("9.1.0")
+
+		// Since QEMU 9.1 the parameter `runas` has been marked as deprecated.
+		if qemuVer != nil && qemuVer.Compare(qemuVer91) >= 0 {
+			qemuArgs = append(qemuArgs, "-run-with", fmt.Sprintf("user=%s", d.state.OS.UnprivUser))
+		} else {
+			qemuArgs = append(qemuArgs, "-runas", d.state.OS.UnprivUser)
+		}
 
 		nvRAMPath := d.nvramPath()
 		if d.architectureSupportsUEFI(d.architecture) && util.PathExists(nvRAMPath) {
@@ -3230,8 +3243,8 @@ func (d *qemu) templateApplyNow(trigger instance.TemplateTrigger, path string) e
 		return fmt.Errorf("Failed to read metadata: %w", err)
 	}
 
-	metadata := new(api.ImageMetadata)
-	err = yaml.Unmarshal(content, &metadata)
+	metadata := &api.ImageMetadata{}
+	err = yaml.Unmarshal(content, metadata)
 	if err != nil {
 		return fmt.Errorf("Could not parse %s: %w", fname, err)
 	}
@@ -3847,9 +3860,8 @@ func (d *qemu) writeQemuConfigFile(configPath string) error {
 	return os.WriteFile(configPath, []byte(sb.String()), 0o640)
 }
 
-// addCPUMemoryConfig adds the qemu config required for setting the number of virtualised CPUs and memory.
-// If sb is nil then no config is written.
-func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) error {
+// getCPUOpts retrieves configuration options for virtualized CPUs and memory.
+func (d *qemu) getCPUOpts(cpuInfo *cpuTopology, memSizeBytes int64) (*qemuCPUOpts, error) {
 	// Figure out what memory object layout we're going to use.
 	// Before v6.0 or if version unknown, we use the "repeated" format, otherwise we use "indexed" format.
 	qemuMemObjectFormat := "repeated"
@@ -3863,8 +3875,6 @@ func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) err
 		architecture:        d.architectureName,
 		qemuMemObjectFormat: qemuMemObjectFormat,
 	}
-
-	cpuPinning := false
 
 	hostNodes := []uint64{}
 	if cpuInfo.vcpus == nil {
@@ -3895,14 +3905,12 @@ func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) err
 			// Parse the NUMA restriction.
 			numaNodeSet, err := resources.ParseNumaNodeSet(numaNodes)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			cpuOpts.memoryHostNodes = numaNodeSet
 		}
 	} else {
-		cpuPinning = true
-
 		// Figure out socket-id/core-id/thread-id for all vcpus.
 		vcpuSocket := map[uint64]uint64{}
 		vcpuCore := map[uint64]uint64{}
@@ -3949,6 +3957,27 @@ func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) err
 		cpuOpts.cpuNumaHostNodes = hostNodes
 	}
 
+	cpuOpts.hugepages = ""
+	if util.IsTrue(d.expandedConfig["limits.memory.hugepages"]) {
+		hugetlb, err := localUtil.HugepagesPath()
+		if err != nil {
+			return nil, err
+		}
+
+		cpuOpts.hugepages = hugetlb
+	}
+
+	// Determine per-node memory limit.
+	memSizeMB := memSizeBytes / 1024 / 1024
+	nodeMemory := int64(memSizeMB / int64(len(hostNodes)))
+	cpuOpts.memory = nodeMemory
+
+	return &cpuOpts, nil
+}
+
+// addCPUMemoryConfig adds the qemu config required for setting the number of virtualised CPUs and memory.
+// If sb is nil then no config is written.
+func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) error {
 	// Configure memory limit.
 	memSize := d.expandedConfig["limits.memory"]
 	if memSize == "" {
@@ -3960,24 +3989,25 @@ func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) err
 		return fmt.Errorf("limits.memory invalid: %w", err)
 	}
 
-	cpuOpts.hugepages = ""
-	if util.IsTrue(d.expandedConfig["limits.memory.hugepages"]) {
-		hugetlb, err := localUtil.HugepagesPath()
-		if err != nil {
-			return err
-		}
-
-		cpuOpts.hugepages = hugetlb
+	cpuOpts, err := d.getCPUOpts(cpuInfo, memSizeBytes)
+	if err != nil {
+		return err
 	}
 
-	// Determine per-node memory limit.
-	memSizeMB := memSizeBytes / 1024 / 1024
-	nodeMemory := int64(memSizeMB / int64(len(hostNodes)))
-	cpuOpts.memory = nodeMemory
+	cpuPinning := cpuInfo.vcpus != nil
+
+	maxMemoryBytes, err := linux.DeviceTotalMemory()
+	if err != nil {
+		return err
+	}
+
+	if maxMemoryBytes < memSizeBytes {
+		maxMemoryBytes = memSizeBytes
+	}
 
 	if conf != nil {
-		*conf = append(*conf, qemuMemory(&qemuMemoryOpts{memSizeMB})...)
-		*conf = append(*conf, qemuCPU(&cpuOpts, cpuPinning)...)
+		*conf = append(*conf, qemuMemory(&qemuMemoryOpts{memSizeBytes / 1024 / 1024, maxMemoryBytes / 1024 / 1024})...)
+		*conf = append(*conf, qemuCPU(cpuOpts, cpuPinning)...)
 	}
 
 	return nil
@@ -6149,7 +6179,7 @@ func (d *qemu) updateMemoryLimit(newLimit string) error {
 	if curSizeMB == newSizeMB {
 		return nil
 	} else if baseSizeMB < newSizeMB {
-		return fmt.Errorf("Cannot increase memory size beyond boot time size when VM is running (Boot time size %dMiB, new size %dMiB)", baseSizeMB, newSizeMB)
+		return d.hotplugMemory(monitor, newSizeBytes-curSizeBytes)
 	}
 
 	// Set effective memory size.
@@ -6183,6 +6213,79 @@ func (d *qemu) updateMemoryLimit(newLimit string) error {
 	}
 
 	return fmt.Errorf("Failed setting memory to %dMiB (currently %dMiB) as it was taking too long", newSizeMB, curSizeMB)
+}
+
+// hotplugMemory attaches a memory device to a running VM,
+// respecting NUMA node placement and hugepages.
+func (d *qemu) hotplugMemory(monitor *qmp.Monitor, sizeBytes int64) error {
+	// Get CPU information.
+	cpuInfo, err := d.cpuTopology(d.expandedConfig["limits.cpu"])
+	if err != nil {
+		return err
+	}
+
+	// Fetch memory configuration
+	cpuOpts, err := d.getCPUOpts(cpuInfo, sizeBytes)
+	if err != nil {
+		return err
+	}
+
+	cpuPinning := cpuInfo.vcpus != nil
+
+	// Get CPUs and memory configuration
+	conf := qemuCPU(cpuOpts, cpuPinning)
+
+	memoryObjects := map[int]cfg.Section{}
+	for _, section := range conf {
+		// Name is in the form 'object "mem0"', so the last quote needs to be removed.
+		// This allows proper parsing of the memory object index.
+		sectionName := section.Name[:len(section.Name)-1]
+		index, err := extractTrailingNumber(sectionName, "object \"mem")
+		if err != nil {
+			continue
+		}
+
+		memoryObjects[index] = section
+	}
+
+	// Find first available memory object index.
+	nextMemIndex, err := findNextMemoryIndex(monitor)
+	if err != nil {
+		return err
+	}
+
+	// Find first available pc-dimm device index.
+	nextDimmIndex, err := findNextDimmIndex(monitor)
+	if err != nil {
+		return err
+	}
+
+	for index, memory := range memoryObjects {
+		memIndex := nextMemIndex + index
+		dimmIndex := nextDimmIndex + index
+
+		memObj := memoryConfigSectionToMap(&memory)
+		memObj["id"] = fmt.Sprintf("mem%d", memIndex)
+
+		err = monitor.AddObject(memObj)
+		if err != nil {
+			return err
+		}
+
+		memDev := map[string]any{
+			"driver": "pc-dimm",
+			"id":     fmt.Sprintf("dimm%d", dimmIndex),
+			"memdev": fmt.Sprintf("mem%d", memIndex),
+			"node":   index,
+		}
+
+		err = monitor.AddDevice(memDev)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *qemu) removeUnixDevices() error {
@@ -6706,6 +6809,7 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 	}
 
 	clusterMove := args.ClusterMoveSourceName != ""
+	remoteClusterMove := clusterMove && pool.Driver().Info().Remote
 	storageMove := args.StoragePool != ""
 
 	// The refresh argument passed to MigrationTypes() is always set
@@ -6754,12 +6858,17 @@ func (d *qemu) MigrateSend(args instance.MigrateSendArgs) error {
 
 		for i := range srcConfig.Snapshots {
 			offerHeader.SnapshotNames = append(offerHeader.SnapshotNames, srcConfig.Snapshots[i].Name)
-			snapSize, err := storagePools.CalculateVolumeSnapshotSize(d.Project().Name, pool, contentType, storageDrivers.VolumeTypeVM, d.Name(), srcConfig.Snapshots[i].Name)
-			if err != nil {
-				return err
+
+			// Calculating snapshot size can be very slow, skip unless absolutely needed.
+			if !remoteClusterMove || storageMove {
+				snapSize, err := storagePools.CalculateVolumeSnapshotSize(d.Project().Name, pool, contentType, storageDrivers.VolumeTypeVM, d.Name(), srcConfig.Snapshots[i].Name)
+				if err != nil {
+					return err
+				}
+
+				srcConfig.Snapshots[i].Config["size"] = fmt.Sprintf("%d", snapSize)
 			}
 
-			srcConfig.Snapshots[i].Config["size"] = fmt.Sprintf("%d", snapSize)
 			offerHeader.Snapshots = append(offerHeader.Snapshots, instance.SnapshotToProtobuf(srcConfig.Snapshots[i]))
 		}
 	}
@@ -7998,8 +8107,38 @@ func (d *qemu) Exec(req api.InstanceExecPost, stdin *os.File, stdout *os.File, s
 	return instCmd, nil
 }
 
+// RenderWithUsage renders the API response including disk usage.
+func (d *qemu) RenderWithUsage() (any, any, error) {
+	resp, etag, err := d.Render()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Currently only snapshot data needs usage added.
+	snapResp, ok := resp.(*api.InstanceSnapshot)
+	if !ok {
+		return resp, etag, nil
+	}
+
+	pool, err := d.getStoragePool()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// It is important that the snapshot not be mounted here as mounting a snapshot can trigger a very
+	// expensive filesystem UUID regeneration, so we rely on the driver implementation to get the info
+	// we are requesting as cheaply as possible.
+	volumeState, err := pool.GetInstanceUsage(d)
+	if err != nil {
+		return resp, etag, nil
+	}
+
+	snapResp.Size = volumeState.Used
+	return snapResp, etag, nil
+}
+
 // Render returns info about the instance.
-func (d *qemu) Render(options ...func(response any) error) (any, any, error) {
+func (d *qemu) Render() (any, any, error) {
 	profileNames := make([]string, 0, len(d.profiles))
 	for _, profile := range d.profiles {
 		profileNames = append(profileNames, profile.Name)
@@ -8023,13 +8162,6 @@ func (d *qemu) Render(options ...func(response any) error) (any, any, error) {
 		snapState.Ephemeral = d.ephemeral
 		snapState.Profiles = profileNames
 		snapState.ExpiresAt = d.expiryDate
-
-		for _, option := range options {
-			err := option(&snapState)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
 
 		return &snapState, d.ETag(), nil
 	}
@@ -8057,13 +8189,6 @@ func (d *qemu) Render(options ...func(response any) error) (any, any, error) {
 	instState.Stateful = d.stateful
 	instState.Project = d.project.Name
 
-	for _, option := range options {
-		err := option(&instState)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
 	return &instState, d.ETag(), nil
 }
 
@@ -8071,6 +8196,17 @@ func (d *qemu) Render(options ...func(response any) error) (any, any, error) {
 func (d *qemu) RenderFull(hostInterfaces []net.Interface) (*api.InstanceFull, any, error) {
 	if d.IsSnapshot() {
 		return nil, nil, fmt.Errorf("RenderFull doesn't work with snapshots")
+	}
+
+	// Pre-fetch the data.
+	pool, err := d.getStoragePool()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = pool.CacheInstanceSnapshots(d)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Get the Instance struct.
@@ -9518,7 +9654,7 @@ func (d *qemu) ConsoleLog() (string, error) {
 
 	// If we got data back, append it to the log file for this instance.
 	if logString != "" {
-		logFile, err := os.OpenFile(d.common.ConsoleBufferLogPath(), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
+		logFile, err := os.OpenFile(d.ConsoleBufferLogPath(), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 		if err != nil {
 			return "", err
 		}
@@ -9532,7 +9668,7 @@ func (d *qemu) ConsoleLog() (string, error) {
 	}
 
 	// Read and return the complete log for this instance.
-	fullLog, err := os.ReadFile(d.common.ConsoleBufferLogPath())
+	fullLog, err := os.ReadFile(d.ConsoleBufferLogPath())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			// If there's no log file yet, such as right at VM creation, return an empty string.

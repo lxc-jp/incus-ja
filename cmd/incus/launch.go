@@ -17,6 +17,7 @@ type cmdLaunch struct {
 	flagConsole string
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdLaunch) Command() *cobra.Command {
 	cmd := c.init.Command()
 	cmd.Use = usage("launch", i18n.G("[<remote>:]<image> [<remote>:][<name>]"))
@@ -24,15 +25,15 @@ func (c *cmdLaunch) Command() *cobra.Command {
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Create and start instances from images`))
 	cmd.Example = cli.FormatSection("", i18n.G(
-		`incus launch images:ubuntu/22.04 u1
+		`incus launch images:debian/12 u1
 
-incus launch images:ubuntu/22.04 u1 < config.yaml
+incus launch images:debian/12 u1 < config.yaml
     Create and start a container with configuration from config.yaml
 
-incus launch images:ubuntu/22.04 u2 -t aws:t2.micro
+incus launch images:debian/12 u2 -t aws:t2.micro
     Create and start a container using the same size as an AWS t2.micro (1 vCPU, 1GiB of RAM)
 
-incus launch images:ubuntu/22.04 v1 --vm -c limits.cpu=4 -c limits.memory=4GiB
+incus launch images:debian/12 v1 --vm -c limits.cpu=4 -c limits.memory=4GiB
     Create and start a virtual machine with 4 vCPUs and 4GiB of RAM
 
 incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
@@ -44,7 +45,7 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
 	cmd.Flags().StringVar(&c.flagConsole, "console", "", i18n.G("Immediately attach to the console")+"``")
 	cmd.Flags().Lookup("console").NoOptDefVal = "console"
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -55,11 +56,12 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdLaunch) Run(cmd *cobra.Command, args []string) error {
 	conf := c.global.conf
 
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 1, 2)
+	exit, err := c.global.checkArgs(cmd, args, 1, 2)
 	if exit {
 		return err
 	}

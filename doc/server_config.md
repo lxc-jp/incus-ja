@@ -10,7 +10,7 @@ key/value 設定は名前空間が分けられています。
 - {ref}`server-options-acme`
 - {ref}`server-options-cluster`
 - {ref}`server-options-images`
-- {ref}`server-options-loki`
+- {ref}`server-options-logging`
 - {ref}`server-options-misc`
 - {ref}`server-options-oidc`
 - {ref}`server-options-openfga`
@@ -88,15 +88,38 @@ key/value 設定は名前空間が分けられています。
     :end-before: <!-- config group server-images end -->
 ```
 
-(server-options-loki)=
-## Loki設定
+(server-options-logging)=
+## ログ設定
 
-以下のサーバーオプションは外部ログ集約システムを設定します:
+ログシステムは複数のターゲットが設定できるようになりました。ターゲットはユニークな名前（例：`loki1`、`syslog01`）により識別されます。
+各ターゲットは独立して設定でき、固有のログ種別が割り当てられます。
+
+### サポートされるターゲット
+
+- `loki` -  Grafana Lokiサーバーにログを送信
+- `syslog` - リモートのsyslogエンドポイントにログを送信
+
+### 設定例
+
+```
+logging.loki01.target.type: loki
+logging.loki01.target.address: https://loki01.int.example.net
+logging.loki01.target.username: foo
+logging.loki01.target.password: bar
+logging.loki01.types: lifecycle,network-acl
+logging.loki01.lifecycle.types: instance
+
+logging.syslog01.target.type: syslog
+logging.syslog01.target.address: syslog01.int.example.net
+logging.syslog01.target.facility: security
+logging.syslog01.types: logging
+logging.syslog01.logging.level: warning
+```
 
 % Include content from [config_options.txt](config_options.txt)
 ```{include} config_options.txt
-    :start-after: <!-- config group server-loki start -->
-    :end-before: <!-- config group server-loki end -->
+    :start-after: <!-- config group server-logging start -->
+    :end-before: <!-- config group server-logging end -->
 ```
 
 (server-options-misc)=

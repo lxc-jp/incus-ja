@@ -49,6 +49,7 @@ type ImageServer interface {
 	// Image handling functions
 	GetImages() (images []api.Image, err error)
 	GetImagesAllProjects() (images []api.Image, err error)
+	GetImagesAllProjectsWithFilter(filters []string) (images []api.Image, err error)
 	GetImageFingerprints() (fingerprints []string, err error)
 	GetImagesWithFilter(filters []string) (images []api.Image, err error)
 
@@ -193,7 +194,9 @@ type InstanceServer interface {
 	// Network functions ("network" API extension)
 	GetNetworkNames() (names []string, err error)
 	GetNetworks() (networks []api.Network, err error)
+	GetNetworksWithFilter(filters []string) (networks []api.Network, err error)
 	GetNetworksAllProjects() (networks []api.Network, err error)
+	GetNetworksAllProjectsWithFilter(filters []string) (networks []api.Network, err error)
 	GetNetwork(name string) (network *api.Network, ETag string, err error)
 	GetNetworkLeases(name string) (leases []api.NetworkLease, err error)
 	GetNetworkState(name string) (state *api.NetworkState, err error)
@@ -238,6 +241,16 @@ type InstanceServer interface {
 	RenameNetworkACL(name string, acl api.NetworkACLPost) (err error)
 	DeleteNetworkACL(name string) (err error)
 
+	// Network address set functions ("network_address_set" API extension)
+	GetNetworkAddressSetNames() (names []string, err error)
+	GetNetworkAddressSets() (AddressSets []api.NetworkAddressSet, err error)
+	GetNetworkAddressSetsAllProjects() (AddressSets []api.NetworkAddressSet, err error)
+	GetNetworkAddressSet(name string) (AddressSet *api.NetworkAddressSet, ETag string, err error)
+	CreateNetworkAddressSet(AddressSet api.NetworkAddressSetsPost) (err error)
+	UpdateNetworkAddressSet(name string, AddressSet api.NetworkAddressSetPut, ETag string) (err error)
+	RenameNetworkAddressSet(name string, AddressSet api.NetworkAddressSetPost) (err error)
+	DeleteNetworkAddressSet(name string) (err error)
+
 	// Network allocations functions ("network_allocations" API extension)
 	GetNetworkAllocations() (allocations []api.NetworkAllocations, err error)
 	GetNetworkAllocationsAllProjects() (allocations []api.NetworkAllocations, err error)
@@ -279,8 +292,10 @@ type InstanceServer interface {
 
 	// Profile functions
 	GetProfilesAllProjects() (profiles []api.Profile, err error)
+	GetProfilesAllProjectsWithFilter(filters []string) ([]api.Profile, error)
 	GetProfileNames() (names []string, err error)
 	GetProfiles() (profiles []api.Profile, err error)
+	GetProfilesWithFilter(filters []string) ([]api.Profile, error)
 	GetProfile(name string) (profile *api.Profile, ETag string, err error)
 	CreateProfile(profile api.ProfilesPost) (err error)
 	UpdateProfile(name string, profile api.ProfilePut, ETag string) (err error)

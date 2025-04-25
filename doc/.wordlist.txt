@@ -67,6 +67,7 @@ Distrobuilder
 diskful
 Diskless
 diskless
+DNAT
 DNS
 dnsmasq
 DNSSEC
@@ -164,6 +165,7 @@ macOS
 macvlan
 Makefile
 manpages
+mDNS
 Mbit
 MiB
 Mibit
@@ -263,6 +265,7 @@ SIGTERM
 simplestreams
 SLAAC
 SMTP
+SNAT
 Snapcraft
 Solaris
 SPAs

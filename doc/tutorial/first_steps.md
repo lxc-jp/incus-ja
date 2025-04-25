@@ -23,7 +23,7 @@ Incus はほとんどのよくある Linux ディストリビューションで�
 
    すべてのコマンドを root で実行することなく Incus を制御するには、あなた自身を`incus-admin`グループに追加してください。
 
-       sudo adduser YOUR-USERNAME incus-admin
+       sudo adduser $USER incus-admin
        newgrp incus-admin
 
    `newgrp`の手順はあなたの端末セッションを再起動しないままで Incus を利用する場合に必要です（訳注：端末を起動し直す場合は不要です）。
@@ -62,9 +62,9 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
 
 インスタンスを管理するには、Incus のコマンドラインクライアント`incus`を使います。
 
-1. Ubuntu 22.04 イメージを使って`first`という名前のコンテナを起動します。
+1. Debian 12 イメージを使って`first`という名前のコンテナを起動します。
 
-       incus launch images:ubuntu/22.04 first
+       incus launch images:debian/12 first
 
    ```{note}
    最初はイメージをダウンロードして展開しなければならないため、コンテナの起動には少し時間がかかることに注意してください。
@@ -72,7 +72,7 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
 
 1. 同じイメージを使って`second`という名前のコンテナを起動します。
 
-       incus launch images:ubuntu/22.04 second
+       incus launch images:debian/12 second
 
    ```{note}
    イメージを取得済みなので、最初の（first）コンテナの起動に比べると早く起動します。
@@ -82,9 +82,9 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
 
        incus copy first third
 
-1. Ubuntu 22.04 イメージを使って`ubuntu-vm`という名前の仮想マシンを起動します。
+1. Debian 12 イメージを使って`debian-vm`という名前の仮想マシンを起動します。
 
-       incus launch images:ubuntu/22.04 ubuntu-vm --vm
+       incus launch images:debian/12 debian-vm --vm
 
    ```{note}
    インスタンスの起動に同じイメージ名を使っていますが、Incusは仮想マシンに適した少し異なるイメージをダウンロードします。
@@ -106,7 +106,7 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
        incus info first
        incus info second
        incus info third
-       incus info ubuntu-vm
+       incus info debian-vm
 
 1. チュートリアルではこの後、これらのインスタンスすべては必要ありませんので、不要なインスタンスを消しましょう。
 
@@ -136,7 +136,7 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
 
 1. コンテナを起動し、1vCPU と 192MiB メモリーの制限を設定します。
 
-       incus launch images:ubuntu/22.04 limited --config limits.cpu=1 --config limits.memory=192MiB
+       incus launch images:debian/12 limited --config limits.cpu=1 --config limits.memory=192MiB
 
 1. 現在の設定を確認し、制限が設定されていない最初の（first）コンテナの設定と比べてみましょう。
 
@@ -182,10 +182,10 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
 1. 使用するインスタンスタイプとストレージドライバーによっては、より多くの設定を指定できます。
    たとえば、仮想マシンの root ディスクデバイスのサイズを指定できます。
 
-   1. Ubuntu 仮想マシンの root ディスクデバイスの現在のサイズをチェックします。
+   1. Debian 仮想マシンの root ディスクデバイスの現在のサイズをチェックします。
 
       ```{terminal}
-      :input: incus exec ubuntu-vm -- df -h
+      :input: incus exec debian-vm -- df -h
 
       Filesystem      Size  Used Avail Use% Mounted on
       /dev/root       9.6G  1.4G  8.2G  15% /
@@ -198,16 +198,16 @@ Incus が使用するイメージについてのより詳細情報は{ref}`image
 
    1. root ディスクデバイスのサイズを上書きします。
 
-          incus config device override ubuntu-vm root size=30GiB
+          incus config device override debian-vm root size=30GiB
 
    1. 仮想マシンを再起動します。
 
-          incus restart ubuntu-vm
+          incus restart debian-vm
 
    1. ふたたび、root ディスクデバイスのサイズをチェックします。
 
        ```{terminal}
-       :input: incus exec ubuntu-vm -- df -h
+       :input: incus exec debian-vm -- df -h
 
        Filesystem      Size  Used Avail Use% Mounted on
        /dev/root        29G  1.4G   28G   5% /

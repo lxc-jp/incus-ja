@@ -1036,11 +1036,6 @@ func imagesPost(d *Daemon, r *http.Request) response.Response {
 		}
 	}
 
-	instanceType, err := urlInstanceTypeDetect(r)
-	if err != nil {
-		return response.SmartError(err)
-	}
-
 	// create a directory under which we keep everything while building
 	builddir, err := os.MkdirTemp(internalUtil.VarPath("images"), "incus_build_")
 	if err != nil {
@@ -1131,7 +1126,7 @@ func imagesPost(d *Daemon, r *http.Request) response.Response {
 			}
 
 			r.Body = post
-			resp, err := forwardedResponseIfInstanceIsRemote(s, r, projectName, name, instanceType)
+			resp, err := forwardedResponseIfInstanceIsRemote(s, r, projectName, name)
 			if err != nil {
 				cleanup(builddir, post)
 				return response.SmartError(err)
@@ -1384,7 +1379,7 @@ func getImageMetadata(fname string) (*api.ImageMetadata, string, error) {
 		return nil, "unknown", fmt.Errorf("Metadata tarball is missing metadata.yaml")
 	}
 
-	_, err = osarch.ArchitectureId(result.Architecture)
+	_, err = osarch.ArchitectureID(result.Architecture)
 	if err != nil {
 		return nil, "unknown", err
 	}

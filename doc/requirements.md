@@ -21,7 +21,7 @@ Incus には以下の機能をサポートするカーネルが必要です。
 以下のオプションの機能はさらなるカーネルオプションを必要とします。
 
 * Namespaces （`user`と`cgroup`）
-* AppArmor （mount mediation に対する Ubuntu パッチを含む）
+* AppArmor
 * Control Groups （`blkio`、`cpuset`、`devices`、`memory`、`pids`）
 * CRIU (正確な詳細は CRIU のアップストリームを参照のこと)
 
@@ -34,7 +34,7 @@ Incus は以下のビルドオプションでビルドされた LXC 5.0.0 以上
 * `apparmor` （もし Incus の AppArmor サポートを使用するのであれば）
 * `seccomp`
 
-Ubuntu を含むさまざまなディストリビューションの最近のバージョンを動かすためには、LXCFS もインストールする必要があります。
+コンテナ内のリソース消費を適切にレポートするために、LXCFSのインストールを強く推奨します。
 
 ## OCI
 

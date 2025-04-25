@@ -15,7 +15,7 @@
   さまざまなオペレーティングシステムのイメージがビルトインのリモートイメージサーバーで利用できます。
   詳細は {ref}`images` を参照してください。
 
-  イメージがローカルにない場合、イメージサーバーとイメージの名前を指定（たとえば、公式の 22.04 Ubuntu イメージなら `images:ubuntu/22.04`）する必要があります。
+  イメージがローカルにない場合、イメージサーバーとイメージの名前を指定（たとえば、Debian 12イメージなら `images:debian/12`）する必要があります。
 
 インスタンス名
 : インスタンス名は Incus の運用環境（そしてクラスタ内）でユニークである必要があります。
@@ -38,9 +38,7 @@
 
 たとえば、`config.yaml` の設定でコンテナを起動するには、以下のコマンドを入力します:
 
-    incus launch images:ubuntu/22.04 ubuntu-config < config.yaml
-
-    incus launch images:ubuntu/22.04 ubuntu-config < config.yaml
+    incus launch images:debian/12 debian-config < config.yaml
 
 ```{tip}
 YAML ファイルの必要な文法を見るには既存のインスタンス設定の中身を確認（[`incus config show <instance_name> --expanded`](incus_config_show.md)）してください。
@@ -52,9 +50,9 @@ YAML ファイルの必要な文法を見るには既存のインスタンス設
 
 ### システムコンテナを起動する
 
-`images` サーバーの Ubuntu 22.04 のイメージで `ubuntu-container` というインスタンス名でシステムコンテナを起動するには、以下のコマンドを入力します:
+`images` サーバーの Debian 12 のイメージで `debian-container` というインスタンス名でシステムコンテナを起動するには、以下のコマンドを入力します:
 
-    incus launch images:ubuntu/22.04 ubuntu-container
+    incus launch images:debian/12 debian-container
 
 ### アプリケーションコンテナを起動する
 
@@ -68,25 +66,25 @@ YAML ファイルの必要な文法を見るには既存のインスタンス設
 
 ### 仮想マシンを起動する
 
-`images` サーバーの Ubuntu 22.04 のイメージで `ubuntu-vm` というインスタンス名で仮想マシンを起動するには、以下のコマンドを入力します:
+`images` サーバーの Debian 12 のイメージで `debian-vm` というインスタンス名で仮想マシンを起動するには、以下のコマンドを入力します:
 
-    incus launch images:ubuntu/22.04 ubuntu-vm --vm
+    incus launch images:debian/12 debian-vm --vm
 
 より大きいディスクサイズで起動する場合は:
 
-    incus launch images:ubuntu/22.04 ubuntu-vm-big --vm --device root,size=30GiB
+    incus launch images:debian/12 debian-vm-big --vm --device root,size=30GiB
 
 ### コンテナを指定の設定で起動する
 
 コンテナを起動しリソースを 1 つの vCPU と 192MiB の RAM に限定するには、以下のコマンドを入力します:
 
-    incus launch images:ubuntu/22.04 ubuntu-limited --config limits.cpu=1 --config limits.memory=192MiB
+    incus launch images:debian/12 debian-limited --config limits.cpu=1 --config limits.memory=192MiB
 
 ### 指定のクラスタメンバー上で仮想マシンを起動する
 
 クラスタメンバー `server2` 上で仮想マシンを起動するには、以下のコマンドを入力します:
 
-    incus launch images:ubuntu/22.04 ubuntu-container --vm --target server2
+    incus launch images:debian/12 debian-container --vm --target server2
 
 ### 指定のインスタンスタイプでコンテナを起動する
 
@@ -106,7 +104,7 @@ Incus ではクラウドのシンプルなインスタンスタイプが使え�
 
 コマンドラインでは、インスタンスタイプは次のように指定します:
 
-    incus launch images:ubuntu/22.04 my-instance --type t2.micro
+    incus launch images:debian/12 my-instance --type t2.micro
 
 使えるクラウドとインスタンスタイプのリストは [`https://github.com/dustinkirkland/instance-type`](https://github.com/dustinkirkland/instance-type) で確認できます。
 

@@ -37,15 +37,15 @@ Incus ではこの目的のためベンチマークツールを提供してい�
 
   そうするには、以下のようなコマンドを実行し、`lxd.benchmark`の実行時にはイメージのフィンガープリント（たとえば`2d21da400963`）を指定します:
 
-      incus image copy images:ubuntu/22.04 local:
+      incus image copy images:debian/12 local:
 
-  またイメージにエイリアスを割り当てて、`incus-benchmark`の実行時にエイリアス (たとえば`ubuntu`) を指定することもできます:
+  またイメージにエイリアスを割り当てて、`incus-benchmark`の実行時にエイリアス (たとえば`debian`) を指定することもできます:
 
-      incus image copy images:ubuntu/22.04 local: --alias ubuntu
+      incus image copy images:debian/12 local: --alias debian
 
 リモートイメージ
-: 全体の結果にダウンロード時間も含めたい場合は、リモートイメージ (たとえば`images:ubuntu/22.04`) を指定します。
-`incus-benchmark`が使用するデフォルトのイメージは最新の Ubuntu イメージ (`images:ubuntu`) ですので、このイメージを使用したい場合は、ツール実行時にイメージ名を省略できます。
+: 全体の結果にダウンロード時間も含めたい場合は、リモートイメージ (たとえば`images:debian/12`) を指定します。
+`incus-benchmark`が使用するデフォルトのイメージは最新の Debian イメージ (`images:debian`) ですので、このイメージを使用したい場合は、ツール実行時にイメージ名を省略できます。
 
 ### コンテナを作成、起動する
 
@@ -63,13 +63,13 @@ Incus ではこの目的のためベンチマークツールを提供してい�
 * - コマンド
   - 説明
 * - `incus-benchmark init --count 10 --privileged`
-  - 最新の Ubuntu イメージを使用して 10 個の特権コンテナを作成する。
+  - 最新の Debian イメージを使用して 10 個の特権コンテナを作成する。
 * - `incus-benchmark init --count 20 --parallel 4 images:alpine/edge`
   - Alpine Edge イメージを使用する 20 個のコンテナを 4 つのパラレルスレッドを使用して作成する。
 * - `incus-benchmark init 2d21da400963`
   - フィンガープリントが`2d21da400963`のローカルイメージを使用して 1 個のコンテナを作成する。
-* - `incus-benchmark init --count 10 ubuntu`
-  - `ubuntu`のエイリアスを設定されたイメージを使用して 10 個のコンテナを作成する。
+* - `incus-benchmark init --count 10 debian`
+  - `debian`のエイリアスを設定されたイメージを使用して 10 個のコンテナを作成する。
 
 ```
 

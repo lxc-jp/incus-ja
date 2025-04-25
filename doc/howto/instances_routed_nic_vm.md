@@ -7,17 +7,17 @@
 
 `cloud-init` でゲートウェイを設定するには、まずインスタンスを初期化します:
 
-    incus init images:ubuntu/22.04 jammy --vm
+    incus init images:debian/12 bookworm --vm
 
 次に routed NIC デバイスを追加します:
 
-    incus config device add jammy eth0 nic nictype=routed parent=my-parent-network ipv4.address=192.0.2.2 ipv6.address=2001:db8::2
+    incus config device add bookworm eth0 nic nictype=routed parent=my-parent-network ipv4.address=192.0.2.2 ipv6.address=2001:db8::2
 
 このコマンドでは、`my-parent-network` が親ネットワークで、IPv4 と IPv6 アドレスは親のサブネット内です。
 
 次に `cloud-init.network-config` 設定キーを使ってインスタンスに `netplan` 設定を追加します:
 
-    cat <<EOF | incus config set jammy cloud-init.network-config -
+    cat <<EOF | incus config set bookworm cloud-init.network-config -
     network:
       version: 2
       ethernets:
@@ -47,7 +47,7 @@
 
 これでネットワークを開始できます:
 
-    incus start jammy
+    incus start bookworm
 
 ```{note}
 インスタンスを輝度する前に、 proxy ARP/NDP を有効にするように {ref}`親のネットワークを設定した <nic-routed>` ことを確認してください。

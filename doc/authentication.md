@@ -167,92 +167,14 @@ Incus クライアントはその後、アクセストークンとリフレッ�
 
 Incus は {abbr}`ACME (Automatic Certificate Management Environment)` サービス（たとえば、[Let's Encrypt](https://letsencrypt.org/)）を使ったサーバー証明書の発行をサポートします。
 
-この機能を有効にするには、以下のサーバー設定をしてください:
+この機能を有効にするには、[関連するサーバー設定オプション](server-options-acme)を設定してください。
 
-- {config:option}`server-acme:acme.domain`: 証明書を発行するドメイン。
-- {config:option}`server-acme:acme.email`: ACME サービスのアカウントに使用する email アドレス。
-- {config:option}`server-acme:acme.agree_tos`: ACME サービスの利用規約に同意するためには `true` に設定する必要あり。
-- {config:option}`server-acme:acme.ca_url`: ACME サービスのディレクトリー URL。デフォルトでは Incus は "Let's Encrypt" を使用。
+Incusは`HTTP-01`と`DNS-01`チャレンジの両方をサポートしています。2つの間で設定オプションの組は異なります。
 
-この機能を利用するには、 Incus は 80 番ポートを開放する必要があります。
-これは [HAProxy](http://www.haproxy.org/) のようなリバースプロキシを使用することで実現できます。
+`DNS-01`では、関連する{config:option}`server-acme:acme.provider`と{config:option}`server-acme:acme.provider.environment`の値は[`lego`のドキュメント](https://go-acme.github.io/lego/dns/index.html)に直接書かれています。legoはIncusが使用しているACMEクライアントです。
 
-以下は `incus.example.net` をドメインとして使用する HAProxy の最小限の設定です。
-証明書が発行された後、 Incus は`https://incus.example.net/` でアクセスできます。
-
-```
-# Global configuration
-global
-  log /dev/log local0
-  chroot /var/lib/haproxy
-  stats socket /run/haproxy/admin.sock mode 660 level admin
-  stats timeout 30s
-  user haproxy
-  group haproxy
-  daemon
-  ssl-default-bind-options ssl-min-ver TLSv1.2
-  tune.ssl.default-dh-param 2048
-  maxconn 100000
-
-# Default settings
-defaults
-  mode tcp
-  timeout connect 5s
-  timeout client 30s
-  timeout client-fin 30s
-  timeout server 120s
-  timeout tunnel 6h
-  timeout http-request 5s
-  maxconn 80000
-
-# Default backend - Return HTTP 301 (TLS upgrade)
-backend http-301
-  mode http
-  redirect scheme https code 301
-
-# Default backend - Return HTTP 403
-backend http-403
-  mode http
-  http-request deny deny_status 403
-
-# HTTP dispatcher
-frontend http-dispatcher
-  bind :80
-  mode http
-
-  # Backend selection
-  tcp-request inspect-delay 5s
-
-  # Dispatch
-  default_backend http-403
-  use_backend http-301 if { hdr(host) -i incus.example.net }
-
-# SNI dispatcher
-frontend sni-dispatcher
-  bind :443
-  mode tcp
-
-  # Backend selection
-  tcp-request inspect-delay 5s
-
-  # require TLS
-  tcp-request content reject unless { req.ssl_hello_type 1 }
-
-  # Dispatch
-  default_backend http-403
-  use_backend incus-nodes if { req.ssl_sni -i incus.example.net }
-
-# Incus nodes
-backend incus-nodes
-  mode tcp
-
-  option tcp-check
-
-  # Multiple servers should be listed when running a cluster
-  server incus-node01 1.2.3.4:8443 check
-  server incus-node02 1.2.3.5:8443 check
-  server incus-node03 1.2.3.6:8443 check
-```
+`HTTP-01`では、Incusは`lego`に一時的に`80`番ポートをリッスンさせ、HTTPチャレンジが通るようにします。
+もしIncusサーバーがリバースプロキシの後ろにいる場合は、リバースプロキシがHTTPのトラフィックをHTTPSにリダイレクトするようにする必要があります。
 
 ## 失敗のシナリオ
 

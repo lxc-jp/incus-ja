@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -37,14 +38,15 @@ type cmdCreate struct {
 	flagDescription     string
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdCreate) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("create", i18n.G("[<remote>:]<image> [<remote>:][<name>]"))
 	cmd.Short = i18n.G("Create instances from images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Create instances from images`))
-	cmd.Example = cli.FormatSection("", i18n.G(`incus create images:ubuntu/22.04 u1
+	cmd.Example = cli.FormatSection("", i18n.G(`incus create images:debian/12 u1
 
-incus create images:ubuntu/22.04 u1 < config.yaml
+incus create images:debian/12 u1 < config.yaml
     Create the instance with configuration from config.yaml
 
 incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
@@ -66,7 +68,7 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
 	cmd.Flags().BoolVar(&c.flagVM, "vm", false, i18n.G("Create a virtual machine"))
 	cmd.Flags().StringVar(&c.flagDescription, "description", "", i18n.G("Instance description")+"``")
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -77,9 +79,10 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdCreate) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 0, 2)
+	exit, err := c.global.checkArgs(cmd, args, 0, 2)
 	if exit {
 		return err
 	}
@@ -138,7 +141,7 @@ func (c *cmdCreate) create(conf *config.Config, args []string, launch bool) (inc
 
 	if c.flagEmpty {
 		if len(args) > 1 {
-			return nil, "", fmt.Errorf(i18n.G("--empty cannot be combined with an image name"))
+			return nil, "", errors.New(i18n.G("--empty cannot be combined with an image name"))
 		}
 
 		if len(args) == 0 {
@@ -385,7 +388,7 @@ func (c *cmdCreate) create(conf *config.Config, args []string, launch bool) (inc
 
 		if conf.Remotes[iremote].Protocol == "incus" {
 			if imgInfo.Type != "virtual-machine" && c.flagVM {
-				return nil, "", fmt.Errorf(i18n.G("Asked for a VM but image is of type container"))
+				return nil, "", errors.New(i18n.G("Asked for a VM but image is of type container"))
 			}
 
 			req.Type = api.InstanceType(imgInfo.Type)
@@ -442,16 +445,16 @@ func (c *cmdCreate) create(conf *config.Config, args []string, launch bool) (inc
 
 	instances, ok := opInfo.Resources["instances"]
 	if !ok || len(instances) == 0 {
-		return nil, "", fmt.Errorf(i18n.G("Didn't get name of new instance from the server"))
+		return nil, "", errors.New(i18n.G("Didn't get name of new instance from the server"))
 	}
 
 	if len(instances) == 1 && name == "" {
-		url, err := url.Parse(instances[0])
+		uri, err := url.Parse(instances[0])
 		if err != nil {
 			return nil, "", err
 		}
 
-		name = path.Base(url.Path)
+		name = path.Base(uri.Path)
 		fmt.Printf(i18n.G("Instance name is: %s")+"\n", name)
 	}
 

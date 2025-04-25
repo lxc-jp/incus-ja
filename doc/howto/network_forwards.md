@@ -43,10 +43,11 @@ incus network forward create <network_name> <listen_address> [configuration_opti
 
 ネットワークフォワードには以下の設定オプションがあります:
 
-キー             | 型     | デフォルト値 | 説明
-:--              | :---   | :------      | :----------
-`user.*`         | string | -            | ユーザー定義のキー/バリュー設定
-`target_address` | string | -            | ポート設定でカバーされないすべてのもののデフォルトのターゲットアドレス
+% Include content from [../config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_forward-common start -->
+    :end-before: <!-- config group network_forward-common end -->
+```
 
 (network-forwards-listen-addresses)=
 ### リッスンアドレスの要件
@@ -93,6 +94,12 @@ incus network forward port add <network_name> <listen_address> <protocol> <liste
 `target_address` | string | yes  | フォワード先の IP アドレス
 `target_port`    | string | no   | ターゲットのポート（例 `70,80-90` または `90`）、 空の場合は `listen_port` と同じ
 `description`    | string | no   | ポートの説明
+`snat`           | bool   | no   | マッチングするSNATルールを配置してターゲットから来る新しいトラフィックを書き換えるかどうか
+
+```{note}
+`snat`プロパティは現在は`nftables`ファイアウォールドライバーを使う管理された`bridge`ネットワークでのみサポートされます。
+また、外部のアドレスの整合性を保証するために、対象のインスタンスのポートが複数のフォワードにカバーされないようにしておく必要があります。
+```
 
 ## ネットワークフォワードを編集する
 

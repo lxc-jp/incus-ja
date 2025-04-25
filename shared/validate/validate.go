@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adhocore/gronx"
 	"github.com/google/uuid"
 	"github.com/kballard/go-shellquote"
-	"github.com/robfig/cron/v3"
 	"gopkg.in/yaml.v2"
 
 	"github.com/lxc/incus/v6/shared/osarch"
@@ -104,15 +104,15 @@ func IsUint32Range(value string) error {
 }
 
 // IsInRange checks whether an integer is within a specific range.
-func IsInRange(min int64, max int64) func(value string) error {
+func IsInRange(minValue int64, maxValue int64) func(value string) error {
 	return func(value string) error {
 		valueInt, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return fmt.Errorf("Invalid value for an integer %q", value)
 		}
 
-		if valueInt < min || valueInt > max {
-			return fmt.Errorf("Value isn't within valid range. Must be between %d and %d", min, max)
+		if valueInt < minValue || valueInt > maxValue {
+			return fmt.Errorf("Value isn't within valid range. Must be between %d and %d", minValue, maxValue)
 		}
 
 		return nil
@@ -154,7 +154,7 @@ func IsOneOf(valid ...string) func(value string) error {
 }
 
 // IsAny accepts all strings as valid.
-func IsAny(value string) error {
+func IsAny(_ string) error {
 	return nil
 }
 
@@ -599,22 +599,15 @@ func IsCron(aliases []string) func(value string) error {
 	return func(value string) error {
 		isValid := func(value string) error {
 			// Accept valid aliases.
-			for _, alias := range aliases {
-				if alias == value {
-					return nil
-				}
+			if slices.Contains(aliases, value) {
+				return nil
 			}
 
-			if len(strings.Split(value, " ")) != 5 {
-				return fmt.Errorf("Schedule must be of the form: <minute> <hour> <day-of-month> <month> <day-of-week>")
+			if gronx.IsValid(value) {
+				return nil
 			}
 
-			_, err := cron.ParseStandard(value)
-			if err != nil {
-				return fmt.Errorf("Error parsing schedule: %w", err)
-			}
-
-			return nil
+			return fmt.Errorf("Error parsing cron expr: %s", value)
 		}
 
 		// Can be comma+space separated (just commas are valid cron pattern).
