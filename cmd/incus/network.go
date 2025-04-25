@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -29,6 +32,7 @@ type networkColumn struct {
 	Data func(api.Network) string
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetwork) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("network")
@@ -104,6 +108,10 @@ func (c *cmdNetwork) Command() *cobra.Command {
 	networkACLCmd := cmdNetworkACL{global: c.global}
 	cmd.AddCommand(networkACLCmd.Command())
 
+	// Address set
+	networkAddressSetCmd := cmdNetworkAddressSet{global: c.global}
+	cmd.AddCommand(networkAddressSetCmd.Command())
+
 	// Forward
 	networkForwardCmd := cmdNetworkForward{global: c.global}
 	cmd.AddCommand(networkForwardCmd.Command())
@@ -126,7 +134,7 @@ func (c *cmdNetwork) Command() *cobra.Command {
 
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
-	cmd.Run = func(cmd *cobra.Command, args []string) { _ = cmd.Usage() }
+	cmd.Run = func(cmd *cobra.Command, _ []string) { _ = cmd.Usage() }
 	return cmd
 }
 
@@ -136,6 +144,7 @@ type cmdNetworkAttach struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkAttach) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("attach", i18n.G("[<remote>:]<network> <instance> [<device name>] [<interface name>]"))
@@ -145,7 +154,7 @@ func (c *cmdNetworkAttach) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return c.global.cmpNetworks(toComplete)
 		}
@@ -160,15 +169,16 @@ func (c *cmdNetworkAttach) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkAttach) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, 4)
+	exit, err := c.global.checkArgs(cmd, args, 2, 4)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -176,7 +186,7 @@ func (c *cmdNetworkAttach) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Default name is same as network
@@ -233,6 +243,7 @@ type cmdNetworkAttachProfile struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkAttachProfile) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("attach-profile", i18n.G("[<remote>:]<network> <profile> [<device name>] [<interface name>]"))
@@ -242,7 +253,7 @@ func (c *cmdNetworkAttachProfile) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return c.global.cmpNetworks(toComplete)
 		}
@@ -257,15 +268,16 @@ func (c *cmdNetworkAttachProfile) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkAttachProfile) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, 4)
+	exit, err := c.global.checkArgs(cmd, args, 2, 4)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -273,7 +285,7 @@ func (c *cmdNetworkAttachProfile) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Default name is same as network
@@ -332,6 +344,7 @@ type cmdNetworkCreate struct {
 	flagDescription string
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkCreate) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("create", i18n.G("[<remote>:]<network> [key=value...]"))
@@ -352,7 +365,7 @@ incus network create bar network=baz --type ovn
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -363,11 +376,12 @@ incus network create bar network=baz --type ovn
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkCreate) Run(cmd *cobra.Command, args []string) error {
 	var stdinData api.NetworkPut
 
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 1, -1)
+	exit, err := c.global.checkArgs(cmd, args, 1, -1)
 	if exit {
 		return err
 	}
@@ -386,7 +400,7 @@ func (c *cmdNetworkCreate) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -447,6 +461,7 @@ type cmdNetworkDelete struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("delete", i18n.G("[<remote>:]<network>"))
@@ -457,7 +472,7 @@ func (c *cmdNetworkDelete) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -468,15 +483,16 @@ func (c *cmdNetworkDelete) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkDelete) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 1, 1)
+	exit, err := c.global.checkArgs(cmd, args, 1, 1)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -484,7 +500,7 @@ func (c *cmdNetworkDelete) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Delete the network
@@ -506,6 +522,7 @@ type cmdNetworkDetach struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkDetach) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("detach", i18n.G("[<remote>:]<network> <instance> [<device name>]"))
@@ -515,7 +532,7 @@ func (c *cmdNetworkDetach) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return c.global.cmpNetworks(toComplete)
 		}
@@ -530,15 +547,16 @@ func (c *cmdNetworkDetach) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkDetach) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, 3)
+	exit, err := c.global.checkArgs(cmd, args, 2, 3)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -546,7 +564,7 @@ func (c *cmdNetworkDetach) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Default name is same as network
@@ -566,7 +584,7 @@ func (c *cmdNetworkDetach) Run(cmd *cobra.Command, args []string) error {
 		for n, d := range inst.Devices {
 			if d["type"] == "nic" && (d["parent"] == resource.name || d["network"] == resource.name) {
 				if devName != "" {
-					return fmt.Errorf(i18n.G("More than one device matches, specify the device name"))
+					return errors.New(i18n.G("More than one device matches, specify the device name"))
 				}
 
 				devName = n
@@ -575,16 +593,16 @@ func (c *cmdNetworkDetach) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	if devName == "" {
-		return fmt.Errorf(i18n.G("No device found for this network"))
+		return errors.New(i18n.G("No device found for this network"))
 	}
 
 	device, ok := inst.Devices[devName]
 	if !ok {
-		return fmt.Errorf(i18n.G("The specified device doesn't exist"))
+		return errors.New(i18n.G("The specified device doesn't exist"))
 	}
 
 	if device["type"] != "nic" || (device["parent"] != resource.name && device["network"] != resource.name) {
-		return fmt.Errorf(i18n.G("The specified device doesn't match the network"))
+		return errors.New(i18n.G("The specified device doesn't match the network"))
 	}
 
 	// Remove the device
@@ -603,6 +621,7 @@ type cmdNetworkDetachProfile struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkDetachProfile) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("detach-profile", i18n.G("[<remote>:]<network> <profile> [<device name>]"))
@@ -612,7 +631,7 @@ func (c *cmdNetworkDetachProfile) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return c.global.cmpNetworks(toComplete)
 		}
@@ -627,15 +646,16 @@ func (c *cmdNetworkDetachProfile) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkDetachProfile) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, 3)
+	exit, err := c.global.checkArgs(cmd, args, 2, 3)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -643,7 +663,7 @@ func (c *cmdNetworkDetachProfile) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Default name is same as network
@@ -663,7 +683,7 @@ func (c *cmdNetworkDetachProfile) Run(cmd *cobra.Command, args []string) error {
 		for n, d := range profile.Devices {
 			if d["type"] == "nic" && (d["parent"] == resource.name || d["network"] == resource.name) {
 				if devName != "" {
-					return fmt.Errorf(i18n.G("More than one device matches, specify the device name"))
+					return errors.New(i18n.G("More than one device matches, specify the device name"))
 				}
 
 				devName = n
@@ -672,16 +692,16 @@ func (c *cmdNetworkDetachProfile) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	if devName == "" {
-		return fmt.Errorf(i18n.G("No device found for this network"))
+		return errors.New(i18n.G("No device found for this network"))
 	}
 
 	device, ok := profile.Devices[devName]
 	if !ok {
-		return fmt.Errorf(i18n.G("The specified device doesn't exist"))
+		return errors.New(i18n.G("The specified device doesn't exist"))
 	}
 
 	if device["type"] != "nic" || (device["parent"] != resource.name && device["network"] != resource.name) {
-		return fmt.Errorf(i18n.G("The specified device doesn't match the network"))
+		return errors.New(i18n.G("The specified device doesn't match the network"))
 	}
 
 	// Remove the device
@@ -700,6 +720,7 @@ type cmdNetworkEdit struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkEdit) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("edit", i18n.G("[<remote>:]<network>"))
@@ -709,7 +730,7 @@ func (c *cmdNetworkEdit) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -740,15 +761,16 @@ func (c *cmdNetworkEdit) helpTemplate() string {
 ### Note that only the configuration can be changed.`)
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkEdit) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 1, 1)
+	exit, err := c.global.checkArgs(cmd, args, 1, 1)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -756,7 +778,7 @@ func (c *cmdNetworkEdit) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// If stdin isn't a terminal, read text from it
@@ -782,7 +804,7 @@ func (c *cmdNetworkEdit) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	if !network.Managed {
-		return fmt.Errorf(i18n.G("Only managed networks can be modified"))
+		return errors.New(i18n.G("Only managed networks can be modified"))
 	}
 
 	data, err := yaml.Marshal(&network)
@@ -836,6 +858,7 @@ type cmdNetworkGet struct {
 	flagIsProperty bool
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkGet) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("get", i18n.G("[<remote>:]<network> <key>"))
@@ -847,7 +870,7 @@ func (c *cmdNetworkGet) Command() *cobra.Command {
 	cmd.Flags().BoolVarP(&c.flagIsProperty, "property", "p", false, i18n.G("Get the key as a network property"))
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return c.global.cmpNetworks(toComplete)
 		}
@@ -862,15 +885,16 @@ func (c *cmdNetworkGet) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkGet) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, 2)
+	exit, err := c.global.checkArgs(cmd, args, 2, 2)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -879,7 +903,7 @@ func (c *cmdNetworkGet) Run(cmd *cobra.Command, args []string) error {
 	client := resource.server
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Get the network key
@@ -894,7 +918,7 @@ func (c *cmdNetworkGet) Run(cmd *cobra.Command, args []string) error {
 
 	if c.flagIsProperty {
 		w := resp.Writable()
-		res, err := getFieldByJsonTag(&w, args[1])
+		res, err := getFieldByJSONTag(&w, args[1])
 		if err != nil {
 			return fmt.Errorf(i18n.G("The property %q does not exist on the network %q: %v"), args[1], resource.name, err)
 		}
@@ -917,6 +941,7 @@ type cmdNetworkInfo struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkInfo) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("info", i18n.G("[<remote>:]<network>"))
@@ -927,7 +952,7 @@ func (c *cmdNetworkInfo) Command() *cobra.Command {
 	cmd.Flags().StringVar(&c.network.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -938,15 +963,16 @@ func (c *cmdNetworkInfo) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkInfo) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 1, 1)
+	exit, err := c.global.checkArgs(cmd, args, 1, 1)
 	if exit {
 		return err
 	}
 
 	// Parse remote.
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -955,13 +981,13 @@ func (c *cmdNetworkInfo) Run(cmd *cobra.Command, args []string) error {
 	client := resource.server
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Targeting.
 	if c.network.flagTarget != "" {
 		if !client.IsClustered() {
-			return fmt.Errorf(i18n.G("To use --target, the destination remote must be a cluster"))
+			return errors.New(i18n.G("To use --target, the destination remote must be a cluster"))
 		}
 
 		client = client.UseTarget(c.network.flagTarget)
@@ -984,7 +1010,7 @@ func (c *cmdNetworkInfo) Run(cmd *cobra.Command, args []string) error {
 	fmt.Printf(i18n.G("Type: %s")+"\n", state.Type)
 
 	// IP addresses.
-	if state.Addresses != nil && len(state.Addresses) > 0 {
+	if len(state.Addresses) > 0 {
 		fmt.Println("")
 		fmt.Println(i18n.G("IP addresses:"))
 		for _, addr := range state.Addresses {
@@ -1074,13 +1100,22 @@ type cmdNetworkList struct {
 	flagAllProjects bool
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkList) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = usage("list", i18n.G("[<remote>:]"))
+	cmd.Use = usage("list", i18n.G("[<remote>:] [<filter>...]"))
 	cmd.Aliases = []string{"ls"}
 	cmd.Short = i18n.G("List available networks")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`List available networks
+
+Filters may be of the <key>=<value> form for property based filtering,
+or part of the network name. Filters must be delimited by a ','.
+
+Examples:
+  - "foo" lists all networks that start with the name foo
+  - "name=foo" lists all networks that exactly have the name foo
+  - "type=bridge" lists all networks with the type bridge
 
 The -c option takes a (optionally comma-separated) list of arguments
 that control which image attributes to output when displaying in table
@@ -1102,13 +1137,13 @@ u - Used by (count)`))
 	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("List networks in all projects"))
 
-	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
 	}
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -1200,20 +1235,27 @@ func (c *cmdNetworkList) stateColumnData(network api.Network) string {
 	return strings.ToUpper(network.Status)
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkList) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 0, 1)
+	exit, err := c.global.checkArgs(cmd, args, 0, -1)
 	if exit {
 		return err
 	}
 
-	// Parse remote
+	// Parse remote and filters.
 	remote := ""
-	if len(args) > 0 {
-		remote = args[0]
+	filters := []string{}
+
+	if len(args) != 0 {
+		filters = args
+		if strings.Contains(args[0], ":") && !strings.Contains(args[0], "=") {
+			remote = args[0]
+			filters = args[1:]
+		}
 	}
 
-	resources, err := c.global.ParseServers(remote)
+	resources, err := c.global.parseServers(remote)
 	if err != nil {
 		return err
 	}
@@ -1222,20 +1264,21 @@ func (c *cmdNetworkList) Run(cmd *cobra.Command, args []string) error {
 
 	// List the networks
 	if resource.name != "" {
-		return fmt.Errorf(i18n.G("Filtering isn't supported yet"))
+		return errors.New(i18n.G("Filtering isn't supported yet"))
 	}
+
+	filters = prepareNetworkServerFilters(filters)
+	serverFilters, _ := getServerSupportedFilters(filters, []string{}, false)
 
 	var networks []api.Network
 	if c.flagAllProjects {
-		networks, err = resource.server.GetNetworksAllProjects()
-		if err != nil {
-			return err
-		}
+		networks, err = resource.server.GetNetworksAllProjectsWithFilter(serverFilters)
 	} else {
-		networks, err = resource.server.GetNetworks()
-		if err != nil {
-			return err
-		}
+		networks, err = resource.server.GetNetworksWithFilter(serverFilters)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	// Parse column flags.
@@ -1278,6 +1321,7 @@ type networkLeasesColumn struct {
 	Data func(api.NetworkLease) string
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkListLeases) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("list-leases", i18n.G("[<remote>:]<network>"))
@@ -1306,13 +1350,13 @@ Pre-defined column shorthand chars:
 	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultNetworkListLeasesColumns, i18n.G("Columns")+"``")
 
-	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
 	}
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -1378,15 +1422,16 @@ func (c *cmdNetworkListLeases) locationColumnData(lease api.NetworkLease) string
 	return lease.Location
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkListLeases) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 1, 1)
+	exit, err := c.global.checkArgs(cmd, args, 1, 1)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -1394,7 +1439,7 @@ func (c *cmdNetworkListLeases) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// List DHCP leases
@@ -1435,6 +1480,7 @@ type cmdNetworkRename struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkRename) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("rename", i18n.G("[<remote>:]<network> <new-name>"))
@@ -1445,7 +1491,7 @@ func (c *cmdNetworkRename) Command() *cobra.Command {
 
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -1456,15 +1502,16 @@ func (c *cmdNetworkRename) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkRename) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, 2)
+	exit, err := c.global.checkArgs(cmd, args, 2, 2)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -1472,7 +1519,7 @@ func (c *cmdNetworkRename) Run(cmd *cobra.Command, args []string) error {
 	resource := resources[0]
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Rename the network
@@ -1496,6 +1543,7 @@ type cmdNetworkSet struct {
 	flagIsProperty bool
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkSet) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("set", i18n.G("[<remote>:]<network> <key>=<value>..."))
@@ -1510,7 +1558,7 @@ For backward compatibility, a single configuration key may still be set with:
 	cmd.Flags().BoolVarP(&c.flagIsProperty, "property", "p", false, i18n.G("Set the key as a network property"))
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -1521,15 +1569,16 @@ For backward compatibility, a single configuration key may still be set with:
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkSet) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, -1)
+	exit, err := c.global.checkArgs(cmd, args, 2, -1)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -1538,7 +1587,7 @@ func (c *cmdNetworkSet) Run(cmd *cobra.Command, args []string) error {
 	client := resource.server
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Handle targeting
@@ -1553,7 +1602,7 @@ func (c *cmdNetworkSet) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	if !network.Managed {
-		return fmt.Errorf(i18n.G("Only managed networks can be modified"))
+		return errors.New(i18n.G("Only managed networks can be modified"))
 	}
 
 	// Set the keys
@@ -1566,7 +1615,7 @@ func (c *cmdNetworkSet) Run(cmd *cobra.Command, args []string) error {
 	if c.flagIsProperty {
 		if cmd.Name() == "unset" {
 			for k := range keys {
-				err := unsetFieldByJsonTag(&writable, k)
+				err := unsetFieldByJSONTag(&writable, k)
 				if err != nil {
 					return fmt.Errorf(i18n.G("Error unsetting property: %v"), err)
 				}
@@ -1592,6 +1641,7 @@ type cmdNetworkShow struct {
 	network *cmdNetwork
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkShow) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("show", i18n.G("[<remote>:]<network>"))
@@ -1602,7 +1652,7 @@ func (c *cmdNetworkShow) Command() *cobra.Command {
 	cmd.Flags().StringVar(&c.network.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -1613,15 +1663,16 @@ func (c *cmdNetworkShow) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkShow) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 1, 1)
+	exit, err := c.global.checkArgs(cmd, args, 1, 1)
 	if exit {
 		return err
 	}
 
 	// Parse remote
-	resources, err := c.global.ParseServers(args[0])
+	resources, err := c.global.parseServers(args[0])
 	if err != nil {
 		return err
 	}
@@ -1630,7 +1681,7 @@ func (c *cmdNetworkShow) Run(cmd *cobra.Command, args []string) error {
 	client := resource.server
 
 	if resource.name == "" {
-		return fmt.Errorf(i18n.G("Missing network name"))
+		return errors.New(i18n.G("Missing network name"))
 	}
 
 	// Show the network config
@@ -1664,6 +1715,7 @@ type cmdNetworkUnset struct {
 	flagIsProperty bool
 }
 
+// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdNetworkUnset) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("unset", i18n.G("[<remote>:]<network> <key>"))
@@ -1675,7 +1727,7 @@ func (c *cmdNetworkUnset) Command() *cobra.Command {
 	cmd.Flags().BoolVarP(&c.flagIsProperty, "property", "p", false, i18n.G("Unset the key as a network property"))
 	cmd.RunE = c.Run
 
-	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return c.global.cmpNetworks(toComplete)
 		}
@@ -1690,9 +1742,10 @@ func (c *cmdNetworkUnset) Command() *cobra.Command {
 	return cmd
 }
 
+// Run runs the actual command logic.
 func (c *cmdNetworkUnset) Run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
-	exit, err := c.global.CheckArgs(cmd, args, 2, 2)
+	exit, err := c.global.checkArgs(cmd, args, 2, 2)
 	if exit {
 		return err
 	}
@@ -1701,4 +1754,41 @@ func (c *cmdNetworkUnset) Run(cmd *cobra.Command, args []string) error {
 
 	args = append(args, "")
 	return c.networkSet.Run(cmd, args)
+}
+
+// prepareNetworkServerFilter processes and formats filter criteria
+// for networks, ensuring they are in a format that the server can interpret.
+func prepareNetworkServerFilters(filters []string) []string {
+	flattenedFilters := []string{}
+	for _, filter := range filters {
+		flattenedFilters = append(flattenedFilters, strings.Split(filter, ",")...)
+	}
+
+	formattedFilters := []string{}
+
+	for _, filter := range flattenedFilters {
+		membs := strings.SplitN(filter, "=", 2)
+		key := membs[0]
+
+		if len(membs) == 1 {
+			filter = fmt.Sprintf("name=^%s($|.*)", regexp.QuoteMeta(key))
+		} else if len(membs) == 2 {
+			firstPart := key
+			if strings.Contains(key, ".") {
+				firstPart = strings.Split(key, ".")[0]
+			}
+
+			if !structHasField(reflect.TypeOf(api.Network{}), firstPart) {
+				filter = fmt.Sprintf("config.%s", filter)
+			}
+
+			if key == "state" {
+				filter = fmt.Sprintf("status=%s", membs[1])
+			}
+		}
+
+		formattedFilters = append(formattedFilters, filter)
+	}
+
+	return formattedFilters
 }

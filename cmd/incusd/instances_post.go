@@ -130,7 +130,7 @@ func createFromImage(s *state.State, r *http.Request, p api.Project, profiles []
 			return fmt.Errorf("Image not provided for instance creation")
 		}
 
-		args.Architecture, err = osarch.ArchitectureId(img.Architecture)
+		args.Architecture, err = osarch.ArchitectureID(img.Architecture)
 		if err != nil {
 			return err
 		}
@@ -179,7 +179,7 @@ func createFromNone(s *state.State, r *http.Request, projectName string, profile
 	}
 
 	if req.Architecture != "" {
-		architecture, err := osarch.ArchitectureId(req.Architecture)
+		architecture, err := osarch.ArchitectureID(req.Architecture)
 		if err != nil {
 			return response.InternalError(err)
 		}
@@ -219,7 +219,7 @@ func createFromMigration(ctx context.Context, s *state.State, r *http.Request, p
 	}
 
 	// Parse the architecture name
-	architecture, err := osarch.ArchitectureId(req.Architecture)
+	architecture, err := osarch.ArchitectureID(req.Architecture)
 	if err != nil {
 		return response.BadRequest(err)
 	}
@@ -913,15 +913,6 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Set type from URL if missing
-	urlType, err := urlInstanceTypeDetect(r)
-	if err != nil {
-		return response.InternalError(err)
-	}
-
-	if req.Type == "" && urlType != instancetype.Any {
-		req.Type = api.InstanceType(urlType.String())
-	}
-
 	if req.Type == "" {
 		req.Type = api.InstanceTypeContainer // Default to container if not specified.
 	}
@@ -944,6 +935,31 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 			if req.Config[k] == "" {
 				req.Config[k] = v
 			}
+		}
+	}
+
+	// Special handling for instance refresh.
+	// For all other situations, we're headed towards the scheduler, but for this case, we can short circuit it.
+	if s.ServerClustered && !clusterNotification && req.Source.Type == "migration" && req.Source.Refresh {
+		client, err := cluster.ConnectIfInstanceIsRemote(s, targetProjectName, req.Name, r)
+		if err != nil && !response.IsNotFoundError(err) {
+			return response.SmartError(err)
+		}
+
+		if client != nil {
+			// The request needs to be forwarded to the correct server.
+			op, err := client.CreateInstance(req)
+			if err != nil {
+				return response.SmartError(err)
+			}
+
+			opAPI := op.Get()
+			return operations.ForwardedOperationResponse(targetProjectName, &opAPI)
+		}
+
+		if err == nil {
+			// The instance is valid and the request wasn't forwarded, so the instance is local.
+			return createFromMigration(r.Context(), s, r, targetProjectName, nil, &req)
 		}
 	}
 
@@ -1128,7 +1144,7 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 				}
 
 				if defaultArch != "" {
-					defaultArchID, err := osarch.ArchitectureId(defaultArch)
+					defaultArchID, err := osarch.ArchitectureID(defaultArch)
 					if err != nil {
 						return err
 					}
@@ -1329,7 +1345,7 @@ func clusterCopyContainerInternal(ctx context.Context, s *state.State, r *http.R
 		var err error
 
 		// Load source node.
-		nodeAddress, err = tx.GetNodeAddressOfInstance(ctx, source.Project().Name, source.Name(), source.Type())
+		nodeAddress, err = tx.GetNodeAddressOfInstance(ctx, source.Project().Name, source.Name())
 		if err != nil {
 			return fmt.Errorf("Failed to get address of instance's member: %w", err)
 		}

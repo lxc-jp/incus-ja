@@ -67,7 +67,7 @@ var (
 // ConnectIfInstanceIsRemote is a reference to cluster.ConnectIfInstanceIsRemote.
 //
 //nolint:typecheck
-var ConnectIfInstanceIsRemote func(s *state.State, projectName string, instName string, r *http.Request, instanceType instancetype.Type) (incus.InstanceServer, error)
+var ConnectIfInstanceIsRemote func(s *state.State, projectName string, instName string, r *http.Request) (incus.InstanceServer, error)
 
 // instanceDiskVolumeEffectiveFields fields from the instance disks that are applied to the volume's effective
 // config (but not stored in the disk's volume database record).
@@ -264,6 +264,10 @@ func (b *backend) GetResources() (*api.ResourcesStoragePool, error) {
 	l := b.logger.AddContext(nil)
 	l.Debug("GetResources started")
 	defer l.Debug("GetResources finished")
+
+	if b.Status() == api.StoragePoolStatusPending {
+		return nil, errors.New("The pool is in pending state")
+	}
 
 	return b.driver.GetResources()
 }
@@ -1940,6 +1944,23 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 		return err
 	}
 
+	// Now that we got the source details, validate against the instance limits.
+	_, rootDiskConf, err := internalInstance.GetRootDiskDevice(inst.ExpandedDevices().CloneNative())
+	if err != nil {
+		return err
+	}
+
+	if rootDiskConf["size"] != "" {
+		rootDiskConfBytes, err := units.ParseByteSizeString(rootDiskConf["size"])
+		if err != nil {
+			return err
+		}
+
+		if args.VolumeSize > rootDiskConfBytes {
+			return fmt.Errorf("The configured target instance root disk size is smaller than the migration source")
+		}
+	}
+
 	var volumeDescription string
 	var volumeConfig map[string]string
 
@@ -2975,6 +2996,40 @@ func (b *backend) getInstanceDisk(inst instance.Instance) (string, error) {
 	}
 
 	return diskPath, nil
+}
+
+// CacheInstanceSnapshots instructs the driver to pre-fetch and cache details on all snapshots.
+// This is used to significantly accelerate listing of issues with a lot of snapshots.
+func (b *backend) CacheInstanceSnapshots(inst instance.ConfigReader) error {
+	l := b.logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
+	l.Debug("CacheInstanceSnapshots started")
+	defer l.Debug("CacheInstanceSnapshots finished")
+
+	// Check we can convert the instance to the volume type needed.
+	volType, err := InstanceTypeToVolumeType(inst.Type())
+	if err != nil {
+		return err
+	}
+
+	contentVolume := InstanceContentType(inst)
+	volStorageName := project.Instance(inst.Project().Name, inst.Name())
+
+	// Load storage volume from database.
+	dbVol, err := VolumeDBGet(b, inst.Project().Name, inst.Name(), volType)
+	if err != nil {
+		return err
+	}
+
+	// Apply the main volume quota.
+	// There's no need to pass config as it's not needed when setting quotas.
+	vol := b.GetVolume(volType, contentVolume, volStorageName, dbVol.Config)
+
+	err = b.driver.CacheVolumeSnapshots(vol)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // CreateInstanceSnapshot creates a snapshot of an instance volume.
@@ -5520,7 +5575,7 @@ func (b *backend) UpdateCustomVolume(projectName string, volName string, newDesc
 		}
 
 		for _, entry := range instDevices {
-			c, err := ConnectIfInstanceIsRemote(b.state, entry.args.Project, entry.args.Name, nil, entry.args.Type)
+			c, err := ConnectIfInstanceIsRemote(b.state, entry.args.Project, entry.args.Name, nil)
 			if err != nil {
 				return err
 			}
