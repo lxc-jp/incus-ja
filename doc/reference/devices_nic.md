@@ -75,38 +75,11 @@ VMでUSBネットワークアダプターを使用する場合、メインライ
 
 `bridged` タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー                                   | 型      | デフォルト値       | 管理 | 説明
-:--                                    | :--     | :--                | :--  | :--
-`boot.priority`                        | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
-`host_name`                            | string  | ランダムに割り当て | no   | ホスト内でのインターフェースの名前
-`hwaddr`                               | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
-`io.bus`                               | string  | `virtio`           | no   | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
-`ipv4.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能）
-`ipv4.routes`                          | string  | -                  | no   | ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト
-`ipv4.routes.external`                 | string  | -                  | no   | NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv4静的ルートのカンマ区切りリスト
-`ipv6.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にすべてのIPv6トラフィックを制限するには`none`と設定可能）
-`ipv6.routes`                          | string  | -                  | no   | ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト
-`ipv6.routes.external`                 | string  | -                  | no   | NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv6静的ルートのカンマ区切りリスト
-`limits.egress`                        | string  | -                  | no   | 外向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
-`limits.ingress`                       | string  | -                  | no   | 内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
-`limits.max`                           | string  | -                  | no   | 内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）
-`limits.priority`                      | integer | -                  | no   | 外向きトラフィックへの `skb->priority` の値（32-bit 符号なし整数）、カーネルでネットワークパケットに優先度をつけるために kernel queuing discipline （qdisc） によって使用される（この値の効果は特定の qdisc 実装、たとえば、`SKBPRIO` または `QFQ` によって異なる。この値を設定する前に kernel qdisc ドキュメントを参照のこと）
-`mtu`                                  | integer | 親の MTU           | yes  | 新しいインターフェースのMTU
-`name`                                 | string  | カーネルが割り当て | no   | インスタンス内でのインターフェースの名前
-`network`                              | string  | -                  | no   | （`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク
-`parent`                               | string  | -                  | yes  | ホストデバイスの名前（`nictype`を直接設定する場合は必須）
-`queue.tx.length`                      | integer | -                  | no   | NICの送信キューの長さ
-`security.acls`                        | string  | -                  | no   | 適用するネットワークACLのカンマ区切りリスト
-`security.acls.default.egress.action`  | string  | `drop`             | no   | どのACLルールにもマッチしないエグレス・トラフィックに使うアクション
-`security.acls.default.egress.logged`  | bool    | `false`            | no   | どのACLルールにもマッチしないエグレス・トラフィックをログ出力するかどうか
-`security.acls.default.ingress.action` | string  | `drop`             | no   | どのACLルールにもマッチしないイングレス・トラフィックに使うアクション
-`security.acls.default.ingress.logged` | bool    | `false`            | no   | どのACLルールにもマッチしないイングレス・トラフィックをログ出力するかどうか
-`security.ipv4_filtering`              | bool    | `false`            | no   | インスタンスが他のインスタンスのIPv4アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）
-`security.ipv6_filtering`              | bool    | `false`            | no   | インスタンスが他のインスタンスのIPv6アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）
-`security.mac_filtering`               | bool    | `false`            | no   | インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ
-`security.port_isolation`              | bool    | `false`            | no   | NICがポート隔離を有効にしたネットワーク内の他のNICと通信するのを防ぐ
-`vlan`                                 | integer | -                  | no   | タグなしのトラフィックに使用するVLAN ID（デフォルトのVLANからポートを削除するには`none`を指定）
-`vlan.tagged`                          | integer | -                  | no   | タグありのトラフィックに参加するVLAN IDまたはVLANの範囲のカンマ区切りリスト
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_bridged start -->
+    :end-before: <!-- config group devices-nic_bridged end -->
+```
 
 (nic-macvlan)=
 ### `nictype`: `macvlan`
@@ -124,18 +97,11 @@ VMでUSBネットワークアダプターを使用する場合、メインライ
 
 `macvlan`タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー            | 型      | デフォルト値       | 管理 | 説明
-:--             | :--     | :--                | :--  | :--
-`boot.priority` | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
-`gvrp`          | bool    | `false`            | no   | GARP VLAN Registration Protocolを使ってVLANを登録する
-`hwaddr`        | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
-`io.bus`        | string  | `virtio`           | no   | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
-`mode`          | string  | `bridge`           | no   | Macvlanモード（`bridge`、`vepa`、`passthru`、`private`のいずれか）
-`mtu`           | integer | 親の MTU           | yes  | 新しいインターフェースのMTU
-`name`          | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
-`network`       | string  | -                  | no   | （`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク
-`parent`        | string  | -                  | yes  | ホストデバイスの名前（`nictype`を直接設定する場合は必須）
-`vlan`          | integer | -                  | no   | アタッチ先のVLAN ID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_macvlan start -->
+    :end-before: <!-- config group devices-nic_macvlan end -->
+```
 
 (nic-sriov)=
 ### `nictype`: `sriov`
@@ -169,16 +135,11 @@ VF の割り当て
 
 `sriov`タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー                     | 型      | デフォルト値       | 管理 | 説明
-:--                      | :--     | :--                | :--  | :--
-`boot.priority`          | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
-`hwaddr`                 | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
-`mtu`                    | integer | カーネルが割り当て | yes  | 新しいインターフェースのMTU
-`name`                   | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
-`network`                | string  | -                  | no   | （`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク
-`parent`                 | string  | -                  | yes  | ホストデバイスの名前（`nictype`を直接設定する場合は必須）
-`security.mac_filtering` | bool    | `false`            | no   | インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ
-`vlan`                   | integer | -                  | no   | アタッチ先のVLAN ID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_sriov start -->
+    :end-before: <!-- config group devices-nic_sriov end -->
+```
 
 (nic-ovn)=
 ### `nictype`: `ovn`
@@ -232,28 +193,11 @@ VDPA ハードウェアアクセラレーション
 
 `ovn` タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー                                   | 型      | デフォルト値       | 管理 | 説明
-:--                                    | :--     | :--                | :--  | :--
-`acceleration`                         | string  | `none`             | no   | ハードウェアオフローディングを有効にする（`none`か`sriov`か`vdpa`、{ref}`devices-nic-hw-acceleration`参照）
-`boot.priority`                        | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
-`host_name`                            | string  | ランダムに割り当て | no   | ホスト内部でのインターフェース名
-`hwaddr`                               | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
-`ipv4.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv4アドレス、IP割り当てを無効にするには`none`が使える
-`ipv4.routes`                          | string  | -                  | no   | NICへルーティングするIPv4静的ルートのカンマ区切りリスト
-`ipv4.routes.external`                 | string  | -                  | no   | NICへのルーティングとアップリンクネットワークでの公開に使用するIPv4静的ルートのカンマ区切りリスト
-`ipv6.address`                         | string  | -                  | no   | DHCPでインスタンスに割り当てるIPv6アドレス、IP割り当てを無効にするには`none`が使える
-`ipv6.routes`                          | string  | -                  | no   | NICへルーティングするIPv6静的ルートのカンマ区切りリスト
-`ipv6.routes.external`                 | string  | -                  | no   | NICへのルーティングとアップリンクネットワークでの公開に使用するIPv6静的ルートのカンマ区切りリスト
-`name`                                 | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
-`nested`                               | string  | -                  | no   | このNICをどの親NICの下にネストするか（`vlan`も参照）
-`network`                              | string  | -                  | yes  | デバイスの接続先の管理されたネットワーク（必須）
-`security.acls`                        | string  | -                  | no   | 適用するネットワークACLのカンマ区切りリスト
-`security.acls.default.egress.action`  | string  | `reject`           | no   | どのACLルールにもマッチしない外向きトラフィックに使うアクション
-`security.acls.default.egress.logged`  | bool    | `false`            | no   | どのACLルールにもマッチしない外向きトラフィックをログ出力するかどうか
-`security.acls.default.ingress.action` | string  | `reject`           | no   | どのACLルールにもマッチしない内向きトラフィックに使うアクション
-`security.acls.default.ingress.logged` | bool    | `false`            | no   | どのACLルールにもマッチしない内向きトラフィックをログ出力するかどうか
-`security.promiscuous`                 | bool    | `false`            | no   | OVNに未知のネットワークトラフィックをこのネットワークインタフェースに送信させる（特定のネストしたケースで必要）
-`vlan`                                 | integer | -                  | no   | ネストする際に使用する VLAN ID （`nested`も参照）
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_ovn start -->
+    :end-before: <!-- config group devices-nic_ovn end -->
+```
 
 ```{note}
 `ipv4.address`や`ipv6.address`に`none`を使うには、他のプロトコルも無効にする必要があることに注意してください。
@@ -275,16 +219,11 @@ VDPA ハードウェアアクセラレーション
 
 `physical`タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー            | 型      | デフォルト値       | 管理 | 説明
-:--             | :--     | :--                | :--  | :--
-`boot.priority` | integer | -                  | no   | VMのブート優先度（高いほうが先にブート）
-`gvrp`          | bool    | `false`            | no   | GARP VLAN Registration Protocolを使ってVLANを登録する
-`hwaddr`        | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス
-`mtu`           | integer | 親の MTU           | no   | 新しいインターフェースのMTU
-`name`          | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
-`network`       | string  | -                  | no   | デバイスのリンク先（`nictype`を直接指定する代わりに）の管理ネットワーク
-`parent`        | string  | -                  | yes  | ホストデバイスの名前（`nictype`を直接指定する場合は必須）
-`vlan`          | integer | -                  | no   | アタッチ先のVLAN ID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_physical start -->
+    :end-before: <!-- config group devices-nic_physical end -->
+```
 
 (nic-ipvlan)=
 ### `nictype`: `ipvlan`
@@ -324,21 +263,11 @@ DNS
 
 `ipvlan`タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー              | 型      | デフォルト値                 | 説明
-:--               | :--     | :--                          | :--
-`gvrp`            | bool    | `false`                      | GARP VLAN Registration Protocolを使ってVLANを登録する
-`hwaddr`          | string  | ランダムに割り当て           | 新しいインターフェースのMACアドレス
-`ipv4.address`    | string  | -                            | インスタンスに追加するIPv4静的アドレスのカンマ区切りリスト（`l2`モードでは、CIDR形式か`/24`のサブネットの単一アドレスで指定可能）
-`ipv4.gateway`    | string  | `auto` （`l3s`）, - （`l2`） | `l3s`モードでは、デフォルトIPv4ゲートウェイを自動的に追加するかどうか（`auto`か`none`を指定可能）。`l2`モードでは、ゲートウェイのIPv4アドレス
-`ipv4.host_table` | integer | -                            | （メインのルーティングテーブルに加えて）IPv4の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID
-`ipv6.address`    | string  | -                            | インスタンスに追加するIPv6静的アドレスのカンマ区切りリスト（`l2`モードでは、CIDR 形式か`/64`のサブネットの単一アドレスで指定可能）
-`ipv6.gateway`    | string  | `auto` （`l3s`）, - （`l2`） | `l3s`モードでは、デフォルトIPv6ゲートウェイを自動的に追加するかどうか（`auto`か`none`を指定可能）。`l2`モードで、はゲートウェイのIPv6アドレス
-`ipv6.host_table` | integer | -                            | （メインのルーティングテーブルに加えて）IPv6の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID
-`mode`            | string  | `l3s`                        | IPVLANのモード（`l2`か`l3s`のいずれか）
-`mtu`             | integer | 親の MTU                     | 新しいインターフェースのMTU
-`name`            | string  | カーネルが割り当て           | インスタンス内部でのインターフェース名
-`parent`          | string  | -                            | ホストデバイスの名前(必須)
-`vlan`            | integer | -                            | アタッチ先のVLAN ID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_ipvlan start -->
+    :end-before: <!-- config group devices-nic_ipvlan end -->
+```
 
 (nic-p2p)=
 ### `nictype`: `p2p`
@@ -353,21 +282,11 @@ DNS
 
 `p2p`タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー              | 型      | デフォルト値       | 説明
-:--               | :--     | :--                | :--
-`boot.priority`   | integer | -                  | VMのブート優先度 （高いほうが先にブート）
-`host_name`       | string  | ランダムに割り当て | ホスト内でのインターフェースの名前
-`hwaddr`          | string  | ランダムに割り当て | 新しいインターフェースのMACアドレス
-`io.bus`          | string  | `virtio`           | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
-`ipv4.routes`     | string  | -                  | ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト
-`ipv6.routes`     | string  | -                  | ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト
-`limits.egress`   | string  | -                  | 外向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
-`limits.ingress`  | string  | -                  | 内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）
-`limits.max`      | string  | -                  | 内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）
-`limits.priority` | integer | -                  | 外向きトラフィックへの `skb->priority` の値（32-bit 符号なし整数）、カーネルでネットワークパケットに優先度をつけるために kernel queuing discipline （qdisc） によって使用される（この値の効果は特定の qdisc 実装、たとえば、`SKBPRIO` または `QFQ` によって異なる。この値を設定する前に kernel qdisc ドキュメントを参照のこと）
-`mtu`             | integer | カーネルが割り当て | 新しいインターフェースのMTU
-`name`            | string  | カーネルが割り当て | インスタンス内部でのインターフェース名
-`queue.tx.length` | integer | -                  | NIC の送信キューの長さ
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_p2p start -->
+    :end-before: <!-- config group devices-nic_p2p end -->
+```
 
 (nic-routed)=
 ### `nictype`: `routed`
@@ -433,34 +352,11 @@ IP アドレス、ゲートウェイ、ルーティング
 
 `routed`タイプの NIC デバイスには以下のデバイスオプションがあります:
 
-キー                  | 型      | デフォルト値       | 説明
-:--                   | :--     | :--                | :--
-`gvrp`                | bool    | `false`            | GARP VLAN Registration Protocolを使ってVLANを登録する
-`host_name`           | string  | ランダムに割り当て | ホスト内でのインターフェース名
-`hwaddr`              | string  | ランダムに割り当て | 新しいインターフェースのMACアドレス
-`io.bus`              | string  | `virtio`           | デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）
-`ipv4.address`        | string  | -                  | インスタンスに追加するIPv4静的アドレスのカンマ区切りリスト
-`ipv4.gateway`        | string  | `auto`             | 自動的にIPv4デフォルトゲートウェイを追加するかどうか（`auto`か`none`を指定可能）
-`ipv4.host_address`   | string  | `169.254.0.1`      | ホスト側の`veth`インターフェースに追加するIPv4アドレス
-`ipv4.host_table`     | integer | -                  | （メインのルーティングテーブルに加えて）IPv4の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID
-`ipv4.neighbor_probe` | bool    | `true`             | IPアドレスが利用可能か知るために親のネットワークを調べるかどうか
-`ipv4.routes`         | string  | -                  | ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト（L2 ARP/NDPプロキシを除く）
-`ipv6.address`        | string  | -                  | インスタンスに追加するIPv6静的アドレスのカンマ区切りリスト
-`ipv6.gateway`        | string  | `auto`             | 自動的にIPv6のデフォルトゲートウェイを追加するかどうか（`auto`か`none`を指定可能）
-`ipv6.host_address`   | string  | `fe80::1`          | ホスト側の`veth`インターフェースに追加するIPv6アドレス
-`ipv6.host_table`     | integer | -                  | （メインのルーティングテーブルに加えて）IPv6の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID
-`ipv6.neighbor_probe` | bool    | `true`             | IPアドレスが利用可能か知るために親のネットワークを調べるかどうか
-`ipv6.routes`         | string  | -                  | ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト（L2 ARP/NDPプロキシを除く）
-`limits.egress`       | string  | -                  | 内向きトラフィックに対するbit/sでのI/O制限値（さまざまな単位をサポート、{ref}`instances-limit-units`参照）
-`limits.ingress`      | string  | -                  | 外向きトラフィックに対するbit/sでのI/O制限値（さまざまな単位をサポート、{ref}`instances-limit-units`参照）
-`limits.max`          | string  | -                  | 内向きと外向き両方のトラフィックのI/O 制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）
-`limits.priority`     | integer | -                  | 外向きトラフィックへの `skb->priority` の値（32-bit 符号なし整数）、カーネルでネットワークパケットに優先度をつけるために kernel queuing discipline （qdisc） によって使用される（この値の効果は特定の qdisc 実装、たとえば、`SKBPRIO` または `QFQ` によって異なる。この値を設定する前に kernel qdisc ドキュメントを参照のこと）
-`mtu`                 | integer | 親の MTU           | 新しいインターフェースのMTU
-`name`                | string  | カーネルが割り当て | インスタンス内でのインターフェース名
-`parent`              | string  | -                  | インスタンスが参加するホストデバイス名
-`queue.tx.length`     | integer | -                  | NICの送信キューの長さ
-`vlan`                | integer | -                  | アタッチ先の VLAN ID
-`vrf`                 | string  | -                  | ホスト側のインターフェースが接続されており、ルートが作成されるホスト上のVRF
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-nic_routed start -->
+    :end-before: <!-- config group devices-nic_routed end -->
+```
 
 ## `bridge`、`macvlan`、`ipvlan`を使った物理ネットワークへの接続
 

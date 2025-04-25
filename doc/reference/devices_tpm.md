@@ -18,7 +18,8 @@ Incus は、TPM 2.0 をサポートするソフトウェア TPM を使用しま�
 
 `tpm`デバイスには以下のデバイスオプションがあります:
 
-キー     | 型     | デフォルト値 | 必須             | 説明
-:--      | :--    | :--          | :--              | :--
-`path`   | string | -            | コンテナでは必須 | コンテナのみ: インスタンス内でのパス（例:`/dev/tpm0`）
-`pathrm` | string | -            | コンテナでは必須 | コンテナのみ: インスタンス内でのリソースマネージャのパス（例:`dev/tpmrm0`）
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group tpm-common start -->
+    :end-before: <!-- config group tpm-common end -->
+```

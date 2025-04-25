@@ -12,7 +12,7 @@
 
 たとえば、`c1` という名前のインスタンスを `server2` クラスタメンバー上で起動するには、以下のコマンドを使用します:
 
-    incus launch images:ubuntu/22.04 c1 --target server2
+    incus launch images:debian/12 c1 --target server2
 
 インスタンスを特定のクラスタメンバーあるいは特定の {ref}`クラスタグループ <howto-cluster-groups>` 上で実行できます。
 

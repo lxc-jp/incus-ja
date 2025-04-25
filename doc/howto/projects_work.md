@@ -79,7 +79,7 @@
 そのため、プロジェクトはデフォルトのプロファイル（`default`プロジェクトの一部）にアクセスできず、インスタンスを作成しようとすると次のようなエラーが表示されます:
 
 ```{terminal}
-:input: incus launch images:ubuntu/22.04 my-instance
+:input: incus launch images:debian/12 my-instance
 
 Creating my-instance
 Error: Failed instance creation: Failed creating instance record: Failed initializing instance: Failed getting root disk: No root device could be found

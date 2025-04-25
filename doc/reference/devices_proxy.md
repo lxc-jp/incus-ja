@@ -66,15 +66,8 @@ listen のアドレスも非 NAT モードではワイルドカードのアド�
 
 `proxy` デバイスには以下のデバイスオプションがあります:
 
-キー             | 型     | デフォルト値 | 必須 | 説明
-:--              | :--    | :--          | :--  | :--
-`bind`           | string | `host`       | no   | どちら側にバインドするか（`host`/`instance`）
-`connect`        | string | -            | yes  | 接続するアドレスとポート（`<type>:<addr>:<port>[-<port>][,<port>]`）
-`gid`            | int    | `0`          | no   | listenするUnixソケットの所有者のGID
-`listen`         | string | -            | yes  | バインドし、接続を待ち受けるアドレスとポート（`<type>:<addr>:<port>[-<port>][,<port>]`）
-`mode`           | int    | `0644`       | no   | listenするUnixソケットのモード
-`nat`            | bool   | `false`      | no   | NAT経由でプロキシを最適化するかどうか（インスタンスのNICが静的IPを持つ必要あり）
-`proxy_protocol` | bool   | `false`      | no   | 送信者情報を送信するのに HAProxy の PROXY プロトコルを使用するかどうか
-`security.gid`   | int    | `0`          | no   | 特権を落とすGID
-`security.uid`   | int    | `0`          | no   | 特権を落とすUID
-`uid`            | int    | `0`          | no   | listenするUnixソケットの所有者のUID
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-proxy start -->
+    :end-before: <!-- config group devices-proxy end -->
+```

@@ -29,7 +29,7 @@ relatedlinks: https://cloudinit.readthedocs.org/
 `cloud-init`を使用するには、`cloud-init`がインストールされたイメージをベースにインスタンスを作る必要があります。
 
 [`images`リモート](https://images.linuxcontainers.org/)からのイメージには`cloud-init`が有効化されたバリアントがあり、通常デフォルトバリアントよりもサイズが大きくなります。
-クラウドバリアントは`/cloud`接尾辞を使用します。たとえば、`images:ubuntu/22.04/cloud`。
+クラウドバリアントは`/cloud`接尾辞を使用します。たとえば、`images:debian/12/cloud`。
 
 ## `cloud-init`と仮想マシン
 
@@ -203,7 +203,7 @@ config:
 デフォルトでは、`cloud-init`はインスタンスの`eth0`インターフェースに DHCP クライアントを設定します。
 デフォルトの構成を上書きするために、`network-config`オプションを使用して独自のネットワーク構成を定義することができます（これはテンプレートの構造によるものです）。
 
-その後、`cloud-init`は Ubuntu リリースに応じて`ifupdown`か`netplan`を使用して、システム上の関連するネットワーク構成をレンダリングします。
+その後、`cloud-init`はディストリビューションに応じて`ifupdown`か`netplan`を使用して、システム上の関連するネットワーク構成をレンダリングします。
 
 構成データは、インスタンスのルートファイルシステム内の以下のファイルに保存されます:
 

@@ -8,6 +8,7 @@
 ネットワークの作成 </howto/network_create>
 ネットワークの設定 </howto/network_configure>
 ネットワーク ACL の設定 </howto/network_acls>
+ネットワークアドレスセットの設定 </howto/network_address_sets>
 ネットワークフォワードの設定 </howto/network_forwards>
 ネットワーク統合の設定 </howto/network_integrations>
 ネットワークゾーンの設定 </howto/network_zones>

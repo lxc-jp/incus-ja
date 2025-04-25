@@ -49,7 +49,7 @@
 クラスタグループのメンバー上でインスタンスを起動するには、{ref}`cluster-target-instance` の指示に従ってください。ただし `--target` フラグではグループ名の前に `@` をつけて指定してください。
 たとえば:
 
-    incus launch images:ubuntu/22.04 c1 --target=@gpu
+    incus launch images:debian/12 c1 --target=@gpu
 
 ## 制限されたプロジェクトでの使用
 

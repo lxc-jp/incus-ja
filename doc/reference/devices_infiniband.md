@@ -29,10 +29,8 @@ Incus では、InfiniBand デバイスに対する 2 種類の異なったネッ
 
 `infiniband`デバイスには以下のデバイスオプションがあります:
 
-キー      | 型      | デフォルト値       | 必須 | 説明
-:--       | :--     | :--                | :--  | :--
-`hwaddr`  | string  | ランダムに割り当て | no   | 新しいインターフェースのMACアドレス。20バイトすべてを指定するか短い8バイト（この場合親デバイスの最後の8バイトだけを変更）のどちらかを設定可能
-`mtu`     | integer | 親の MTU           | no   | 新しいインターフェースのMTU
-`name`    | string  | カーネルが割り当て | no   | インスタンス内部でのインターフェース名
-`nictype` | string  | -                  | yes  | デバイスタイプ（`physical`か`sriov`のいずれか）
-`parent`  | string  | -                  | yes  | ホスト上のデバイスまたはブリッジの名前
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group infiniband-common start -->
+    :end-before: <!-- config group infiniband-common end -->
+```

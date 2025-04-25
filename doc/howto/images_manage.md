@@ -16,19 +16,19 @@
 ### 利用可能なイメージをフィルタする
 
 表示される結果をフィルタするには、コマンドの後にエイリアスかフィンガープリントの一部を指定します。
-たとえば、すべての Ubuntu 22.04 のイメージを表示するには、以下のコマンドを入力します:
+たとえば、すべてのDebianのイメージを表示するには、以下のコマンドを入力します:
 
-    incus image list images: 22.04
+    incus image list images: debian
 
 複数のフィルタも指定可能です。
-たとえば、すべての Arm 64-bit の Ubuntu 22.04 のイメージを表示するには、以下のコマンドを入力します:
+たとえば、すべての Arm 64-bit のDebianのイメージを表示するには、以下のコマンドを入力します:
 
-    incus image list images: 22.04 arm64
+    incus image list images: debian arm64
 
 エイリアスとフィンガープリント以外のプロパティをフィルタするには、`<key>=<value>`形式でフィルタを指定します。
 たとえば:
 
-    incus image list images: 22.04 architecture=x86_64
+    incus image list images: debian architecture=x86_64
 
 ## イメージの情報を表示する
 
@@ -37,7 +37,7 @@
     incus image info <image_ID>
 
 イメージの ID としては、イメージのエイリアスかフィンガープリントを指定できます。
-リモートのイメージでは、リモートサーバーを忘れずに含めてください（たとえば、`images:ubuntu/22.04`）。
+リモートのイメージでは、リモートサーバーを忘れずに含めてください（たとえば、`images:debian/12`）。
 
 イメージのプロパティだけを表示するには、以下のコマンドを入力します:
 
@@ -47,9 +47,9 @@
 
     incus image get-property <image_ID> <key>
 
-たとえば、公式の Ubuntu 22.04 イメージのリリース名を表示するには、以下のコマンドを入力します:
+たとえば、公式のDebian 12イメージのリリース名を表示するには、以下のコマンドを入力します:
 
-    incus image get-property images:ubuntu/22.04 release
+    incus image get-property images:debian/12 release
 
 (images-manage-edit)=
 ## イメージのプロパティを編集する

@@ -131,7 +131,7 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 
 ```{config:option} path devices-disk
 :required: "yes"
-:shortdesc: "ディスクをマウントするインスタンス内のパス（コンテナのみ）"
+:shortdesc: "ディスクをマウントするインスタンス内のパス（ファイルシステムディスクデバイスのみ）"
 :type: "string"
 
 ```
@@ -211,6 +211,1179 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 ```
 
 <!-- config group devices-disk end -->
+<!-- config group devices-gpu_mdev start -->
+```{config:option} id devices-gpu_mdev
+:required: "no"
+:shortdesc: "GPUデバイスのDRMカードID"
+:type: "string"
+
+```
+
+```{config:option} mdev devices-gpu_mdev
+:required: "yes"
+:shortdesc: "使用する`mdev`プロファイル（必須 - 例:`i915-GVTg_V5_4`）"
+:type: "string"
+
+```
+
+```{config:option} productid devices-gpu_mdev
+:required: "no"
+:shortdesc: "GPUデバイスのプロダクトID"
+:type: "string"
+
+```
+
+```{config:option} vendorid devices-gpu_mdev
+:required: "no"
+:shortdesc: "GPUデバイスのベンダーID"
+:type: "string"
+
+```
+
+<!-- config group devices-gpu_mdev end -->
+<!-- config group devices-gpu_mig start -->
+```{config:option} id devices-gpu_mig
+:required: "no"
+:shortdesc: "GPUデバイスのDRMカードID"
+:type: "string"
+
+```
+
+```{config:option} mig.ci devices-gpu_mig
+:required: "no"
+:shortdesc: "既存のMIGコンピュートインスタンスID"
+:type: "int"
+
+```
+
+```{config:option} mig.gi devices-gpu_mig
+:required: "no"
+:shortdesc: "既存のMIG GPUインスタンスID"
+:type: "int"
+
+```
+
+```{config:option} mig.uuid devices-gpu_mig
+:required: "no"
+:shortdesc: "既存のMIGデバイスUUID（`MIG-`接頭辞は省略可）"
+:type: "string"
+
+```
+
+```{config:option} pci devices-gpu_mig
+:required: "no"
+:shortdesc: "GPUデバイスのPCIアドレス"
+:type: "string"
+
+```
+
+```{config:option} productid devices-gpu_mig
+:required: "no"
+:shortdesc: "GPUデバイスのプロダクトID"
+:type: "string"
+
+```
+
+```{config:option} vendorid devices-gpu_mig
+:required: "no"
+:shortdesc: "GPUデバイスのベンダーID"
+:type: "string"
+
+```
+
+<!-- config group devices-gpu_mig end -->
+<!-- config group devices-gpu_physical start -->
+```{config:option} gid devices-gpu_physical
+:default: "0"
+:required: "no"
+:shortdesc: "インスタンス（コンテナのみ）内のデバイス所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} id devices-gpu_physical
+:required: "no"
+:shortdesc: "GPUデバイスのDRMカードID"
+:type: "string"
+
+```
+
+```{config:option} mode devices-gpu_physical
+:default: "0660"
+:required: "no"
+:shortdesc: "インスタンス（コンテナのみ）内のデバイスのモード"
+:type: "int"
+
+```
+
+```{config:option} pci devices-gpu_physical
+:required: "no"
+:shortdesc: "GPUデバイスのPCIアドレス"
+:type: "string"
+
+```
+
+```{config:option} productid devices-gpu_physical
+:required: "no"
+:shortdesc: "GPUデバイスのプロダクトID"
+:type: "string"
+
+```
+
+```{config:option} uid devices-gpu_physical
+:default: "0"
+:required: "no"
+:shortdesc: "インスタンス（コンテナのみ）内のデバイス所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} vendorid devices-gpu_physical
+:required: "no"
+:shortdesc: "GPUデバイスのベンダーID"
+:type: "string"
+
+```
+
+<!-- config group devices-gpu_physical end -->
+<!-- config group devices-gpu_sriov start -->
+```{config:option} id devices-gpu_sriov
+:required: "no"
+:shortdesc: "GPUデバイスのDRMカードID"
+:type: "string"
+
+```
+
+```{config:option} pci devices-gpu_sriov
+:required: "no"
+:shortdesc: "親GPUデバイスのPCIアドレス"
+:type: "string"
+
+```
+
+```{config:option} productid devices-gpu_sriov
+:required: "no"
+:shortdesc: "親GPUデバイスのプロダクトID"
+:type: "string"
+
+```
+
+```{config:option} vendorid devices-gpu_sriov
+:required: "no"
+:shortdesc: "親GPUデバイスのベンダーID"
+:type: "string"
+
+```
+
+<!-- config group devices-gpu_sriov end -->
+<!-- config group devices-nic_bridged start -->
+```{config:option} boot.priority devices-nic_bridged
+:managed: "no"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）"
+:type: "integer"
+
+```
+
+```{config:option} host_name devices-nic_bridged
+:default: "ランダムに割り当て"
+:managed: "no"
+:shortdesc: "ホスト内でのインターフェースの名前"
+:type: "string"
+
+```
+
+```{config:option} hwaddr devices-nic_bridged
+:default: "ランダムに割り当て"
+:managed: "no"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} io.bus devices-nic_bridged
+:default: "`virtio`"
+:managed: "no"
+:shortdesc: "デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.address devices-nic_bridged
+:managed: "no"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.routes devices-nic_bridged
+:managed: "no"
+:shortdesc: "ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv4.routes.external devices-nic_bridged
+:managed: "no"
+:shortdesc: "NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv4静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.address devices-nic_bridged
+:managed: "no"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にすべてのIPv6トラフィックを制限するには`none`と設定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv6.routes devices-nic_bridged
+:managed: "no"
+:shortdesc: "ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.routes.external devices-nic_bridged
+:managed: "no"
+:shortdesc: "NICにルーティングしアップリンクのネットワーク（BGP）で公開するIPv6静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} limits.egress devices-nic_bridged
+:managed: "no"
+:shortdesc: "外向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.ingress devices-nic_bridged
+:managed: "no"
+:shortdesc: "内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.max devices-nic_bridged
+:managed: "no"
+:shortdesc: "内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.priority devices-nic_bridged
+:managed: "no"
+:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにkernel queuing disciplineによって使用される"
+:type: "integer"
+
+```
+
+```{config:option} mtu devices-nic_bridged
+:default: "親デバイスのMTU"
+:managed: "yes"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_bridged
+:default: "カーネルが割り当て"
+:managed: "no"
+:shortdesc: "インスタンス内でのインターフェースの名前"
+:type: "string"
+
+```
+
+```{config:option} network devices-nic_bridged
+:managed: "no"
+:shortdesc: "（`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク"
+:type: "string"
+
+```
+
+```{config:option} parent devices-nic_bridged
+:managed: "yes"
+:shortdesc: "ホストデバイスの名前（`nictype`を直接設定する場合は必須）"
+:type: "string"
+
+```
+
+```{config:option} queue.tx.length devices-nic_bridged
+:managed: "no"
+:shortdesc: " NICの送信キューの長さ"
+:type: "integer"
+
+```
+
+```{config:option} security.acls devices-nic_bridged
+:managed: "no"
+:shortdesc: "適用するネットワークACLのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.egress.action devices-nic_bridged
+:default: "drop"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないエグレス・トラフィックに使うアクション"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.egress.logged devices-nic_bridged
+:default: "false"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないエグレス・トラフィックをログ出力するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} security.acls.default.ingress.action devices-nic_bridged
+:default: "drop"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないイングレス・トラフィックに使うアクション"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.ingress.logged devices-nic_bridged
+:default: "false"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないイングレス・トラフィックをログ出力するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} security.ipv4_filtering devices-nic_bridged
+:default: "false"
+:managed: "no"
+:shortdesc: "インスタンスが他のインスタンスのIPv4アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）"
+:type: "bool"
+
+```
+
+```{config:option} security.ipv6_filtering devices-nic_bridged
+:default: "false"
+:managed: "no"
+:shortdesc: "インスタンスが他のインスタンスのIPv6アドレスになりすますのを防ぐ（これを設定すると`mac_filtering`も有効になります）"
+:type: "bool"
+
+```
+
+```{config:option} security.mac_filtering devices-nic_bridged
+:default: "false"
+:managed: "no"
+:shortdesc: "インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ"
+:type: "bool"
+
+```
+
+```{config:option} security.port_isolation devices-nic_bridged
+:default: "false"
+:managed: "no"
+:shortdesc: "NICがポート隔離を有効にしたネットワーク内の他のNICと通信するのを防ぐ"
+:type: "bool"
+
+```
+
+```{config:option} vlan devices-nic_bridged
+:managed: "no"
+:shortdesc: "タグなしのトラフィックに使用するVLAN ID（デフォルトのVLANからポートを削除するには`none`を指定）"
+:type: "integer"
+
+```
+
+```{config:option} vlan.tagged devices-nic_bridged
+:managed: "no"
+:shortdesc: "タグありのトラフィックに参加するVLAN IDまたはVLANの範囲のカンマ区切りリスト"
+:type: "integer"
+
+```
+
+<!-- config group devices-nic_bridged end -->
+<!-- config group devices-nic_ipvlan start -->
+```{config:option} gvrp devices-nic_ipvlan
+:default: "false"
+:shortdesc: "GARP VLAN Registration Protocolを使ってVLANを登録する"
+:type: "bool"
+
+```
+
+```{config:option} hwaddr devices-nic_ipvlan
+:default: "ランダムに割り当て"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv4.address devices-nic_ipvlan
+:shortdesc: "インスタンスに追加するIPv4静的アドレスのカンマ区切りリスト（`l2`モードでは、CIDR形式か`/24`のサブネットの単一アドレスで指定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.gateway devices-nic_ipvlan
+:default: "（`l3s`モードでは）`auto`、(`l2`モードでは)`-`"
+:shortdesc: "`l3s`モードでは、デフォルトIPv4ゲートウェイを自動的に追加するかどうか（`auto`か`none`を指定可能）。`l2`モードでは、ゲートウェイのIPv4アドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv4.host_table devices-nic_ipvlan
+:shortdesc: "（メインのルーティングテーブルに加えて）IPv4の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID"
+:type: "integer"
+
+```
+
+```{config:option} ipv6.address devices-nic_ipvlan
+:shortdesc: "インスタンスに追加するIPv6静的アドレスのカンマ区切りリスト（`l2`モードでは、CIDR 形式か`/64`のサブネットの単一アドレスで指定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv6.gateway devices-nic_ipvlan
+:default: "（`l3s`モードでは）`auto`、(`l2`モードでは)`-`"
+:shortdesc: "`l3s`モードでは、デフォルトIPv6ゲートウェイを自動的に追加するかどうか（`auto`か`none`を指定可能）。`l2`モードで、はゲートウェイのIPv6アドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv6.host_table devices-nic_ipvlan
+:shortdesc: "（メインのルーティングテーブルに加えて）IPv6の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID"
+:type: "integer"
+
+```
+
+```{config:option} mode devices-nic_ipvlan
+:default: "`l3s`"
+:shortdesc: "IPVLANのモード（`l2`か`l3s`のいずれか）"
+:type: "string"
+
+```
+
+```{config:option} mtu devices-nic_ipvlan
+:default: "親デバイスのMTU"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_ipvlan
+:default: "カーネルが割り当て"
+:shortdesc: "新しいインターフェースのMTU"
+:type: "string"
+
+```
+
+```{config:option} parent devices-nic_ipvlan
+:shortdesc: "ホストデバイスの名前(必須)"
+:type: "string"
+
+```
+
+```{config:option} vlan devices-nic_ipvlan
+:shortdesc: "アタッチ先のVLAN ID"
+:type: "integer"
+
+```
+
+<!-- config group devices-nic_ipvlan end -->
+<!-- config group devices-nic_macvlan start -->
+```{config:option} boot.priority devices-nic_macvlan
+:managed: "no"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）"
+:type: "integer"
+
+```
+
+```{config:option} gvrp devices-nic_macvlan
+:default: "false"
+:managed: "no"
+:shortdesc: "GARP VLAN Registration Protocolを使ってVLANを登録する"
+:type: "bool"
+
+```
+
+```{config:option} hwaddr devices-nic_macvlan
+:default: "ランダムに割り当て"
+:managed: "no"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} io.bus devices-nic_macvlan
+:default: "`virtio`"
+:managed: "no"
+:shortdesc: "デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）"
+:type: "string"
+
+```
+
+```{config:option} mode devices-nic_macvlan
+:default: "bridge"
+:managed: "no"
+:shortdesc: "Macvlanモード（`bridge`、`vepa`、`passthru`、`private`のいずれか）"
+:type: "string"
+
+```
+
+```{config:option} mtu devices-nic_macvlan
+:default: "親デバイスのMTU"
+:managed: "yes"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_macvlan
+:default: "カーネルが割り当て"
+:managed: "no"
+:shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} network devices-nic_macvlan
+:managed: "no"
+:shortdesc: "（`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク"
+:type: "string"
+
+```
+
+```{config:option} parent devices-nic_macvlan
+:managed: "yes"
+:shortdesc: "親ホストデバイスの名前（`nictype`を直接設定する場合は必須）"
+:type: "string"
+
+```
+
+```{config:option} vlan devices-nic_macvlan
+:managed: "no"
+:shortdesc: "アタッチ先のVLAN ID"
+:type: "integer"
+
+```
+
+<!-- config group devices-nic_macvlan end -->
+<!-- config group devices-nic_ovn start -->
+```{config:option} acceleration devices-nic_ovn
+:default: "none"
+:managed: "no"
+:shortdesc: "ハードウェアオフローディングを有効にする（`none`か`sriov`か`vdpa`）"
+:type: "string"
+
+```
+
+```{config:option} boot.priority devices-nic_ovn
+:managed: "no"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）"
+:type: "integer"
+
+```
+
+```{config:option} host_name devices-nic_ovn
+:default: "ランダムに割り当て"
+:managed: "no"
+:shortdesc: "ホスト内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} hwaddr devices-nic_ovn
+:default: "ランダムに割り当て"
+:managed: "no"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv4.address devices-nic_ovn
+:managed: "no"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス、IP割り当てを無効にするには`none`が使える"
+:type: "string"
+
+```
+
+```{config:option} ipv4.routes devices-nic_ovn
+:managed: "no"
+:shortdesc: "NICへルーティングするIPv4静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv4.routes.external devices-nic_ovn
+:managed: "no"
+:shortdesc: "NICへのルーティングとアップリンクネットワークでの公開に使用するIPv4静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.address devices-nic_ovn
+:managed: "no"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス、IP割り当てを無効にするには`none`が使える"
+:type: "string"
+
+```
+
+```{config:option} ipv6.routes devices-nic_ovn
+:managed: "no"
+:shortdesc: "NICへルーティングするIPv6静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.routes.external devices-nic_ovn
+:managed: "no"
+:shortdesc: "NICへのルーティングとアップリンクネットワークでの公開に使用するIPv6静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} mtu devices-nic_ovn
+:default: "親ネットワークのMTU"
+:managed: "yes"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_ovn
+:default: "カーネルが割り当て"
+:managed: "no"
+:shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} nested devices-nic_ovn
+:managed: "no"
+:shortdesc: "このNICをどの親NICの下にネストするか（`vlan`も参照）"
+:type: "string"
+
+```
+
+```{config:option} network devices-nic_ovn
+:managed: "yes"
+:shortdesc: "デバイスの接続先の管理されたネットワーク（必須）"
+:type: "string"
+
+```
+
+```{config:option} security.acls devices-nic_ovn
+:managed: "no"
+:shortdesc: "適用するネットワークACLのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.egress.action devices-nic_ovn
+:default: "reject"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないエグレス・トラフィックに使うアクション"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.egress.logged devices-nic_ovn
+:default: "false"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないエグレス・トラフィックをログ出力するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} security.acls.default.ingress.action devices-nic_ovn
+:default: "reject"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないイングレス・トラフィックに使うアクション"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.ingress.logged devices-nic_ovn
+:default: "false"
+:managed: "no"
+:shortdesc: "どのACLルールにもマッチしないイングレス・トラフィックをログ出力するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} security.promiscuous devices-nic_ovn
+:default: "false"
+:managed: "no"
+:shortdesc: "OVNに未知のネットワークトラフィックをこのネットワークインタフェースに送信させる（特定のネストしたケースで必要）"
+:type: "bool"
+
+```
+
+```{config:option} vlan devices-nic_ovn
+:managed: "no"
+:shortdesc: "ネストする際に使用する VLAN ID （`nested`も参照）"
+:type: "integer"
+
+```
+
+<!-- config group devices-nic_ovn end -->
+<!-- config group devices-nic_p2p start -->
+```{config:option} boot.priotiry devices-nic_p2p
+:shortdesc: "VMのブート優先度 （高いほうが先にブート）"
+:type: "integer"
+
+```
+
+```{config:option} host_name devices-nic_p2p
+:default: "ランダムに割り当て"
+:shortdesc: "ホスト内でのインターフェースの名前"
+:type: "string"
+
+```
+
+```{config:option} hwaddr devices-nic_p2p
+:default: "ランダムに割り当て"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} io.bus devices-nic_p2p
+:default: "`virtio`"
+:shortdesc: "デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.routes devices-nic_p2p
+:shortdesc: "ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.routes devices-nic_p2p
+:shortdesc: "ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} limits.egress devices-nic_p2p
+:shortdesc: "外向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.ingress devices-nic_p2p
+:shortdesc: "内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.max devices-nic_p2p
+:shortdesc: "内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.priority devices-nic_p2p
+:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにkernel queuing disciplineによって使用される"
+:type: "integer"
+
+```
+
+```{config:option} mtu devices-nic_p2p
+:default: "カーネルが割り当て"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_p2p
+:default: "カーネルが割り当て"
+:shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} queue.tx.length devices-nic_p2p
+:shortdesc: "NICの送信キューの長さ"
+:type: "integer"
+
+```
+
+<!-- config group devices-nic_p2p end -->
+<!-- config group devices-nic_physical start -->
+```{config:option} boot.priority devices-nic_physical
+:managed: "no"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）"
+:type: "integer"
+
+```
+
+```{config:option} gvrp devices-nic_physical
+:default: "false"
+:managed: "no"
+:shortdesc: "GARP VLAN Registration Protocolを使ってVLANを登録する"
+:type: "bool"
+
+```
+
+```{config:option} hwaddr devices-nic_physical
+:default: "ランダムに割り当て"
+:managed: "no"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} mtu devices-nic_physical
+:default: "親デバイスのMTU"
+:managed: "no"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_physical
+:default: "カーネルが割り当て"
+:managed: "no"
+:shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} network devices-nic_physical
+:managed: "no"
+:shortdesc: "デバイスのリンク先（`nictype`を直接指定する代わりに）の管理ネットワーク"
+:type: "string"
+
+```
+
+```{config:option} parent devices-nic_physical
+:managed: "yes"
+:shortdesc: "ホストデバイスの名前（`nictype`を直接指定する場合は必須）"
+:type: "string"
+
+```
+
+```{config:option} vlan devices-nic_physical
+:managed: "no"
+:shortdesc: "アタッチ先のVLAN ID"
+:type: "integer"
+
+```
+
+<!-- config group devices-nic_physical end -->
+<!-- config group devices-nic_routed start -->
+```{config:option} gvrp devices-nic_routed
+:default: "false"
+:shortdesc: "GARP VLAN Registration Protocolを使ってVLANを登録する"
+:type: "bool"
+
+```
+
+```{config:option} host_name devices-nic_routed
+:default: "ランダムに割り当て"
+:shortdesc: "ホスト内でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} hwaddr devices-nic_routed
+:default: "ランダムに割り当て"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} io.bus devices-nic_routed
+:default: "`virtio`"
+:shortdesc: "デバイスのバスをオーバーライド（`virtio`か`usb`）（VMのみ）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.address devices-nic_routed
+:shortdesc: "インスタンスに追加するIPv4静的アドレスのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv4.gateway devices-nic_routed
+:default: "auto"
+:shortdesc: "自動的にIPv4デフォルトゲートウェイを追加するかどうか（`auto`か`none`を指定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.host_address devices-nic_routed
+:default: "`169.254.0.1`"
+:shortdesc: "ホスト側の`veth`インターフェースに追加するIPv4アドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv4.host_table devices-nic_routed
+:shortdesc: "（メインのルーティングテーブルに加えて）IPv4の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID"
+:type: "integer"
+
+```
+
+```{config:option} ipv4.neighbor_probe devices-nic_routed
+:default: "true"
+:shortdesc: "IPアドレスが利用可能か知るために親のネットワークを調べるかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv4.routes devices-nic_routed
+:shortdesc: "ホスト上でNICに追加するIPv4静的ルートのカンマ区切りリスト（L2 ARP/NDPプロキシを除く）"
+:type: "string"
+
+```
+
+```{config:option} ipv6.address devices-nic_routed
+:shortdesc: "インスタンスに追加するIPv6静的アドレスのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.gateway devices-nic_routed
+:default: "auto"
+:shortdesc: "自動的にIPv6のデフォルトゲートウェイを追加するかどうか（`auto`か`none`を指定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv6.host_address devices-nic_routed
+:default: "`fe80::1`"
+:shortdesc: "ホスト側の`veth`インターフェースに追加するIPv6アドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv6.host_table devices-nic_routed
+:shortdesc: "（メインのルーティングテーブルに加えて）IPv6の静的ルートを追加する先のカスタムポリシー・ルーティングテーブルID"
+:type: "integer"
+
+```
+
+```{config:option} ipv6.neighbor_probe devices-nic_routed
+:default: "true"
+:shortdesc: "IPアドレスが利用可能か知るために親のネットワークを調べるかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv6.routes devices-nic_routed
+:shortdesc: "ホスト上でNICに追加するIPv6静的ルートのカンマ区切りリスト（L2 ARP/NDPプロキシを除く）"
+:type: "string"
+
+```
+
+```{config:option} limits.egress devices-nic_routed
+:shortdesc: "外向きトラフィックに対するbit/sでのI/O制限値（さまざまな単位をサポート、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.ingress devices-nic_routed
+:shortdesc: "内向きトラフィックに対するbit/sでのI/O制限値（さまざまな単位をサポート、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.max devices-nic_routed
+:shortdesc: "内向きと外向き両方のトラフィックのI/O 制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.priority devices-nic_routed
+:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにkernel queuing disciplineによって使用される"
+:type: "integer"
+
+```
+
+```{config:option} mtu devices-nic_routed
+:default: "親のMTU"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_routed
+:default: "カーネルが割り当て"
+:shortdesc: "インスタンス内でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} parent devices-nic_routed
+:shortdesc: "インスタンスが参加するホストデバイス名"
+:type: "string"
+
+```
+
+```{config:option} queue.tx.length devices-nic_routed
+:shortdesc: "NICの送信キューの長さ"
+:type: "integer"
+
+```
+
+```{config:option} vlan devices-nic_routed
+:shortdesc: "アタッチ先の VLAN ID"
+:type: "integer"
+
+```
+
+```{config:option} vrf devices-nic_routed
+:shortdesc: "ホスト側のインターフェースが接続されており、ルートが作成されるホスト上のVRF"
+:type: "string"
+
+```
+
+<!-- config group devices-nic_routed end -->
+<!-- config group devices-nic_sriov start -->
+```{config:option} boot.priority devices-nic_sriov
+:managed: "no"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）"
+:type: "integer"
+
+```
+
+```{config:option} hwaddr devices-nic_sriov
+:default: "ランダムに割り当て"
+:managed: "no"
+:shortdesc: "新しいインターフェースのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} mtu devices-nic_sriov
+:default: "カーネルが割り当て"
+:managed: "yes"
+:shortdesc: "新しいインターフェースのMaximum Transmit Unit (MTU)"
+:type: "integer"
+
+```
+
+```{config:option} name devices-nic_sriov
+:default: "カーネルが割り当て"
+:managed: "no"
+:shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} network devices-nic_sriov
+:managed: "no"
+:shortdesc: "（`nictype`を直接設定する代わりに）デバイスをリンクする先の管理されたネットワーク"
+:type: "string"
+
+```
+
+```{config:option} parent devices-nic_sriov
+:managed: "yes"
+:shortdesc: "ホストデバイスの名前（`nictype`を直接設定する場合は必須）"
+:type: "string"
+
+```
+
+```{config:option} security.mac_filtering devices-nic_sriov
+:default: "false"
+:managed: "no"
+:shortdesc: "インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ"
+:type: "bool"
+
+```
+
+```{config:option} vlan devices-nic_sriov
+:managed: "no"
+:shortdesc: "アタッチ先のVLAN ID"
+:type: "integer"
+
+```
+
+<!-- config group devices-nic_sriov end -->
+<!-- config group devices-proxy start -->
+```{config:option} bind devices-proxy
+:default: "`host`"
+:required: "no"
+:shortdesc: "どちら側にバインドするか（`host`/`instance`）"
+:type: "string"
+
+```
+
+```{config:option} connect devices-proxy
+:required: "yes"
+:shortdesc: "接続するアドレスとポート（`<type>:<addr>:<port>[-<port>][,<port>]`）"
+:type: "string"
+
+```
+
+```{config:option} gid devices-proxy
+:default: "`0`"
+:required: "no"
+:shortdesc: "listenするUnixソケットの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} listen devices-proxy
+:required: "yes"
+:shortdesc: "バインドし、接続を待ち受けるアドレスとポート（`<type>:<addr>:<port>[-<port>][,<port>]`）"
+:type: "string"
+
+```
+
+```{config:option} mode devices-proxy
+:default: "`0644`"
+:required: "no"
+:shortdesc: "listenするUnixソケットのモード"
+:type: "int"
+
+```
+
+```{config:option} nat devices-proxy
+:default: "`false`"
+:required: "no"
+:shortdesc: "NAT経由でプロキシを最適化するかどうか（インスタンスのNICが静的IPを持つ必要あり）"
+:type: "bool"
+
+```
+
+```{config:option} proxy_protocol devices-proxy
+:default: "`false`"
+:required: "no"
+:shortdesc: "送信者情報を送信するのに HAProxy の PROXY プロトコルを使用するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} security.gid devices-proxy
+:default: "`0`"
+:required: "no"
+:shortdesc: "特権を落とすGID"
+:type: "int"
+
+```
+
+```{config:option} security.uid devices-proxy
+:default: "`0`"
+:required: "no"
+:shortdesc: "特権を落とすUID"
+:type: "int"
+
+```
+
+```{config:option} uid devices-proxy
+:default: "`0`"
+:required: "no"
+:shortdesc: "listenするUnixソケットの所有者のUID"
+:type: "int"
+
+```
+
+<!-- config group devices-proxy end -->
 <!-- config group devices-unix-char-block start -->
 ```{config:option} gid devices-unix-char-block
 :default: "0"
@@ -402,6 +1575,47 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 ```
 
 <!-- config group image-requirements end -->
+<!-- config group infiniband-common start -->
+```{config:option} hwaddr infiniband-common
+:defaultdesc: "ランダムに割り当て"
+:required: "no"
+:shortdesc: "新しいインターフェースのMACアドレス（20バイトすべてか短い8バイト、後者は親デバイスの最後の8バイトだけを変更）"
+:type: "string"
+
+```
+
+```{config:option} mtu infiniband-common
+:defaultdesc: "親のMTU"
+:required: "no"
+:shortdesc: "新しいインターフェースのMTU"
+:type: "integer"
+
+```
+
+```{config:option} name infiniband-common
+:defaultdesc: "カーネルが割り当て"
+:required: "no"
+:shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} nictype infiniband-common
+:required: "yes"
+:shortdesc: "デバイスタイプ（`physical`か`sriov`のいずれか）"
+:type: "string"
+
+```
+
+```{config:option} parent infiniband-common
+:defaultdesc: "カーネルが割り当て"
+:required: "no"
+:shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+<!-- config group infiniband-common end -->
 <!-- config group instance-boot start -->
 ```{config:option} boot.autorestart instance-boot
 :liveupdate: "no"
@@ -1574,6 +2788,454 @@ NVIDIA仮想GPUインスタンスUUID。
 ```
 
 <!-- config group kernel-limits end -->
+<!-- config group network_address_set-common start -->
+```{config:option} user.* network_address_set-common
+:shortdesc: "自由形式のキー／バリューストレージ"
+:type: "string"
+検索に使えるユーザーキー。
+```
+
+<!-- config group network_address_set-common end -->
+<!-- config group network_bridge-common start -->
+```{config:option} bgp.ipv4.nexthop network_bridge-common
+:condition: "BGPサーバー"
+:default: "ローカルアドレス"
+:shortdesc: "広告されたプリフィクスのnext-hopをオーバーライド"
+:type: "string"
+
+```
+
+```{config:option} bgp.ipv6.nexthop network_bridge-common
+:condition: "BGPサーバー"
+:default: "ローカルアドレス"
+:shortdesc: "広告されたプリフィクスのnext-hopをオーバーライド"
+:type: "string"
+
+```
+
+```{config:option} bridge.driver network_bridge-common
+:condition: "-"
+:default: "`native`"
+:shortdesc: "ブリッジのドライバー: `native`か`openvswitch`"
+:type: "string"
+
+```
+
+```{config:option} bridge.external_interfaces network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "ブリッジに含める未設定のネットワークインターフェースのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} bridge.hwaddr network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "ブリッジのMACアドレス"
+:type: "string"
+
+```
+
+```{config:option} bridge.mtu network_bridge-common
+:condition: "-"
+:default: "`1500`"
+:shortdesc: "ブリッジのMTU（tunnel使用時はデフォルト値は変わる）"
+:type: "integer"
+
+```
+
+```{config:option} dns.domain network_bridge-common
+:condition: "-"
+:default: "`incus`"
+:shortdesc: "DHCPのクライアントに広告しDNSの名前解決に使用するドメイン"
+:type: "string"
+
+```
+
+```{config:option} dns.mode network_bridge-common
+:condition: "-"
+:default: "`managed`"
+:shortdesc: "DNSの登録モード: `none`はDNSレコード無し、`managed`はIncusが静的レコードを生成、`dynamic`はクライアントがレコードを生成"
+:type: "string"
+
+```
+
+```{config:option} dns.nameservers network_bridge-common
+:condition: "-"
+:default: "IPv4とIPv6のアドレス"
+:shortdesc: "DHCPクライアントへとルーターアドバータイズメント経由で広告するDNSサーバーのIPアドレス。IPv4とIPv6の両方のアドレスがDHCPクライアントに広告され、IPv6アドレスはさらにRA経由のRDNSSとしても広告されます。"
+:type: "string"
+
+```
+
+```{config:option} dns.search network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "完全なドメインサーチのカンマ区切りリスト、デフォルトは`dns.domain`の値"
+:type: "string"
+
+```
+
+```{config:option} dns.zone.forward network_bridge-common
+:condition: "-"
+:default: "`managed`"
+:shortdesc: "正引きDNSレコード用のDNSゾーン名のカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} dns.zone.reverse.ipv4 network_bridge-common
+:condition: "-"
+:default: "`managed`"
+:shortdesc: "IPv4逆引きDNSレコード用のDNSゾーン名"
+:type: "string"
+
+```
+
+```{config:option} dns.zone.reverse.ipv6 network_bridge-common
+:condition: "-"
+:default: "`managed`"
+:shortdesc: "IPv6逆引きDNSレコード用のDNSゾーン名"
+:type: "string"
+
+```
+
+```{config:option} ipv4.address network_bridge-common
+:condition: "標準モード"
+:default: "- （作成時の初期値: `auto`）"
+:shortdesc: "ブリッジのIPv4アドレス（CIDR形式）（IPv4をオフにするには`none`、新しいランダムな未使用のサブネットを生成するには`auto`を指定）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.dhcp network_bridge-common
+:condition: "IPv4アドレス"
+:default: "`true`"
+:shortdesc: "DHCPを使ってアドレスを割り当てるかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv4.dhcp.expiry network_bridge-common
+:condition: "IPv4 DHCP"
+:default: "`1h`"
+:shortdesc: "DHCPリースの有効期限"
+:type: "string"
+
+```
+
+```{config:option} ipv4.dhcp.gateway network_bridge-common
+:condition: "IPv4 DHCP"
+:default: "IPv4アドレス"
+:shortdesc: "サブネットのゲートウェイのアドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv4.dhcp.ranges network_bridge-common
+:condition: "IPv4 DHCP"
+:default: "すべてのアドレス"
+:shortdesc: "DHCPに使用するIPv4の範囲（開始-終了の形式）のカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv4.dhcp.routes network_bridge-common
+:condition: "IPv4 DHCP"
+:default: "-"
+:shortdesc: "DHCPオプション121経由で提供する静的ルート、代替のサブネット（CIDR）とゲートウェイアドレスのカンマ区切りリスト（dnsmasqと同じ形式）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.firewall network_bridge-common
+:condition: "IPv4アドレス"
+:default: "`true`"
+:shortdesc: "このネットワークに対するファイアウォールのフィルタリングルールを生成するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv4.nat network_bridge-common
+:condition: "IPv4アドレス"
+:default: "`false`（`ipv4.address`が`auto`の場合の作成時の初期値: `true`） "
+:shortdesc: "NATにするかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv4.nat.address network_bridge-common
+:condition: "IPv4アドレス"
+:default: "-"
+:shortdesc: "ブリッジからの送信時に使うソースアドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv4.nat.order network_bridge-common
+:condition: "IPv4アドレス"
+:default: "`before`"
+:shortdesc: "必要なNATのルールを既存のルールの前に追加するか後に追加するか"
+:type: "string"
+
+```
+
+```{config:option} ipv4.ovn.ranges network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "子供のOVNネットワークルーターに使用するIPv4アドレスの範囲（開始-終了の形式）のカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv4.routes network_bridge-common
+:condition: "IPv4アドレス"
+:default: "-"
+:shortdesc: "ブリッジへルーティングする追加のIPv4 CIDRサブネットのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv4.routing network_bridge-common
+:condition: "IPv4 DHCP"
+:default: "`true`"
+:shortdesc: "ブリッジの内外にトラフィックをルーティングするかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv6.address network_bridge-common
+:condition: "標準モード"
+:default: "- （作成時の初期値: `auto`）"
+:shortdesc: "ブリッジのIPv6アドレス（CIDR形式）（IPv6をオフにするには`none`、新しいランダムな未使用のサブネットを生成するには`auto`を指定）"
+:type: "string"
+
+```
+
+```{config:option} ipv6.dhcp network_bridge-common
+:condition: "IPv6 DHCP"
+:default: "`true`"
+:shortdesc: "DHCP上で追加のネットワーク設定を提供するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv6.dhcp.expiry network_bridge-common
+:condition: "IPv6 DHCP"
+:default: "`1h`"
+:shortdesc: "DHCPリースの有効期限"
+:type: "string"
+
+```
+
+```{config:option} ipv6.dhcp.ranges network_bridge-common
+:condition: "IPv6 ステートフル DHCP"
+:default: "すべてのアドレス"
+:shortdesc: "DHCPに使用するIPv6の範囲（開始-終了の形式）のカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.dhcp.stateful network_bridge-common
+:condition: "IPv6 DHCP"
+:default: "`false`"
+:shortdesc: "DHCPを使ってアドレスを割り当てるかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv6.firewall network_bridge-common
+:condition: "IPv6アドレス"
+:default: "`true`"
+:shortdesc: "このネットワークに対するファイアウォールのフィルタリングルールを生成するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv6.nat network_bridge-common
+:condition: "IPv6アドレス"
+:default: "`false`（`ipv6.address`が`auto`の場合の作成時の初期値: `true`）"
+:shortdesc: "NATにするかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ipv6.nat.address network_bridge-common
+:condition: "IPv6アドレス"
+:default: "-"
+:shortdesc: "ブリッジからの送信時に使うソースアドレス"
+:type: "string"
+
+```
+
+```{config:option} ipv6.nat.order network_bridge-common
+:condition: "IPv6アドレス"
+:default: "`before`"
+:shortdesc: "必要なNATのルールを既存のルールの前に追加するか後に追加するか"
+:type: "string"
+
+```
+
+```{config:option} ipv6.ovn.ranges network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "子供のOVNネットワークルーターに使用するIPv6アドレスの範囲（開始-終了の形式）のカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.routes network_bridge-common
+:condition: "IPv6アドレス"
+:default: "-"
+:shortdesc: "ブリッジへルーティングする追加のIPv4 CIDRサブネットのカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ipv6.routing network_bridge-common
+:condition: "IPv6アドレス"
+:default: "`true`"
+:shortdesc: "ブリッジの内外にトラフィックをルーティングするかどうか"
+:type: "bool"
+
+```
+
+```{config:option} raw.dnsmasq network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "設定ファイルの後ろに追加するdnsmasqの設定"
+:type: "string"
+
+```
+
+```{config:option} security.acls network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "このネットワークに接続されたNICに適用するカンマ区切りのネットワークACL（{ref}`network-acls-bridge-limitations`参照）"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.egress.action network_bridge-common
+:condition: "`security.acls`"
+:default: "`reject`"
+:shortdesc: "どのACLルールにもマッチしないエグレス・トラフィックに使うアクション"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.egress.logged network_bridge-common
+:condition: "`security.acls`"
+:default: "`false`"
+:shortdesc: "どのACLルールにもマッチしないエグレス・トラフィックをログ出力するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} security.acls.default.ingress.action network_bridge-common
+:condition: "`security.acls`"
+:default: "`reject`"
+:shortdesc: "どのACLルールにもマッチしないイングレス・トラフィックに使うアクション"
+:type: "string"
+
+```
+
+```{config:option} security.acls.default.ingress.logged network_bridge-common
+:condition: "`security.acls`"
+:default: "`false`"
+:shortdesc: "どのACLルールにもマッチしないイングレス・トラフィックをログ出力するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} tunnel.NAME.group network_bridge-common
+:condition: "`vxlan`"
+:default: "`239.0.0.1`"
+:shortdesc: "`vxlan`のマルチキャスト設定（localとremoteが未設定の場合に使われます）"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.id network_bridge-common
+:condition: "`vxlan`"
+:default: "`0`"
+:shortdesc: "`vxlan`トンネルに使用するトンネルID"
+:type: "integer"
+
+```
+
+```{config:option} tunnel.NAME.interface network_bridge-common
+:condition: "`vxlan`"
+:default: "-"
+:shortdesc: "トンネルに使用するホスト・インターフェース"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.local network_bridge-common
+:condition: "`gre`か`vxlan`"
+:default: "-"
+:shortdesc: "トンネルに使用するローカルアドレス（マルチキャスト`vxlan`の場合は不要）"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.port network_bridge-common
+:condition: "`vxlan`"
+:default: "`0`"
+:shortdesc: "`vxlan`トンネルに使用するポート"
+:type: "integer"
+
+```
+
+```{config:option} tunnel.NAME.protocol network_bridge-common
+:condition: "標準モード"
+:default: "-"
+:shortdesc: "トンネリングのプロトコル: `vxlan`か`gre`"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.remote network_bridge-common
+:condition: "`gre`か`vxlan`"
+:default: "-"
+:shortdesc: "トンネルに使用するリモートアドレス（マルチキャスト`vxlan`の場合は不要）"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.ttl network_bridge-common
+:condition: "`vxlan`"
+:default: "`1`"
+:shortdesc: "マルチキャストルーティングトポロジーに使用する固有のTTL"
+:type: "integer"
+
+```
+
+```{config:option} user.* network_bridge-common
+:condition: "-"
+:default: "-"
+:shortdesc: "ユーザー指定の自由形式のキー／バリューペア"
+:type: "string"
+
+```
+
+<!-- config group network_bridge-common end -->
+<!-- config group network_forward-common start -->
+```{config:option} target_address network_forward-common
+:shortdesc: "ポート設定でカバーされないすべてのもののデフォルトのターゲットアドレス"
+:type: "string"
+
+```
+
+```{config:option} user.* network_forward-common
+:shortdesc: "ユーザー定義のキー/バリュー設定"
+:type: "string"
+
+```
+
+<!-- config group network_forward-common end -->
 <!-- config group network_integration-common start -->
 ```{config:option} user.* network_integration-common
 :shortdesc: "自由形式のユーザーのkey/valueストレージ"
@@ -2035,7 +3697,7 @@ Possible values are `allow` or `block`.
 :shortdesc: "バックアップに使用できる圧縮アルゴリズム"
 :type: "string"
 このプロジェクト内でバックアップに使用できる圧縮アルゴリズムを指定します。
-設定できる値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
+設定できる値は`bzip2`、`gzip`、`lz4`、`lzma`、`xz`、`zstd`、`none`です。
 ```
 
 ```{config:option} images.auto_update_cached project-specific
@@ -2054,7 +3716,7 @@ Possible values are `allow` or `block`.
 ```{config:option} images.compression_algorithm project-specific
 :shortdesc: "このプロジェクト内の新しいイメージの圧縮アルゴリズム"
 :type: "string"
-設定できる値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
+設定できる値は`bzip2`、`gzip`、`lz4`、`lzma`、`xz`、`zstd`、`none`です。
 ```
 
 ```{config:option} images.default_architecture project-specific
@@ -2421,7 +4083,7 @@ See {ref}`cluster-https-address`.
 :scope: "global"
 :shortdesc: "新しいイメージに使用する圧縮アルゴリズム"
 :type: "string"
-設定可能な値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
+設定できる値は`bzip2`、`gzip`、`lz4`、`lzma`、`xz`、`zstd`、`none`です。
 ```
 
 ```{config:option} images.default_architecture server-images
@@ -2439,6 +4101,103 @@ See {ref}`cluster-https-address`.
 ```
 
 <!-- config group server-images end -->
+<!-- config group server-logging start -->
+```{config:option} logging.NAME.lifecycle.projects server-logging
+:scope: "global"
+:shortdesc: "プロジェクトのカンマ区切りリスト、空はすべての意味"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.lifecycle.types server-logging
+:scope: "global"
+:shortdesc: "例、`instance`、カンマ区切り、空はすべての意味"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.logging.level server-logging
+:defaultdesc: "`info`"
+:scope: "global"
+:shortdesc: "ロガーに送る最小のログレベル"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.target.address server-logging
+:scope: "global"
+:shortdesc: "ロガーのアドレス"
+:type: "string"
+プロトコル、名前かIP、ポートを指定。例えば`tcp://syslog01.int.example.net:514`。
+```
+
+```{config:option} logging.NAME.target.ca_cert server-logging
+:scope: "global"
+:shortdesc: "サーバーのCA証明書"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.target.facility server-logging
+:scope: "global"
+:shortdesc: "ログメッセージのカテゴリを定義するsyslog facility"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.target.instance server-logging
+:defaultdesc: "ローカルサーバーのホスト名かクラスターのメンバー名"
+:scope: "global"
+:shortdesc: "Lokiイベント内のインスタンスフィールドで使用する名前"
+:type: "string"
+これによりデフォルトのインスタンスの値（サーバーホスト名）をクラスターIDのようなより関連する値に置き換えられます。
+```
+
+```{config:option} logging.NAME.target.labels server-logging
+:scope: "global"
+:shortdesc: "Lokiログエントリーのラベル"
+:type: "string"
+Lokiログエントリーのラベルとして使われる値のカンマ区切りリストを指定します。
+```
+
+```{config:option} logging.NAME.target.password server-logging
+:scope: "global"
+:shortdesc: "認証に使うパスワード"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.target.retry server-logging
+:scope: "global"
+:shortdesc: "配信リトライ回数、デフォルトは3"
+:type: "integer"
+
+```
+
+```{config:option} logging.NAME.target.type server-logging
+:scope: "global"
+:shortdesc: "ロガーの種別、例、syslog"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.target.username server-logging
+:scope: "global"
+:shortdesc: "認証に使うユーザー名"
+:type: "string"
+
+```
+
+```{config:option} logging.NAME.types server-logging
+:defaultdesc: "`lifecycle,logging`"
+:scope: "global"
+:shortdesc: "ロガーに送信するイベント"
+:type: "string"
+ロガーに送信するイベントのカンマ区切りリストを指定します。
+`lifecycle`、`logging`、`network-acl`の組み合わせを指定できます。
+```
+
+<!-- config group server-logging end -->
 <!-- config group server-loki start -->
 ```{config:option} loki.api.ca_cert server-loki
 :scope: "global"
@@ -2514,7 +4273,7 @@ Lokiサーバーへ送るイベントのカンマ区切りリストを指定し�
 :scope: "global"
 :shortdesc: "バックアップに使用できる圧縮アルゴリズム"
 :type: "string"
-設定できる値は`bzip2`、`gzip`、`lzma`、`xz`、`none`です。
+設定できる値は`bzip2`、`gzip`、`lz4`、`lzma`、`xz`、`zstd`、`none`です。
 ```
 
 ```{config:option} instances.lxcfs.per_instance server-miscellaneous
@@ -2708,3 +4467,21 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```
 
 <!-- config group server-openfga end -->
+<!-- config group tpm-common start -->
+```{config:option} path tpm-common
+:default: "-"
+:required: "コンテナでは必須"
+:shortdesc: "コンテナのみ: インスタンス内でのパス（例:`/dev/tpm0`）"
+:type: "string"
+
+```
+
+```{config:option} pathrm tpm-common
+:default: "-"
+:required: "コンテナでは必須"
+:shortdesc: "コンテナのみ: インスタンス内でのリソースマネージャのパス（例:`dev/tpmrm0`）"
+:type: "string"
+
+```
+
+<!-- config group tpm-common end -->

@@ -25,7 +25,7 @@
 
 1. `ovntest` ネットワークを使用するインスタンスを作成します:
 
-       incus init images:ubuntu/22.04 c1
+       incus init images:debian/12 c1
        incus config device override c1 eth0 network=ovntest
        incus start c1
 
@@ -164,10 +164,10 @@ Incus と同様に、 OVN の分散データベースは奇数のメンバーで
 
 1. OVN ネットワークをテストするには、インスタンスを作成してネットワークが接続できるか確認します:
 
-       incus launch images:ubuntu/22.04 c1 --network my-ovn
-       incus launch images:ubuntu/22.04 c2 --network my-ovn
-       incus launch images:ubuntu/22.04 c3 --network my-ovn
-       incus launch images:ubuntu/22.04 c4 --network my-ovn
+       incus launch images:debian/12 c1 --network my-ovn
+       incus launch images:debian/12 c2 --network my-ovn
+       incus launch images:debian/12 c3 --network my-ovn
+       incus launch images:debian/12 c4 --network my-ovn
        incus list
        incus exec c4 -- bash
        ping <IP of c1>
@@ -198,9 +198,9 @@ OVN コントローラーのログを Incus に送るようにするには以下
     incus monitor --type=network-acls
 
 また Loki にログを送ることもできます。
-そのためには、たとえば、{config:option}`server-loki:loki.types`設定キーに`network-acl`の値を追加してください:
+そのためには、たとえば、{config:option}`server-logging:logging.NAME.types`設定キーに`network-acl`の値を追加してください:
 
-    incus config set loki.types=network-acl
+    incus config set logging.NAME.types=network-acl
 
 ```{tip}
 OVN `northd`、OVN north-bound `ovsdb-server`、OVN south-bound `ovsdb-server`のログもインクルードできます。

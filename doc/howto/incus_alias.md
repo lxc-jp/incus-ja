@@ -92,7 +92,7 @@ $
 | :----------- | :--------------: | :----------- |
 | Alpine | `alpine` | `images:alpine/edge/cloud` |
 | Debian | `debian` | `images:debian/12/cloud` |
-| Fedora | `fedora` | `images:fedora/40/cloud` |
+| Fedora | `fedora` | `images:fedora/42/cloud` |
 | Ubuntu | `ubuntu` | `images:ubuntu/24.04/cloud` |
 
 以下のコマンドで非rootのユーザー名でインスタンス内のシェルを起動できます。

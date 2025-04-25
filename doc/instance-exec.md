@@ -17,7 +17,7 @@ Incus では、ネットワークを経由してインスタンスにアクセ�
 
 たとえば、コンテナ上のパッケージリストを更新するには以下のコマンドを入力します:
 
-    incus exec ubuntu-container -- apt-get update
+    incus exec debian-container -- apt-get update
 
 ### 実行モード
 
