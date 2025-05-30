@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/lxc/incus/v6/internal/linux"
 	"github.com/lxc/incus/v6/shared/ioprogress"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/subprocess"
@@ -194,9 +196,16 @@ func Unpack(file string, path string, blockBackend bool, maxMemory int64, tracke
 		if maxMemory != 0 {
 			// If maximum memory consumption is less than 256MiB, restrict unsquashfs and limit to a single thread.
 			mem := maxMemory / 1024 / 1024
-			if err == nil && mem < 256 {
+			if mem < 256 {
 				args = append(args, "-da", fmt.Sprintf("%d", mem), "-fr", fmt.Sprintf("%d", mem), "-p", "1")
 			}
+		}
+
+		// NFS 4.2 can support xattrs, but not security.xattr.
+		if linux.IsNFS(path) {
+			logger.Warn("Unpack: destination path is NFS, disabling non-user xatttr unpacking", logger.Ctx{"file": file, "command": command, "extension": extension, "path": path, "args": args})
+
+			args = append(args, "-user-xattrs")
 		}
 
 		args = append(args, file)
@@ -267,10 +276,10 @@ func Unpack(file string, path string, blockBackend bool, maxMemory int64, tracke
 		// Check if we're running out of space
 		if int64(fs.Bfree) < 10 {
 			if blockBackend {
-				return fmt.Errorf("Unable to unpack image, run out of disk space (consider increasing your pool's volume.size)")
+				return errors.New("Unable to unpack image, run out of disk space (consider increasing your pool's volume.size)")
 			}
 
-			return fmt.Errorf("Unable to unpack image, run out of disk space")
+			return errors.New("Unable to unpack image, run out of disk space")
 		}
 
 		logger.Warn("Unpack failed", logger.Ctx{"file": file, "allowedCmds": allowedCmds, "extension": extension, "path": path, "err": err})

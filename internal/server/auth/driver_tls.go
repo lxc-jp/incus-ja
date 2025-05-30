@@ -68,10 +68,6 @@ func (t *TLS) CheckPermission(ctx context.Context, r *http.Request, object Objec
 			return nil
 		}
 
-		if entitlement == EntitlementCanViewSensitive && certType == certificate.TypeClient && isNotRestricted {
-			return nil
-		}
-
 		return api.StatusErrorf(http.StatusForbidden, "Certificate is restricted")
 	case ObjectTypeStoragePool, ObjectTypeCertificate:
 		if entitlement == EntitlementCanView {
@@ -145,10 +141,6 @@ func (t *TLS) GetPermissionChecker(ctx context.Context, r *http.Request, entitle
 	switch objectType {
 	case ObjectTypeServer:
 		if entitlement == EntitlementCanView || entitlement == EntitlementCanViewResources || entitlement == EntitlementCanViewMetrics {
-			return allowFunc(true), nil
-		}
-
-		if entitlement == EntitlementCanViewSensitive && certType == certificate.TypeClient && isNotRestricted {
 			return allowFunc(true), nil
 		}
 
@@ -250,15 +242,12 @@ func (t *TLS) GetInstanceAccess(ctx context.Context, projectName string, instanc
 		}
 
 		// Restricted
-		for _, proj := range certificateProjects {
-			if proj == projectName {
-				access = append(access, api.AccessEntry{
-					Identifier: fingerprint,
-					Role:       "operator",
-					Provider:   "tls",
-				})
-				break
-			}
+		if slices.Contains(certificateProjects, projectName) {
+			access = append(access, api.AccessEntry{
+				Identifier: fingerprint,
+				Role:       "operator",
+				Provider:   "tls",
+			})
 		}
 	}
 
@@ -278,15 +267,12 @@ func (t *TLS) GetInstanceAccess(ctx context.Context, projectName string, instanc
 		}
 
 		// Restricted
-		for _, proj := range certificateProjects {
-			if proj == projectName {
-				access = append(access, api.AccessEntry{
-					Identifier: fingerprint,
-					Role:       "view",
-					Provider:   "tls",
-				})
-				break
-			}
+		if slices.Contains(certificateProjects, projectName) {
+			access = append(access, api.AccessEntry{
+				Identifier: fingerprint,
+				Role:       "view",
+				Provider:   "tls",
+			})
 		}
 	}
 
@@ -312,15 +298,12 @@ func (t *TLS) GetProjectAccess(ctx context.Context, projectName string) (*api.Ac
 			})
 		}
 
-		for _, project := range certificateProjects {
-			if project == projectName {
-				access = append(access, api.AccessEntry{
-					Identifier: fingerprint,
-					Role:       "operator",
-					Provider:   "tls",
-				})
-				break
-			}
+		if slices.Contains(certificateProjects, projectName) {
+			access = append(access, api.AccessEntry{
+				Identifier: fingerprint,
+				Role:       "operator",
+				Provider:   "tls",
+			})
 		}
 	}
 
@@ -335,15 +318,12 @@ func (t *TLS) GetProjectAccess(ctx context.Context, projectName string) (*api.Ac
 			})
 		}
 
-		for _, project := range certificateProjects {
-			if project == projectName {
-				access = append(access, api.AccessEntry{
-					Identifier: fingerprint,
-					Role:       "view",
-					Provider:   "tls",
-				})
-				break
-			}
+		if slices.Contains(certificateProjects, projectName) {
+			access = append(access, api.AccessEntry{
+				Identifier: fingerprint,
+				Role:       "view",
+				Provider:   "tls",
+			})
 		}
 	}
 

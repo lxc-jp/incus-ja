@@ -211,7 +211,7 @@ func diskCephRbdMap(clusterName string, userName string, poolName string, volume
 
 	idx := strings.Index(devPath, "/dev/rbd")
 	if idx < 0 {
-		return "", fmt.Errorf("Failed to detect mapped device path")
+		return "", errors.New("Failed to detect mapped device path")
 	}
 
 	devPath = devPath[idx:]
@@ -227,10 +227,10 @@ again:
 		"unmap",
 		unmapImageName)
 	if err != nil {
-		runError, ok := err.(subprocess.RunError)
-		if ok {
-			exitError, ok := runError.Unwrap().(*exec.ExitError)
-			if ok {
+		var runError subprocess.RunError
+		if errors.As(err, &runError) {
+			var exitError *exec.ExitError
+			if errors.As(runError.Unwrap(), &exitError) {
 				if exitError.ExitCode() == 22 {
 					// EINVAL (already unmapped)
 					return nil
@@ -259,13 +259,13 @@ again:
 // diskCephfsOptions returns the mntSrcPath and fsOptions to use for mounting a cephfs share.
 func diskCephfsOptions(clusterName string, userName string, fsName string, fsPath string) (string, []string, error) {
 	// Get the FSID.
-	fsid, err := storageDrivers.CephFsid(clusterName)
+	fsid, err := storageDrivers.CephFsid(clusterName, userName)
 	if err != nil {
 		return "", nil, err
 	}
 
 	// Get the monitor list.
-	monAddresses, err := storageDrivers.CephMonitors(clusterName)
+	monAddresses, err := storageDrivers.CephMonitors(clusterName, userName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -294,8 +294,8 @@ func diskCephfsOptions(clusterName string, userName string, fsName string, fsPat
 // type if process cannot be started for other reasons.
 // Returns revert function and listener file handle on success.
 func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath string, pidPath string, logPath string, sharePath string, idmaps []idmap.Entry, cacheOption string) (func(), net.Listener, error) {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	if !filepath.IsAbs(sharePath) {
 		return nil, nil, fmt.Errorf("Share path not absolute: %q", sharePath)
@@ -343,14 +343,14 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 		return nil, nil, fmt.Errorf("Failed to create unix listener for virtiofsd: %w", err)
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = listener.Close()
 		_ = os.Remove(socketPath)
 	})
 
 	unixListener, ok := listener.(*net.UnixListener)
 	if !ok {
-		return nil, nil, fmt.Errorf("Failed getting UnixListener for virtiofsd")
+		return nil, nil, errors.New("Failed getting UnixListener for virtiofsd")
 	}
 
 	unixFile, err := unixListener.File()
@@ -414,15 +414,16 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 		return nil, nil, fmt.Errorf("Failed to start virtiofsd: %w", err)
 	}
 
-	revert.Add(func() { _ = proc.Stop() })
+	reverter.Add(func() { _ = proc.Stop() })
 
 	err = proc.Save(pidPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to save virtiofsd state: %w", err)
 	}
 
-	cleanup := revert.Clone().Fail
-	revert.Success()
+	cleanup := reverter.Clone().Fail
+	reverter.Success()
+
 	return cleanup, listener, err
 }
 
@@ -437,7 +438,7 @@ func DiskVMVirtiofsdStop(socketPath string, pidPath string) error {
 		err = proc.Stop()
 		// The virtiofsd process will terminate automatically once the VM has stopped.
 		// We therefore should only return an error if it's still running and fails to stop.
-		if err != nil && err != subprocess.ErrNotRunning {
+		if err != nil && !errors.Is(err, subprocess.ErrNotRunning) {
 			return err
 		}
 

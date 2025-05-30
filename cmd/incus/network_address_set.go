@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -93,7 +95,7 @@ func (c *cmdNetworkAddressSetList) Command() *cobra.Command {
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G("List available network address sets"))
 
 	cmd.RunE = c.Run
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G("Format (csv|json|table|yaml|compact)")+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G("Format (csv|json|table|yaml|compact)")+"``")
 	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("List address sets across all projects"))
 
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -404,9 +406,7 @@ func (c *cmdNetworkAddressSetSet) Run(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf(i18n.G("Error setting properties: %v"), err)
 		}
 	} else {
-		for k, v := range keys {
-			writable.Config[k] = v
-		}
+		maps.Copy(writable.Config, keys)
 	}
 
 	return resource.server.UpdateNetworkAddressSet(resource.name, writable, etag)
@@ -796,12 +796,9 @@ func (c *cmdNetworkAddressSetRemove) Run(cmd *cobra.Command, args []string) erro
 	for _, addr := range addrSet.Addresses {
 		match := false
 
-		for _, r := range toRemove {
-			if r == addr {
-				match = true
-				removedCount++
-				break
-			}
+		if slices.Contains(toRemove, addr) {
+			match = true
+			removedCount++
 		}
 
 		if !match {

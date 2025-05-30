@@ -341,8 +341,8 @@ func main() {
 	err = app.Execute()
 	if err != nil {
 		// Handle non-Linux systems
-		if err == config.ErrNotLinux {
-			fmt.Fprintf(os.Stderr, i18n.G(`This client hasn't been configured to use a remote server yet.
+		if errors.Is(err, config.ErrNotLinux) {
+			fmt.Fprintf(os.Stderr, "%s", i18n.G(`This client hasn't been configured to use a remote server yet.
 As your platform can't run native Linux instances, you must connect to a remote server.
 
 If you already added a remote server, make it the default with "incus remote switch NAME".`)+"\n")
@@ -463,7 +463,7 @@ func (c *cmdGlobal) PreRun(cmd *cobra.Command, _ []string) error {
 
 			flush := false
 			if runInit && (cmd.Name() != "init" || cmd.Parent() == nil || cmd.Parent().Name() != "admin") {
-				fmt.Fprintf(os.Stderr, i18n.G("If this is your first time running Incus on this machine, you should also run: incus admin init")+"\n")
+				fmt.Fprint(os.Stderr, i18n.G("If this is your first time running Incus on this machine, you should also run: incus admin init")+"\n")
 				flush = true
 			}
 
@@ -477,7 +477,7 @@ Or for a virtual machine: incus launch images:%s --vm`)+"\n", image, image)
 			}
 
 			if flush {
-				fmt.Fprintf(os.Stderr, "\n")
+				fmt.Fprint(os.Stderr, "\n")
 			}
 		}
 
@@ -567,4 +567,13 @@ func (c *cmdGlobal) checkArgs(cmd *cobra.Command, args []string, minArgs int, ma
 	}
 
 	return false, nil
+}
+
+// Return the default list format if the user configured it, otherwise just return "table".
+func (c *cmdGlobal) defaultListFormat() string {
+	if c.conf == nil || c.conf.Defaults.ListFormat == "" {
+		return "table"
+	}
+
+	return c.conf.Defaults.ListFormat
 }

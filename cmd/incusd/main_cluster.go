@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -32,15 +33,14 @@ type cmdAdmin struct {
 	global *cmdGlobal
 }
 
-// Command returns a cobra command for inclusion.
-func (c *cmdAdmin) Command() *cobra.Command {
+func (c *cmdAdmin) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Hidden = true
 	cmd.Use = "admin"
 
 	// Cluster
 	clusterCmd := cmdCluster{global: c.global}
-	cmd.AddCommand(clusterCmd.Command())
+	cmd.AddCommand(clusterCmd.command())
 
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
@@ -53,7 +53,7 @@ type cmdCluster struct {
 }
 
 // Command returns a cobra command for inclusion.
-func (c *cmdCluster) Command() *cobra.Command {
+func (c *cmdCluster) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "cluster"
 	cmd.Short = "Low-level cluster administration commands"
@@ -62,23 +62,23 @@ func (c *cmdCluster) Command() *cobra.Command {
 `
 	// List database nodes
 	listDatabase := cmdClusterListDatabase{global: c.global}
-	cmd.AddCommand(listDatabase.Command())
+	cmd.AddCommand(listDatabase.command())
 
 	// Recover
-	recover := cmdClusterRecoverFromQuorumLoss{global: c.global}
-	cmd.AddCommand(recover.Command())
+	recoverFromQuorumLoss := cmdClusterRecoverFromQuorumLoss{global: c.global}
+	cmd.AddCommand(recoverFromQuorumLoss.command())
 
 	// Remove a raft node.
 	removeRaftNode := cmdClusterRemoveRaftNode{global: c.global}
-	cmd.AddCommand(removeRaftNode.Command())
+	cmd.AddCommand(removeRaftNode.command())
 
 	// Edit cluster configuration.
 	clusterEdit := cmdClusterEdit{global: c.global}
-	cmd.AddCommand(clusterEdit.Command())
+	cmd.AddCommand(clusterEdit.command())
 
 	// Show cluster configuration.
 	clusterShow := cmdClusterShow{global: c.global}
-	cmd.AddCommand(clusterShow.Command())
+	cmd.AddCommand(clusterShow.command())
 
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
@@ -132,22 +132,22 @@ type cmdClusterEdit struct {
 	global *cmdGlobal
 }
 
-func (c *cmdClusterEdit) Command() *cobra.Command {
+func (c *cmdClusterEdit) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "edit"
 	cmd.Short = "Edit cluster configuration as YAML"
 	cmd.Long = `Description:
 	Edit cluster configuration as YAML.`
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-func (c *cmdClusterEdit) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdClusterEdit) run(_ *cobra.Command, _ []string) error {
 	// Make sure that the daemon is not running.
 	_, err := incus.ConnectIncusUnix("", nil)
 	if err == nil {
-		return fmt.Errorf("The daemon is running, please stop it first.")
+		return errors.New("The daemon is running, please stop it first.")
 	}
 
 	database, err := db.OpenNode(filepath.Join(sys.DefaultOS().VarDir, "database"), nil)
@@ -164,7 +164,7 @@ func (c *cmdClusterEdit) Run(cmd *cobra.Command, args []string) error {
 
 		clusterAddress := config.ClusterAddress()
 		if clusterAddress == "" {
-			return fmt.Errorf(`Can't edit cluster configuration as server isn't clustered (missing "cluster.https_address" config)`)
+			return errors.New(`Can't edit cluster configuration as server isn't clustered (missing "cluster.https_address" config)`)
 		}
 
 		nodes, err = tx.GetRaftNodes(ctx)
@@ -257,11 +257,11 @@ func (c *cmdClusterEdit) Run(cmd *cobra.Command, args []string) error {
 
 func validateNewConfig(oldNodes []db.RaftNode, newNodes []db.RaftNode) error {
 	if len(oldNodes) > len(newNodes) {
-		return fmt.Errorf("Removing cluster members is not supported")
+		return errors.New("Removing cluster members is not supported")
 	}
 
 	if len(oldNodes) < len(newNodes) {
-		return fmt.Errorf("Adding cluster members is not supported")
+		return errors.New("Adding cluster members is not supported")
 	}
 
 	numNewVoters := 0
@@ -270,12 +270,12 @@ func validateNewConfig(oldNodes []db.RaftNode, newNodes []db.RaftNode) error {
 
 		// IDs should not be reordered among cluster members.
 		if oldNode.ID != newNode.ID {
-			return fmt.Errorf("Changing cluster member ID is not supported")
+			return errors.New("Changing cluster member ID is not supported")
 		}
 
 		// If the name field could not be populated, just ignore the new value.
 		if oldNode.Name != "" && newNode.Name != "" && oldNode.Name != newNode.Name {
-			return fmt.Errorf("Changing cluster member name is not supported")
+			return errors.New("Changing cluster member name is not supported")
 		}
 
 		if oldNode.Role == db.RaftSpare && newNode.Role == db.RaftVoter {
@@ -300,18 +300,18 @@ type cmdClusterShow struct {
 	global *cmdGlobal
 }
 
-func (c *cmdClusterShow) Command() *cobra.Command {
+func (c *cmdClusterShow) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "show"
 	cmd.Short = "Show cluster configuration as YAML"
 	cmd.Long = `Description:
 	Show cluster configuration as YAML.`
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-func (c *cmdClusterShow) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdClusterShow) run(_ *cobra.Command, _ []string) error {
 	database, err := db.OpenNode(filepath.Join(sys.DefaultOS().VarDir, "database"), nil)
 	if err != nil {
 		return err
@@ -359,7 +359,7 @@ type cmdClusterListDatabase struct {
 	flagFormat string
 }
 
-func (c *cmdClusterListDatabase) Command() *cobra.Command {
+func (c *cmdClusterListDatabase) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "list-database"
 	cmd.Aliases = []string{"ls"}
@@ -370,12 +370,12 @@ func (c *cmdClusterListDatabase) Command() *cobra.Command {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
 	}
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-func (c *cmdClusterListDatabase) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdClusterListDatabase) run(_ *cobra.Command, _ []string) error {
 	defaultOS := sys.DefaultOS()
 
 	dbconn, err := db.OpenNode(filepath.Join(defaultOS.VarDir, "database"), nil)
@@ -404,23 +404,23 @@ type cmdClusterRecoverFromQuorumLoss struct {
 	flagNonInteractive bool
 }
 
-func (c *cmdClusterRecoverFromQuorumLoss) Command() *cobra.Command {
+func (c *cmdClusterRecoverFromQuorumLoss) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "recover-from-quorum-loss"
 	cmd.Short = "Recover an instance whose cluster has lost quorum"
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	cmd.Flags().BoolVarP(&c.flagNonInteractive, "quiet", "q", false, "Don't require user confirmation")
 
 	return cmd
 }
 
-func (c *cmdClusterRecoverFromQuorumLoss) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdClusterRecoverFromQuorumLoss) run(_ *cobra.Command, _ []string) error {
 	// Make sure that the daemon is not running.
 	_, err := incus.ConnectIncusUnix("", nil)
 	if err == nil {
-		return fmt.Errorf("The daemon is running, please stop it first.")
+		return errors.New("The daemon is running, please stop it first.")
 	}
 
 	// Prompt for confirmation unless --quiet was passed.
@@ -463,7 +463,7 @@ Do you want to proceed? (yes/no): `)
 	input = strings.TrimSuffix(input, "\n")
 
 	if !slices.Contains([]string{"yes"}, strings.ToLower(input)) {
-		return fmt.Errorf("Recover operation aborted")
+		return errors.New("Recover operation aborted")
 	}
 
 	return nil
@@ -474,22 +474,22 @@ type cmdClusterRemoveRaftNode struct {
 	flagNonInteractive bool
 }
 
-func (c *cmdClusterRemoveRaftNode) Command() *cobra.Command {
+func (c *cmdClusterRemoveRaftNode) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "remove-raft-node <address>"
 	cmd.Short = "Remove a raft node from the raft configuration"
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	cmd.Flags().BoolVarP(&c.flagNonInteractive, "quiet", "q", false, "Don't require user confirmation")
 
 	return cmd
 }
 
-func (c *cmdClusterRemoveRaftNode) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdClusterRemoveRaftNode) run(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		_ = cmd.Help()
-		return fmt.Errorf("Missing required arguments")
+		return errors.New("Missing required arguments")
 	}
 
 	address := internalUtil.CanonicalNetworkAddress(args[0], ports.HTTPSDefaultPort)
@@ -527,7 +527,7 @@ Do you want to proceed? (yes/no): `)
 	input = strings.TrimSuffix(input, "\n")
 
 	if !slices.Contains([]string{"yes"}, strings.ToLower(input)) {
-		return fmt.Errorf("Remove raft node operation aborted")
+		return errors.New("Remove raft node operation aborted")
 	}
 
 	return nil
@@ -552,7 +552,7 @@ func textEditor(inPath string, inContent []byte) ([]byte, error) {
 				}
 			}
 			if editor == "" {
-				return []byte{}, fmt.Errorf("No text editor found, please set the EDITOR environment variable")
+				return []byte{}, errors.New("No text editor found, please set the EDITOR environment variable")
 			}
 		}
 	}
@@ -564,9 +564,9 @@ func textEditor(inPath string, inContent []byte) ([]byte, error) {
 			return []byte{}, err
 		}
 
-		revert := revert.New()
-		defer revert.Fail()
-		revert.Add(func() {
+		reverter := revert.New()
+		defer reverter.Fail()
+		reverter.Add(func() {
 			_ = f.Close()
 			_ = os.Remove(f.Name())
 		})
@@ -592,8 +592,8 @@ func textEditor(inPath string, inContent []byte) ([]byte, error) {
 			return []byte{}, err
 		}
 
-		revert.Success()
-		revert.Add(func() { _ = os.Remove(path) })
+		reverter.Success()
+		reverter.Add(func() { _ = os.Remove(path) })
 	} else {
 		path = inPath
 	}

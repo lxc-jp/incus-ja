@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -15,7 +16,7 @@ type cmdMigratedumpsuccess struct {
 	global *cmdGlobal
 }
 
-func (c *cmdMigratedumpsuccess) Command() *cobra.Command {
+func (c *cmdMigratedumpsuccess) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "migratedumpsuccess <operation> <secret>"
 	cmd.Short = "Tell the daemon that a particular CRIU dump succeeded"
@@ -25,13 +26,13 @@ func (c *cmdMigratedumpsuccess) Command() *cobra.Command {
   This internal command is used from the CRIU dump script and is
   called as soon as the script is done running.
 `
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 	cmd.Hidden = true
 
 	return cmd
 }
 
-func (c *cmdMigratedumpsuccess) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdMigratedumpsuccess) run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
 	if len(args) < 2 {
 		_ = cmd.Help()
@@ -40,12 +41,12 @@ func (c *cmdMigratedumpsuccess) Run(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		return fmt.Errorf("Missing required arguments")
+		return errors.New("Missing required arguments")
 	}
 
 	// Only root should run this
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("This must be run as root")
+		return errors.New("This must be run as root")
 	}
 
 	clientArgs := incus.ConnectionArgs{
@@ -79,5 +80,5 @@ func (c *cmdMigratedumpsuccess) Run(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	return fmt.Errorf(op.Err)
+	return errors.New(op.Err)
 }

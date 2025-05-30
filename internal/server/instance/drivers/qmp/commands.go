@@ -3,6 +3,7 @@ package qmp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -205,15 +206,12 @@ func (m *Monitor) SendFile(name string, file *os.File) error {
 		return ErrMonitorDisconnect
 	}
 
-	var req struct {
-		Execute   string `json:"execute"`
-		Arguments struct {
-			FDName string `json:"fdname"`
-		} `json:"arguments"`
+	id := m.qmp.qmpIncreaseID()
+	req := &qmpCommand{
+		ID:        id,
+		Execute:   "getfd",
+		Arguments: map[string]any{"fdname": name},
 	}
-
-	req.Execute = "getfd"
-	req.Arguments.FDName = name
 
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -221,7 +219,7 @@ func (m *Monitor) SendFile(name string, file *os.File) error {
 	}
 
 	// Query the status.
-	_, err = m.qmp.RunWithFile(reqJSON, file)
+	_, err = m.qmp.runWithFile(reqJSON, file, id)
 	if err != nil {
 		// Confirm the daemon didn't die.
 		errPing := m.ping()
@@ -258,27 +256,26 @@ func (m *Monitor) SendFileWithFDSet(name string, file *os.File, readonly bool) (
 		return nil, ErrMonitorDisconnect
 	}
 
-	var req struct {
-		Execute   string `json:"execute"`
-		Arguments struct {
-			Opaque string `json:"opaque"`
-		} `json:"arguments"`
-	}
-
 	permissions := "rdwr"
 	if readonly {
 		permissions = "rdonly"
 	}
 
-	req.Execute = "add-fd"
-	req.Arguments.Opaque = fmt.Sprintf("%s:%s", permissions, name)
+	id := m.qmp.qmpIncreaseID()
+	req := &qmpCommand{
+		ID:      id,
+		Execute: "add-fd",
+		Arguments: map[string]any{
+			"opaque": fmt.Sprintf("%s:%s", permissions, name),
+		},
+	}
 
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	ret, err := m.qmp.RunWithFile(reqJSON, file)
+	ret, err := m.qmp.runWithFile(reqJSON, file, id)
 	if err != nil {
 		// Confirm the daemon didn't die.
 		errPing := m.ping()
@@ -418,7 +415,7 @@ func (m *Monitor) MigrateWait(state string) error {
 		}
 
 		if resp.Return.Status == "failed" {
-			return fmt.Errorf("Migrate call failed")
+			return errors.New("Migrate call failed")
 		}
 
 		if resp.Return.Status == state {
@@ -487,7 +484,7 @@ func (m *Monitor) MigrateIncoming(ctx context.Context, name string) error {
 		}
 
 		if resp.Return.Status == "failed" {
-			return fmt.Errorf("Migrate incoming call failed")
+			return errors.New("Migrate incoming call failed")
 		}
 
 		if resp.Return.Status == "completed" {
@@ -658,12 +655,12 @@ func (m *Monitor) AddObject(args map[string]any) error {
 
 // AddBlockDevice adds a block device.
 func (m *Monitor) AddBlockDevice(blockDev map[string]any, device map[string]any) error {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	nodeName, ok := blockDev["node-name"].(string)
 	if !ok {
-		return fmt.Errorf("Device node name must be a string")
+		return errors.New("Device node name must be a string")
 	}
 
 	if blockDev != nil {
@@ -672,7 +669,7 @@ func (m *Monitor) AddBlockDevice(blockDev map[string]any, device map[string]any)
 			return fmt.Errorf("Failed adding block device: %w", err)
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = m.RemoveBlockDevice(nodeName)
 		})
 	}
@@ -682,7 +679,8 @@ func (m *Monitor) AddBlockDevice(blockDev map[string]any, device map[string]any)
 		return fmt.Errorf("Failed adding device: %w", err)
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return nil
 }
 
@@ -696,7 +694,7 @@ func (m *Monitor) RemoveBlockDevice(blockDevName string) error {
 		err := m.Run("blockdev-del", blockDevName, nil)
 		if err != nil {
 			if strings.Contains(err.Error(), "is in use") {
-				return api.StatusErrorf(http.StatusLocked, err.Error())
+				return api.StatusErrorf(http.StatusLocked, "%s", err.Error())
 			}
 
 			if strings.Contains(err.Error(), "Failed to find") {
@@ -776,8 +774,8 @@ func (m *Monitor) RemoveDevice(deviceID string) error {
 
 // AddNIC adds a NIC device.
 func (m *Monitor) AddNIC(netDev map[string]any, device map[string]any) error {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	if netDev != nil {
 		err := m.Run("netdev_add", netDev, nil)
@@ -785,7 +783,7 @@ func (m *Monitor) AddNIC(netDev map[string]any, device map[string]any) error {
 			return fmt.Errorf("Failed adding NIC netdev: %w", err)
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			netDevDel := map[string]any{
 				"id": netDev["id"],
 			}
@@ -802,7 +800,8 @@ func (m *Monitor) AddNIC(netDev map[string]any, device map[string]any) error {
 		return fmt.Errorf("Failed adding NIC device: %w", err)
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return nil
 }
 
@@ -1088,7 +1087,7 @@ func (m *Monitor) blockJobWaitReady(jobID string) error {
 		}
 
 		if !found {
-			return fmt.Errorf("Specified block job not found")
+			return errors.New("Specified block job not found")
 		}
 
 		time.Sleep(1 * time.Second)
@@ -1285,7 +1284,7 @@ func (m *Monitor) RingbufRead(device string) (string, error) {
 		return "", err
 	}
 
-	deviceFound := true
+	deviceFound := false
 	for _, qemuDevice := range queryResp.Return {
 		if qemuDevice.Label == device {
 			deviceFound = true
@@ -1297,6 +1296,7 @@ func (m *Monitor) RingbufRead(device string) (string, error) {
 			break
 		}
 	}
+
 	if !deviceFound {
 		return "", fmt.Errorf("Specified qemu device %q doesn't exist", device)
 	}

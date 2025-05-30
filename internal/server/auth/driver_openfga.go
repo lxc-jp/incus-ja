@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -38,12 +39,12 @@ type FGA struct {
 
 func (f *FGA) configure(opts Opts) error {
 	if opts.config == nil {
-		return fmt.Errorf("Missing OpenFGA config")
+		return errors.New("Missing OpenFGA config")
 	}
 
 	val, ok := opts.config["openfga.api.token"]
 	if !ok || val == nil {
-		return fmt.Errorf("Missing OpenFGA API token")
+		return errors.New("Missing OpenFGA API token")
 	}
 
 	f.apiToken, ok = val.(string)
@@ -53,7 +54,7 @@ func (f *FGA) configure(opts Opts) error {
 
 	val, ok = opts.config["openfga.api.url"]
 	if !ok || val == nil {
-		return fmt.Errorf("Missing OpenFGA API URL")
+		return errors.New("Missing OpenFGA API URL")
 	}
 
 	f.apiURL, ok = val.(string)
@@ -63,7 +64,7 @@ func (f *FGA) configure(opts Opts) error {
 
 	val, ok = opts.config["openfga.store.id"]
 	if !ok || val == nil {
-		return fmt.Errorf("Missing OpenFGA store ID")
+		return errors.New("Missing OpenFGA store ID")
 	}
 
 	f.storeID, ok = val.(string)
@@ -1194,11 +1195,13 @@ func (f *FGA) GetInstanceAccess(ctx context.Context, projectName string, instanc
 			UserFilters: userFilters,
 		}).Execute()
 		if err != nil {
-			fgaAPIErr, ok := err.(openfga.FgaApiValidationError)
+			var fgaAPIErr openfga.FgaApiValidationError
+			ok := errors.As(err, &fgaAPIErr)
 			if !ok || fgaAPIErr.ResponseCode() != openfga.ERRORCODE_RELATION_NOT_FOUND {
-				fgaNotFoundErr, ok := err.(openfga.FgaApiNotFoundError)
+				var fgaNotFoundErr openfga.FgaApiNotFoundError
+				ok := errors.As(err, &fgaNotFoundErr)
 				if ok && fgaNotFoundErr.ResponseCode() == openfga.NOTFOUNDERRORCODE_UNDEFINED_ENDPOINT {
-					return nil, fmt.Errorf("OpenFGA server doesn't support listing users")
+					return nil, errors.New("OpenFGA server doesn't support listing users")
 				}
 
 				return nil, fmt.Errorf("Failed to list objects with relation %q: %w: %T", relation, err, err)
@@ -1248,11 +1251,13 @@ func (f *FGA) GetProjectAccess(ctx context.Context, projectName string) (*api.Ac
 			UserFilters: userFilters,
 		}).Execute()
 		if err != nil {
-			fgaAPIErr, ok := err.(openfga.FgaApiValidationError)
+			var fgaAPIErr openfga.FgaApiValidationError
+			ok := errors.As(err, &fgaAPIErr)
 			if !ok || fgaAPIErr.ResponseCode() != openfga.ERRORCODE_RELATION_NOT_FOUND {
-				fgaNotFoundErr, ok := err.(openfga.FgaApiNotFoundError)
+				var fgaNotFoundErr openfga.FgaApiNotFoundError
+				ok := errors.As(err, &fgaNotFoundErr)
 				if ok && fgaNotFoundErr.ResponseCode() == openfga.NOTFOUNDERRORCODE_UNDEFINED_ENDPOINT {
-					return nil, fmt.Errorf("OpenFGA server doesn't support listing users")
+					return nil, errors.New("OpenFGA server doesn't support listing users")
 				}
 
 				return nil, fmt.Errorf("Failed to list objects with relation %q: %w: %T", relation, err, err)

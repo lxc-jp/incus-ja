@@ -20,6 +20,6 @@ Incus は、TPM 2.0 をサポートするソフトウェア TPM を使用しま�
 
 % Include content from [config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
-    :start-after: <!-- config group tpm-common start -->
-    :end-before: <!-- config group tpm-common end -->
+    :start-after: <!-- config group devices-tpm start -->
+    :end-before: <!-- config group devices-tpm end -->
 ```

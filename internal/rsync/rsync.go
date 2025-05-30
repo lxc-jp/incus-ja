@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -30,7 +31,7 @@ var RunWrapper func(cmd *exec.Cmd, source string, destination string) (func(), e
 // rsync is a wrapper for the rsync command which will respect RunWrapper.
 func rsync(args ...string) (string, error) {
 	if len(args) < 2 {
-		return "", fmt.Errorf("rsync call expects a minimum of two arguments (source and destination)")
+		return "", errors.New("rsync call expects a minimum of two arguments (source and destination)")
 	}
 
 	// Setup the command.
@@ -107,13 +108,11 @@ func LocalCopy(source string, dest string, bwlimit string, xattrs bool, rsyncArg
 
 	msg, err := rsync(args...)
 	if err != nil {
-		runError, ok := err.(subprocess.RunError)
+		var exitError *exec.ExitError
+		ok := errors.As(err, &exitError)
 		if ok {
-			exitError, ok := runError.Unwrap().(*exec.ExitError)
-			if ok {
-				if exitError.ExitCode() == 24 {
-					return msg, nil
-				}
+			if exitError.ExitCode() == 24 {
+				return msg, nil
 			}
 		}
 

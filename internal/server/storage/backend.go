@@ -104,12 +104,12 @@ func (b *backend) Description() string {
 // ValidateName validates the provided name, and returns an error if it's not a valid storage name.
 func (b *backend) ValidateName(value string) error {
 	if strings.Contains(value, "/") {
-		return fmt.Errorf(`Storage name cannot contain "/"`)
+		return errors.New(`Storage name cannot contain "/"`)
 	}
 
 	for _, r := range value {
 		if unicode.IsSpace(r) {
-			return fmt.Errorf(`Storage name cannot contain white space`)
+			return errors.New(`Storage name cannot contain white space`)
 		}
 	}
 
@@ -145,7 +145,7 @@ func (b *backend) LocalStatus() string {
 // isStatusReady returns an error if pool is not ready for use on this server.
 func (b *backend) isStatusReady() error {
 	if b.Status() == api.StoragePoolStatusPending {
-		return fmt.Errorf("Specified pool is not fully created")
+		return errors.New("Specified pool is not fully created")
 	}
 
 	if b.LocalStatus() == api.StoragePoolStatusUnvailable {
@@ -193,8 +193,8 @@ func (b *backend) Create(clientType request.ClientType, op *operations.Operation
 		return err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	path := drivers.GetPoolMountPath(b.name)
 
@@ -208,7 +208,7 @@ func (b *backend) Create(clientType request.ClientType, op *operations.Operation
 		return fmt.Errorf("Failed to create storage pool directory %q: %w", path, err)
 	}
 
-	revert.Add(func() { _ = os.RemoveAll(path) })
+	reverter.Add(func() { _ = os.RemoveAll(path) })
 
 	if b.driver.Info().Remote && clientType != request.ClientTypeNormal {
 		if !b.driver.Info().MountedRoot {
@@ -220,7 +220,7 @@ func (b *backend) Create(clientType request.ClientType, op *operations.Operation
 		}
 
 		// Dealing with a remote storage pool, we're done now.
-		revert.Success()
+		reverter.Success()
 		return nil
 	}
 
@@ -230,7 +230,7 @@ func (b *backend) Create(clientType request.ClientType, op *operations.Operation
 		return err
 	}
 
-	revert.Add(func() { _ = b.driver.Delete(op) })
+	reverter.Add(func() { _ = b.driver.Delete(op) })
 
 	// Mount the storage pool.
 	ourMount, err := b.driver.Mount()
@@ -250,7 +250,7 @@ func (b *backend) Create(clientType request.ClientType, op *operations.Operation
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -300,7 +300,7 @@ func (b *backend) Update(clientType request.ClientType, newDesc string, newConfi
 	// Check if the pool source is being changed that the local state is still pending, otherwise prevent it.
 	_, sourceChanged := changedConfig["source"]
 	if sourceChanged && b.LocalStatus() != api.StoragePoolStatusPending {
-		return fmt.Errorf("Pool source cannot be changed when not in pending state")
+		return errors.New("Pool source cannot be changed when not in pending state")
 	}
 
 	// Prevent shrinking the storage pool.
@@ -310,7 +310,7 @@ func (b *backend) Update(clientType request.ClientType, newDesc string, newConfi
 		newSizeBytes, _ := units.ParseByteSizeString(newSize)
 
 		if newSizeBytes < oldSizeBytes {
-			return fmt.Errorf("Pool cannot be shrunk")
+			return errors.New("Pool cannot be shrunk")
 		}
 	}
 
@@ -427,10 +427,10 @@ func (b *backend) Mount() (bool, error) {
 	b.logger.Debug("Mount started")
 	defer b.logger.Debug("Mount finished")
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		unavailablePoolsMu.Lock()
 		unavailablePools[b.Name()] = struct{}{}
 		unavailablePoolsMu.Unlock()
@@ -452,7 +452,7 @@ func (b *backend) Mount() (bool, error) {
 	}
 
 	if ourMount {
-		revert.Add(func() { _, _ = b.Unmount() })
+		reverter.Add(func() { _, _ = b.Unmount() })
 	}
 
 	// Create the directory structure (if needed) after mounted.
@@ -461,7 +461,7 @@ func (b *backend) Mount() (bool, error) {
 		return false, err
 	}
 
-	revert.Success()
+	reverter.Success()
 
 	// Ensure pool is marked as available now its mounted.
 	unavailablePoolsMu.Lock()
@@ -514,7 +514,7 @@ func (b *backend) ApplyPatch(name string) error {
 // if doesn't exist already.
 func (b *backend) ensureInstanceSymlink(instanceType instancetype.Type, projectName string, instanceName string, mountPath string) error {
 	if internalInstance.IsSnapshot(instanceName) {
-		return fmt.Errorf("Instance must not be snapshot")
+		return errors.New("Instance must not be snapshot")
 	}
 
 	symlinkPath := InstancePath(instanceType, projectName, instanceName, false)
@@ -669,8 +669,8 @@ func (b *backend) CreateInstance(inst instance.Instance, op *operations.Operatio
 
 	contentType := InstanceContentType(inst)
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	volumeConfig := make(map[string]string)
 	err = b.applyInstanceRootDiskInitialValues(inst, volumeConfig)
@@ -684,7 +684,7 @@ func (b *backend) CreateInstance(inst instance.Instance, op *operations.Operatio
 		return err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
 
 	// Record new volume with authorizer.
 	err = b.state.Authorizer.AddStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
@@ -692,7 +692,7 @@ func (b *backend) CreateInstance(inst instance.Instance, op *operations.Operatio
 		logger.Error("Failed to add storage volume to authorizer", logger.Ctx{"name": inst.Name(), "type": volType, "pool": b.Name(), "project": inst.Project().Name, "error": err})
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.state.Authorizer.DeleteStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
 	})
 
@@ -724,7 +724,7 @@ func (b *backend) CreateInstance(inst instance.Instance, op *operations.Operatio
 		return err
 	}
 
-	revert.Add(func() { _ = b.DeleteInstance(inst, op) })
+	reverter.Add(func() { _ = b.DeleteInstance(inst, op) })
 
 	err = b.ensureInstanceSymlink(inst.Type(), inst.Project().Name, inst.Name(), vol.MountPath())
 	if err != nil {
@@ -736,7 +736,7 @@ func (b *backend) CreateInstance(inst instance.Instance, op *operations.Operatio
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -1029,7 +1029,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 	}
 
 	if inst.Type() != src.Type() {
-		return fmt.Errorf("Instance types must match")
+		return errors.New("Instance types must match")
 	}
 
 	volType, err := InstanceTypeToVolumeType(inst.Type())
@@ -1047,7 +1047,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 
 	srcPoolBackend, ok := srcPool.(*backend)
 	if !ok {
-		return fmt.Errorf("Source pool is not a backend")
+		return errors.New("Source pool is not a backend")
 	}
 
 	// Check source volume exists, and get its config.
@@ -1074,12 +1074,12 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 	}
 
 	if volExists {
-		return fmt.Errorf("Cannot create volume, already exists on target storage")
+		return errors.New("Cannot create volume, already exists on target storage")
 	}
 
 	// Setup reverter.
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Some driver backing stores require that running instances be frozen during copy.
 	if !src.IsSnapshot() && srcPoolBackend.driver.Info().RunningCopyFreeze && src.IsRunning() && !src.IsFrozen() && !allowInconsistent {
@@ -1095,7 +1095,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 		_ = linux.SyncFS(src.RootfsPath())
 	}
 
-	revert.Add(func() { _ = b.DeleteInstance(inst, op) })
+	reverter.Add(func() { _ = b.DeleteInstance(inst, op) })
 
 	if b.Name() == srcPool.Name() {
 		l.Debug("CreateInstanceFromCopy same-pool mode detected")
@@ -1110,7 +1110,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 			return err
 		}
 
-		revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
+		reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
 
 		// Record new volume with authorizer.
 		err = b.state.Authorizer.AddStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
@@ -1118,7 +1118,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 			logger.Error("Failed to add storage volume to authorizer", logger.Ctx{"name": inst.Name(), "type": volType, "pool": b.Name(), "project": inst.Project().Name, "error": err})
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = b.state.Authorizer.DeleteStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
 		})
 
@@ -1136,7 +1136,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 				return err
 			}
 
-			revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, newSnapshotName, vol.Type()) })
+			reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, newSnapshotName, vol.Type()) })
 		}
 
 		// Generate the effective root device volume for instance.
@@ -1237,7 +1237,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -1301,20 +1301,13 @@ func (b *backend) RefreshCustomVolume(projectName string, srcProjectName string,
 		return fmt.Errorf("Volume of content type %q cannot be refreshed", contentType)
 	}
 
-	storagePoolSupported := false
-	for _, supportedType := range b.Driver().Info().VolumeTypes {
-		if supportedType == drivers.VolumeTypeCustom {
-			storagePoolSupported = true
-			break
-		}
-	}
-
+	storagePoolSupported := slices.Contains(b.Driver().Info().VolumeTypes, drivers.VolumeTypeCustom)
 	if !storagePoolSupported {
-		return fmt.Errorf("Storage pool does not support custom volume type")
+		return errors.New("Storage pool does not support custom volume type")
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Only send the snapshots that the target needs when refreshing.
 	// There is currently no recorded creation timestamp, so we can only detect changes based on name.
@@ -1388,7 +1381,7 @@ func (b *backend) RefreshCustomVolume(projectName string, srcProjectName string,
 				return err
 			}
 
-			revert.Add(func() { _ = VolumeDBDelete(b, projectName, newSnapshotName, vol.Type()) })
+			reverter.Add(func() { _ = VolumeDBDelete(b, projectName, newSnapshotName, vol.Type()) })
 
 			// Generate source snapshot volumes list.
 			srcSnapVolumeName := drivers.GetSnapshotVolumeName(srcVolName, srcSnap.Name)
@@ -1418,7 +1411,7 @@ func (b *backend) RefreshCustomVolume(projectName string, srcProjectName string,
 			err = srcVol.MountTask(func(mountPath string, op *operations.Operation) error {
 				srcPoolBackend, ok := srcPool.(*backend)
 				if !ok {
-					return fmt.Errorf("Pool is not a backend")
+					return errors.New("Pool is not a backend")
 				}
 
 				volDiskPath, err := srcPoolBackend.driver.GetVolumeDiskPath(srcVol)
@@ -1513,7 +1506,7 @@ func (b *backend) RefreshCustomVolume(projectName string, srcProjectName string,
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -1530,7 +1523,7 @@ func (b *backend) RefreshInstance(inst instance.Instance, src instance.Instance,
 	snapshots := len(srcSnapshots) > 0
 
 	if inst.Type() != src.Type() {
-		return fmt.Errorf("Instance types must match")
+		return errors.New("Instance types must match")
 	}
 
 	volType, err := InstanceTypeToVolumeType(inst.Type())
@@ -1562,7 +1555,7 @@ func (b *backend) RefreshInstance(inst instance.Instance, src instance.Instance,
 
 	srcPoolBackend, ok := srcPool.(*backend)
 	if !ok {
-		return fmt.Errorf("Source pool is not a backend")
+		return errors.New("Source pool is not a backend")
 	}
 
 	// Check source volume exists, and get its config.
@@ -1604,8 +1597,8 @@ func (b *backend) RefreshInstance(inst instance.Instance, src instance.Instance,
 		snapshotNames = append(snapshotNames, srcConfig.VolumeSnapshots[i].Name)
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Some driver backing stores require that running instances be frozen during copy.
 	if !src.IsSnapshot() && srcPoolBackend.driver.Info().RunningCopyFreeze && src.IsRunning() && !src.IsFrozen() && !allowInconsistent {
@@ -1639,7 +1632,7 @@ func (b *backend) RefreshInstance(inst instance.Instance, src instance.Instance,
 				return err
 			}
 
-			revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, newSnapshotName, volType) })
+			reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, newSnapshotName, volType) })
 		}
 
 		err = b.driver.RefreshVolume(vol, srcVol, srcSnapVols, allowInconsistent, op)
@@ -1729,7 +1722,7 @@ func (b *backend) RefreshInstance(inst instance.Instance, src instance.Instance,
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -1789,8 +1782,8 @@ func (b *backend) CreateInstanceFromImage(inst instance.Instance, fingerprint st
 
 	contentType := InstanceContentType(inst)
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	volumeConfig := make(map[string]string)
 	err = b.applyInstanceRootDiskInitialValues(inst, volumeConfig)
@@ -1810,7 +1803,7 @@ func (b *backend) CreateInstanceFromImage(inst instance.Instance, fingerprint st
 		return err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
 
 	// Record new volume with authorizer.
 	err = b.state.Authorizer.AddStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
@@ -1818,7 +1811,7 @@ func (b *backend) CreateInstanceFromImage(inst instance.Instance, fingerprint st
 		logger.Error("Failed to add storage volume to authorizer", logger.Ctx{"name": inst.Name(), "type": volType, "pool": b.Name(), "project": inst.Project().Name, "error": err})
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.state.Authorizer.DeleteStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
 	})
 
@@ -1909,7 +1902,7 @@ func (b *backend) CreateInstanceFromImage(inst instance.Instance, fingerprint st
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -1926,7 +1919,7 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 	}
 
 	if args.Config != nil {
-		return fmt.Errorf("Migration VolumeTargetArgs.Config cannot be set for instances")
+		return errors.New("Migration VolumeTargetArgs.Config cannot be set for instances")
 	}
 
 	volType, err := InstanceTypeToVolumeType(inst.Type())
@@ -1956,8 +1949,10 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 			return err
 		}
 
-		if args.VolumeSize > rootDiskConfBytes {
-			return fmt.Errorf("The configured target instance root disk size is smaller than the migration source")
+		// Compare volume size with configured root size.
+		// Add a 4MiB allowed extra to account for round to nearest extent (16k on ZFS, 4MiB on LVM).
+		if args.VolumeSize > (rootDiskConfBytes + (4 * 1024 * 1024)) {
+			return errors.New("The configured target instance root disk size is smaller than the migration source")
 		}
 	}
 
@@ -2005,29 +2000,29 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 
 	// Check for inconsistencies between database and storage before continuing.
 	if dbVol == nil && volExists {
-		return fmt.Errorf("Volume already exists on storage but not in database")
+		return errors.New("Volume already exists on storage but not in database")
 	}
 
 	if dbVol != nil && !volExists {
-		return fmt.Errorf("Volume exists in database but not on storage")
+		return errors.New("Volume exists in database but not on storage")
 	}
 
 	// Consistency check for refresh mode.
 	// We expect that the args.Refresh setting will have already been set to false by the caller as part of
 	// detecting if the instance DB record exists or not. If we get here then something has gone wrong.
 	if args.Refresh && !volExists {
-		return fmt.Errorf("Cannot refresh volume, doesn't exist on migration target storage")
+		return errors.New("Cannot refresh volume, doesn't exist on migration target storage")
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	isRemoteClusterMove := args.ClusterMoveSourceName != "" && b.driver.Info().Remote
 
 	if !args.Refresh {
 		if volExists {
 			if !isRemoteClusterMove {
-				return fmt.Errorf("Cannot create volume, already exists on migration target storage")
+				return errors.New("Cannot create volume, already exists on migration target storage")
 			}
 		} else {
 			// Validate config and create database entry for new storage volume if not refreshing.
@@ -2037,7 +2032,7 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 				return err
 			}
 
-			revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
+			reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
 
 			// Record new volume with authorizer.
 			err = b.state.Authorizer.AddStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
@@ -2045,7 +2040,7 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 				logger.Error("Failed to add storage volume to authorizer", logger.Ctx{"name": inst.Name(), "type": volType, "pool": b.Name(), "project": inst.Project().Name, "error": err})
 			}
 
-			revert.Add(func() {
+			reverter.Add(func() {
 				_ = b.state.Authorizer.DeleteStoragePoolVolume(b.state.ShutdownCtx, inst.Project().Name, b.Name(), volType.Singular(), inst.Name(), "")
 			})
 		}
@@ -2092,7 +2087,7 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 				return err
 			}
 
-			revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, newSnapshotName, volType) })
+			reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, newSnapshotName, volType) })
 		}
 	}
 
@@ -2171,7 +2166,7 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 	}
 
 	if !isRemoteClusterMove {
-		revert.Add(func() { _ = b.DeleteInstance(inst, op) })
+		reverter.Add(func() { _ = b.DeleteInstance(inst, op) })
 	}
 
 	err = b.ensureInstanceSymlink(inst.Type(), inst.Project().Name, inst.Name(), vol.MountPath())
@@ -2186,7 +2181,7 @@ func (b *backend) CreateInstanceFromMigration(inst instance.Instance, conn io.Re
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -2197,11 +2192,11 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 	defer l.Debug("RenameInstance finished")
 
 	if inst.IsSnapshot() {
-		return fmt.Errorf("Instance cannot be a snapshot")
+		return errors.New("Instance cannot be a snapshot")
 	}
 
 	if internalInstance.IsSnapshot(newName) {
-		return fmt.Errorf("New name cannot be a snapshot")
+		return errors.New("New name cannot be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume types needed.
@@ -2215,8 +2210,8 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 		return err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	volume, err := VolumeDBGet(b, inst.Project().Name, inst.Name(), volType)
 	if err != nil && !response.IsNotFoundError(err) {
@@ -2238,7 +2233,7 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 	}
 
 	if len(snapshots) > 0 {
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = b.removeInstanceSnapshotSymlinkIfUnused(inst.Type(), inst.Project().Name, newName)
 			_ = b.ensureInstanceSnapshotSymlink(inst.Type(), inst.Project().Name, inst.Name())
 		})
@@ -2256,7 +2251,7 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 			return err
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 				return tx.RenameStoragePoolVolume(ctx, inst.Project().Name, newSnapVolName, srcSnapshot, volDBType, b.ID())
 			})
@@ -2271,7 +2266,7 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 		return err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 			return tx.RenameStoragePoolVolume(ctx, inst.Project().Name, newName, inst.Name(), volDBType, b.ID())
 		})
@@ -2289,7 +2284,7 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 		return err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		// There's no need to pass config as it's not needed when renaming a volume.
 		newVol := b.GetVolume(volType, contentType, newVolStorageName, nil)
 		_ = b.driver.RenameVolume(newVol, volStorageName, op)
@@ -2301,7 +2296,7 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 		return err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.ensureInstanceSymlink(inst.Type(), inst.Project().Name, inst.Name(), drivers.GetVolumeMountPath(b.name, volType, volStorageName))
 	})
 
@@ -2310,7 +2305,7 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 		return err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.removeInstanceSymlink(inst.Type(), inst.Project().Name, newName)
 	})
 
@@ -2333,7 +2328,7 @@ func (b *backend) RenameInstance(inst instance.Instance, newName string, op *ope
 		logger.Error("Failed to rename storage volume in authorizer", logger.Ctx{"name": inst.Name(), "newName": newName, "type": vol.Type(), "pool": b.Name(), "project": inst.Project().Name, "error": err})
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -2344,7 +2339,7 @@ func (b *backend) DeleteInstance(inst instance.Instance, op *operations.Operatio
 	defer l.Debug("DeleteInstance finished")
 
 	if inst.IsSnapshot() {
-		return fmt.Errorf("Instance must not be a snapshot")
+		return errors.New("Instance must not be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume types needed.
@@ -2361,7 +2356,7 @@ func (b *backend) DeleteInstance(inst instance.Instance, op *operations.Operatio
 
 	// Check all snapshots are already removed.
 	if len(dbVolSnaps) > 0 {
-		return fmt.Errorf("Cannot remove an instance volume that has snapshots")
+		return errors.New("Cannot remove an instance volume that has snapshots")
 	}
 
 	// Get the volume name on storage.
@@ -2420,7 +2415,7 @@ func (b *backend) UpdateInstance(inst instance.Instance, newDesc string, newConf
 	defer l.Debug("UpdateInstance finished")
 
 	if inst.IsSnapshot() {
-		return fmt.Errorf("Instance cannot be a snapshot")
+		return errors.New("Instance cannot be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume types needed.
@@ -2455,17 +2450,17 @@ func (b *backend) UpdateInstance(inst instance.Instance, newDesc string, newConf
 	if len(changedConfig) != 0 {
 		// Check that the volume's size property isn't being changed.
 		if changedConfig["size"] != "" {
-			return fmt.Errorf(`Instance volume "size" property cannot be changed`)
+			return errors.New(`Instance volume "size" property cannot be changed`)
 		}
 
 		// Check that the volume's size.state property isn't being changed.
 		if changedConfig["size.state"] != "" {
-			return fmt.Errorf(`Instance volume "size.state" property cannot be changed`)
+			return errors.New(`Instance volume "size.state" property cannot be changed`)
 		}
 
 		// Check that the volume's block.filesystem property isn't being changed.
 		if changedConfig["block.filesystem"] != "" {
-			return fmt.Errorf(`Instance volume "block.filesystem" property cannot be changed`)
+			return errors.New(`Instance volume "block.filesystem" property cannot be changed`)
 		}
 
 		// Load storage volume from database.
@@ -2513,7 +2508,7 @@ func (b *backend) UpdateInstanceSnapshot(inst instance.Instance, newDesc string,
 	defer l.Debug("UpdateInstanceSnapshot finished")
 
 	if !inst.IsSnapshot() {
-		return fmt.Errorf("Instance must be a snapshot")
+		return errors.New("Instance must be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume types needed.
@@ -2540,15 +2535,15 @@ func (b *backend) MigrateInstance(inst instance.Instance, conn io.ReadWriteClose
 	contentType := InstanceContentType(inst)
 
 	if len(args.Snapshots) > 0 && args.FinalSync {
-		return fmt.Errorf("Snapshots should not be transferred during final sync")
+		return errors.New("Snapshots should not be transferred during final sync")
 	}
 
 	if args.Info == nil {
-		return fmt.Errorf("Migration info required")
+		return errors.New("Migration info required")
 	}
 
 	if args.Info.Config == nil || args.Info.Config.Volume == nil || args.Info.Config.Volume.Config == nil {
-		return fmt.Errorf("Volume config is required")
+		return errors.New("Volume config is required")
 	}
 
 	if len(args.Snapshots) != len(args.Info.Config.VolumeSnapshots) {
@@ -2621,7 +2616,7 @@ func (b *backend) CleanupInstancePaths(inst instance.Instance, op *operations.Op
 	defer l.Debug("CleanupInstancePaths finished")
 
 	if inst.IsSnapshot() {
-		return fmt.Errorf("Instance must not be a snapshot")
+		return errors.New("Instance must not be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume types needed.
@@ -2861,8 +2856,8 @@ func (b *backend) MountInstance(inst instance.Instance, op *operations.Operation
 		return nil, err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Check we can convert the instance to the volume type needed.
 	volType, err := InstanceTypeToVolumeType(inst.Type())
@@ -2899,7 +2894,7 @@ func (b *backend) MountInstance(inst instance.Instance, op *operations.Operation
 		return nil, err
 	}
 
-	revert.Add(func() { _, _ = b.driver.UnmountVolume(vol, false, op) })
+	reverter.Add(func() { _, _ = b.driver.UnmountVolume(vol, false, op) })
 
 	diskPath, err := b.getInstanceDisk(inst)
 	if err != nil && !errors.Is(err, drivers.ErrNotSupported) {
@@ -2910,7 +2905,7 @@ func (b *backend) MountInstance(inst instance.Instance, op *operations.Operation
 		DiskPath: diskPath,
 	}
 
-	revert.Success() // From here on it is up to caller to call UnmountInstance() when done.
+	reverter.Success() // From here on it is up to caller to call UnmountInstance() when done.
 
 	// Handle delegation.
 	if b.driver.CanDelegateVolume(vol) {
@@ -3039,15 +3034,15 @@ func (b *backend) CreateInstanceSnapshot(inst instance.Instance, src instance.In
 	defer l.Debug("CreateInstanceSnapshot finished")
 
 	if inst.Type() != src.Type() {
-		return fmt.Errorf("Instance types must match")
+		return errors.New("Instance types must match")
 	}
 
 	if !inst.IsSnapshot() {
-		return fmt.Errorf("Instance must be a snapshot")
+		return errors.New("Instance must be a snapshot")
 	}
 
 	if src.IsSnapshot() {
-		return fmt.Errorf("Source instance cannot be a snapshot")
+		return errors.New("Source instance cannot be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume type needed.
@@ -3064,8 +3059,8 @@ func (b *backend) CreateInstanceSnapshot(inst instance.Instance, src instance.In
 		return err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Validate config and create database entry for new storage volume.
 	err = VolumeDBCreate(b, inst.Project().Name, inst.Name(), srcDBVol.Description, volType, true, srcDBVol.Config, inst.CreationDate(), time.Time{}, contentType, false, true)
@@ -3073,7 +3068,7 @@ func (b *backend) CreateInstanceSnapshot(inst instance.Instance, src instance.In
 		return err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
 
 	// Some driver backing stores require that running instances be frozen during snapshot.
 	if b.driver.Info().RunningCopyFreeze && src.IsRunning() && !src.IsFrozen() {
@@ -3114,7 +3109,7 @@ func (b *backend) CreateInstanceSnapshot(inst instance.Instance, src instance.In
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -3124,15 +3119,15 @@ func (b *backend) RenameInstanceSnapshot(inst instance.Instance, newName string,
 	l.Debug("RenameInstanceSnapshot started")
 	defer l.Debug("RenameInstanceSnapshot finished")
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	if !inst.IsSnapshot() {
-		return fmt.Errorf("Instance must be a snapshot")
+		return errors.New("Instance must be a snapshot")
 	}
 
 	if internalInstance.IsSnapshot(newName) {
-		return fmt.Errorf("New name cannot be a snapshot")
+		return errors.New("New name cannot be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume types needed.
@@ -3148,7 +3143,7 @@ func (b *backend) RenameInstanceSnapshot(inst instance.Instance, newName string,
 
 	parentName, oldSnapshotName, isSnap := api.GetParentAndSnapshotName(inst.Name())
 	if !isSnap {
-		return fmt.Errorf("Volume name must be a snapshot")
+		return errors.New("Volume name must be a snapshot")
 	}
 
 	contentType := InstanceContentType(inst)
@@ -3163,7 +3158,7 @@ func (b *backend) RenameInstanceSnapshot(inst instance.Instance, newName string,
 
 	newVolName := drivers.GetSnapshotVolumeName(parentName, newName)
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		// Revert rename. No need to pass config as it's not needed when renaming a volume.
 		newSnapVol := b.GetVolume(volType, contentType, project.Instance(inst.Project().Name, newVolName), nil)
 		_ = b.driver.RenameVolumeSnapshot(newSnapVol, oldSnapshotName, op)
@@ -3177,7 +3172,7 @@ func (b *backend) RenameInstanceSnapshot(inst instance.Instance, newName string,
 		return err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 			// Rename DB volume record back.
 			return tx.RenameStoragePoolVolume(ctx, inst.Project().Name, newVolName, inst.Name(), volDBType, b.ID())
@@ -3190,7 +3185,7 @@ func (b *backend) RenameInstanceSnapshot(inst instance.Instance, newName string,
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -3202,7 +3197,7 @@ func (b *backend) DeleteInstanceSnapshot(inst instance.Instance, op *operations.
 
 	parentName, snapName, isSnap := api.GetParentAndSnapshotName(inst.Name())
 	if !inst.IsSnapshot() || !isSnap {
-		return fmt.Errorf("Instance must be a snapshot")
+		return errors.New("Instance must be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume types needed.
@@ -3258,24 +3253,24 @@ func (b *backend) RestoreInstanceSnapshot(inst instance.Instance, src instance.I
 	l.Debug("RestoreInstanceSnapshot started")
 	defer l.Debug("RestoreInstanceSnapshot finished")
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	if inst.Type() != src.Type() {
-		return fmt.Errorf("Instance types must match")
+		return errors.New("Instance types must match")
 	}
 
 	if inst.IsSnapshot() {
-		return fmt.Errorf("Instance must not be snapshot")
+		return errors.New("Instance must not be snapshot")
 	}
 
 	if !src.IsSnapshot() {
-		return fmt.Errorf("Source instance must be a snapshot")
+		return errors.New("Source instance must be a snapshot")
 	}
 
 	// Target instance must not be running.
 	if inst.IsRunning() {
-		return fmt.Errorf("Instance must not be running to restore")
+		return errors.New("Instance must not be running to restore")
 	}
 
 	// Check we can convert the instance to the volume type needed.
@@ -3302,7 +3297,7 @@ func (b *backend) RestoreInstanceSnapshot(inst instance.Instance, src instance.I
 
 	_, snapshotName, isSnap := api.GetParentAndSnapshotName(src.Name())
 	if !isSnap {
-		return fmt.Errorf("Volume name must be a snapshot")
+		return errors.New("Volume name must be a snapshot")
 	}
 
 	srcDBVol, err := VolumeDBGet(b, src.Project().Name, src.Name(), volType)
@@ -3325,7 +3320,7 @@ func (b *backend) RestoreInstanceSnapshot(inst instance.Instance, src instance.I
 			return err
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 				return tx.UpdateStoragePoolVolume(ctx, inst.Project().Name, inst.Name(), volDBType, b.ID(), dbVol.Description, dbVol.Config)
 			})
@@ -3334,8 +3329,8 @@ func (b *backend) RestoreInstanceSnapshot(inst instance.Instance, src instance.I
 
 	err = b.driver.RestoreVolume(vol, snapshotName, op)
 	if err != nil {
-		snapErr, ok := err.(drivers.ErrDeleteSnapshots)
-		if ok {
+		var snapErr drivers.ErrDeleteSnapshots
+		if errors.As(err, &snapErr) {
 			// We need to delete some snapshots and try again.
 			snaps, err := inst.Snapshots()
 			if err != nil {
@@ -3368,7 +3363,7 @@ func (b *backend) RestoreInstanceSnapshot(inst instance.Instance, src instance.I
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -3380,7 +3375,7 @@ func (b *backend) MountInstanceSnapshot(inst instance.Instance, op *operations.O
 	defer l.Debug("MountInstanceSnapshot finished")
 
 	if !inst.IsSnapshot() {
-		return nil, fmt.Errorf("Instance must be a snapshot")
+		return nil, errors.New("Instance must be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume type needed.
@@ -3429,7 +3424,7 @@ func (b *backend) UnmountInstanceSnapshot(inst instance.Instance, op *operations
 	defer l.Debug("UnmountInstanceSnapshot finished")
 
 	if !inst.IsSnapshot() {
-		return fmt.Errorf("Instance must be a snapshot")
+		return errors.New("Instance must be a snapshot")
 	}
 
 	// Check we can convert the instance to the volume type needed.
@@ -3618,8 +3613,8 @@ func (b *backend) EnsureImage(fingerprint string, op *operations.Operation) erro
 		Fill:        b.imageFiller(fingerprint, op),
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Validate config and create database entry for new storage volume.
 	err = VolumeDBCreate(b, api.ProjectDefaultName, fingerprint, "", drivers.VolumeTypeImage, false, imgVol.Config(), time.Now().UTC(), time.Time{}, contentType, false, false)
@@ -3627,7 +3622,7 @@ func (b *backend) EnsureImage(fingerprint string, op *operations.Operation) erro
 		return err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, api.ProjectDefaultName, fingerprint, drivers.VolumeTypeImage) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, api.ProjectDefaultName, fingerprint, drivers.VolumeTypeImage) })
 
 	// Record new volume with authorizer.
 	var location string
@@ -3641,7 +3636,7 @@ func (b *backend) EnsureImage(fingerprint string, op *operations.Operation) erro
 		logger.Error("Failed to add storage volume to authorizer", logger.Ctx{"name": fingerprint, "type": drivers.VolumeTypeImage, "pool": b.Name(), "project": api.ProjectDefaultName, "error": err})
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.state.Authorizer.DeleteStoragePoolVolume(b.state.ShutdownCtx, api.ProjectDefaultName, b.Name(), drivers.VolumeTypeImage.Singular(), fingerprint, location)
 	})
 
@@ -3650,7 +3645,7 @@ func (b *backend) EnsureImage(fingerprint string, op *operations.Operation) erro
 		return err
 	}
 
-	revert.Add(func() { _ = b.driver.DeleteVolume(imgVol, op) })
+	reverter.Add(func() { _ = b.driver.DeleteVolume(imgVol, op) })
 
 	// If the volume filler has recorded the size of the unpacked volume, then store this in the image DB row.
 	if volFiller.Size != 0 {
@@ -3664,7 +3659,7 @@ func (b *backend) EnsureImage(fingerprint string, op *operations.Operation) erro
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -3818,7 +3813,7 @@ func (b *backend) updateVolumeDescriptionOnly(projectName string, volName string
 	if newConfig != nil {
 		changedConfig, _ := b.detectChangedConfig(curVol.Config, newConfig)
 		if len(changedConfig) != 0 {
-			return fmt.Errorf("Volume config is not editable")
+			return errors.New("Volume config is not editable")
 		}
 	}
 
@@ -3876,16 +3871,16 @@ func (b *backend) CreateBucket(projectName string, bucket api.StorageBucketsPost
 	}
 
 	if !b.Driver().Info().Buckets {
-		return fmt.Errorf("Storage pool does not support buckets")
+		return errors.New("Storage pool does not support buckets")
 	}
 
-	// Must be defined before revert so that its not cancelled by time revert.Fail runs.
+	// Must be defined before revert so that its not cancelled by time reverter.Fail runs.
 	ctx, ctxCancel := context.WithTimeout(context.TODO(), time.Duration(time.Second*30))
 	defer ctxCancel()
 
 	// Validate config and create database entry for new storage bucket.
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	memberSpecific := !b.Driver().Info().Remote // Member specific if storage pool isn't remote.
 
@@ -3894,7 +3889,7 @@ func (b *backend) CreateBucket(projectName string, bucket api.StorageBucketsPost
 		return err
 	}
 
-	revert.Add(func() { _ = BucketDBDelete(context.TODO(), b, bucketID) })
+	reverter.Add(func() { _ = BucketDBDelete(context.TODO(), b, bucketID) })
 
 	bucketVolName := project.StorageVolume(projectName, bucket.Name)
 	bucketVol := b.GetVolume(drivers.VolumeTypeBucket, drivers.ContentTypeFS, bucketVolName, bucket.Config)
@@ -3907,7 +3902,7 @@ func (b *backend) CreateBucket(projectName string, bucket api.StorageBucketsPost
 			return err
 		}
 
-		revert.Add(func() { _ = b.driver.DeleteVolume(bucketVol, op) })
+		reverter.Add(func() { _ = b.driver.DeleteVolume(bucketVol, op) })
 
 		// Start minio process.
 		minioProc, err := b.ActivateBucket(projectName, bucket.Name, op)
@@ -3935,7 +3930,7 @@ func (b *backend) CreateBucket(projectName string, bucket api.StorageBucketsPost
 			return fmt.Errorf("Failed creating bucket: %w", err)
 		}
 
-		revert.Add(func() { _ = s3Client.RemoveBucket(ctx, bucket.Name) })
+		reverter.Add(func() { _ = s3Client.RemoveBucket(ctx, bucket.Name) })
 	} else {
 		// Handle per-driver implementation for remote storage drivers.
 		err = b.driver.CreateBucket(bucketVol, op)
@@ -3944,7 +3939,7 @@ func (b *backend) CreateBucket(projectName string, bucket api.StorageBucketsPost
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -3960,7 +3955,7 @@ func (b *backend) UpdateBucket(projectName string, bucketName string, bucket api
 	}
 
 	if !b.Driver().Info().Buckets {
-		return fmt.Errorf("Storage pool does not support buckets")
+		return errors.New("Storage pool does not support buckets")
 	}
 
 	memberSpecific := !b.Driver().Info().Remote // Member specific if storage pool isn't remote.
@@ -4040,7 +4035,7 @@ func (b *backend) UpdateBucket(projectName string, bucketName string, bucket api
 		}
 	}
 
-	b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+	err = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 		// Update the database record.
 		return tx.UpdateStoragePoolBucket(ctx, b.id, curBucket.ID, &bucket)
 	})
@@ -4063,7 +4058,7 @@ func (b *backend) DeleteBucket(projectName string, bucketName string, op *operat
 	}
 
 	if !b.Driver().Info().Buckets {
-		return fmt.Errorf("Storage pool does not support buckets")
+		return errors.New("Storage pool does not support buckets")
 	}
 
 	memberSpecific := !b.Driver().Info().Remote // Member specific if storage pool isn't remote.
@@ -4122,15 +4117,15 @@ func (b *backend) DeleteBucket(projectName string, bucketName string, op *operat
 // Used during the recovery import stage.
 func (b *backend) ImportBucket(projectName string, poolVol *backupConfig.Config, op *operations.Operation) (revert.Hook, error) {
 	if poolVol.Bucket == nil {
-		return nil, fmt.Errorf("Invalid pool bucket config supplied")
+		return nil, errors.New("Invalid pool bucket config supplied")
 	}
 
 	l := b.logger.AddContext(logger.Ctx{"project": projectName, "bucketName": poolVol.Bucket.Name})
 	l.Debug("ImportBucket started")
 	defer l.Debug("ImportBucket finished")
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Copy bucket config from backup file if present (so BucketDBCreate can safely modify the copy if needed).
 	bucketConfig := util.CloneMap(poolVol.Bucket.Config)
@@ -4146,7 +4141,7 @@ func (b *backend) ImportBucket(projectName string, poolVol *backupConfig.Config,
 		return nil, err
 	}
 
-	revert.Add(func() { _ = BucketDBDelete(b.state.ShutdownCtx, b, bucketID) })
+	reverter.Add(func() { _ = BucketDBDelete(b.state.ShutdownCtx, b, bucketID) })
 
 	// Get the bucket name on storage.
 	storageBucketName := project.StorageVolume(projectName, bucket.Name)
@@ -4181,18 +4176,18 @@ func (b *backend) ImportBucket(projectName string, poolVol *backupConfig.Config,
 				return nil, err
 			}
 
-			revert.Add(func() {
+			reverter.Add(func() {
 				_ = b.state.DB.Cluster.Transaction(b.state.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
 					return tx.DeleteStoragePoolBucketKey(ctx, bucketID, keyID)
 				})
 			})
 		}
 	} else {
-		return nil, fmt.Errorf("Importing buckets from a remote storage is not supported")
+		return nil, errors.New("Importing buckets from a remote storage is not supported")
 	}
 
-	cleanup := revert.Clone().Fail
-	revert.Success()
+	cleanup := reverter.Clone().Fail
+	reverter.Success()
 	return cleanup, nil
 }
 
@@ -4299,15 +4294,15 @@ func (b *backend) CreateBucketKey(projectName string, bucketName string, key api
 	}
 
 	if !b.Driver().Info().Buckets {
-		return nil, fmt.Errorf("Storage pool does not support buckets")
+		return nil, errors.New("Storage pool does not support buckets")
 	}
 
-	// Must be defined before revert so that its not cancelled by time revert.Fail runs.
+	// Must be defined before revert so that its not cancelled by time reverter.Fail runs.
 	ctx, ctxCancel := context.WithTimeout(context.TODO(), time.Duration(time.Second*30))
 	defer ctxCancel()
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	memberSpecific := !b.Driver().Info().Remote // Member specific if storage pool isn't remote.
 
@@ -4360,7 +4355,7 @@ func (b *backend) CreateBucketKey(projectName string, bucketName string, key api
 			return nil, err
 		}
 
-		revert.Add(func() { _ = adminClient.DeleteServiceAccount(ctx, adminCreds.AccessKey) })
+		reverter.Add(func() { _ = adminClient.DeleteServiceAccount(ctx, adminCreds.AccessKey) })
 
 		newCreds = &drivers.S3Credentials{
 			AccessKey: adminCreds.AccessKey,
@@ -4373,7 +4368,7 @@ func (b *backend) CreateBucketKey(projectName string, bucketName string, key api
 			return nil, err
 		}
 
-		revert.Add(func() { _ = b.driver.DeleteBucketKey(bucketVol, key.Name, op) })
+		reverter.Add(func() { _ = b.driver.DeleteBucketKey(bucketVol, key.Name, op) })
 	}
 
 	key.AccessKey = newCreds.AccessKey
@@ -4398,7 +4393,7 @@ func (b *backend) CreateBucketKey(projectName string, bucketName string, key api
 		return nil, err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return &newKey, err
 }
 
@@ -4413,10 +4408,10 @@ func (b *backend) UpdateBucketKey(projectName string, bucketName string, keyName
 	}
 
 	if !b.Driver().Info().Buckets {
-		return fmt.Errorf("Storage pool does not support buckets")
+		return errors.New("Storage pool does not support buckets")
 	}
 
-	// Must be defined before revert so that its not cancelled by time revert.Fail runs.
+	// Must be defined before revert so that its not cancelled by time reverter.Fail runs.
 	ctx, ctxCancel := context.WithTimeout(context.TODO(), time.Duration(time.Second*30))
 	defer ctxCancel()
 
@@ -4550,10 +4545,10 @@ func (b *backend) DeleteBucketKey(projectName string, bucketName string, keyName
 	}
 
 	if !b.Driver().Info().Buckets {
-		return fmt.Errorf("Storage pool does not support buckets")
+		return errors.New("Storage pool does not support buckets")
 	}
 
-	// Must be defined before revert so that its not cancelled by time revert.Fail runs.
+	// Must be defined before revert so that its not cancelled by time reverter.Fail runs.
 	ctx, ctxCancel := context.WithTimeout(context.TODO(), time.Duration(time.Second*30))
 	defer ctxCancel()
 
@@ -4608,7 +4603,7 @@ func (b *backend) DeleteBucketKey(projectName string, bucketName string, keyName
 		}
 	}
 
-	b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+	err = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 		return tx.DeleteStoragePoolBucketKey(ctx, bucket.ID, bucketKey.ID)
 	})
 	if err != nil {
@@ -4621,11 +4616,11 @@ func (b *backend) DeleteBucketKey(projectName string, bucketName string, keyName
 // ActivateBucket mounts the local bucket volume and returns the MinIO S3 process for it.
 func (b *backend) ActivateBucket(projectName string, bucketName string, op *operations.Operation) (*miniod.Process, error) {
 	if !b.Driver().Info().Buckets {
-		return nil, fmt.Errorf("Storage pool does not support buckets")
+		return nil, errors.New("Storage pool does not support buckets")
 	}
 
 	if b.Driver().Info().Remote {
-		return nil, fmt.Errorf("Remote buckets cannot be activated")
+		return nil, errors.New("Remote buckets cannot be activated")
 	}
 
 	bucketVolName := project.StorageVolume(projectName, bucketName)
@@ -4678,20 +4673,13 @@ func (b *backend) CreateCustomVolume(projectName string, volName string, desc st
 	volStorageName := project.StorageVolume(projectName, volName)
 	vol := b.GetVolume(drivers.VolumeTypeCustom, contentType, volStorageName, config)
 
-	storagePoolSupported := false
-	for _, supportedType := range b.Driver().Info().VolumeTypes {
-		if supportedType == drivers.VolumeTypeCustom {
-			storagePoolSupported = true
-			break
-		}
-	}
-
+	storagePoolSupported := slices.Contains(b.Driver().Info().VolumeTypes, drivers.VolumeTypeCustom)
 	if !storagePoolSupported {
-		return fmt.Errorf("Storage pool does not support custom volume type")
+		return errors.New("Storage pool does not support custom volume type")
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Validate config and create database entry for new storage volume.
 	err = VolumeDBCreate(b, projectName, volName, desc, vol.Type(), false, vol.Config(), time.Now().UTC(), time.Time{}, vol.ContentType(), false, false)
@@ -4699,7 +4687,7 @@ func (b *backend) CreateCustomVolume(projectName string, volName string, desc st
 		return err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, projectName, volName, vol.Type()) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, projectName, volName, vol.Type()) })
 
 	// Create the empty custom volume on the storage device.
 	err = b.driver.CreateVolume(vol, nil, op)
@@ -4723,7 +4711,7 @@ func (b *backend) CreateCustomVolume(projectName string, volName string, desc st
 
 	b.state.Events.SendLifecycle(projectName, lifecycle.StorageVolumeCreated.Event(vol, string(vol.Type()), projectName, op, eventCtx))
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -4782,16 +4770,10 @@ func (b *backend) CreateCustomVolumeFromCopy(projectName string, srcProjectName 
 		return err
 	}
 
-	storagePoolSupported := false
-	for _, supportedType := range b.Driver().Info().VolumeTypes {
-		if supportedType == drivers.VolumeTypeCustom {
-			storagePoolSupported = true
-			break
-		}
-	}
+	storagePoolSupported := slices.Contains(b.Driver().Info().VolumeTypes, drivers.VolumeTypeCustom)
 
 	if !storagePoolSupported {
-		return fmt.Errorf("Storage pool does not support custom volume type")
+		return errors.New("Storage pool does not support custom volume type")
 	}
 
 	// If we are copying snapshots, retrieve a list of snapshots from source volume.
@@ -4803,8 +4785,8 @@ func (b *backend) CreateCustomVolumeFromCopy(projectName string, srcProjectName 
 		}
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Get the src volume name on storage.
 	srcVolStorageName := project.StorageVolume(srcProjectName, srcVolName)
@@ -4825,7 +4807,7 @@ func (b *backend) CreateCustomVolumeFromCopy(projectName string, srcProjectName 
 			return err
 		}
 
-		revert.Add(func() { _ = VolumeDBDelete(b, projectName, volName, vol.Type()) })
+		reverter.Add(func() { _ = VolumeDBDelete(b, projectName, volName, vol.Type()) })
 
 		// Create database entries for new storage volume snapshots.
 		for i, snapName := range snapshotNames {
@@ -4841,7 +4823,7 @@ func (b *backend) CreateCustomVolumeFromCopy(projectName string, srcProjectName 
 				return err
 			}
 
-			revert.Add(func() { _ = VolumeDBDelete(b, projectName, newSnapshotName, vol.Type()) })
+			reverter.Add(func() { _ = VolumeDBDelete(b, projectName, newSnapshotName, vol.Type()) })
 		}
 
 		err = b.driver.CreateVolumeFromCopy(vol, srcVol, snapshots, false, op)
@@ -4865,7 +4847,7 @@ func (b *backend) CreateCustomVolumeFromCopy(projectName string, srcProjectName 
 
 		b.state.Events.SendLifecycle(projectName, lifecycle.StorageVolumeCreated.Event(vol, string(vol.Type()), projectName, op, eventCtx))
 
-		revert.Success()
+		reverter.Success()
 		return nil
 	}
 
@@ -4890,7 +4872,7 @@ func (b *backend) CreateCustomVolumeFromCopy(projectName string, srcProjectName 
 		err = srcVol.MountTask(func(mountPath string, op *operations.Operation) error {
 			srcPoolBackend, ok := srcPool.(*backend)
 			if !ok {
-				return fmt.Errorf("Pool is not a backend")
+				return errors.New("Pool is not a backend")
 			}
 
 			volDiskPath, err := srcPoolBackend.driver.GetVolumeDiskPath(srcVol)
@@ -4985,7 +4967,7 @@ func (b *backend) CreateCustomVolumeFromCopy(projectName string, srcProjectName 
 		return fmt.Errorf("Create custom volume from copy failed: %v", errs)
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -5095,11 +5077,11 @@ func (b *backend) MigrateCustomVolume(projectName string, conn io.ReadWriteClose
 	}
 
 	if args.Info == nil {
-		return fmt.Errorf("Migration info required")
+		return errors.New("Migration info required")
 	}
 
 	if args.Info.Config == nil || args.Info.Config.Volume == nil || args.Info.Config.Volume.Config == nil {
-		return fmt.Errorf("Volume config is required")
+		return errors.New("Volume config is required")
 	}
 
 	if len(args.Snapshots) != len(args.Info.Config.VolumeSnapshots) {
@@ -5136,16 +5118,10 @@ func (b *backend) CreateCustomVolumeFromMigration(projectName string, conn io.Re
 		return err
 	}
 
-	storagePoolSupported := false
-	for _, supportedType := range b.Driver().Info().VolumeTypes {
-		if supportedType == drivers.VolumeTypeCustom {
-			storagePoolSupported = true
-			break
-		}
-	}
+	storagePoolSupported := slices.Contains(b.Driver().Info().VolumeTypes, drivers.VolumeTypeCustom)
 
 	if !storagePoolSupported {
-		return fmt.Errorf("Storage pool does not support custom volume type")
+		return errors.New("Storage pool does not support custom volume type")
 	}
 
 	var volumeConfig map[string]string
@@ -5173,11 +5149,11 @@ func (b *backend) CreateCustomVolumeFromMigration(projectName string, conn io.Re
 
 	// Check for inconsistencies between database and storage before continuing.
 	if dbVol == nil && volExists {
-		return fmt.Errorf("Volume already exists on storage but not in database")
+		return errors.New("Volume already exists on storage but not in database")
 	}
 
 	if dbVol != nil && !volExists {
-		return fmt.Errorf("Volume exists in database but not on storage")
+		return errors.New("Volume exists in database but not on storage")
 	}
 
 	// Disable refresh mode if volume doesn't exist yet.
@@ -5186,7 +5162,7 @@ func (b *backend) CreateCustomVolumeFromMigration(projectName string, conn io.Re
 	if args.Refresh && !volExists {
 		args.Refresh = false
 	} else if !args.Refresh && volExists {
-		return fmt.Errorf("Cannot create volume, already exists on migration target storage")
+		return errors.New("Cannot create volume, already exists on migration target storage")
 	}
 
 	// VolumeSize is set to the actual size of the underlying block device.
@@ -5204,8 +5180,8 @@ func (b *backend) CreateCustomVolumeFromMigration(projectName string, conn io.Re
 		return err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	if !args.Refresh {
 		// Validate config and create database entry for new storage volume.
@@ -5215,7 +5191,7 @@ func (b *backend) CreateCustomVolumeFromMigration(projectName string, conn io.Re
 			return err
 		}
 
-		revert.Add(func() { _ = VolumeDBDelete(b, projectName, args.Name, vol.Type()) })
+		reverter.Add(func() { _ = VolumeDBDelete(b, projectName, args.Name, vol.Type()) })
 	}
 
 	if len(args.Snapshots) > 0 {
@@ -5256,7 +5232,7 @@ func (b *backend) CreateCustomVolumeFromMigration(projectName string, conn io.Re
 				return err
 			}
 
-			revert.Add(func() { _ = VolumeDBDelete(b, projectName, newSnapshotName, vol.Type()) })
+			reverter.Add(func() { _ = VolumeDBDelete(b, projectName, newSnapshotName, vol.Type()) })
 		}
 	}
 
@@ -5281,7 +5257,7 @@ func (b *backend) CreateCustomVolumeFromMigration(projectName string, conn io.Re
 
 	b.state.Events.SendLifecycle(projectName, lifecycle.StorageVolumeCreated.Event(vol, string(vol.Type()), projectName, op, eventCtx))
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -5292,15 +5268,15 @@ func (b *backend) RenameCustomVolume(projectName string, volName string, newVolN
 	defer l.Debug("RenameCustomVolume finished")
 
 	if internalInstance.IsSnapshot(volName) {
-		return fmt.Errorf("Volume name cannot be a snapshot")
+		return errors.New("Volume name cannot be a snapshot")
 	}
 
 	if internalInstance.IsSnapshot(newVolName) {
-		return fmt.Errorf("New volume name cannot be a snapshot")
+		return errors.New("New volume name cannot be a snapshot")
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	volume, err := VolumeDBGet(b, projectName, volName, drivers.VolumeTypeCustom)
 	if err != nil {
@@ -5324,7 +5300,7 @@ func (b *backend) RenameCustomVolume(projectName string, volName string, newVolN
 			return err
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 				return tx.RenameStoragePoolVolume(ctx, projectName, newSnapVolName, srcSnapshot.Name, db.StoragePoolVolumeTypeCustom, b.ID())
 			})
@@ -5353,7 +5329,7 @@ func (b *backend) RenameCustomVolume(projectName string, volName string, newVolN
 			return fmt.Errorf("Failed renaming backup %q to %q: %w", backupRow.Name, newVolBackupName, err)
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = volBackup.Rename(backupRow.Name)
 		})
 	}
@@ -5365,7 +5341,7 @@ func (b *backend) RenameCustomVolume(projectName string, volName string, newVolN
 		return err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = b.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 			return tx.RenameStoragePoolVolume(ctx, projectName, newVolName, volName, db.StoragePoolVolumeTypeCustom, b.ID())
 		})
@@ -5395,7 +5371,7 @@ func (b *backend) RenameCustomVolume(projectName string, volName string, newVolN
 	vol = b.GetVolume(drivers.VolumeTypeCustom, drivers.ContentType(volume.ContentType), newVolStorageName, nil)
 	b.state.Events.SendLifecycle(projectName, lifecycle.StorageVolumeRenamed.Event(vol, string(vol.Type()), projectName, op, logger.Ctx{"old_name": volName}))
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -5436,7 +5412,7 @@ func (b *backend) UpdateCustomVolume(projectName string, volName string, newDesc
 	defer l.Debug("UpdateCustomVolume finished")
 
 	if internalInstance.IsSnapshot(volName) {
-		return fmt.Errorf("Volume name cannot be a snapshot")
+		return errors.New("Volume name cannot be a snapshot")
 	}
 
 	// Get the volume name on storage.
@@ -5471,12 +5447,12 @@ func (b *backend) UpdateCustomVolume(projectName string, volName string, newDesc
 	if len(changedConfig) != 0 {
 		// Forbid changing the config for ISO custom volumes as they are read-only.
 		if contentType == drivers.ContentTypeISO {
-			return fmt.Errorf("Custom ISO volume config cannot be changed")
+			return errors.New("Custom ISO volume config cannot be changed")
 		}
 
 		// Check that the volume's block.filesystem property isn't being changed.
 		if changedConfig["block.filesystem"] != "" {
-			return fmt.Errorf(`Custom volume "block.filesystem" property cannot be changed`)
+			return errors.New(`Custom volume "block.filesystem" property cannot be changed`)
 		}
 
 		// Check for config changing that is not allowed when running instances are using it.
@@ -5489,7 +5465,7 @@ func (b *backend) UpdateCustomVolume(projectName string, volName string, newDesc
 
 				// Confirm that no running instances are using it when changing shifted state.
 				if inst.IsRunning() && changedConfig["security.shifted"] != "" {
-					return fmt.Errorf("Cannot modify shifting with running instances using the volume")
+					return errors.New("Cannot modify shifting with running instances using the volume")
 				}
 
 				return nil
@@ -5513,7 +5489,7 @@ func (b *backend) UpdateCustomVolume(projectName string, volName string, newDesc
 			}
 
 			if len(usedByProfileDevices) > 0 {
-				return fmt.Errorf("Cannot un-share custom storage block volume if attached to profile")
+				return errors.New("Cannot un-share custom storage block volume if attached to profile")
 			}
 
 			var usedByInstanceDevices []string
@@ -5528,7 +5504,7 @@ func (b *backend) UpdateCustomVolume(projectName string, volName string, newDesc
 			}
 
 			if len(usedByInstanceDevices) > 1 {
-				return fmt.Errorf("Cannot un-share custom storage block volume if attached to more than one instance")
+				return errors.New("Cannot un-share custom storage block volume if attached to more than one instance")
 			}
 		}
 
@@ -5644,7 +5620,7 @@ func (b *backend) UpdateCustomVolumeSnapshot(projectName string, volName string,
 	defer l.Debug("UpdateCustomVolumeSnapshot finished")
 
 	if !internalInstance.IsSnapshot(volName) {
-		return fmt.Errorf("Volume must be a snapshot")
+		return errors.New("Volume must be a snapshot")
 	}
 
 	// Get current config to compare what has changed.
@@ -5667,7 +5643,7 @@ func (b *backend) UpdateCustomVolumeSnapshot(projectName string, volName string,
 	if newConfig != nil {
 		changedConfig, _ := b.detectChangedConfig(curVol.Config, newConfig)
 		if len(changedConfig) != 0 {
-			return fmt.Errorf("Volume config is not editable")
+			return errors.New("Volume config is not editable")
 		}
 	}
 
@@ -5695,7 +5671,7 @@ func (b *backend) DeleteCustomVolume(projectName string, volName string, op *ope
 
 	_, _, isSnap := api.GetParentAndSnapshotName(volName)
 	if isSnap {
-		return fmt.Errorf("Volume name cannot be a snapshot")
+		return errors.New("Volume name cannot be a snapshot")
 	}
 
 	// Retrieve a list of snapshots.
@@ -5906,15 +5882,15 @@ func (b *backend) UnmountCustomVolume(projectName, volName string, op *operation
 // Used during the recovery import stage.
 func (b *backend) ImportCustomVolume(projectName string, poolVol *backupConfig.Config, op *operations.Operation) (revert.Hook, error) {
 	if poolVol.Volume == nil {
-		return nil, fmt.Errorf("Invalid pool volume config supplied")
+		return nil, errors.New("Invalid pool volume config supplied")
 	}
 
 	l := b.logger.AddContext(logger.Ctx{"project": projectName, "volName": poolVol.Volume.Name})
 	l.Debug("ImportCustomVolume started")
 	defer l.Debug("ImportCustomVolume finished")
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Copy volume config from backup file if present (so VolumeDBCreate can safely modify the copy if needed).
 	volumeConfig := util.CloneMap(poolVol.Volume.Config)
@@ -5925,7 +5901,7 @@ func (b *backend) ImportCustomVolume(projectName string, poolVol *backupConfig.C
 		return nil, err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, projectName, poolVol.Volume.Name, drivers.VolumeTypeCustom) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, projectName, poolVol.Volume.Name, drivers.VolumeTypeCustom) })
 
 	// Create the storage volume snapshot DB records.
 	for _, poolVolSnap := range poolVol.VolumeSnapshots {
@@ -5941,7 +5917,7 @@ func (b *backend) ImportCustomVolume(projectName string, poolVol *backupConfig.C
 			return nil, err
 		}
 
-		revert.Add(func() { _ = VolumeDBDelete(b, projectName, fullSnapName, drivers.VolumeTypeCustom) })
+		reverter.Add(func() { _ = VolumeDBDelete(b, projectName, fullSnapName, drivers.VolumeTypeCustom) })
 	}
 
 	// Get the volume name on storage.
@@ -5969,8 +5945,8 @@ func (b *backend) ImportCustomVolume(projectName string, poolVol *backupConfig.C
 		}
 	}
 
-	cleanup := revert.Clone().Fail
-	revert.Success()
+	cleanup := reverter.Clone().Fail
+	reverter.Success()
 	return cleanup, err
 }
 
@@ -5981,11 +5957,11 @@ func (b *backend) CreateCustomVolumeSnapshot(projectName, volName string, newSna
 	defer l.Debug("CreateCustomVolumeSnapshot finished")
 
 	if internalInstance.IsSnapshot(volName) {
-		return fmt.Errorf("Volume does not support snapshots")
+		return errors.New("Volume does not support snapshots")
 	}
 
 	if internalInstance.IsSnapshot(newSnapshotName) {
-		return fmt.Errorf("Snapshot name is not a valid snapshot name")
+		return errors.New("Snapshot name is not a valid snapshot name")
 	}
 
 	fullSnapshotName := drivers.GetSnapshotVolumeName(volName, newSnapshotName)
@@ -6022,8 +5998,8 @@ func (b *backend) CreateCustomVolumeSnapshot(projectName, volName string, newSna
 		return fmt.Errorf("Volume of content type %q does not support snapshots", contentType)
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Validate config and create database entry for new storage volume.
 	// Copy volume config from parent.
@@ -6032,7 +6008,7 @@ func (b *backend) CreateCustomVolumeSnapshot(projectName, volName string, newSna
 		return err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, projectName, fullSnapshotName, drivers.VolumeTypeCustom) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, projectName, fullSnapshotName, drivers.VolumeTypeCustom) })
 
 	// Get the volume name on storage.
 	volStorageName := project.StorageVolume(projectName, fullSnapshotName)
@@ -6055,7 +6031,7 @@ func (b *backend) CreateCustomVolumeSnapshot(projectName, volName string, newSna
 
 	b.state.Events.SendLifecycle(projectName, lifecycle.StorageVolumeSnapshotCreated.Event(vol, string(vol.Type()), projectName, op, logger.Ctx{"type": vol.Type()}))
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -6067,11 +6043,11 @@ func (b *backend) RenameCustomVolumeSnapshot(projectName, volName string, newSna
 
 	parentName, oldSnapshotName, isSnap := api.GetParentAndSnapshotName(volName)
 	if !isSnap {
-		return fmt.Errorf("Volume name must be a snapshot")
+		return errors.New("Volume name must be a snapshot")
 	}
 
 	if internalInstance.IsSnapshot(newSnapshotName) {
-		return fmt.Errorf("Invalid new snapshot name")
+		return errors.New("Invalid new snapshot name")
 	}
 
 	volume, err := VolumeDBGet(b, projectName, volName, drivers.VolumeTypeCustom)
@@ -6119,7 +6095,7 @@ func (b *backend) DeleteCustomVolumeSnapshot(projectName, volName string, op *op
 	isSnap := internalInstance.IsSnapshot(volName)
 
 	if !isSnap {
-		return fmt.Errorf("Volume name must be a snapshot")
+		return errors.New("Volume name must be a snapshot")
 	}
 
 	// Get the volume.
@@ -6178,11 +6154,11 @@ func (b *backend) RestoreCustomVolume(projectName, volName string, snapshotName 
 
 	// Quick checks.
 	if internalInstance.IsSnapshot(volName) {
-		return fmt.Errorf("Volume cannot be snapshot")
+		return errors.New("Volume cannot be snapshot")
 	}
 
 	if internalInstance.IsSnapshot(snapshotName) {
-		return fmt.Errorf("Invalid snapshot name")
+		return errors.New("Invalid snapshot name")
 	}
 
 	// Get current volume.
@@ -6199,7 +6175,7 @@ func (b *backend) RestoreCustomVolume(projectName, volName string, snapshotName 
 		}
 
 		if inst.IsRunning() {
-			return fmt.Errorf("Cannot restore custom volume used by running instances")
+			return errors.New("Cannot restore custom volume used by running instances")
 		}
 
 		return nil
@@ -6224,8 +6200,8 @@ func (b *backend) RestoreCustomVolume(projectName, volName string, snapshotName 
 
 	err = b.driver.RestoreVolume(vol, snapshotName, op)
 	if err != nil {
-		snapErr, ok := err.(drivers.ErrDeleteSnapshots)
-		if ok {
+		var snapErr drivers.ErrDeleteSnapshots
+		if errors.As(err, &snapErr) {
 			// We need to delete some snapshots and try again.
 			for _, snapName := range snapErr.Snapshots {
 				err := b.DeleteCustomVolumeSnapshot(projectName, fmt.Sprintf("%s/%s", volName, snapName), op)
@@ -6388,7 +6364,7 @@ func (b *backend) GenerateInstanceBackupConfig(inst instance.Instance, snapshots
 			}
 
 			if len(snapshots) != len(dbVolSnaps) {
-				return nil, fmt.Errorf("Instance snapshot record count doesn't match instance snapshot volume record count")
+				return nil, errors.New("Instance snapshot record count doesn't match instance snapshot volume record count")
 			}
 
 			config.VolumeSnapshots = make([]*api.StorageVolumeSnapshot, 0, len(dbVolSnaps))
@@ -6971,8 +6947,8 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 
 	contentType := InstanceContentType(inst)
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	var volumeConfig map[string]string
 
@@ -6996,7 +6972,7 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 			return nil, err
 		}
 
-		revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
+		reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, inst.Name(), volType) })
 
 		if len(snapshots) > 0 && len(poolVol.VolumeSnapshots) > 0 {
 			// Create storage volume snapshot DB records from the entries in the backup file config.
@@ -7013,7 +6989,7 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 					return nil, err
 				}
 
-				revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, fullSnapName, volType) })
+				reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, fullSnapName, volType) })
 			}
 		} else {
 			b.logger.Warn("Missing volume snapshot info in backup config, using parent volume config")
@@ -7032,7 +7008,7 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 					return nil, err
 				}
 
-				revert.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, fullSnapName, volType) })
+				reverter.Add(func() { _ = VolumeDBDelete(b, inst.Project().Name, fullSnapName, volType) })
 			}
 		}
 	}
@@ -7081,7 +7057,7 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 		return nil, err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		// Remove symlinks.
 		_ = b.removeInstanceSymlink(inst.Type(), inst.Project().Name, inst.Name())
 		_ = b.removeInstanceSnapshotSymlinkIfUnused(inst.Type(), inst.Project().Name, inst.Name())
@@ -7110,8 +7086,8 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 		}
 	}
 
-	cleanup := revert.Clone().Fail
-	revert.Success()
+	cleanup := reverter.Clone().Fail
+	reverter.Success()
 	return cleanup, err
 }
 
@@ -7189,8 +7165,8 @@ func (b *backend) CreateCustomVolumeFromISO(projectName string, volName string, 
 		return fmt.Errorf("Failed checking volume creation allowed: %w", err)
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Get the volume name on storage.
 	volStorageName := project.StorageVolume(projectName, volName)
@@ -7203,7 +7179,7 @@ func (b *backend) CreateCustomVolumeFromISO(projectName string, volName string, 
 	}
 
 	if volExists {
-		return fmt.Errorf("Cannot create volume, already exists on target storage")
+		return errors.New("Cannot create volume, already exists on target storage")
 	}
 
 	// Validate config and create database entry for new storage volume.
@@ -7212,7 +7188,7 @@ func (b *backend) CreateCustomVolumeFromISO(projectName string, volName string, 
 		return fmt.Errorf("Failed creating database entry for custom volume: %w", err)
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, projectName, volName, vol.Type()) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, projectName, volName, vol.Type()) })
 
 	_, err = srcData.Seek(0, io.SeekStart)
 	if err != nil {
@@ -7247,7 +7223,7 @@ func (b *backend) CreateCustomVolumeFromISO(projectName string, volName string, 
 
 	b.state.Events.SendLifecycle(projectName, lifecycle.StorageVolumeCreated.Event(vol, string(vol.Type()), projectName, op, eventCtx))
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -7257,11 +7233,11 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 	defer l.Debug("CreateCustomVolumeFromBackup finished")
 
 	if srcBackup.Config == nil || srcBackup.Config.Volume == nil {
-		return fmt.Errorf("Valid volume config not found in index")
+		return errors.New("Valid volume config not found in index")
 	}
 
 	if len(srcBackup.Snapshots) != len(srcBackup.Config.VolumeSnapshots) {
-		return fmt.Errorf("Valid volume snapshot config not found in index")
+		return errors.New("Valid volume snapshot config not found in index")
 	}
 
 	// Check whether we are allowed to create volumes.
@@ -7279,8 +7255,8 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 		return fmt.Errorf("Failed checking volume creation allowed: %w", err)
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Get the volume name on storage.
 	volStorageName := project.StorageVolume(srcBackup.Project, srcBackup.Name)
@@ -7304,7 +7280,7 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 		return err
 	}
 
-	revert.Add(func() { _ = VolumeDBDelete(b, srcBackup.Project, srcBackup.Name, vol.Type()) })
+	reverter.Add(func() { _ = VolumeDBDelete(b, srcBackup.Project, srcBackup.Name, vol.Type()) })
 
 	// Create database entries for new storage volume snapshots.
 	for _, s := range srcBackup.Config.VolumeSnapshots {
@@ -7328,7 +7304,7 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 			return err
 		}
 
-		revert.Add(func() { _ = VolumeDBDelete(b, srcBackup.Project, fullSnapName, snapVol.Type()) })
+		reverter.Add(func() { _ = VolumeDBDelete(b, srcBackup.Project, fullSnapName, snapVol.Type()) })
 	}
 
 	// Unpack the backup into the new storage volume(s).
@@ -7338,14 +7314,14 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 	}
 
 	if revertHook != nil {
-		revert.Add(revertHook)
+		reverter.Add(revertHook)
 	}
 
 	// If the driver returned a post hook, return error as custom volumes don't need post hooks and we expect
 	// the storage driver to understand this distinction and ensure that all activities done in the postHook
 	// normally are done in CreateVolumeFromBackup as the DB record is created ahead of time.
 	if volPostHook != nil {
-		return fmt.Errorf("Custom volume restore doesn't support post hooks")
+		return errors.New("Custom volume restore doesn't support post hooks")
 	}
 
 	eventCtx := logger.Ctx{"type": vol.Type()}
@@ -7366,7 +7342,7 @@ func (b *backend) CreateCustomVolumeFromBackup(srcBackup backup.Info, srcData io
 
 	b.state.Events.SendLifecycle(srcBackup.Project, lifecycle.StorageVolumeCreated.Event(vol, string(vol.Type()), srcBackup.Project, op, eventCtx))
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -7382,7 +7358,7 @@ func (b *backend) BackupBucket(projectName string, bucketName string, tarWriter 
 	}
 
 	if !b.Driver().Info().Buckets {
-		return fmt.Errorf("Storage pool does not support buckets")
+		return errors.New("Storage pool does not support buckets")
 	}
 
 	memberSpecific := !b.Driver().Info().Remote // Member specific if storage pool isn't remote.
@@ -7424,7 +7400,7 @@ func (b *backend) CreateBucketFromBackup(srcBackup backup.Info, srcData io.ReadS
 	}
 
 	if !b.Driver().Info().Buckets {
-		return fmt.Errorf("Storage pool does not support buckets")
+		return errors.New("Storage pool does not support buckets")
 	}
 
 	reverter := revert.New()

@@ -4,6 +4,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 )
 
 // ErrUnknownEntityID describes the unknown entity ID error.
-var ErrUnknownEntityID = fmt.Errorf("Unknown entity ID")
+var ErrUnknownEntityID = errors.New("Unknown entity ID")
 
 // GetURIFromEntity returns the URI for the given entity type and entity ID.
 func (c *ClusterTx) GetURIFromEntity(ctx context.Context, entityType int, entityID int) (string, error) {
@@ -21,7 +22,7 @@ func (c *ClusterTx) GetURIFromEntity(ctx context.Context, entityType int, entity
 
 	_, ok := cluster.EntityNames[entityType]
 	if !ok {
-		return "", fmt.Errorf("Unknown entity type")
+		return "", errors.New("Unknown entity type")
 	}
 
 	var uri string
@@ -168,12 +169,16 @@ func (c *ClusterTx) GetURIFromEntity(ctx context.Context, entityType int, entity
 
 		uri = fmt.Sprintf(cluster.EntityURIs[entityType], networkName, projectName)
 	case cluster.TypeNetworkACL:
-		networkACLName, projectName, err := c.GetNetworkACLNameAndProjectWithID(ctx, entityID)
+		acls, err := cluster.GetNetworkACLs(ctx, c.tx, cluster.NetworkACLFilter{ID: &entityID})
 		if err != nil {
-			return "", fmt.Errorf("Failed to get network ACL name and project name: %w", err)
+			return "", err
 		}
 
-		uri = fmt.Sprintf(cluster.EntityURIs[entityType], networkACLName, projectName)
+		if len(acls) == 0 {
+			return "", ErrUnknownEntityID
+		}
+
+		uri = fmt.Sprintf(cluster.EntityURIs[entityType], acls[0].Name, acls[0].Project)
 	case cluster.TypeNode:
 		nodeInfo, err := c.GetNodeWithID(ctx, entityID)
 		if err != nil {
@@ -191,7 +196,7 @@ func (c *ClusterTx) GetURIFromEntity(ctx context.Context, entityType int, entity
 		}
 
 		if len(ops) > 1 {
-			return "", fmt.Errorf("Failed to get operation: More than one operation matches")
+			return "", errors.New("Failed to get operation: More than one operation matches")
 		}
 
 		op := ops[0]

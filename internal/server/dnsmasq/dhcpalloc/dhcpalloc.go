@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io/fs"
 	"math"
 	"math/big"
@@ -29,14 +28,14 @@ func DHCPValidIP(subnet *net.IPNet, ranges []iprange.Range, IP net.IP) bool {
 		return false
 	}
 
-	if len(ranges) > 0 {
-		for _, IPRange := range ranges {
-			if bytes.Compare(IP, IPRange.Start) >= 0 && bytes.Compare(IP, IPRange.End) <= 0 {
-				return true
-			}
-		}
-	} else if inSubnet {
+	if len(ranges) == 0 {
 		return true
+	}
+
+	for _, IPRange := range ranges {
+		if bytes.Compare(IP, IPRange.Start) >= 0 && bytes.Compare(IP, IPRange.End) <= 0 {
+			return true
+		}
 	}
 
 	return false
@@ -240,7 +239,7 @@ func (t *Transaction) getDHCPFreeIPv4(usedIPs map[[4]byte]dnsmasq.DHCPAllocation
 		}
 	}
 
-	return nil, fmt.Errorf("No available IP could not be found")
+	return nil, errors.New("No available IP could not be found")
 }
 
 // getDHCPFreeIPv6 attempts to find a free IPv6 address for the device.
@@ -331,7 +330,7 @@ func (t *Transaction) getDHCPFreeIPv6(usedIPs map[[16]byte]dnsmasq.DHCPAllocatio
 		}
 	}
 
-	return nil, fmt.Errorf("No available IP could not be found")
+	return nil, errors.New("No available IP could not be found")
 }
 
 // AllocateTask initializes a new locked Transaction for a specific host and executes the supplied function on it.

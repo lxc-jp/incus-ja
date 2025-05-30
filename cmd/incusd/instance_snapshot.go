@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -131,7 +132,7 @@ func instanceSnapshotsGet(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(cname) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	// Handle requests targeted to a container on a different node
@@ -242,7 +243,7 @@ func instanceSnapshotsPost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(name) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -369,7 +370,7 @@ func instanceSnapshotHandler(d *Daemon, r *http.Request) response.Response {
 
 	switch r.Method {
 	case "GET":
-		return snapshotGet(s, snapInst)
+		return snapshotGet(snapInst)
 	case "POST":
 		return snapshotPost(s, r, snapInst)
 	case "DELETE":
@@ -569,7 +570,7 @@ func snapshotPut(s *state.State, r *http.Request, snapInst instance.Instance) re
 //	    $ref: "#/responses/Forbidden"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
-func snapshotGet(s *state.State, snapInst instance.Instance) response.Response {
+func snapshotGet(snapInst instance.Instance) response.Response {
 	render, _, err := snapInst.RenderWithUsage()
 	if err != nil {
 		return response.SmartError(err)
@@ -667,7 +668,7 @@ func snapshotPost(s *state.State, r *http.Request, snapInst instance.Instance) r
 
 		run := func(op *operations.Operation) error {
 			ws.instance.SetOperation(op)
-			return ws.Do(s, op)
+			return ws.do(op)
 		}
 
 		if req.Target != nil {
@@ -689,7 +690,7 @@ func snapshotPost(s *state.State, r *http.Request, snapInst instance.Instance) r
 		return operations.OperationResponse(op)
 	} else if !migration {
 		if reqNew.Name == "" {
-			return response.BadRequest(fmt.Errorf("A new name for the instance must be provided"))
+			return response.BadRequest(errors.New("A new name for the instance must be provided"))
 		}
 	}
 

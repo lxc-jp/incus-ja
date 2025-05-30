@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -30,8 +31,8 @@ import (
 
 // Errors.
 var (
-	errBtrfsNoQuota  = fmt.Errorf("Quotas disabled on filesystem")
-	errBtrfsNoQGroup = fmt.Errorf("Unable to find quota group")
+	errBtrfsNoQuota  = errors.New("Quotas disabled on filesystem")
+	errBtrfsNoQGroup = errors.New("Unable to find quota group")
 )
 
 // btrfsISOVolSuffix suffix used for iso content type volumes.
@@ -182,8 +183,8 @@ func (d *btrfs) getSubvolumes(path string) ([]string, error) {
 // snapshotSubvolume creates a snapshot of the specified path at the dest supplied. If recursion is true and
 // sub volumes are found below the path then they are created at the relative location in dest.
 func (d *btrfs) snapshotSubvolume(path string, dest string, recursion bool) (revert.Hook, error) {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Single subvolume creation.
 	snapshot := func(path string, dest string) error {
@@ -192,7 +193,7 @@ func (d *btrfs) snapshotSubvolume(path string, dest string, recursion bool) (rev
 			return err
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			// Don't delete recursive since there already is a revert hook
 			// for each subvolume that got created.
 			_ = d.deleteSubvolume(dest, false)
@@ -230,8 +231,8 @@ func (d *btrfs) snapshotSubvolume(path string, dest string, recursion bool) (rev
 		}
 	}
 
-	cleanup := revert.Clone().Fail
-	revert.Success()
+	cleanup := reverter.Clone().Fail
+	reverter.Success()
 	return cleanup, nil
 }
 
@@ -601,7 +602,7 @@ func (d *btrfs) loadOptimizedBackupHeader(r io.ReadSeeker, mountPath string) (*B
 		}
 	}
 
-	return nil, fmt.Errorf("Optimized backup header file not found")
+	return nil, errors.New("Optimized backup header file not found")
 }
 
 // receiveSubVolume receives a subvolume from an io.Reader into the receivePath and returns the path to the received subvolume.
@@ -651,7 +652,7 @@ func (d *btrfs) receiveSubVolume(r io.Reader, receivePath string, tracker *iopro
 	}
 
 	if filename == "" {
-		return "", fmt.Errorf("Failed to determine received subvolume")
+		return "", errors.New("Failed to determine received subvolume")
 	}
 
 	subVolPath := filepath.Join(receivePath, filename)

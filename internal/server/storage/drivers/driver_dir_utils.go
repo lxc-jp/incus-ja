@@ -1,7 +1,7 @@
 package drivers
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/lxc/incus/v6/internal/server/storage/quota"
 	"github.com/lxc/incus/v6/shared/logger"
@@ -34,12 +34,12 @@ func (d *dir) setupInitialQuota(vol Volume) (revert.Hook, error) {
 		return nil, err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Define a function to revert the quota being setup.
 	revertFunc := func() { _ = d.deleteQuota(volPath, volID) }
-	revert.Add(revertFunc)
+	reverter.Add(revertFunc)
 
 	// Initialize the volume's project using the volume ID and set the quota.
 	sizeBytes, err := units.ParseByteSizeString(vol.ConfigSize())
@@ -52,7 +52,7 @@ func (d *dir) setupInitialQuota(vol Volume) (revert.Hook, error) {
 		return nil, err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return revertFunc, nil
 }
 
@@ -64,7 +64,7 @@ func (d *dir) deleteQuota(path string, volID int64) error {
 	}
 
 	if volID == 0 {
-		return fmt.Errorf("Missing volume ID")
+		return errors.New("Missing volume ID")
 	}
 
 	ok, err := quota.Supported(path)
@@ -99,7 +99,7 @@ func (d *dir) setQuota(path string, volID int64, sizeBytes int64) error {
 	}
 
 	if volID == 0 {
-		return fmt.Errorf("Missing volume ID")
+		return errors.New("Missing volume ID")
 	}
 
 	ok, err := quota.Supported(path)

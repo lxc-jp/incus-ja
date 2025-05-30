@@ -1,6 +1,7 @@
 package device
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -24,6 +25,12 @@ func (d *pci) validateConfig(instConf instance.ConfigReader) error {
 	}
 
 	rules := map[string]func(string) error{
+		// gendoc:generate(entity=devices, group=pci, key=address)
+		//
+		// ---
+		//  type: string
+		//  required: yes
+		//  shortdesc: PCI address of the device
 		"address": validate.IsPCIAddress,
 	}
 
@@ -40,7 +47,7 @@ func (d *pci) validateConfig(instConf instance.ConfigReader) error {
 // validateEnvironment checks if the PCI device is available.
 func (d *pci) validateEnvironment() error {
 	if d.inst.Type() == instancetype.VM && util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) {
-		return fmt.Errorf("PCI devices cannot be used when migration.stateful is enabled")
+		return errors.New("PCI devices cannot be used when migration.stateful is enabled")
 	}
 
 	return validatePCIDevice(d.config["address"])

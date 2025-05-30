@@ -2,7 +2,9 @@ package ovn
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"slices"
 	"strings"
@@ -210,7 +212,7 @@ func (o *NB) CreateLogicalRouter(ctx context.Context, routerName OVNRouter, mayE
 
 	// Check if already exists.
 	err := o.get(ctx, &logicalRouter)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -267,7 +269,7 @@ func (o *NB) DeleteLogicalRouter(ctx context.Context, routerName OVNRouter) erro
 	err := o.get(ctx, &logicalRouter)
 	if err != nil {
 		// Logical router is already gone.
-		if err == ErrNotFound {
+		if errors.Is(err, ErrNotFound) {
 			return nil
 		}
 
@@ -402,7 +404,7 @@ func (o *NB) CreateLogicalRouterNAT(ctx context.Context, routerName OVNRouter, n
 func (o *NB) DeleteLogicalRouterNAT(ctx context.Context, routerName OVNRouter, natType string, all bool, extIPs ...net.IP) error {
 	// Quick checks.
 	if all && len(extIPs) != 0 {
-		return fmt.Errorf("Can't ask for all NAT rules to be deleted and specify specific addresses")
+		return errors.New("Can't ask for all NAT rules to be deleted and specify specific addresses")
 	}
 
 	// Get the logical router.
@@ -476,6 +478,108 @@ func (o *NB) DeleteLogicalRouterNAT(ctx context.Context, routerName OVNRouter, n
 	}
 
 	_, err = ovsdb.CheckOperationResults(resp, operations)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CreateStaticMACBinding ensures a Static_Mac_Binding row exists in NB for this router port/IP.
+func (o *NB) CreateStaticMACBinding(ctx context.Context, portName OVNRouterPort, ip net.IP, mac net.HardwareAddr, mayExist bool) error {
+	binding := ovnNB.StaticMACBinding{
+		LogicalPort:        string(portName),
+		IP:                 ip.String(),
+		MAC:                mac.String(),
+		OverrideDynamicMAC: true,
+	}
+
+	// Check if the binding already exists.
+	err := o.get(ctx, &binding)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+
+	if binding.UUID != "" {
+		if !mayExist {
+			return ErrExists
+		}
+
+		if binding.LogicalPort == string(portName) && binding.IP == ip.String() && binding.MAC == mac.String() && binding.OverrideDynamicMAC {
+			return nil
+		}
+	}
+
+	// Create the record.
+	var operations []ovsdb.Operation
+
+	if binding.UUID == "" {
+		operations, err = o.client.Create(&binding)
+		if err != nil {
+			return err
+		}
+	} else {
+		operations, err = o.client.Where(&binding).Update(&binding)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Apply the changes.
+	reply, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(reply, operations)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteStaticMACBindings deletes all static MAC bindings from the specified router port.
+// It allows filtering what family to flush.
+func (o *NB) DeleteStaticMACBindings(ctx context.Context, portName OVNRouterPort, ipv4 bool, ipv6 bool) error {
+	if !ipv4 && !ipv6 {
+		return nil
+	}
+
+	// Get all the entries for this router port.
+	staticMACBindings := []ovnNB.StaticMACBinding{}
+	err := o.client.WhereCache(func(smb *ovnNB.StaticMACBinding) bool {
+		return smb.LogicalPort == string(portName)
+	}).List(ctx, &staticMACBindings)
+	if err != nil {
+		return err
+	}
+
+	// Check what needs to be deleted.
+	var operations []ovsdb.Operation
+	for _, binding := range staticMACBindings {
+		ip := net.ParseIP(binding.IP)
+		if ip != nil && ((ip.To4() != nil && ipv4) || (ip.To4() == nil && ipv6)) {
+			op, err := o.client.Where(&ovnNB.StaticMACBinding{UUID: binding.UUID}).Delete()
+			if err != nil {
+				return err
+			}
+
+			operations = append(operations, op...)
+		}
+	}
+
+	if len(operations) == 0 {
+		return nil
+	}
+
+	// Apply the database changes.
+	reply, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(reply, operations)
 	if err != nil {
 		return err
 	}
@@ -718,7 +822,7 @@ func (o *NB) CreateLogicalRouterPort(ctx context.Context, routerName OVNRouter, 
 
 	// Check if the entry already exists.
 	err := o.get(ctx, &logicalRouterPort)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -811,7 +915,7 @@ func (o *NB) DeleteLogicalRouterPort(ctx context.Context, routerName OVNRouter, 
 	err := o.get(ctx, &logicalRouterPort)
 	if err != nil {
 		// Logical router port is already gone.
-		if err == ErrNotFound {
+		if errors.Is(err, ErrNotFound) {
 			return nil
 		}
 
@@ -938,7 +1042,7 @@ func (o *NB) CreateLogicalSwitch(ctx context.Context, switchName OVNSwitch, mayE
 
 	// Check if already exists.
 	err := o.get(ctx, &logicalSwitch)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -1065,12 +1169,12 @@ func (o *NB) logicalSwitchParseExcludeIPs(ips []iprange.Range) ([]string, error)
 	excludeIPs := make([]string, 0, len(ips))
 	for _, v := range ips {
 		if v.Start == nil || v.Start.To4() == nil {
-			return nil, fmt.Errorf("Invalid exclude IPv4 range start address")
+			return nil, errors.New("Invalid exclude IPv4 range start address")
 		} else if v.End == nil {
 			excludeIPs = append(excludeIPs, v.Start.String())
 		} else {
 			if v.End != nil && v.End.To4() == nil {
-				return nil, fmt.Errorf("Invalid exclude IPv4 range end address")
+				return nil, errors.New("Invalid exclude IPv4 range end address")
 			}
 
 			excludeIPs = append(excludeIPs, fmt.Sprintf("%s..%s", v.Start.String(), v.End.String()))
@@ -1657,7 +1761,7 @@ func (o *NB) CreateLogicalSwitchPort(ctx context.Context, switchName OVNSwitch, 
 
 	// Check if the entry already exists.
 	err := o.get(ctx, &logicalSwitchPort)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -1686,7 +1790,7 @@ func (o *NB) CreateLogicalSwitchPort(ctx context.Context, switchName OVNSwitch, 
 			logicalSwitchPort.Options = map[string]string{"router-port": string(opts.RouterPort)}
 		} else {
 			if (opts.IPV4 == "none" && opts.IPV6 != "none") || (opts.IPV6 == "none" && opts.IPV4 != "none") {
-				return fmt.Errorf("OVN doesn't support disabling IP allocation on only one protocol")
+				return errors.New("OVN doesn't support disabling IP allocation on only one protocol")
 			}
 
 			addresses := []string{}
@@ -1929,9 +2033,7 @@ func (o *NB) UpdateLogicalSwitchPortOptions(ctx context.Context, portName OVNSwi
 		lsp.Options = map[string]string{}
 	}
 
-	for key, value := range options {
-		lsp.Options[key] = value
-	}
+	maps.Copy(lsp.Options, options)
 
 	// Update the record.
 	operations, err := o.client.Where(&lsp).Update(&lsp)
@@ -1978,7 +2080,7 @@ func (o *NB) UpdateLogicalSwitchPortDNS(ctx context.Context, switchName OVNSwitc
 	} else if len(dnsRecords) == 0 {
 		dnsRecord = ovnNB.DNS{}
 	} else {
-		return "", fmt.Errorf("Found more than one matching DNS record")
+		return "", errors.New("Found more than one matching DNS record")
 	}
 
 	// Make sure the external IDs are set.
@@ -2078,7 +2180,7 @@ func (o *NB) GetLogicalSwitchPortDNS(ctx context.Context, portName OVNSwitchPort
 	}
 
 	if len(dnsRecords[0].Records) > 1 {
-		return "", "", nil, fmt.Errorf("More than one DNS record found for logical switch port")
+		return "", "", nil, errors.New("More than one DNS record found for logical switch port")
 	}
 
 	var ips []net.IP
@@ -2187,7 +2289,7 @@ func (o *NB) logicalSwitchPortDeleteOperations(ctx context.Context, switchName O
 	err := o.get(ctx, &logicalSwitchPort)
 	if err != nil {
 		// Logical switch port is already gone.
-		if err == ErrNotFound {
+		if errors.Is(err, ErrNotFound) {
 			return nil, nil
 		}
 
@@ -2385,7 +2487,7 @@ func (o *NB) CreateChassisGroup(ctx context.Context, haChassisGroupName OVNChass
 
 	// Check if already exists.
 	err := o.get(ctx, &haChassisGroup)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -2427,7 +2529,7 @@ func (o *NB) DeleteChassisGroup(ctx context.Context, haChassisGroupName OVNChass
 	err := o.get(ctx, &haChassisGroup)
 	if err != nil {
 		// Already gone.
-		if err == ErrNotFound {
+		if errors.Is(err, ErrNotFound) {
 			return nil
 		}
 
@@ -2568,7 +2670,7 @@ func (o *NB) GetPortGroupInfo(ctx context.Context, portGroupName OVNPortGroup) (
 
 	err := o.get(ctx, pg)
 	if err != nil {
-		if err == ovsClient.ErrNotFound {
+		if errors.Is(err, ovsClient.ErrNotFound) {
 			return "", false, nil
 		}
 
@@ -2645,7 +2747,7 @@ func (o *NB) DeletePortGroup(ctx context.Context, portGroupNames ...OVNPortGroup
 
 		err := o.get(ctx, &pg)
 		if err != nil {
-			if err == ErrNotFound {
+			if errors.Is(err, ErrNotFound) {
 				// Already gone.
 				continue
 			}
@@ -2841,9 +2943,7 @@ func (o *NB) aclRuleAddOperations(ctx context.Context, entityTable string, entit
 			}
 		}
 
-		for k, v := range externalIDs {
-			acl.ExternalIDs[k] = v
-		}
+		maps.Copy(acl.ExternalIDs, externalIDs)
 
 		createOps, err := o.client.Create(&acl)
 		if err != nil {
@@ -3048,7 +3148,7 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 		}
 
 		err := o.get(ctx, &lb)
-		if err == nil || err == ErrTooMany {
+		if err == nil || errors.Is(err, ErrTooMany) {
 			// Delete the load balancer (by name in case there are duplicates).
 			lb := ovnNB.LoadBalancer{
 				Name: name,
@@ -3060,7 +3160,7 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 			}
 
 			operations = append(operations, deleteOps...)
-		} else if err != ErrNotFound {
+		} else if !errors.Is(err, ErrNotFound) {
 			return err
 		}
 	}
@@ -3096,11 +3196,11 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 	// Build up the commands to add VIPs to the load balancer.
 	for _, r := range vips {
 		if r.ListenAddress == nil {
-			return fmt.Errorf("Missing VIP listen address")
+			return errors.New("Missing VIP listen address")
 		}
 
 		if len(r.Targets) == 0 {
-			return fmt.Errorf("Missing VIP target(s)")
+			return errors.New("Missing VIP target(s)")
 		}
 
 		for _, lb := range []*ovnNB.LoadBalancer{lbtcp, lbudp} {
@@ -3115,7 +3215,7 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 			targetAddresses := []string{}
 			for _, target := range r.Targets {
 				if (r.ListenPort > 0 && target.Port <= 0) || (target.Port > 0 && r.ListenPort <= 0) {
-					return fmt.Errorf("The listen and target ports must be specified together")
+					return errors.New("The listen and target ports must be specified together")
 				}
 
 				// Determine the target address.
@@ -3264,13 +3364,13 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 				ip := net.ParseIP(target)
 				if ip.To4() == nil {
 					if healthCheck.CheckerIPV6 == nil {
-						return fmt.Errorf("No IPv6 address for load balancer health check")
+						return errors.New("No IPv6 address for load balancer health check")
 					}
 
 					lb.IPPortMappings[fmt.Sprintf("[%s]", target)] = fmt.Sprintf("%s:[%s]", lspName, healthCheck.CheckerIPV6.String())
 				} else {
 					if healthCheck.CheckerIPV4 == nil {
-						return fmt.Errorf("No IPv4 address for load balancer health check")
+						return errors.New("No IPv4 address for load balancer health check")
 					}
 
 					lb.IPPortMappings[target] = fmt.Sprintf("%s:%s", lspName, healthCheck.CheckerIPV4.String())
@@ -3350,7 +3450,7 @@ func (o *NB) DeleteLoadBalancer(ctx context.Context, loadBalancerNames ...OVNLoa
 			}
 
 			operations = append(operations, deleteOps...)
-		} else if err != ErrNotFound {
+		} else if !errors.Is(err, ErrNotFound) {
 			return err
 		}
 
@@ -3368,7 +3468,7 @@ func (o *NB) DeleteLoadBalancer(ctx context.Context, loadBalancerNames ...OVNLoa
 			}
 
 			operations = append(operations, deleteOps...)
-		} else if err != ErrNotFound {
+		} else if !errors.Is(err, ErrNotFound) {
 			return err
 		}
 	}
@@ -3497,7 +3597,7 @@ func (o *NB) UpdateAddressSetAdd(ctx context.Context, addressSetPrefix OVNAddres
 	}
 
 	err := o.get(ctx, &ipv4Set)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -3510,7 +3610,7 @@ func (o *NB) UpdateAddressSetAdd(ctx context.Context, addressSetPrefix OVNAddres
 	}
 
 	err = o.get(ctx, &ipv6Set)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -3676,7 +3776,7 @@ func (o *NB) DeleteAddressSet(ctx context.Context, addressSetPrefix OVNAddressSe
 	}
 
 	err := o.get(ctx, &ipv4Set)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -3685,7 +3785,7 @@ func (o *NB) DeleteAddressSet(ctx context.Context, addressSetPrefix OVNAddressSe
 	}
 
 	err = o.get(ctx, &ipv6Set)
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 
@@ -3897,7 +3997,7 @@ func (o *NB) CreateLogicalRouterPeering(ctx context.Context, opts OVNRouterPeeri
 	operations := []ovsdb.Operation{}
 
 	if len(opts.LocalRouterPortIPs) <= 0 || len(opts.TargetRouterPortIPs) <= 0 {
-		return fmt.Errorf("IPs not populated for both router ports")
+		return errors.New("IPs not populated for both router ports")
 	}
 
 	// Remove peering router ports and static routes using ports from both routers.
@@ -3908,8 +4008,8 @@ func (o *NB) CreateLogicalRouterPeering(ctx context.Context, opts OVNRouterPeeri
 	}
 
 	// Will use the first IP from each family of the router port interfaces.
-	localRouterGatewayIPs := make(map[uint]net.IP, 0)
-	targetRouterGatewayIPs := make(map[uint]net.IP, 0)
+	localRouterGatewayIPs := make(map[uint]net.IP)
+	targetRouterGatewayIPs := make(map[uint]net.IP)
 
 	// Create the local router port.
 	localPeerName := string(opts.TargetRouterPort)
@@ -4109,7 +4209,7 @@ func (o *NB) DeleteLogicalRouterPeering(ctx context.Context, opts OVNRouterPeeri
 
 	// Remove peering router ports and static routes using ports from both routers.
 	if opts.LocalRouter == "" || opts.TargetRouter == "" {
-		return fmt.Errorf("Router names not populated for both routers")
+		return errors.New("Router names not populated for both routers")
 	}
 
 	deleteLogicalRouterPort := func(routerName OVNRouter, portName OVNRouterPort) error {
@@ -4120,7 +4220,7 @@ func (o *NB) DeleteLogicalRouterPeering(ctx context.Context, opts OVNRouterPeeri
 
 		err := o.get(ctx, &logicalRouterPort)
 		if err != nil {
-			if err == ErrNotFound {
+			if errors.Is(err, ErrNotFound) {
 				// Logical router port is already gone.
 				return nil
 			}

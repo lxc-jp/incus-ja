@@ -415,7 +415,7 @@ func (d *common) VolatileSet(changes map[string]string) error {
 	// Quick check.
 	for key := range changes {
 		if !strings.HasPrefix(key, internalInstance.ConfigVolatilePrefix) {
-			return fmt.Errorf("Only volatile keys can be modified with VolatileSet")
+			return errors.New("Only volatile keys can be modified with VolatileSet")
 		}
 	}
 
@@ -580,8 +580,9 @@ func (d *common) deviceVolatileGetFunc(devName string) func() map[string]string 
 		volatile := make(map[string]string)
 		prefix := fmt.Sprintf("volatile.%s.", devName)
 		for k, v := range d.localConfig {
-			if strings.HasPrefix(k, prefix) {
-				volatile[strings.TrimPrefix(k, prefix)] = v
+			after, ok := strings.CutPrefix(k, prefix)
+			if ok {
+				volatile[after] = v
 			}
 		}
 		return volatile
@@ -664,7 +665,7 @@ func (d *common) restartCommon(inst instance.Instance, timeout time.Duration) er
 		}
 	} else {
 		if inst.IsFrozen() {
-			err = fmt.Errorf("Instance is not running")
+			err = errors.New("Instance is not running")
 			op.Done(err)
 			return err
 		}
@@ -785,8 +786,8 @@ func (d *common) runHooks(hooks []func() error) error {
 
 // snapshot handles the common part of the snapshotting process.
 func (d *common) snapshotCommon(inst instance.Instance, name string, expiry time.Time, stateful bool) error {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Setup the arguments.
 	args := db.InstanceArgs{
@@ -809,7 +810,7 @@ func (d *common) snapshotCommon(inst instance.Instance, name string, expiry time
 		return fmt.Errorf("Failed creating instance snapshot record %q: %w", name, err)
 	}
 
-	revert.Add(cleanup)
+	reverter.Add(cleanup)
 	defer snapInstOp.Done(err)
 
 	pool, err := storagePools.LoadByInstance(d.state, snap)
@@ -822,7 +823,7 @@ func (d *common) snapshotCommon(inst instance.Instance, name string, expiry time
 		return fmt.Errorf("Create instance snapshot: %w", err)
 	}
 
-	revert.Add(func() { _ = snap.Delete(true) })
+	reverter.Add(func() { _ = snap.Delete(true) })
 
 	// Mount volume for backup.yaml writing.
 	_, err = pool.MountInstance(inst, d.op)
@@ -838,7 +839,8 @@ func (d *common) snapshotCommon(inst instance.Instance, name string, expiry time
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return nil
 }
 
@@ -895,7 +897,7 @@ func (d *common) isRunningStatusCode(statusCode api.StatusCode) bool {
 // isStartableStatusCode returns an error if the status code means the instance cannot be started currently.
 func (d *common) isStartableStatusCode(statusCode api.StatusCode) error {
 	if d.isRunningStatusCode(statusCode) {
-		return fmt.Errorf("The instance is already running")
+		return errors.New("The instance is already running")
 	}
 
 	// If the instance process exists but is crashed, don't allow starting until its been cleaned up, as it
@@ -949,7 +951,7 @@ func (d *common) validateStartup(stateful bool, statusCode api.StatusCode) error
 
 	// Validate architecture.
 	if !slices.Contains(d.state.OS.Architectures, d.architecture) {
-		return fmt.Errorf("Requested architecture isn't supported by this host")
+		return errors.New("Requested architecture isn't supported by this host")
 	}
 
 	// Must happen before creating operation Start lock to avoid the status check returning Stopped due to the
@@ -1255,7 +1257,7 @@ func (d *common) deviceAdd(dev device.Device, instanceRunning bool) error {
 	l.Debug("Adding device")
 
 	if instanceRunning && !dev.CanHotPlug() {
-		return fmt.Errorf("Device cannot be added when instance is running")
+		return errors.New("Device cannot be added when instance is running")
 	}
 
 	return dev.Add()
@@ -1267,7 +1269,7 @@ func (d *common) deviceRemove(dev device.Device, instanceRunning bool) error {
 	l.Debug("Removing device")
 
 	if instanceRunning && !dev.CanHotPlug() {
-		return fmt.Errorf("Device cannot be removed when instance is running")
+		return errors.New("Device cannot be removed when instance is running")
 	}
 
 	return dev.Remove()
@@ -1275,8 +1277,8 @@ func (d *common) deviceRemove(dev device.Device, instanceRunning bool) error {
 
 // devicesAdd adds devices to instance.
 func (d *common) devicesAdd(inst instance.Instance, instanceRunning bool) (revert.Hook, error) {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	for _, entry := range d.expandedDevices.Sorted() {
 		dev, err := d.deviceLoad(inst, entry.Name, entry.Config)
@@ -1308,11 +1310,12 @@ func (d *common) devicesAdd(inst instance.Instance, instanceRunning bool) (rever
 			return nil, fmt.Errorf("Failed to add device %q: %w", dev.Name(), err)
 		}
 
-		revert.Add(func() { _ = d.deviceRemove(dev, instanceRunning) })
+		reverter.Add(func() { _ = d.deviceRemove(dev, instanceRunning) })
 	}
 
-	cleanup := revert.Clone().Fail
-	revert.Success()
+	cleanup := reverter.Clone().Fail
+	reverter.Success()
+
 	return cleanup, nil
 }
 
@@ -1333,12 +1336,12 @@ func (d *common) devicesRegister(inst instance.Instance) {
 
 // devicesUpdate applies device changes to an instance.
 func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfig.Devices, addDevices deviceConfig.Devices, updateDevices deviceConfig.Devices, oldExpandedDevices deviceConfig.Devices, instanceRunning bool, userRequested bool) error {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	dm, ok := inst.(deviceManager)
 	if !ok {
-		return fmt.Errorf("Instance is not compatible with deviceManager interface")
+		return errors.New("Instance is not compatible with deviceManager interface")
 	}
 
 	// Remove devices in reverse order to how they were added.
@@ -1364,7 +1367,7 @@ func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfi
 			}
 
 			err = d.deviceRemove(dev, instanceRunning)
-			if err != nil && err != device.ErrUnsupportedDevType {
+			if err != nil && !errors.Is(err, device.ErrUnsupportedDevType) {
 				return fmt.Errorf("Failed to remove device %q: %w", dev.Name(), err)
 			}
 		}
@@ -1412,7 +1415,7 @@ func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfi
 			l.Error("Failed to add device, skipping as non-user requested", logger.Ctx{"err": err})
 		}
 
-		revert.Add(func() { _ = d.deviceRemove(dev, instanceRunning) })
+		reverter.Add(func() { _ = d.deviceRemove(dev, instanceRunning) })
 
 		if instanceRunning {
 			err = dev.PreStartCheck()
@@ -1421,11 +1424,20 @@ func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfi
 			}
 
 			_, err := dm.deviceStart(dev, instanceRunning)
-			if err != nil && err != device.ErrUnsupportedDevType {
+			if err != nil && !errors.Is(err, device.ErrUnsupportedDevType) {
 				return fmt.Errorf("Failed to start device %q: %w", dev.Name(), err)
 			}
 
-			revert.Add(func() { _ = dm.deviceStop(dev, instanceRunning, "") })
+			reverter.Add(func() { _ = dm.deviceStop(dev, instanceRunning, "") })
+		}
+
+		// For the root disk, call Update as its size may change.
+		// Update will invoke applyQuota, which resizes the disk if necessary.
+		if internalInstance.IsRootDiskDevice(dev.Config()) {
+			err = dev.Update(oldExpandedDevices, instanceRunning)
+			if err != nil {
+				return fmt.Errorf("Failed to update device %q: %w", dev.Name(), err)
+			}
 		}
 	}
 
@@ -1461,7 +1473,7 @@ func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfi
 				}
 
 				err = d.deviceRemove(dev, instanceRunning)
-				if err != nil && err != device.ErrUnsupportedDevType {
+				if err != nil && !errors.Is(err, device.ErrUnsupportedDevType) {
 					l.Error("Failed to remove device after update validation failed", logger.Ctx{"err": err})
 				}
 			}
@@ -1475,7 +1487,8 @@ func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfi
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return nil
 }
 
@@ -1636,7 +1649,7 @@ func (d *common) processStartedAt(pid int) (time.Time, error) {
 
 	linuxInfo, ok := file.Sys().(*syscall.Stat_t)
 	if !ok {
-		return time.Time{}, fmt.Errorf("Bad stat type")
+		return time.Time{}, errors.New("Bad stat type")
 	}
 
 	return time.Unix(int64(linuxInfo.Ctim.Sec), int64(linuxInfo.Ctim.Nsec)), nil
@@ -1663,4 +1676,18 @@ func (d *common) ETag() []any {
 	}
 
 	return etag
+}
+
+// ClearLimitsCPUNodes clears the "volatile.cpu.nodes" configuration if necessary.
+func (d *common) ClearLimitsCPUNodes(changedConfig []string) {
+	if !slices.Contains(changedConfig, "limits.cpu.nodes") {
+		return
+	}
+
+	value := d.expandedConfig["limits.cpu.nodes"]
+	if value == "balanced" {
+		return
+	}
+
+	d.localConfig["volatile.cpu.nodes"] = ""
 }

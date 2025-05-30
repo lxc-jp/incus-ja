@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -48,7 +49,7 @@ func (d *cephobject) s3Client(creds S3Credentials) (*minio.Client, error) {
 
 		ok := rootCAs.AppendCertsFromPEM(certs)
 		if !ok {
-			return nil, fmt.Errorf("Failed adding S3 client certificates")
+			return nil, errors.New("Failed adding S3 client certificates")
 		}
 
 		// Trust the cert pool in our client.
@@ -90,12 +91,12 @@ func (d *cephobject) CreateBucket(bucket Volume, op *operations.Operation) error
 	_, bucketName := project.StorageVolumeParts(bucket.name)
 	storageBucketName := d.radosgwBucketName(bucketName)
 
-	// Must be defined before revert so that its not cancelled by time revert.Fail runs.
+	// Must be defined before revert so that its not cancelled by time reverter.Fail runs.
 	ctx, ctxCancel := context.WithTimeout(context.TODO(), time.Duration(time.Second*30))
 	defer ctxCancel()
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	minioClient, err := d.s3Client(*adminUserInfo)
 	if err != nil {
@@ -117,7 +118,7 @@ func (d *cephobject) CreateBucket(bucket Volume, op *operations.Operation) error
 		return fmt.Errorf("Failed creating bucket: %w", err)
 	}
 
-	revert.Add(func() { _ = minioClient.RemoveBucket(ctx, storageBucketName) })
+	reverter.Add(func() { _ = minioClient.RemoveBucket(ctx, storageBucketName) })
 
 	// Create bucket user.
 	_, err = d.radosgwadminUserAdd(context.TODO(), storageBucketName, -1)
@@ -125,7 +126,7 @@ func (d *cephobject) CreateBucket(bucket Volume, op *operations.Operation) error
 		return fmt.Errorf("Failed creating bucket user: %w", err)
 	}
 
-	revert.Add(func() { _ = d.radosgwadminUserDelete(context.TODO(), storageBucketName) })
+	reverter.Add(func() { _ = d.radosgwadminUserDelete(context.TODO(), storageBucketName) })
 
 	// Link bucket to user.
 	err = d.radosgwadminBucketLink(context.TODO(), storageBucketName, storageBucketName)
@@ -141,7 +142,7 @@ func (d *cephobject) CreateBucket(bucket Volume, op *operations.Operation) error
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 

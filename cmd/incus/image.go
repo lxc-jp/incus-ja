@@ -310,7 +310,7 @@ type cmdImageDelete struct {
 func (c *cmdImageDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = usage("delete", i18n.G("[<remote>:]<image> [[<remote>:]<image>...]"))
-	cmd.Aliases = []string{"rm"}
+	cmd.Aliases = []string{"rm", "remove"}
 	cmd.Short = i18n.G("Delete images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Delete images`))
@@ -1013,7 +1013,7 @@ func (c *cmdImageInfo) Run(cmd *cobra.Command, args []string) error {
 	fmt.Printf(i18n.G("Architecture: %s")+"\n", info.Architecture)
 	fmt.Printf(i18n.G("Type: %s")+"\n", imgType)
 	fmt.Printf(i18n.G("Public: %s")+"\n", public)
-	fmt.Printf(i18n.G("Timestamps:") + "\n")
+	fmt.Print(i18n.G("Timestamps:") + "\n")
 
 	if !info.CreatedAt.IsZero() {
 		fmt.Printf("    "+i18n.G("Created: %s")+"\n", info.CreatedAt.Local().Format(dateLayout))
@@ -1024,13 +1024,13 @@ func (c *cmdImageInfo) Run(cmd *cobra.Command, args []string) error {
 	if !info.ExpiresAt.IsZero() {
 		fmt.Printf("    "+i18n.G("Expires: %s")+"\n", info.ExpiresAt.Local().Format(dateLayout))
 	} else {
-		fmt.Printf("    " + i18n.G("Expires: never") + "\n")
+		fmt.Print("    " + i18n.G("Expires: never") + "\n")
 	}
 
 	if !info.LastUsedAt.IsZero() {
 		fmt.Printf("    "+i18n.G("Last used: %s")+"\n", info.LastUsedAt.Local().Format(dateLayout))
 	} else {
-		fmt.Printf("    " + i18n.G("Last used: never") + "\n")
+		fmt.Print("    " + i18n.G("Last used: never") + "\n")
 	}
 
 	fmt.Println(i18n.G("Properties:"))
@@ -1058,7 +1058,7 @@ func (c *cmdImageInfo) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(info.Profiles) == 0 {
-		fmt.Printf(i18n.G("Profiles: ") + "[]\n")
+		fmt.Print(i18n.G("Profiles: ") + "[]\n")
 	} else {
 		fmt.Println(i18n.G("Profiles:"))
 		for _, name := range info.Profiles {
@@ -1112,7 +1112,7 @@ Column shorthand chars:
     t - Type`))
 
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultImagesColumns, i18n.G("Columns")+"``")
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Display images from all projects"))
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {

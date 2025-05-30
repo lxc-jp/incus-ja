@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -156,7 +157,7 @@ func (s *Schema) Ensure(db *sql.DB) (int, error) {
 
 		if s.check != nil {
 			err := s.check(ctx, current, tx)
-			if err == ErrGracefulAbort {
+			if errors.Is(err, ErrGracefulAbort) {
 				// Abort the update gracefully, committing what
 				// we've done so far.
 				aborted = true
@@ -306,7 +307,7 @@ func queryCurrentVersion(ctx context.Context, tx *sql.Tx) (int, error) {
 	if hasVersion(30) && hasVersion(32) && !hasVersion(31) {
 		err = insertSchemaVersion(tx, 31)
 		if err != nil {
-			return -1, fmt.Errorf("failed to insert missing schema version 31")
+			return -1, errors.New("failed to insert missing schema version 31")
 		}
 
 		versions, err = selectSchemaVersions(ctx, tx)
@@ -326,7 +327,7 @@ func queryCurrentVersion(ctx context.Context, tx *sql.Tx) (int, error) {
 			// Insert the missing version.
 			err := insertSchemaVersion(tx, 38)
 			if err != nil {
-				return -1, fmt.Errorf("Failed to insert missing schema version 38")
+				return -1, errors.New("Failed to insert missing schema version 38")
 			}
 
 			versions = append(versions, 38)
@@ -404,7 +405,7 @@ func checkAllUpdatesAreApplied(ctx context.Context, tx *sql.Tx, updates []Update
 	}
 
 	if len(versions) == 0 {
-		return fmt.Errorf("expected schema table to contain at least one row")
+		return errors.New("expected schema table to contain at least one row")
 	}
 
 	err = checkSchemaVersionsHaveNoHoles(versions)

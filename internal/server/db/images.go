@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -392,7 +393,7 @@ func (c *ClusterTx) GetImageByFingerprintPrefix(ctx context.Context, fingerprint
 	case 1:
 		object = images[0]
 	default:
-		return -1, nil, fmt.Errorf("More than one image matches")
+		return -1, nil, errors.New("More than one image matches")
 	}
 
 	image.Fingerprint = object.Fingerprint
@@ -560,13 +561,11 @@ WHERE images.fingerprint = ?
 	}
 
 	if len(addresses) == 0 {
-		return "", fmt.Errorf("Image not available on any online member")
+		return "", errors.New("Image not available on any online member")
 	}
 
-	for _, address := range addresses {
-		if address == localAddress {
-			return "", nil
-		}
+	if slices.Contains(addresses, localAddress) {
+		return "", nil
 	}
 
 	return addresses[0], nil
@@ -657,7 +656,7 @@ func (c *ClusterTx) GetImageAlias(ctx context.Context, projectName string, image
 	arg2 := []any{&id, &fingerprint, &imageType, &description}
 	err = c.tx.QueryRowContext(ctx, q, arg1...).Scan(arg2...)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return -1, api.ImageAliasesEntry{}, api.StatusErrorf(http.StatusNotFound, "Image alias not found")
 		}
 

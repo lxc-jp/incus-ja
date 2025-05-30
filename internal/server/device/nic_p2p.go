@@ -138,7 +138,7 @@ func (d *nicP2P) validateConfig(instConf instance.ConfigReader) error {
 // validateEnvironment checks the runtime environment for correctness.
 func (d *nicP2P) validateEnvironment() error {
 	if d.inst.Type() == instancetype.Container && d.config["name"] == "" {
-		return fmt.Errorf("Requires name property to start")
+		return errors.New("Requires name property to start")
 	}
 
 	return nil
@@ -162,8 +162,8 @@ func (d *nicP2P) Start() (*deviceConfig.RunConfig, error) {
 		return nil, err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	saveData := make(map[string]string)
 	saveData["host_name"] = d.config["host_name"]
@@ -197,7 +197,7 @@ func (d *nicP2P) Start() (*deviceConfig.RunConfig, error) {
 		return nil, err
 	}
 
-	revert.Add(func() { _ = network.InterfaceRemove(saveData["host_name"]) })
+	reverter.Add(func() { _ = network.InterfaceRemove(saveData["host_name"]) })
 
 	// Attempt to disable router advertisement acceptance.
 	err = localUtil.SysctlSet(fmt.Sprintf("net/ipv6/conf/%s/accept_ra", saveData["host_name"]), "0")
@@ -246,7 +246,8 @@ func (d *nicP2P) Start() (*deviceConfig.RunConfig, error) {
 			}...)
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return &runConf, nil
 }
 

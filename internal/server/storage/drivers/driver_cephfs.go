@@ -115,8 +115,8 @@ func (d *cephfs) FillConfig() error {
 // Create is called during pool creation and is effectively using an empty driver struct.
 // WARNING: The Create() function cannot rely on any of the struct attributes being set.
 func (d *cephfs) Create() error {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	err := d.FillConfig()
 	if err != nil {
@@ -125,11 +125,11 @@ func (d *cephfs) Create() error {
 
 	// Config validation.
 	if d.config["source"] == "" {
-		return fmt.Errorf("Missing required source name/path")
+		return errors.New("Missing required source name/path")
 	}
 
 	if d.config["cephfs.path"] != "" && d.config["cephfs.path"] != d.config["source"] {
-		return fmt.Errorf("cephfs.path must match the source")
+		return errors.New("cephfs.path must match the source")
 	}
 
 	d.config["cephfs.path"] = d.config["source"]
@@ -191,7 +191,7 @@ func (d *cephfs) Create() error {
 					return fmt.Errorf("Failed to create ceph OSD pool %q: %w", pool, err)
 				}
 
-				revert.Add(func() {
+				reverter.Add(func() {
 					// Delete the OSD pool.
 					_, _ = subprocess.RunCommand("ceph",
 						"--name", fmt.Sprintf("client.%s", d.config["cephfs.user.name"]),
@@ -221,7 +221,7 @@ func (d *cephfs) Create() error {
 			return fmt.Errorf("Failed to create CephFS %q: %w", fsName, err)
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			// Set the FS to fail so that we can remove it.
 			_, _ = subprocess.RunCommand("ceph",
 				"--name", fmt.Sprintf("client.%s", d.config["cephfs.user.name"]),
@@ -267,12 +267,12 @@ func (d *cephfs) Create() error {
 	clusterName := d.config["cephfs.cluster_name"]
 	userName := d.config["cephfs.user.name"]
 
-	fsid, err := CephFsid(clusterName)
+	fsid, err := CephFsid(clusterName, userName)
 	if err != nil {
 		return err
 	}
 
-	monitors, err := CephMonitors(clusterName)
+	monitors, err := CephMonitors(clusterName, userName)
 	if err != nil {
 		return err
 	}
@@ -307,10 +307,10 @@ func (d *cephfs) Create() error {
 	// Check that the existing path is empty.
 	ok, _ := internalUtil.PathIsEmpty(filepath.Join(mountPoint, fsPath))
 	if !ok {
-		return fmt.Errorf("Only empty CephFS paths can be used as a storage pool")
+		return errors.New("Only empty CephFS paths can be used as a storage pool")
 	}
 
-	revert.Success()
+	reverter.Success()
 
 	return nil
 }
@@ -344,12 +344,12 @@ func (d *cephfs) Delete(op *operations.Operation) error {
 	clusterName := d.config["cephfs.cluster_name"]
 	userName := d.config["cephfs.user.name"]
 
-	fsid, err := CephFsid(clusterName)
+	fsid, err := CephFsid(clusterName, userName)
 	if err != nil {
 		return err
 	}
 
-	monitors, err := CephMonitors(clusterName)
+	monitors, err := CephMonitors(clusterName, userName)
 	if err != nil {
 		return err
 	}
@@ -438,12 +438,12 @@ func (d *cephfs) Mount() (bool, error) {
 	clusterName := d.config["cephfs.cluster_name"]
 	userName := d.config["cephfs.user.name"]
 
-	fsid, err := CephFsid(clusterName)
+	fsid, err := CephFsid(clusterName, userName)
 	if err != nil {
 		return false, err
 	}
 
-	monitors, err := CephMonitors(clusterName)
+	monitors, err := CephMonitors(clusterName, userName)
 	if err != nil {
 		return false, err
 	}

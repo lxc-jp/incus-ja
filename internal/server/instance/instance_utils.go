@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -84,11 +85,11 @@ func ValidConfig(sysOS *sys.OS, config map[string]string, expanded bool, instanc
 
 	for k, v := range config {
 		if instanceType == instancetype.Any && !expanded && strings.HasPrefix(k, instance.ConfigVolatilePrefix) {
-			return fmt.Errorf("Volatile keys can only be set on instances")
+			return errors.New("Volatile keys can only be set on instances")
 		}
 
 		if instanceType == instancetype.Any && !expanded && strings.HasPrefix(k, "image.") {
-			return fmt.Errorf("Image keys can only be set on instances")
+			return errors.New("Image keys can only be set on instances")
 		}
 
 		err := validConfigKey(sysOS, k, v, instanceType)
@@ -123,11 +124,11 @@ func ValidConfig(sysOS *sys.OS, config map[string]string, expanded bool, instanc
 	isDenyCompat := util.IsTrue(val)
 
 	if rawSeccomp && (isAllow || isDeny || isDenyDefault || isDenyCompat) {
-		return fmt.Errorf("raw.seccomp is mutually exclusive with security.syscalls*")
+		return errors.New("raw.seccomp is mutually exclusive with security.syscalls*")
 	}
 
 	if isAllow && (isDeny || isDenyDefault || isDenyCompat) {
-		return fmt.Errorf("security.syscalls.allow is mutually exclusive with security.syscalls.deny*")
+		return errors.New("security.syscalls.allow is mutually exclusive with security.syscalls.deny*")
 	}
 
 	_, err = seccomp.SyscallInterceptMountFilter(config)
@@ -136,11 +137,11 @@ func ValidConfig(sysOS *sys.OS, config map[string]string, expanded bool, instanc
 	}
 
 	if instanceType == instancetype.Container && expanded && util.IsFalseOrEmpty(config["security.privileged"]) && sysOS.IdmapSet == nil {
-		return fmt.Errorf("No uid/gid allocation configured. In this mode, only privileged containers are supported")
+		return errors.New("No uid/gid allocation configured. In this mode, only privileged containers are supported")
 	}
 
 	if util.IsTrue(config["security.privileged"]) && util.IsTrue(config["nvidia.runtime"]) {
-		return fmt.Errorf("nvidia.runtime is incompatible with privileged containers")
+		return errors.New("nvidia.runtime is incompatible with privileged containers")
 	}
 
 	return nil
@@ -216,15 +217,15 @@ func lxcValidConfig(rawLxc string) error {
 
 		// block some keys
 		if key == "lxc.logfile" || key == "lxc.log.file" {
-			return fmt.Errorf("Setting lxc.logfile is not allowed")
+			return errors.New("Setting lxc.logfile is not allowed")
 		}
 
 		if key == "lxc.syslog" || key == "lxc.log.syslog" {
-			return fmt.Errorf("Setting lxc.log.syslog is not allowed")
+			return errors.New("Setting lxc.log.syslog is not allowed")
 		}
 
 		if key == "lxc.ephemeral" {
-			return fmt.Errorf("Setting lxc.ephemeral is not allowed")
+			return errors.New("Setting lxc.ephemeral is not allowed")
 		}
 
 		if strings.HasPrefix(key, "lxc.prlimit.") {
@@ -279,7 +280,7 @@ func AllowedUnprivilegedOnlyMap(rawIdmap string) error {
 
 	for _, ent := range rawMaps.Entries {
 		if ent.HostID == 0 {
-			return fmt.Errorf("Cannot map root user into container as the server was configured to only allow unprivileged containers")
+			return errors.New("Cannot map root user into container as the server was configured to only allow unprivileged containers")
 		}
 	}
 
@@ -527,7 +528,7 @@ func ResolveImage(ctx context.Context, tx *db.ClusterTx, projectName string, sou
 
 	if source.Properties != nil {
 		if source.Server != "" {
-			return "", fmt.Errorf("Property match is only supported for local images")
+			return "", errors.New("Property match is only supported for local images")
 		}
 
 		hashes, err := tx.GetImagesFingerprints(ctx, projectName, false)
@@ -565,10 +566,10 @@ func ResolveImage(ctx context.Context, tx *db.ClusterTx, projectName string, sou
 			return image.Fingerprint, nil
 		}
 
-		return "", fmt.Errorf("No matching image could be found")
+		return "", errors.New("No matching image could be found")
 	}
 
-	return "", fmt.Errorf("Must specify one of alias, fingerprint or properties for init from image")
+	return "", errors.New("Must specify one of alias, fingerprint or properties for init from image")
 }
 
 // SuitableArchitectures returns a slice of architecture ids based on an instance create request.
@@ -714,7 +715,7 @@ func ValidName(instanceName string, isSnapshot bool) error {
 
 		// Snapshot part is more flexible, but doesn't allow space or / character.
 		if strings.ContainsAny(snapshotName, " /") {
-			return fmt.Errorf("Invalid instance snapshot name: Cannot contain space or / characters")
+			return errors.New("Invalid instance snapshot name: Cannot contain space or / characters")
 		}
 	} else {
 		if strings.Contains(instanceName, instance.SnapshotDelimiter) {
@@ -737,8 +738,8 @@ func ValidName(instanceName string, isSnapshot bool) error {
 // instance is fully completed, and a revert fail function that can be used to undo this function if a subsequent
 // step fails.
 func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operation, clearLogDir bool, checkArchitecture bool) (Instance, *operationlock.InstanceOperation, revert.Hook, error) {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Check instance type requested is supported by this machine.
 	err := s.InstanceTypes[args.Type]
@@ -758,7 +759,7 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 			return err
 		})
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("Failed to get default profile for new instance")
+			return nil, nil, nil, errors.New("Failed to get default profile for new instance")
 		}
 	}
 
@@ -819,7 +820,7 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 	}
 
 	if checkArchitecture && !slices.Contains(s.OS.Architectures, args.Architecture) {
-		return nil, nil, nil, fmt.Errorf("Requested architecture isn't supported by this host")
+		return nil, nil, nil, errors.New("Requested architecture isn't supported by this host")
 	}
 
 	var profiles []string
@@ -841,7 +842,7 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 		}
 
 		if checkedProfiles[profile.Name] {
-			return nil, nil, nil, fmt.Errorf("Duplicate profile found in request")
+			return nil, nil, nil, errors.New("Duplicate profile found in request")
 		}
 
 		checkedProfiles[profile.Name] = true
@@ -861,7 +862,7 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 		return nil, nil, nil, err
 	}
 
-	revert.Add(func() { opl.Done(err) })
+	reverter.Add(func() { opl.Done(err) })
 
 	var dbInst cluster.Instance
 	var p *api.Project
@@ -1003,7 +1004,7 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 		return nil
 	})
 	if err != nil {
-		if err == db.ErrAlreadyDefined {
+		if errors.Is(err, db.ErrAlreadyDefined) {
 			thing := "Instance"
 			if instance.IsSnapshot(args.Name) {
 				thing = "Snapshot"
@@ -1015,7 +1016,7 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 		return nil, nil, nil, err
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		_ = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 			return tx.DeleteInstance(ctx, dbInst.Project, dbInst.Name)
 		})
@@ -1026,7 +1027,7 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 		return nil, nil, nil, fmt.Errorf("Failed initializing instance: %w", err)
 	}
 
-	revert.Add(cleanup)
+	reverter.Add(cleanup)
 
 	// Wipe any existing log for this instance name.
 	if clearLogDir {
@@ -1034,8 +1035,9 @@ func CreateInternal(s *state.State, args db.InstanceArgs, op *operations.Operati
 		_ = os.RemoveAll(inst.RunPath())
 	}
 
-	cleanup = revert.Clone().Fail
-	revert.Success()
+	cleanup = reverter.Clone().Fail
+	reverter.Success()
+
 	return inst, opl, cleanup, err
 }
 

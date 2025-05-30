@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -497,7 +498,7 @@ func (g *Gateway) TransferLeadership() error {
 	}
 
 	if id == 0 {
-		return fmt.Errorf("No online voter found")
+		return errors.New("No online voter found")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -615,7 +616,7 @@ func (g *Gateway) Reset(networkCert *localtls.CertInfo) error {
 }
 
 // ErrNodeIsNotClustered indicates the node is not clustered.
-var ErrNodeIsNotClustered error = fmt.Errorf("Server is not clustered")
+var ErrNodeIsNotClustered error = errors.New("Server is not clustered")
 
 // LeaderAddress returns the address of the current raft leader.
 func (g *Gateway) LeaderAddress() (string, error) {
@@ -692,7 +693,7 @@ func (g *Gateway) LeaderAddress() (string, error) {
 		// This should never happen because the raft_nodes table should
 		// be never empty for a clustered node, but check it for good
 		// measure.
-		return "", fmt.Errorf("No raft node known")
+		return "", errors.New("No raft node known")
 	}
 
 	transport, cleanup := tlsTransport(config)
@@ -745,7 +746,7 @@ func (g *Gateway) LeaderAddress() (string, error) {
 		return leader, nil
 	}
 
-	return "", fmt.Errorf("RAFT cluster is unavailable")
+	return "", errors.New("RAFT cluster is unavailable")
 }
 
 // NetworkUpdateCert sets a new network certificate for the gateway
@@ -772,7 +773,7 @@ func (g *Gateway) init(bootstrap bool) error {
 
 	dir := filepath.Join(g.db.Dir(), "global")
 	if util.PathExists(filepath.Join(dir, "logs.db")) {
-		return fmt.Errorf("Unsupported upgrade path, please first upgrade to LXD 4.0")
+		return errors.New("Unsupported upgrade path, please first upgrade to LXD 4.0")
 	}
 
 	// If the resulting raft instance is not nil, it means that this node
@@ -865,7 +866,7 @@ func (g *Gateway) init(bootstrap bool) error {
 func (g *Gateway) WaitLeadership() error {
 	n := 80
 	sleep := 250 * time.Millisecond
-	for i := 0; i < n; i++ {
+	for range n {
 		g.lock.RLock()
 		isLeader, err := g.isLeader()
 		if err != nil {
@@ -908,7 +909,7 @@ func (g *Gateway) isLeader() (bool, error) {
 }
 
 // ErrNotLeader signals that a node not the leader.
-var ErrNotLeader = fmt.Errorf("Not leader")
+var ErrNotLeader = errors.New("Not leader")
 
 // Return information about the cluster members that a currently part of the raft
 // cluster, as configured in the raft log. It returns an error if this node is
@@ -1047,15 +1048,15 @@ func dqliteNetworkDial(ctx context.Context, name string, addr string, g *Gateway
 	deadline, _ := ctx.Deadline()
 	dialer := &net.Dialer{Timeout: time.Until(deadline)}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	conn, err := tls.DialWithDialer(dialer, "tcp", addr, config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed connecting to HTTP endpoint %q: %w", addr, err)
 	}
 
-	revert.Add(func() { _ = conn.Close() })
+	reverter.Add(func() { _ = conn.Close() })
 
 	l := logger.AddContext(logger.Ctx{"name": name, "local": conn.LocalAddr(), "remote": conn.RemoteAddr()})
 	l.Debug("Dqlite connected outbound")
@@ -1091,7 +1092,7 @@ func dqliteNetworkDial(ctx context.Context, name string, addr string, g *Gateway
 				g.upgradeTriggered = true
 			}
 		}
-		return nil, fmt.Errorf("Upgrade needed")
+		return nil, errors.New("Upgrade needed")
 	}
 
 	if response.StatusCode != http.StatusSwitchingProtocols {
@@ -1099,10 +1100,10 @@ func dqliteNetworkDial(ctx context.Context, name string, addr string, g *Gateway
 	}
 
 	if response.Header.Get("Upgrade") != "dqlite" {
-		return nil, fmt.Errorf("Missing or unexpected Upgrade header in response")
+		return nil, errors.New("Missing or unexpected Upgrade header in response")
 	}
 
-	revert.Success()
+	reverter.Success()
 	return conn, nil
 }
 

@@ -1,6 +1,7 @@
 package device
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -117,11 +118,11 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 		}
 
 		if d.network.Status() != api.NetworkStatusCreated {
-			return fmt.Errorf("Specified network is not fully created")
+			return errors.New("Specified network is not fully created")
 		}
 
 		if d.network.Type() != "physical" {
-			return fmt.Errorf("Specified network must be of type physical")
+			return errors.New("Specified network must be of type physical")
 		}
 
 		netConfig := d.network.Config()
@@ -152,11 +153,11 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 // validateEnvironment checks the runtime environment for correctness.
 func (d *nicPhysical) validateEnvironment() error {
 	if d.inst.Type() == instancetype.VM && util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) {
-		return fmt.Errorf("Network physical devices cannot be used when migration.stateful is enabled")
+		return errors.New("Network physical devices cannot be used when migration.stateful is enabled")
 	}
 
 	if d.inst.Type() == instancetype.Container && d.config["name"] == "" {
-		return fmt.Errorf("Requires name property to start")
+		return errors.New("Requires name property to start")
 	}
 
 	if !util.PathExists(fmt.Sprintf("/sys/class/net/%s", d.config["parent"])) {
@@ -179,8 +180,8 @@ func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
 
 	saveData := make(map[string]string)
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// pciIOMMUGroup, used for VM physical passthrough.
 	var pciIOMMUGroup uint64
@@ -206,7 +207,7 @@ func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
 		saveData["last_state.created"] = fmt.Sprintf("%t", statusDev != "existing")
 
 		if util.IsTrue(saveData["last_state.created"]) {
-			revert.Add(func() {
+			reverter.Add(func() {
 				_ = networkRemoveInterfaceIfNeeded(d.state, saveData["host_name"], d.inst, d.config["parent"], d.config["vlan"])
 			})
 		}
@@ -260,7 +261,7 @@ func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
 		ueventPath := fmt.Sprintf("/sys/class/net/%s/device/uevent", saveData["host_name"])
 		pciDev, err := pcidev.ParseUeventFile(ueventPath)
 		if err != nil {
-			if err == pcidev.ErrDeviceIsUSB {
+			if errors.Is(err, pcidev.ErrDeviceIsUSB) {
 				// Device is USB rather than PCI.
 				return d.startVMUSB(saveData["host_name"])
 			}
@@ -304,7 +305,8 @@ func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
 			}...)
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return &runConf, nil
 }
 

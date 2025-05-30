@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -43,7 +44,7 @@ func Load(schema Schema, values map[string]string) (Map, error) {
 func (m *Map) Change(changes map[string]string) (map[string]string, error) {
 	values := make(map[string]string, len(m.schema))
 
-	errors := ErrorList{}
+	errors := &ErrorList{}
 	for name, change := range changes {
 		// Ensure that we were actually passed a string.
 		s := reflect.ValueOf(change)
@@ -173,7 +174,7 @@ func (m *Map) update(values map[string]string) ([]string, error) {
 
 	// Update our keys with the values from the given map, and keep track
 	// of which keys actually changed their value.
-	errors := ErrorList{}
+	errors := &ErrorList{}
 	names := []string{}
 	for name, value := range values {
 		changed, err := m.set(name, value, initial)
@@ -206,7 +207,7 @@ func (m *Map) set(name string, value string, initial bool) (bool, error) {
 		for _, r := range strings.TrimPrefix(name, "user.") {
 			// Only allow letters, digits, and punctuation characters.
 			if !unicode.In(r, unicode.Letter, unicode.Digit, unicode.Punct) {
-				return false, fmt.Errorf("Invalid key name")
+				return false, errors.New("Invalid key name")
 			}
 		}
 
@@ -236,7 +237,7 @@ func (m *Map) set(name string, value string, initial bool) (bool, error) {
 
 	key, ok := m.schema[name]
 	if !ok {
-		return false, fmt.Errorf("unknown key")
+		return false, errors.New("unknown key")
 	}
 
 	// When unsetting a config key, the value argument will be empty.

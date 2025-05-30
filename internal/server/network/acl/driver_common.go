@@ -3,8 +3,10 @@ package acl
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"slices"
 	"sort"
@@ -172,7 +174,7 @@ func (d *common) usedBy(firstOnly bool) ([]string, error) {
 		return nil
 	}, d.Info().Name)
 	if err != nil {
-		if err == db.ErrInstanceListStop {
+		if errors.Is(err, db.ErrInstanceListStop) {
 			return usedBy, nil
 		}
 
@@ -314,9 +316,17 @@ func (d *common) validateRule(direction ruleDirection, rule api.NetworkACLRule) 
 		var err error
 
 		// Get map of ACL names to DB IDs (used for generating OVN port group names).
-		acls, err = tx.GetNetworkACLIDsByNames(ctx, d.Project())
+		dbAcls, err := dbCluster.GetNetworkACLs(ctx, tx.Tx(), dbCluster.NetworkACLFilter{Project: &d.projectName})
+		if err != nil {
+			return err
+		}
 
-		return err
+		acls = make(map[string]int64, len(dbAcls))
+		for _, acl := range dbAcls {
+			acls[acl.Name] = int64(acl.ID)
+		}
+
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("Failed getting network ACLs for security ACL subject validation: %w", err)
@@ -355,7 +365,7 @@ func (d *common) validateRule(direction ruleDirection, rule api.NetworkACLRule) 
 			(dstHasIPv4 && !srcHasIPv4 && !srcHasName) ||
 			(srcHasIPv6 && !dstHasIPv6 && !dstHasName) ||
 			(dstHasIPv6 && !srcHasIPv6 && !srcHasName) {
-			return fmt.Errorf("Conflicting IP family types used for Source and Destination")
+			return errors.New("Conflicting IP family types used for Source and Destination")
 		}
 	}
 
@@ -370,11 +380,11 @@ func (d *common) validateRule(direction ruleDirection, rule api.NetworkACLRule) 
 	// Validate protocol dependent fields.
 	if slices.Contains([]string{"tcp", "udp"}, rule.Protocol) {
 		if rule.ICMPType != "" {
-			return fmt.Errorf("ICMP type cannot be used with non-ICMP protocol")
+			return errors.New("ICMP type cannot be used with non-ICMP protocol")
 		}
 
 		if rule.ICMPCode != "" {
-			return fmt.Errorf("ICMP code cannot be used with non-ICMP protocol")
+			return errors.New("ICMP code cannot be used with non-ICMP protocol")
 		}
 
 		// Validate SourcePort field.
@@ -436,19 +446,19 @@ func (d *common) validateRule(direction ruleDirection, rule api.NetworkACLRule) 
 		}
 	} else {
 		if rule.ICMPType != "" {
-			return fmt.Errorf("ICMP type cannot be used without specifying protocol")
+			return errors.New("ICMP type cannot be used without specifying protocol")
 		}
 
 		if rule.ICMPCode != "" {
-			return fmt.Errorf("ICMP code cannot be used without specifying protocol")
+			return errors.New("ICMP code cannot be used without specifying protocol")
 		}
 
 		if rule.SourcePort != "" {
-			return fmt.Errorf("Source port cannot be used without specifying protocol")
+			return errors.New("Source port cannot be used without specifying protocol")
 		}
 
 		if rule.DestinationPort != "" {
-			return fmt.Errorf("Destination port cannot be used without specifying protocol")
+			return errors.New("Destination port cannot be used without specifying protocol")
 		}
 	}
 
@@ -501,7 +511,7 @@ func (d *common) validateRuleSubjects(fieldName string, direction ruleDirection,
 
 		ips := strings.SplitN(value, "-", 2)
 		if len(ips) != 2 {
-			return 0, fmt.Errorf("IP range must contain start and end IP addresses")
+			return 0, errors.New("IP range must contain start and end IP addresses")
 		}
 
 		ip := net.ParseIP(ips[0])
@@ -611,8 +621,8 @@ func (d *common) Update(config *api.NetworkACLPut, clientType request.ClientType
 		return err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	if clientType == request.ClientTypeNormal {
 		oldConfig := d.info.NetworkACLPut
@@ -620,7 +630,7 @@ func (d *common) Update(config *api.NetworkACLPut, clientType request.ClientType
 		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 			// Update database. Its important this occurs before we attempt to apply to networks using the ACL
 			// as usage functions will inspect the database.
-			return tx.UpdateNetworkACL(ctx, d.id, config)
+			return dbCluster.UpdateNetworkACLAPI(ctx, tx.Tx(), d.id, config)
 		})
 		if err != nil {
 			return err
@@ -630,9 +640,9 @@ func (d *common) Update(config *api.NetworkACLPut, clientType request.ClientType
 		d.info.NetworkACLPut = *config
 		d.init(d.state, d.id, d.projectName, d.info)
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-				return tx.UpdateNetworkACL(ctx, d.id, &oldConfig)
+				return dbCluster.UpdateNetworkACLAPI(ctx, tx.Tx(), d.id, &oldConfig)
 			})
 
 			d.info.NetworkACLPut = oldConfig
@@ -704,9 +714,17 @@ func (d *common) Update(config *api.NetworkACLPut, clientType request.ClientType
 
 		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 			// Get map of ACL names to DB IDs (used for generating OVN port group names).
-			aclNameIDs, err = tx.GetNetworkACLIDsByNames(ctx, d.Project())
+			acls, err := dbCluster.GetNetworkACLs(ctx, tx.Tx(), dbCluster.NetworkACLFilter{Project: &d.projectName})
+			if err != nil {
+				return err
+			}
 
-			return err
+			aclNameIDs = make(map[string]int64, len(acls))
+			for _, acl := range acls {
+				aclNameIDs[acl.Name] = int64(acl.ID)
+			}
+
+			return nil
 		})
 		if err != nil {
 			return fmt.Errorf("Failed getting network ACL IDs for security ACL update: %w", err)
@@ -723,14 +741,14 @@ func (d *common) Update(config *api.NetworkACLPut, clientType request.ClientType
 			return fmt.Errorf("Failed ensuring ACL is configured in OVN: %w", err)
 		}
 
-		revert.Add(cleanup)
+		reverter.Add(cleanup)
 
 		cleanup, err = addressset.OVNEnsureAddressSetsViaACLs(d.state, d.logger, ovnnb, d.projectName, []string{d.info.Name})
 		if err != nil {
 			return fmt.Errorf("Failed ensuring Address sets is configured for ACL %s in OVN: %w", d.info.Name, err)
 		}
 
-		revert.Add(cleanup)
+		reverter.Add(cleanup)
 
 		// Run unused port group cleanup in case any formerly referenced ACL in this ACL's rules means that
 		// an ACL port group is now considered unused.
@@ -756,7 +774,8 @@ func (d *common) Update(config *api.NetworkACLPut, clientType request.ClientType
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return nil
 }
 
@@ -764,7 +783,7 @@ func (d *common) Update(config *api.NetworkACLPut, clientType request.ClientType
 func (d *common) Rename(newName string) error {
 	_, err := LoadByName(d.state, d.projectName, newName)
 	if err == nil {
-		return fmt.Errorf("An ACL by that name exists already")
+		return errors.New("An ACL by that name exists already")
 	}
 
 	isUsed, err := d.isUsed()
@@ -773,7 +792,7 @@ func (d *common) Rename(newName string) error {
 	}
 
 	if isUsed {
-		return fmt.Errorf("Cannot rename an ACL that is in use")
+		return errors.New("Cannot rename an ACL that is in use")
 	}
 
 	err = d.validateName(newName)
@@ -782,7 +801,17 @@ func (d *common) Rename(newName string) error {
 	}
 
 	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-		return tx.RenameNetworkACL(ctx, d.id, newName)
+		idInt := int(d.id)
+		acls, err := dbCluster.GetNetworkACLs(ctx, tx.Tx(), dbCluster.NetworkACLFilter{ID: &idInt})
+		if err != nil {
+			return err
+		}
+
+		if len(acls) == 0 {
+			return api.StatusErrorf(http.StatusNotFound, "Network ACL not found")
+		}
+
+		return dbCluster.RenameNetworkACL(ctx, tx.Tx(), acls[0].Project, acls[0].Name, newName)
 	})
 	if err != nil {
 		return err
@@ -802,11 +831,11 @@ func (d *common) Delete() error {
 	}
 
 	if isUsed {
-		return fmt.Errorf("Cannot delete an ACL that is in use")
+		return errors.New("Cannot delete an ACL that is in use")
 	}
 
 	return d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-		return tx.DeleteNetworkACL(ctx, d.id)
+		return dbCluster.DeleteNetworkACL(ctx, tx.Tx(), int(d.id))
 	})
 }
 
@@ -815,7 +844,7 @@ func (d *common) GetLog(clientType request.ClientType) (string, error) {
 	// ACLs aren't specific to a particular network type but the log only works with OVN.
 	logPath := "/var/log/ovn/ovn-controller.log"
 	if !util.PathExists(logPath) {
-		return "", fmt.Errorf("Only OVN log entries may be retrieved at this time")
+		return "", errors.New("Only OVN log entries may be retrieved at this time")
 	}
 
 	// Open the log file.

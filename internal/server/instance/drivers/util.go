@@ -9,10 +9,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/lxc/incus/v6/internal/linux"
+	"github.com/lxc/incus/v6/internal/server/cluster"
 	"github.com/lxc/incus/v6/internal/server/db"
 	"github.com/lxc/incus/v6/internal/server/instance/drivers/cfg"
 	"github.com/lxc/incus/v6/internal/server/instance/drivers/qmp"
@@ -42,36 +44,15 @@ func GetClusterCPUFlags(ctx context.Context, s *state.State, servers []string, a
 	coreCount := 0
 
 	for _, node := range nodes {
-		// Skip if not in the list.
+		// Skip if not in the list of servers we're interested in.
 		if servers != nil && !slices.Contains(servers, node.Name) {
 			continue
 		}
 
-		var res *api.Resources
-		if node.Name == s.ServerName {
-			// Get our own local data.
-			res, err = resources.GetResources()
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// Attempt to load the cached resources.
-			resourcesPath := internalUtil.CachePath("resources", fmt.Sprintf("%s.yaml", node.Name))
-
-			data, err := os.ReadFile(resourcesPath)
-			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					continue
-				}
-
-				return nil, err
-			}
-
-			res = &api.Resources{}
-			err = yaml.Unmarshal(data, res)
-			if err != nil {
-				return nil, err
-			}
+		// Get node resources.
+		res, err := getNodeResources(s, node.Name, node.Address)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get resources for %s: %w", node.Name, err)
 		}
 
 		// Skip if not the correct architecture.
@@ -159,31 +140,31 @@ func memoryConfigSectionToMap(section *cfg.Section) map[string]any {
 	obj := map[string]any{}
 	hostNodes := []int{}
 
-	for _, entry := range section.Entries {
-		if strings.HasPrefix(entry.Key, "host-nodes") {
-			hostNode, err := strconv.Atoi(entry.Value)
+	for key, value := range section.Entries {
+		if strings.HasPrefix(key, "host-nodes") {
+			hostNode, err := strconv.Atoi(value)
 			if err != nil {
 				continue
 			}
 
 			hostNodes = append(hostNodes, hostNode)
-		} else if entry.Key == "size" {
+		} else if key == "size" {
 			// Size in the config is specified in the format: 1024M, so the last character needs to be removed before parsing.
-			memSizeMB, err := strconv.Atoi(entry.Value[:len(entry.Value)-1])
+			memSizeMB, err := strconv.Atoi(value[:len(value)-1])
 			if err != nil {
 				continue
 			}
 
 			obj["size"] = roundDownToBlockSize(int64(memSizeMB)*1024*1024, blockSize)
-		} else if entry.Key == "merge" || entry.Key == "dump" || entry.Key == "prealloc" || entry.Key == "share" || entry.Key == "reserve" {
+		} else if key == "merge" || key == "dump" || key == "prealloc" || key == "share" || key == "reserve" {
 			val := false
-			if entry.Value == "on" {
+			if value == "on" {
 				val = true
 			}
 
-			obj[entry.Key] = val
+			obj[key] = val
 		} else {
-			obj[entry.Key] = entry.Value
+			obj[key] = value
 		}
 	}
 
@@ -255,4 +236,52 @@ func findNextMemoryIndex(monitor *qmp.Monitor) (int, error) {
 	}
 
 	return memIndex + 1, nil
+}
+
+// getNodeResources updates the cluster resource cache..
+func getNodeResources(s *state.State, name string, address string) (*api.Resources, error) {
+	resourcesPath := internalUtil.CachePath("resources", fmt.Sprintf("%s.yaml", name))
+
+	// Check if cache is recent (less than 24 hours).
+	fi, err := os.Stat(resourcesPath)
+	if err == nil && time.Since(fi.ModTime()) < 24*time.Hour {
+		data, err := os.ReadFile(resourcesPath)
+		if err == nil {
+			var res api.Resources
+			if yaml.Unmarshal(data, &res) == nil {
+				return &res, nil
+			}
+		}
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+
+	var res *api.Resources
+	if name == s.ServerName {
+		// Handle the local node.
+		// We still cache the data as it's not particularly cheap to get.
+		res, err = resources.GetResources()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Handle remote nodes.
+		client, err := cluster.Connect(address, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
+		if err != nil {
+			return nil, err
+		}
+
+		res, err = client.GetServerResources()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Cache the data.
+	data, err := yaml.Marshal(res)
+	if err == nil {
+		_ = os.WriteFile(resourcesPath, data, 0o600)
+	}
+
+	return res, nil
 }

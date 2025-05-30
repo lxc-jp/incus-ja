@@ -342,11 +342,11 @@ func profilesPost(d *Daemon, r *http.Request) response.Response {
 
 	// Quick checks.
 	if req.Name == "" {
-		return response.BadRequest(fmt.Errorf("No name provided"))
+		return response.BadRequest(errors.New("No name provided"))
 	}
 
 	if strings.Contains(req.Name, "/") {
-		return response.BadRequest(fmt.Errorf("Profile names may not contain slashes"))
+		return response.BadRequest(errors.New("Profile names may not contain slashes"))
 	}
 
 	if slices.Contains([]string{".", ".."}, req.Name) {
@@ -373,7 +373,7 @@ func profilesPost(d *Daemon, r *http.Request) response.Response {
 
 		current, _ := dbCluster.GetProfile(ctx, tx.Tx(), p.Name, req.Name)
 		if current != nil {
-			return fmt.Errorf("The profile already exists")
+			return errors.New("The profile already exists")
 		}
 
 		profile := dbCluster.Profile{
@@ -568,7 +568,6 @@ func profilePut(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	var id int64
 	var profile *api.Profile
 
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -581,8 +580,6 @@ func profilePut(d *Daemon, r *http.Request) response.Response {
 		if err != nil {
 			return err
 		}
-
-		id = int64(current.ID)
 
 		return nil
 	})
@@ -603,7 +600,7 @@ func profilePut(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(err)
 	}
 
-	err = doProfileUpdate(r.Context(), s, *p, name, id, profile, req)
+	err = doProfileUpdate(r.Context(), s, *p, name, profile, req)
 
 	if err == nil && !isClusterNotification(r) {
 		// Notify all other nodes. If a node is down, it will be ignored.
@@ -673,7 +670,6 @@ func profilePatch(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	var id int64
 	var profile *api.Profile
 
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -686,8 +682,6 @@ func profilePatch(d *Daemon, r *http.Request) response.Response {
 		if err != nil {
 			return err
 		}
-
-		id = int64(current.ID)
 
 		return nil
 	})
@@ -755,7 +749,7 @@ func profilePatch(d *Daemon, r *http.Request) response.Response {
 	requestor := request.CreateRequestor(r)
 	s.Events.SendLifecycle(p.Name, lifecycle.ProfileUpdated.Event(name, p.Name, requestor, nil))
 
-	return response.SmartError(doProfileUpdate(r.Context(), s, *p, name, id, profile, req))
+	return response.SmartError(doProfileUpdate(r.Context(), s, *p, name, profile, req))
 }
 
 // swagger:operation POST /1.0/profiles/{name} profiles profile_post
@@ -815,11 +809,11 @@ func profilePost(d *Daemon, r *http.Request) response.Response {
 
 	// Quick checks.
 	if req.Name == "" {
-		return response.BadRequest(fmt.Errorf("No name provided"))
+		return response.BadRequest(errors.New("No name provided"))
 	}
 
 	if strings.Contains(req.Name, "/") {
-		return response.BadRequest(fmt.Errorf("Profile names may not contain slashes"))
+		return response.BadRequest(errors.New("Profile names may not contain slashes"))
 	}
 
 	if slices.Contains([]string{".", ".."}, req.Name) {
@@ -910,7 +904,7 @@ func profileDelete(d *Daemon, r *http.Request) response.Response {
 		}
 
 		if len(usedBy) > 0 {
-			return fmt.Errorf("Profile is currently in use")
+			return errors.New("Profile is currently in use")
 		}
 
 		return dbCluster.DeleteProfile(ctx, tx.Tx(), p.Name, name)
