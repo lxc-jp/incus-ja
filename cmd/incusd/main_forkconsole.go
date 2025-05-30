@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -14,7 +15,7 @@ type cmdForkconsole struct {
 	global *cmdGlobal
 }
 
-func (c *cmdForkconsole) Command() *cobra.Command {
+func (c *cmdForkconsole) command() *cobra.Command {
 	// Main subcommand
 	cmd := &cobra.Command{}
 	cmd.Use = "forkconsole <container name> <containers path> <config> <tty> <escape>"
@@ -24,13 +25,13 @@ func (c *cmdForkconsole) Command() *cobra.Command {
 
   This internal command is used to attach to one of the container's tty devices.
 `
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 	cmd.Hidden = true
 
 	return cmd
 }
 
-func (c *cmdForkconsole) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdForkconsole) run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
 	if len(args) != 5 {
 		_ = cmd.Help()
@@ -39,12 +40,12 @@ func (c *cmdForkconsole) Run(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		return fmt.Errorf("Missing required arguments")
+		return errors.New("Missing required arguments")
 	}
 
 	// Only root should run this
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("This must be run as root")
+		return errors.New("This must be run as root")
 	}
 
 	name := args[0]

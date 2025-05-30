@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -37,7 +38,7 @@ func instanceFileHandler(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(name) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	// Redirect to correct server if needed.
@@ -59,7 +60,7 @@ func instanceFileHandler(d *Daemon, r *http.Request) response.Response {
 	// Parse and cleanup the path.
 	path := r.FormValue("path")
 	if path == "" {
-		return response.BadRequest(fmt.Errorf("Missing path argument"))
+		return response.BadRequest(errors.New("Missing path argument"))
 	}
 
 	if !strings.HasPrefix(path, "/") {
@@ -149,8 +150,8 @@ func instanceFileHandler(d *Daemon, r *http.Request) response.Response {
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func instanceFileGet(s *state.State, inst instance.Instance, path string, r *http.Request) response.Response {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Get a SFTP client.
 	client, err := inst.FileSFTP()
@@ -158,7 +159,7 @@ func instanceFileGet(s *state.State, inst instance.Instance, path string, r *htt
 		return response.InternalError(err)
 	}
 
-	revert.Add(func() { _ = client.Close() })
+	reverter.Add(func() { _ = client.Close() })
 
 	// Get the file stats.
 	stat, err := client.Lstat(path)
@@ -191,11 +192,11 @@ func instanceFileGet(s *state.State, inst instance.Instance, path string, r *htt
 			return response.SmartError(err)
 		}
 
-		revert.Add(func() { _ = file.Close() })
+		reverter.Add(func() { _ = file.Close() })
 
 		// Setup cleanup logic.
-		cleanup := revert.Clone()
-		revert.Success()
+		cleanup := reverter.Clone()
+		reverter.Success()
 
 		// Make a file response struct.
 		files := make([]response.FileResponseEntry, 1)
@@ -311,9 +312,9 @@ func instanceFileGet(s *state.State, inst instance.Instance, path string, r *htt
 //	    $ref: "#/responses/NotFound"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
-func instanceFileHead(s *state.State, inst instance.Instance, path string, r *http.Request) response.Response {
-	revert := revert.New()
-	defer revert.Fail()
+func instanceFileHead(_ *state.State, inst instance.Instance, path string, _ *http.Request) response.Response {
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Get a SFTP client.
 	client, err := inst.FileSFTP()
@@ -321,7 +322,7 @@ func instanceFileHead(s *state.State, inst instance.Instance, path string, r *ht
 		return response.InternalError(err)
 	}
 
-	revert.Add(func() { _ = client.Close() })
+	reverter.Add(func() { _ = client.Close() })
 
 	// Get the file stats.
 	stat, err := client.Lstat(path)
@@ -588,7 +589,7 @@ func instanceFilePost(s *state.State, inst instance.Instance, path string, r *ht
 //	    $ref: "#/responses/NotFound"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
-func instanceFileDelete(s *state.State, inst instance.Instance, path string, r *http.Request) response.Response {
+func instanceFileDelete(s *state.State, inst instance.Instance, path string, _ *http.Request) response.Response {
 	// Get a SFTP client.
 	client, err := inst.FileSFTP()
 	if err != nil {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -67,7 +68,7 @@ func instanceRebuildPost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(name) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	// Handle requests targeted to a container on a different node
@@ -126,23 +127,23 @@ func instanceRebuildPost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if inst.IsRunning() {
-		return response.BadRequest(fmt.Errorf("Instance must be stopped to be rebuilt"))
+		return response.BadRequest(errors.New("Instance must be stopped to be rebuilt"))
 	}
 
 	run := func(op *operations.Operation) error {
 		if req.Source.Type == "none" {
-			return instanceRebuildFromEmpty(s, inst, op)
+			return instanceRebuildFromEmpty(inst, op)
 		}
 
 		if req.Source.Server != "" {
-			sourceImage, err = ensureDownloadedImageFitWithinBudget(context.TODO(), s, r, op, *targetProject, sourceImage, sourceImageRef, req.Source, inst.Type().String())
+			sourceImage, err = ensureDownloadedImageFitWithinBudget(context.TODO(), s, r, op, *targetProject, sourceImageRef, req.Source, inst.Type().String())
 			if err != nil {
 				return err
 			}
 		}
 
 		if sourceImage == nil {
-			return fmt.Errorf("Image not provided for instance rebuild")
+			return errors.New("Image not provided for instance rebuild")
 		}
 
 		return instanceRebuildFromImage(context.TODO(), s, r, inst, sourceImage, op)

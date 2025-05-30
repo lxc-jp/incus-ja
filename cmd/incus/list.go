@@ -134,7 +134,7 @@ incus list -c ns,user.comment:comment
 
 	cmd.RunE = c.Run
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultColumns, i18n.G("Columns")+"``")
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "table", i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 	cmd.Flags().BoolVar(&c.flagFast, "fast", false, i18n.G("Fast mode (same as --columns=nsacPt)"))
 	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Display instances from all projects"))
 
@@ -207,10 +207,7 @@ func (c *cmdList) evaluateShorthandFilter(key string, value string, inst *api.In
 }
 
 func (c *cmdList) listInstances(d incus.InstanceServer, instances []api.Instance, filters []string, columns []column) error {
-	threads := 10
-	if len(instances) < threads {
-		threads = len(instances)
-	}
+	threads := min(len(instances), 10)
 
 	// Shortcut when needing state and snapshot info.
 	hasSnapshots := false
@@ -231,7 +228,7 @@ func (c *cmdList) listInstances(d incus.InstanceServer, instances []api.Instance
 		cInfoQueue := make(chan string, threads)
 		cInfoWg := sync.WaitGroup{}
 
-		for i := 0; i < threads; i++ {
+		for range threads {
 			cInfoWg.Add(1)
 			go func() {
 				for {
@@ -274,7 +271,7 @@ func (c *cmdList) listInstances(d incus.InstanceServer, instances []api.Instance
 	cSnapshotsQueue := make(chan string, threads)
 	cSnapshotsWg := sync.WaitGroup{}
 
-	for i := 0; i < threads; i++ {
+	for range threads {
 		cStatesWg.Add(1)
 		go func() {
 			for {
@@ -582,7 +579,7 @@ func (c *cmdList) parseColumns(clustered bool) ([]column, bool, error) {
 			colType := configColumnType
 			if (cc[0] == configColumnType || cc[0] == deviceColumnType) && len(cc) > 1 {
 				colType = cc[0]
-				cc = append(cc[:0], cc[1:]...)
+				cc = slices.Delete(cc, 0, 1)
 			}
 
 			if len(cc) > 3 {

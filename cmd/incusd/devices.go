@@ -85,7 +85,7 @@ func deviceNetlinkListener() (chan []string, chan device.USBEvent, chan device.U
 			ueventParts := strings.Split(string(ueventBuf), "\x00")
 			for i, part := range ueventParts {
 				if strings.HasPrefix(part, "SEQNUM=") {
-					ueventParts = append(ueventParts[:i], ueventParts[i+1:]...)
+					ueventParts = slices.Delete(ueventParts, i, i+1)
 					break
 				}
 			}
@@ -378,7 +378,7 @@ func fillFixedInstances(fixedInstances map[int64][]instance.Instance, inst insta
 //
 // Overall, this function ensures that the CPU resources of the host are utilized effectively amongst all the containers running on it.
 func deviceTaskBalance(s *state.State) {
-	min := func(x, y int) int {
+	minFunc := func(x, y int) int {
 		if x < y {
 			return x
 		}
@@ -510,7 +510,7 @@ func deviceTaskBalance(s *state.State) {
 		count, err := strconv.Atoi(cpulimit)
 		if err == nil {
 			// Load-balance
-			count = min(count, len(cpus))
+			count = minFunc(count, len(cpus))
 			if len(numaCpus) > 0 {
 				fillFixedInstances(fixedInstances, c, cpus, numaCpus, count, true)
 			} else {

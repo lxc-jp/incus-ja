@@ -41,7 +41,9 @@ func ValueOf(obj any, field string) any {
 					return v
 				}
 			}
+
 			return m[field]
+
 		case reflect.Map:
 			for _, entry := range value.MapKeys() {
 				if entry.Interface() != key {
@@ -51,11 +53,15 @@ func ValueOf(obj any, field string) any {
 				m := value.MapIndex(entry)
 				return ValueOf(m.Interface(), rest)
 			}
+
+			return nil
+
+		default:
+			return nil
 		}
-		return nil
 	}
 
-	for i := 0; i < value.NumField(); i++ {
+	for i := range value.NumField() {
 		fieldValue := value.Field(i)
 		fieldType := typ.Field(i)
 		yaml := fieldType.Tag.Get("yaml")

@@ -2,6 +2,7 @@ package device
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -316,8 +317,8 @@ func networkCreateTap(hostName string, m deviceConfig.Device) (uint32, error) {
 		return 0, fmt.Errorf("Failed to create the tap interfaces %q: %w", hostName, err)
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	link := &ip.Link{Name: hostName}
 	err = link.SetUp()
@@ -325,7 +326,7 @@ func networkCreateTap(hostName string, m deviceConfig.Device) (uint32, error) {
 		return 0, fmt.Errorf("Failed to bring up the tap interface %q: %w", hostName, err)
 	}
 
-	revert.Add(func() { _ = network.InterfaceRemove(hostName) })
+	reverter.Add(func() { _ = network.InterfaceRemove(hostName) })
 
 	// Set the MTU on both ends.
 	// The host side should always line up with the bridge to avoid accidentally lowering the bridge MTU.
@@ -352,11 +353,7 @@ func networkCreateTap(hostName string, m deviceConfig.Device) (uint32, error) {
 		instanceMTU = uint32(mtu)
 	}
 
-	if instanceMTU > parentMTU {
-		mtu = instanceMTU
-	} else {
-		mtu = parentMTU
-	}
+	mtu = max(instanceMTU, parentMTU)
 
 	err = NetworkSetDevMTU(hostName, mtu)
 	if err != nil {
@@ -386,7 +383,8 @@ func networkCreateTap(hostName string, m deviceConfig.Device) (uint32, error) {
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return mtu, nil
 }
 
@@ -409,8 +407,8 @@ func networkNICRouteAdd(routeDev string, routes ...string) error {
 		return fmt.Errorf("Route interface missing %q", routeDev)
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	for _, r := range routes {
 		route := r // Local var for revert.
@@ -437,7 +435,7 @@ func networkNICRouteAdd(routeDev string, routes ...string) error {
 			return err
 		}
 
-		revert.Add(func() {
+		reverter.Add(func() {
 			r := &ip.Route{
 				DevName: routeDev,
 				Route:   route,
@@ -449,7 +447,8 @@ func networkNICRouteAdd(routeDev string, routes ...string) error {
 		})
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return nil
 }
 
@@ -584,10 +583,10 @@ func networkSetupHostVethLimits(d *deviceCommon, oldConfig deviceConfig.Device, 
 		}
 	}
 
-	if oldConfig == nil || (oldConfig != nil && oldConfig["limits.priority"] != d.config["limits.priority"]) {
+	if oldConfig == nil || oldConfig["limits.priority"] != d.config["limits.priority"] {
 		if networkPriority != 0 {
 			if bridged && d.state.Firewall.String() == "xtables" {
-				return fmt.Errorf("Failed to setup instance device network priority. The xtables firewall driver does not support required functionality.")
+				return errors.New("Failed to setup instance device network priority. The xtables firewall driver does not support required functionality.")
 			}
 
 			err = d.state.Firewall.InstanceSetupNetPrio(d.inst.Project().Name, d.inst.Name(), veth, uint32(networkPriority))
@@ -703,7 +702,7 @@ func networkSRIOVParentVFInfo(vfParent string, vfID int) (ip.VirtFuncInfo, error
 // The useSpoofCheck argument controls whether to use the spoof check feature for the VF on the parent device.
 // If this is false then "security.mac_filtering" must not be enabled.
 // Returns VF PCI device info and IOMMU group number for VMs.
-func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID int, useSpoofCheck bool, volatile map[string]string) (pcidev.Device, uint64, error) {
+func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID int, volatile map[string]string) (pcidev.Device, uint64, error) {
 	var vfPCIDev pcidev.Device
 
 	// Retrieve VF settings from parent device.
@@ -712,8 +711,8 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 		return vfPCIDev, 0, err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Record properties of VF settings on the parent device.
 	volatile["last_state.vf.parent"] = vfParent
@@ -744,7 +743,7 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 		return vfPCIDev, 0, err
 	}
 
-	revert.Add(func() { _ = pcidev.DeviceProbe(vfPCIDev) })
+	reverter.Add(func() { _ = pcidev.DeviceProbe(vfPCIDev) })
 
 	// Setup VF VLAN if specified.
 	if d.config["vlan"] != "" {
@@ -759,10 +758,6 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 	// The ordering of this section is very important, as Intel cards require a very specific
 	// order of setup to allow setting custom MACs when using spoof check mode.
 	if util.IsTrue(d.config["security.mac_filtering"]) {
-		if !useSpoofCheck {
-			return pcidev.Device{}, 0, fmt.Errorf("security.mac_filtering cannot be enabled when VF spoof check not enabled")
-		}
-
 		// If no MAC specified in config, use current VF interface MAC.
 		mac := d.config["hwaddr"]
 		if mac == "" {
@@ -788,12 +783,10 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 		link := &ip.Link{Name: vfParent}
 		_ = link.SetVfAddress(volatile["last_state.vf.id"], "00:00:00:00:00:00")
 
-		if useSpoofCheck {
-			// Ensure spoof checking is disabled if not enabled in instance (only for real VF).
-			err = link.SetVfSpoofchk(volatile["last_state.vf.id"], "off")
-			if err != nil {
-				return vfPCIDev, 0, fmt.Errorf("Failed disabling spoof check for VF %q: %w", volatile["last_state.vf.id"], err)
-			}
+		// Ensure spoof checking is disabled if not enabled in instance (only for real VF).
+		err = link.SetVfSpoofchk(volatile["last_state.vf.id"], "off")
+		if err != nil && d.config["security.mac_filtering"] != "" {
+			return vfPCIDev, 0, fmt.Errorf("Failed disabling spoof check for VF %q: %w", volatile["last_state.vf.id"], err)
 		}
 
 		// Set MAC on VF if specified (this should be passed through into VM when it is bound to vfio-pci).
@@ -844,7 +837,8 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 		volatile["last_state.pci.driver"] = vfPCIDev.Driver
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return vfPCIDev, pciIOMMUGroup, nil
 }
 
@@ -863,8 +857,8 @@ func networkSRIOVRestoreVF(d deviceCommon, useSpoofCheck bool, volatile map[stri
 		return nil
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Get VF device's PCI info so we can unbind and rebind it from the host.
 	vfPCIDev, err := network.SRIOVGetVFDevicePCISlot(parent, volatile["last_state.vf.id"])
@@ -889,7 +883,7 @@ func networkSRIOVRestoreVF(d deviceCommon, useSpoofCheck bool, volatile map[stri
 
 	// However we return from this function, we must try to rebind the VF so its not orphaned.
 	// The OS won't let an already bound device be bound again so is safe to call twice.
-	revert.Add(func() { _ = pcidev.DeviceProbe(vfPCIDev) })
+	reverter.Add(func() { _ = pcidev.DeviceProbe(vfPCIDev) })
 
 	// Reset VF VLAN if specified
 	if volatile["last_state.vf.vlan"] != "" {
@@ -902,7 +896,7 @@ func networkSRIOVRestoreVF(d deviceCommon, useSpoofCheck bool, volatile map[stri
 
 	// Reset VF MAC spoofing protection if recorded. Do this first before resetting the MAC
 	// to avoid any issues with zero MACs refusing to be set whilst spoof check is on.
-	if useSpoofCheck && volatile["last_state.vf.spoofcheck"] != "" {
+	if volatile["last_state.vf.spoofcheck"] != "" {
 		mode := "off"
 		if util.IsTrue(volatile["last_state.vf.spoofcheck"]) {
 			mode = "on"
@@ -910,7 +904,7 @@ func networkSRIOVRestoreVF(d deviceCommon, useSpoofCheck bool, volatile map[stri
 
 		link := &ip.Link{Name: parent}
 		err := link.SetVfSpoofchk(volatile["last_state.vf.id"], mode)
-		if err != nil {
+		if err != nil && d.config["security.mac_filtering"] != "" {
 			return err
 		}
 	}
@@ -936,7 +930,8 @@ func networkSRIOVRestoreVF(d deviceCommon, useSpoofCheck bool, volatile map[stri
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return nil
 }
 
@@ -1073,8 +1068,8 @@ func isIPAvailable(ctx context.Context, address net.IP, parentInterface string) 
 	if address.To4() != nil {
 		err := pingOverIfaceByName(deadline, address, parentInterface)
 		if err != nil {
-			ne, ok := err.(net.Error)
-			if ok && ne.Timeout() {
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
 				return false, nil
 			}
 
@@ -1099,7 +1094,7 @@ func isIPAvailable(ctx context.Context, address net.IP, parentInterface string) 
 
 	netipAddr, ok := netip.AddrFromSlice(address)
 	if !ok {
-		return false, fmt.Errorf("Couldn't convert address to netip")
+		return false, errors.New("Couldn't convert address to netip")
 	}
 
 	solicitedNodeMulticast, err := ndp.SolicitedNodeMulticast(netipAddr)
@@ -1120,8 +1115,8 @@ func isIPAvailable(ctx context.Context, address net.IP, parentInterface string) 
 	_ = conn.SetDeadline(deadline)
 	msg, _, _, err := conn.ReadFrom()
 	if err != nil {
-		cause, ok := err.(net.Error)
-		if ok && cause.Timeout() {
+		var cause net.Error
+		if errors.As(err, &cause) && cause.Timeout() {
 			return false, nil
 		}
 

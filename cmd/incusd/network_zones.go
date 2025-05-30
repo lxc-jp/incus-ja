@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"github.com/lxc/incus/v6/internal/server/auth"
 	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
 	"github.com/lxc/incus/v6/internal/server/db"
+	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
 	"github.com/lxc/incus/v6/internal/server/lifecycle"
 	"github.com/lxc/incus/v6/internal/server/network/zone"
 	"github.com/lxc/incus/v6/internal/server/project"
@@ -175,26 +177,31 @@ func networkZonesGet(d *Daemon, r *http.Request) response.Response {
 
 	mustLoadObjects := recursion || (clauses != nil && len(clauses.Clauses) > 0)
 
-	// var zoneNames []string
+	var zones []dbCluster.NetworkZone
 	var zoneNamesMap map[string]string
 	allProjects := util.IsTrue(request.QueryParam(r, "all-projects"))
 
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
-		// Get list of Network zones.
 		if allProjects {
-			zoneNamesMap, err = tx.GetNetworkZones(ctx)
-			if err != nil {
-				return err
-			}
-		} else {
-			zoneNames, err := tx.GetNetworkZonesByProject(ctx, projectName)
+			zones, err = dbCluster.GetNetworkZones(ctx, tx.Tx())
 			if err != nil {
 				return err
 			}
 
 			zoneNamesMap = map[string]string{}
-			for _, zone := range zoneNames {
-				zoneNamesMap[zone] = projectName
+			for _, zone := range zones {
+				zoneNamesMap[zone.Name] = zone.Project
+			}
+		} else {
+			filter := dbCluster.NetworkZoneFilter{Project: &projectName}
+			zones, err = dbCluster.GetNetworkZones(ctx, tx.Tx(), filter)
+			if err != nil {
+				return err
+			}
+
+			zoneNamesMap = map[string]string{}
+			for _, zone := range zones {
+				zoneNamesMap[zone.Name] = projectName
 			}
 		}
 
@@ -301,7 +308,7 @@ func networkZonesPost(d *Daemon, r *http.Request) response.Response {
 	// Create the zone.
 	err = zone.Exists(s, req.Name)
 	if err == nil {
-		return response.BadRequest(fmt.Errorf("The network zone already exists"))
+		return response.BadRequest(errors.New("The network zone already exists"))
 	}
 
 	err = zone.Create(s, projectName, &req)

@@ -391,7 +391,7 @@ func instancesOnDisk(s *state.State) ([]instance.Instance, error) {
 	return instances, nil
 }
 
-func instancesShutdown(s *state.State, instances []instance.Instance) {
+func instancesShutdown(instances []instance.Instance) {
 	sort.Sort(instanceStopList(instances))
 
 	// Limit shutdown concurrency to number of instances or number of CPU cores (which ever is less).
@@ -403,7 +403,7 @@ func instancesShutdown(s *state.State, instances []instance.Instance) {
 		maxConcurrent = instCount
 	}
 
-	for i := 0; i < maxConcurrent; i++ {
+	for range maxConcurrent {
 		go func(instShutdownCh <-chan instance.Instance) {
 			for inst := range instShutdownCh {
 				// Determine how long to wait for the instance to shutdown cleanly.

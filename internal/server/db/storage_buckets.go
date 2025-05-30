@@ -78,7 +78,7 @@ func (c *ClusterTx) GetStoragePoolBuckets(ctx context.Context, memberSpecific bo
 		for i, filter := range filters {
 			// Validate filter.
 			if !memberSpecific && filter.Name != nil && ((filter.PoolID == nil && filter.PoolName == nil) || filter.Project == nil) {
-				return nil, fmt.Errorf("Cannot filter by bucket name without specifying pool and project when doing member inspecific search")
+				return nil, errors.New("Cannot filter by bucket name without specifying pool and project when doing member inspecific search")
 			}
 
 			var qFilters []string
@@ -104,7 +104,7 @@ func (c *ClusterTx) GetStoragePoolBuckets(ctx context.Context, memberSpecific bo
 			}
 
 			if qFilters == nil {
-				return nil, fmt.Errorf("Invalid storage bucket filter")
+				return nil, errors.New("Invalid storage bucket filter")
 			}
 
 			if i > 0 {
@@ -452,7 +452,7 @@ func (c *ClusterTx) GetStoragePoolBucketKeys(ctx context.Context, bucketID int64
 			}
 
 			if qFilters == nil {
-				return nil, fmt.Errorf("Invalid storage bucket key filter")
+				return nil, errors.New("Invalid storage bucket key filter")
 			}
 
 			if i > 0 {
@@ -620,7 +620,7 @@ WHERE storage_buckets.id = ?
 
 	err := c.tx.QueryRowContext(ctx, stmt, bucketID).Scan(&response.Project, &response.PoolName, &response.ID, &response.PoolID, &response.Name, &response.Description, &response.Location)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return StorageBucket{}, api.StatusErrorf(http.StatusNotFound, "Storage pool bucket not found")
 		}
 

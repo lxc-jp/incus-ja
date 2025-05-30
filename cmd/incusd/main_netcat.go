@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,7 +19,7 @@ type cmdNetcat struct {
 	global *cmdGlobal
 }
 
-func (c *cmdNetcat) Command() *cobra.Command {
+func (c *cmdNetcat) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "netcat <address> <name>"
 	cmd.Short = "Send stdin data to a unix socket"
@@ -31,13 +32,13 @@ func (c *cmdNetcat) Command() *cobra.Command {
   Its main use is when running rsync or btrfs/zfs send/receive between
   two machines over the websocket API.
 `
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 	cmd.Hidden = true
 
 	return cmd
 }
 
-func (c *cmdNetcat) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdNetcat) run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
 	if len(args) < 2 {
 		_ = cmd.Help()
@@ -46,12 +47,12 @@ func (c *cmdNetcat) Run(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		return fmt.Errorf("Missing required arguments")
+		return errors.New("Missing required arguments")
 	}
 
 	// Only root should run this
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("This must be run as root")
+		return errors.New("This must be run as root")
 	}
 
 	logPath := internalUtil.LogPath(args[1], "netcat.log")

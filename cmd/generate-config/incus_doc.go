@@ -69,13 +69,13 @@ func getSortedKeysFromMap[K string, V IterableAny](m map[K]V) []K {
 		keys = append(keys, k)
 	}
 
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	slices.Sort(keys)
 	return keys
 }
 
 func parse(path string, outputJSONPath string, excludedPaths []string) (*doc, error) {
 	jsonDoc := &doc{}
-	docKeys := make(map[string]struct{}, 0)
+	docKeys := make(map[string]struct{})
 	projectEntries := make(map[string]any)
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -262,7 +262,7 @@ func writeDocFile(inputJSONPath, outputTxtPath string) error {
 	countMaxBackTicks := func(s string) int {
 		count, curr_count := 0, 0
 		n := len(s)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if s[i] == '`' {
 				curr_count++
 				continue

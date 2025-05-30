@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -75,7 +76,7 @@ func MaybeUpdate(state *state.State) error {
 	}
 
 	if state.DB.Cluster == nil {
-		return fmt.Errorf("Failed checking cluster update, state not initialized yet")
+		return errors.New("Failed checking cluster update, state not initialized yet")
 	}
 
 	err = state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -132,7 +133,7 @@ func triggerUpdate() error {
 // raft configuration. It's used for upgrading a cluster from a version without roles support.
 func UpgradeMembersWithoutRole(gateway *Gateway, members []db.NodeInfo) error {
 	nodes, err := gateway.currentRaftNodes()
-	if err == ErrNotLeader {
+	if errors.Is(err, ErrNotLeader) {
 		return nil
 	}
 

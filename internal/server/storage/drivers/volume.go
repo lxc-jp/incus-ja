@@ -72,7 +72,7 @@ const VolumeTypeVM = VolumeType("virtual-machines")
 // ContentType indicates the format of the volume.
 type ContentType string
 
-// ContentTypeFS indicates the volume will be populated with a mountabble filesystem.
+// ContentTypeFS indicates the volume will be populated with a mountable filesystem.
 const ContentTypeFS = ContentType("filesystem")
 
 // ContentTypeBlock indicates the volume will be a block device and its contents and we do not
@@ -150,7 +150,7 @@ func (v Volume) ExpandedConfig(key string) string {
 // NewSnapshot instantiates a new Volume struct representing a snapshot of the parent volume.
 func (v Volume) NewSnapshot(snapshotName string) (Volume, error) {
 	if v.IsSnapshot() {
-		return Volume{}, fmt.Errorf("Cannot create a snapshot volume from a snapshot")
+		return Volume{}, errors.New("Cannot create a snapshot volume from a snapshot")
 	}
 
 	fullSnapName := GetSnapshotVolumeName(v.name, snapshotName)
@@ -212,8 +212,8 @@ func (v Volume) MountInUse() bool {
 func (v Volume) EnsureMountPath() error {
 	volPath := v.MountPath()
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Create volume's mount path if missing, with any created directories set to 0711.
 	if !util.PathExists(volPath) {
@@ -231,7 +231,7 @@ func (v Volume) EnsureMountPath() error {
 			return fmt.Errorf("Failed to create mount directory %q: %w", volPath, err)
 		}
 
-		revert.Add(func() { _ = os.Remove(volPath) })
+		reverter.Add(func() { _ = os.Remove(volPath) })
 	}
 
 	mode := os.FileMode(0o711)
@@ -298,7 +298,7 @@ func (v Volume) EnsureMountPath() error {
 		}
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -373,7 +373,7 @@ func (v Volume) UnmountTask(task func(op *operations.Operation) error, keepBlock
 // Snapshots returns a list of snapshots for the volume (in no particular order).
 func (v Volume) Snapshots(op *operations.Operation) ([]Volume, error) {
 	if v.IsSnapshot() {
-		return nil, fmt.Errorf("Volume is a snapshot")
+		return nil, errors.New("Volume is a snapshot")
 	}
 
 	snapshots, err := v.driver.VolumeSnapshots(v, op)
@@ -398,7 +398,7 @@ func (v Volume) Snapshots(op *operations.Operation) ([]Volume, error) {
 // necessarily in the same order).
 func (v Volume) SnapshotsMatch(snapNames []string, op *operations.Operation) error {
 	if v.IsSnapshot() {
-		return fmt.Errorf("Volume is a snapshot")
+		return errors.New("Volume is a snapshot")
 	}
 
 	snapshots, err := v.driver.VolumeSnapshots(v, op)

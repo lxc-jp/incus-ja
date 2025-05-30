@@ -75,7 +75,7 @@ func (e *Endpoints) MetricsUpdateAddress(address string, cert *localtls.CertInfo
 		var err error
 		var listener net.Listener
 
-		for i := 0; i < 10; i++ { // Ten retries over a second seems reasonable.
+		for range 10 { // Ten retries over a second seems reasonable.
 			listener, err = metricsCreateListener(address, cert)
 			if err == nil {
 				break
@@ -91,23 +91,21 @@ func (e *Endpoints) MetricsUpdateAddress(address string, cert *localtls.CertInfo
 		return &listener, nil
 	}
 
-	// If setting a new address, setup the listener
-	if address != "" {
-		listener, err := getListener(address)
-		if err != nil {
-			// Attempt to revert to the previous address
-			listener, err1 := getListener(oldAddress)
-			if err1 == nil {
-				e.listeners[metrics] = *listener
-				e.serve(metrics)
-			}
-
-			return err
+	// Set up the listener
+	listener, err := getListener(address)
+	if err != nil {
+		// Attempt to revert to the previous address
+		listener, err1 := getListener(oldAddress)
+		if err1 == nil {
+			e.listeners[metrics] = *listener
+			e.serve(metrics)
 		}
 
-		e.listeners[metrics] = *listener
-		e.serve(metrics)
+		return err
 	}
+
+	e.listeners[metrics] = *listener
+	e.serve(metrics)
 
 	return nil
 }

@@ -150,11 +150,11 @@ func (d *nicMACVLAN) validateConfig(instConf instance.ConfigReader) error {
 		}
 
 		if d.network.Status() != api.NetworkStatusCreated {
-			return fmt.Errorf("Specified network is not fully created")
+			return errors.New("Specified network is not fully created")
 		}
 
 		if d.network.Type() != "macvlan" {
-			return fmt.Errorf("Specified network must be of type macvlan")
+			return errors.New("Specified network must be of type macvlan")
 		}
 
 		netConfig := d.network.Config()
@@ -201,7 +201,7 @@ func (d *nicMACVLAN) PreStartCheck() error {
 // validateEnvironment checks the runtime environment for correctness.
 func (d *nicMACVLAN) validateEnvironment() error {
 	if d.inst.Type() == instancetype.Container && d.config["name"] == "" {
-		return fmt.Errorf("Requires name property to start")
+		return errors.New("Requires name property to start")
 	}
 
 	if !util.PathExists(fmt.Sprintf("/sys/class/net/%s", d.config["parent"])) {
@@ -222,8 +222,8 @@ func (d *nicMACVLAN) Start() (*deviceConfig.RunConfig, error) {
 	networkCreateSharedDeviceLock.Lock()
 	defer networkCreateSharedDeviceLock.Unlock()
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	saveData := make(map[string]string)
 
@@ -246,7 +246,7 @@ func (d *nicMACVLAN) Start() (*deviceConfig.RunConfig, error) {
 	saveData["last_state.created"] = fmt.Sprintf("%t", statusDev != "existing")
 
 	if util.IsTrue(saveData["last_state.created"]) {
-		revert.Add(func() {
+		reverter.Add(func() {
 			_ = networkRemoveInterfaceIfNeeded(d.state, actualParentName, d.inst, d.config["parent"], d.config["vlan"])
 		})
 	}
@@ -317,7 +317,7 @@ func (d *nicMACVLAN) Start() (*deviceConfig.RunConfig, error) {
 		}
 	}
 
-	revert.Add(func() { _ = network.InterfaceRemove(saveData["host_name"]) })
+	reverter.Add(func() { _ = network.InterfaceRemove(saveData["host_name"]) })
 
 	if d.inst.Type() == instancetype.VM {
 		// Disable IPv6 on host interface to avoid getting IPv6 link-local addresses unnecessarily.
@@ -353,7 +353,8 @@ func (d *nicMACVLAN) Start() (*deviceConfig.RunConfig, error) {
 			}...)
 	}
 
-	revert.Success()
+	reverter.Success()
+
 	return &runConf, nil
 }
 

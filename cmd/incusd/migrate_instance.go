@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -14,7 +15,6 @@ import (
 	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
 	"github.com/lxc/incus/v6/internal/server/migration"
 	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/state"
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/logger"
@@ -82,7 +82,7 @@ func newMigrationSource(inst instance.Instance, stateful bool, instanceOnly bool
 	return &ret, nil
 }
 
-func (s *migrationSourceWs) Do(state *state.State, migrateOp *operations.Operation) error {
+func (s *migrationSourceWs) do(migrateOp *operations.Operation) error {
 	l := logger.AddContext(logger.Ctx{"project": s.instance.Project().Name, "instance": s.instance.Name(), "live": s.live, "clusterMoveSourceName": s.clusterMoveSourceName, "push": s.pushOperationURL != ""})
 
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*30)
@@ -103,7 +103,7 @@ func (s *migrationSourceWs) Do(state *state.State, migrateOp *operations.Operati
 	stateConnFunc := func(ctx context.Context) (io.ReadWriteCloser, error) {
 		conn := s.conns[api.SecretNameState]
 		if conn == nil {
-			return nil, fmt.Errorf("Migration source control connection not initialized")
+			return nil, errors.New("Migration source control connection not initialized")
 		}
 
 		wsConn, err := conn.WebsocketIO(ctx)
@@ -117,7 +117,7 @@ func (s *migrationSourceWs) Do(state *state.State, migrateOp *operations.Operati
 	filesystemConnFunc := func(ctx context.Context) (io.ReadWriteCloser, error) {
 		conn := s.conns[api.SecretNameFilesystem]
 		if conn == nil {
-			return nil, fmt.Errorf("Migration source filesystem connection not initialized")
+			return nil, errors.New("Migration source filesystem connection not initialized")
 		}
 
 		wsConn, err := conn.WebsocketIO(ctx)
@@ -213,7 +213,7 @@ func newMigrationSink(args *migrationSinkArgs) (*migrationSink, error) {
 	return &sink, nil
 }
 
-func (c *migrationSink) Do(state *state.State, instOp *operationlock.InstanceOperation) error {
+func (c *migrationSink) do(instOp *operationlock.InstanceOperation) error {
 	l := logger.AddContext(logger.Ctx{"project": c.instance.Project().Name, "instance": c.instance.Name(), "live": c.live, "clusterMoveSourceName": c.clusterMoveSourceName, "push": c.push})
 
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*30)
@@ -237,7 +237,7 @@ func (c *migrationSink) Do(state *state.State, instOp *operationlock.InstanceOpe
 	stateConnFunc := func(ctx context.Context) (io.ReadWriteCloser, error) {
 		conn := c.conns[api.SecretNameState]
 		if conn == nil {
-			return nil, fmt.Errorf("Migration target control connection not initialized")
+			return nil, errors.New("Migration target control connection not initialized")
 		}
 
 		wsConn, err := conn.WebsocketIO(ctx)
@@ -251,7 +251,7 @@ func (c *migrationSink) Do(state *state.State, instOp *operationlock.InstanceOpe
 	filesystemConnFunc := func(ctx context.Context) (io.ReadWriteCloser, error) {
 		conn := c.conns[api.SecretNameFilesystem]
 		if conn == nil {
-			return nil, fmt.Errorf("Migration target filesystem connection not initialized")
+			return nil, errors.New("Migration target filesystem connection not initialized")
 		}
 
 		wsConn, err := conn.WebsocketIO(ctx)

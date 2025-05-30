@@ -70,7 +70,7 @@ type consoleWs struct {
 	protocol string
 }
 
-func (s *consoleWs) Metadata() any {
+func (s *consoleWs) metadata() any {
 	fds := jmap.Map{}
 	for fd, secret := range s.fds {
 		if fd == -1 {
@@ -83,21 +83,21 @@ func (s *consoleWs) Metadata() any {
 	return jmap.Map{"fds": fds}
 }
 
-func (s *consoleWs) Connect(op *operations.Operation, r *http.Request, w http.ResponseWriter) error {
+func (s *consoleWs) connect(_ *operations.Operation, r *http.Request, w http.ResponseWriter) error {
 	switch s.protocol {
 	case instance.ConsoleTypeConsole:
-		return s.connectConsole(op, r, w)
+		return s.connectConsole(r, w)
 	case instance.ConsoleTypeVGA:
-		return s.connectVGA(op, r, w)
+		return s.connectVGA(r, w)
 	default:
 		return fmt.Errorf("Unknown protocol %q", s.protocol)
 	}
 }
 
-func (s *consoleWs) connectConsole(op *operations.Operation, r *http.Request, w http.ResponseWriter) error {
+func (s *consoleWs) connectConsole(r *http.Request, w http.ResponseWriter) error {
 	secret := r.FormValue("secret")
 	if secret == "" {
-		return fmt.Errorf("missing secret")
+		return errors.New("missing secret")
 	}
 
 	for fd, fdSecret := range s.fds {
@@ -135,10 +135,10 @@ func (s *consoleWs) connectConsole(op *operations.Operation, r *http.Request, w 
 	return os.ErrPermission
 }
 
-func (s *consoleWs) connectVGA(op *operations.Operation, r *http.Request, w http.ResponseWriter) error {
+func (s *consoleWs) connectVGA(r *http.Request, w http.ResponseWriter) error {
 	secret := r.FormValue("secret")
 	if secret == "" {
-		return fmt.Errorf("missing secret")
+		return errors.New("missing secret")
 	}
 
 	for fd, fdSecret := range s.fds {
@@ -196,20 +196,20 @@ func (s *consoleWs) connectVGA(op *operations.Operation, r *http.Request, w http
 	return os.ErrPermission
 }
 
-func (s *consoleWs) Do(op *operations.Operation) error {
+func (s *consoleWs) do(op *operations.Operation) error {
 	s.instance.SetOperation(op)
 
 	switch s.protocol {
 	case instance.ConsoleTypeConsole:
-		return s.doConsole(op)
+		return s.doConsole()
 	case instance.ConsoleTypeVGA:
-		return s.doVGA(op)
+		return s.doVGA()
 	default:
 		return fmt.Errorf("Unknown protocol %q", s.protocol)
 	}
 }
 
-func (s *consoleWs) doConsole(op *operations.Operation) error {
+func (s *consoleWs) doConsole() error {
 	defer logger.Debug("Console websocket finished")
 	<-s.allConnected
 
@@ -342,7 +342,7 @@ func (s *consoleWs) doConsole(op *operations.Operation) error {
 	return nil
 }
 
-func (s *consoleWs) doVGA(op *operations.Operation) error {
+func (s *consoleWs) doVGA() error {
 	defer logger.Debug("VGA websocket finished")
 
 	consoleDoneCh := make(chan struct{})
@@ -389,7 +389,7 @@ func (s *consoleWs) doVGA(op *operations.Operation) error {
 }
 
 // Cancel is responsible for closing websocket connections.
-func (s *consoleWs) Cancel(op *operations.Operation) error {
+func (s *consoleWs) cancel(*operations.Operation) error {
 	s.connsLock.Lock()
 	conn := s.conns[-1]
 	s.connsLock.Unlock()
@@ -452,7 +452,7 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(name) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	post := api.InstanceConsolePost{}
@@ -502,15 +502,15 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if post.Type == instance.ConsoleTypeVGA && inst.Type() != instancetype.VM {
-		return response.BadRequest(fmt.Errorf("VGA console is only supported by virtual machines"))
+		return response.BadRequest(errors.New("VGA console is only supported by virtual machines"))
 	}
 
 	if !inst.IsRunning() {
-		return response.BadRequest(fmt.Errorf("Instance is not running"))
+		return response.BadRequest(errors.New("Instance is not running"))
 	}
 
 	if inst.IsFrozen() {
-		return response.BadRequest(fmt.Errorf("Instance is frozen"))
+		return response.BadRequest(errors.New("Instance is frozen"))
 	}
 
 	// Find any running 'ConsoleShow' operation for the instance.
@@ -525,12 +525,12 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 		r := op.Resources()
 		apiUrls := r["instances"]
 		if len(apiUrls) < 1 {
-			return response.SmartError(fmt.Errorf("Operation does not have an instance URL defined"))
+			return response.SmartError(errors.New("Operation does not have an instance URL defined"))
 		}
 
 		urlPrefix, instanceName := path.Split(apiUrls[0].URL.Path)
 		if urlPrefix == "" || instanceName == "" {
-			return response.SmartError(fmt.Errorf("Instance URL has incorrect format"))
+			return response.SmartError(errors.New("Instance URL has incorrect format"))
 		}
 
 		if instanceName != inst.Name() {
@@ -538,7 +538,7 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 		}
 
 		if !post.Force {
-			return response.SmartError(fmt.Errorf("This console is already connected. Force is required to take it over."))
+			return response.SmartError(errors.New("This console is already connected. Force is required to take it over."))
 		}
 
 		_, err = op.Cancel()
@@ -570,7 +570,7 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 	resources := map[string][]api.URL{}
 	resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", ws.instance.Name())}
 
-	op, err := operations.OperationCreate(s, projectName, operations.OperationClassWebsocket, operationtype.ConsoleShow, resources, ws.Metadata(), ws.Do, ws.Cancel, ws.Connect, r)
+	op, err := operations.OperationCreate(s, projectName, operations.OperationClassWebsocket, operationtype.ConsoleShow, resources, ws.metadata(), ws.do, ws.cancel, ws.connect, r)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -638,7 +638,7 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(name) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	// Forward the request if the container is remote.
@@ -673,7 +673,7 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 	if inst.Type() == instancetype.Container {
 		c, ok := inst.(instance.Container)
 		if !ok {
-			return response.SmartError(fmt.Errorf("Failed to cast inst to Container"))
+			return response.SmartError(errors.New("Failed to cast inst to Container"))
 		}
 
 		// Query the container's console ringbuffer.
@@ -692,7 +692,7 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 				return response.SmartError(err)
 			}
 
-			if errno == unix.ENODATA {
+			if errors.Is(errno, unix.ENODATA) {
 				return response.FileResponse(r, nil, nil)
 			}
 
@@ -707,7 +707,7 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 	} else if inst.Type() == instancetype.VM {
 		v, ok := inst.(instance.VM)
 		if !ok {
-			return response.SmartError(fmt.Errorf("Failed to cast inst to VM"))
+			return response.SmartError(errors.New("Failed to cast inst to VM"))
 		}
 
 		var headers map[string]string
@@ -785,7 +785,7 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 //	    $ref: "#/responses/InternalServerError"
 func instanceConsoleLogDelete(d *Daemon, r *http.Request) response.Response {
 	if !liblxc.RuntimeLiblxcVersionAtLeast(liblxc.Version(), 3, 0, 0) {
-		return response.BadRequest(fmt.Errorf("Clearing the console buffer requires liblxc >= 3.0"))
+		return response.BadRequest(errors.New("Clearing the console buffer requires liblxc >= 3.0"))
 	}
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -794,7 +794,7 @@ func instanceConsoleLogDelete(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(name) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	projectName := request.ProjectParam(r)
@@ -805,12 +805,12 @@ func instanceConsoleLogDelete(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if inst.Type() != instancetype.Container {
-		return response.SmartError(fmt.Errorf("Instance is not container type"))
+		return response.SmartError(errors.New("Instance is not container type"))
 	}
 
 	c, ok := inst.(instance.Container)
 	if !ok {
-		return response.SmartError(fmt.Errorf("Instance is not container type"))
+		return response.SmartError(errors.New("Instance is not container type"))
 	}
 
 	truncateConsoleLogFile := func(path string) error {
@@ -822,11 +822,11 @@ func instanceConsoleLogDelete(d *Daemon, r *http.Request) response.Response {
 		}
 
 		if !st.Mode().IsRegular() {
-			return fmt.Errorf("The console log is not a regular file")
+			return errors.New("The console log is not a regular file")
 		}
 
 		if path == "" {
-			return fmt.Errorf("Container does not keep a console logfile")
+			return errors.New("Container does not keep a console logfile")
 		}
 
 		return os.Truncate(path, 0)
@@ -852,7 +852,7 @@ func instanceConsoleLogDelete(d *Daemon, r *http.Request) response.Response {
 			return response.SmartError(err)
 		}
 
-		if errno == unix.ENODATA {
+		if errors.Is(errno, unix.ENODATA) {
 			return response.SmartError(nil)
 		}
 

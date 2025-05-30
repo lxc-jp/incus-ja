@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -74,7 +75,7 @@ func instancePut(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if internalInstance.IsSnapshot(name) {
-		return response.BadRequest(fmt.Errorf("Invalid instance name"))
+		return response.BadRequest(errors.New("Invalid instance name"))
 	}
 
 	// Handle requests targeted to a container on a different node
@@ -87,15 +88,15 @@ func instancePut(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	unlock, err := instanceOperationLock(s.ShutdownCtx, projectName, name)
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		unlock()
 	})
 
@@ -200,7 +201,7 @@ func instancePut(d *Daemon, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	revert.Success()
+	reverter.Success()
 	return operations.OperationResponse(op)
 }
 

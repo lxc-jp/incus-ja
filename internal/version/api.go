@@ -480,6 +480,12 @@ var APIExtensions = []string{
 	"server_logging",
 	"network_forward_snat",
 	"memory_hotplug",
+	"instance_nic_routed_host_tables",
+	"instance_publish_split",
+	"init_preseed_certificates",
+	"custom_volume_sftp",
+	"network_ovn_external_nic_address",
+	"network_physical_gateway_hwaddr",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

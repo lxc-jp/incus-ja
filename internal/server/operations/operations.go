@@ -2,7 +2,9 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"sync"
 	"time"
@@ -126,8 +128,8 @@ type Operation struct {
 // created, it returns an error.
 func OperationCreate(s *state.State, projectName string, opClass OperationClass, opType operationtype.Type, opResources map[string][]api.URL, opMetadata any, onRun func(*Operation) error, onCancel func(*Operation) error, onConnect func(*Operation, *http.Request, http.ResponseWriter) error, r *http.Request) (*Operation, error) {
 	// Don't allow new operations when Incus is shutting down.
-	if s != nil && s.ShutdownCtx.Err() == context.Canceled {
-		return nil, fmt.Errorf("Incus is shutting down")
+	if s != nil && errors.Is(s.ShutdownCtx.Err(), context.Canceled) {
+		return nil, errors.New("Incus is shutting down")
 	}
 
 	// Main attributes
@@ -165,19 +167,19 @@ func OperationCreate(s *state.State, projectName string, opClass OperationClass,
 
 	// Quick check.
 	if op.class != OperationClassWebsocket && op.onConnect != nil {
-		return nil, fmt.Errorf("Only websocket operations can have a Connect hook")
+		return nil, errors.New("Only websocket operations can have a Connect hook")
 	}
 
 	if op.class == OperationClassWebsocket && op.onConnect == nil {
-		return nil, fmt.Errorf("Websocket operations must have a Connect hook")
+		return nil, errors.New("Websocket operations must have a Connect hook")
 	}
 
 	if op.class == OperationClassToken && op.onRun != nil {
-		return nil, fmt.Errorf("Token operations can't have a Run hook")
+		return nil, errors.New("Token operations can't have a Run hook")
 	}
 
 	if op.class == OperationClassToken && op.onCancel != nil {
-		return nil, fmt.Errorf("Token operations can't have a Cancel hook")
+		return nil, errors.New("Token operations can't have a Cancel hook")
 	}
 
 	// Set requestor if request was provided.
@@ -278,7 +280,7 @@ func (op *Operation) Start() error {
 	op.lock.Lock()
 	if op.status != api.Pending {
 		op.lock.Unlock()
-		return fmt.Errorf("Only pending operations can be started")
+		return errors.New("Only pending operations can be started")
 	}
 
 	op.status = api.Running
@@ -335,12 +337,12 @@ func (op *Operation) Cancel() (chan error, error) {
 	op.lock.Lock()
 	if op.status != api.Running {
 		op.lock.Unlock()
-		return nil, fmt.Errorf("Only running operations can be cancelled")
+		return nil, errors.New("Only running operations can be cancelled")
 	}
 
 	if !op.mayCancel() {
 		op.lock.Unlock()
-		return nil, fmt.Errorf("This operation can't be cancelled")
+		return nil, errors.New("This operation can't be cancelled")
 	}
 
 	chanCancel := make(chan error, 1)
@@ -420,12 +422,12 @@ func (op *Operation) Connect(r *http.Request, w http.ResponseWriter) (chan error
 	op.lock.Lock()
 	if op.class != OperationClassWebsocket {
 		op.lock.Unlock()
-		return nil, fmt.Errorf("Only websocket operations can be connected")
+		return nil, errors.New("Only websocket operations can be connected")
 	}
 
 	if op.status != api.Running {
 		op.lock.Unlock()
-		return nil, fmt.Errorf("Only running operations can be connected")
+		return nil, errors.New("Only running operations can be connected")
 	}
 
 	chanConnect := make(chan error, 1)
@@ -532,12 +534,12 @@ func (op *Operation) UpdateResources(opResources map[string][]api.URL) error {
 	op.lock.Lock()
 	if op.status != api.Pending && op.status != api.Running {
 		op.lock.Unlock()
-		return fmt.Errorf("Only pending or running operations can be updated")
+		return errors.New("Only pending or running operations can be updated")
 	}
 
 	if op.readonly {
 		op.lock.Unlock()
-		return fmt.Errorf("Read-only operations can't be updated")
+		return errors.New("Read-only operations can't be updated")
 	}
 
 	op.updatedAt = time.Now()
@@ -560,12 +562,12 @@ func (op *Operation) UpdateMetadata(opMetadata any) error {
 	op.lock.Lock()
 	if op.status != api.Pending && op.status != api.Running {
 		op.lock.Unlock()
-		return fmt.Errorf("Only pending or running operations can be updated")
+		return errors.New("Only pending or running operations can be updated")
 	}
 
 	if op.readonly {
 		op.lock.Unlock()
-		return fmt.Errorf("Read-only operations can't be updated")
+		return errors.New("Read-only operations can't be updated")
 	}
 
 	newMetadata, err := parseMetadata(opMetadata)
@@ -595,12 +597,12 @@ func (op *Operation) ExtendMetadata(metadata any) error {
 	// Quick checks.
 	if op.status != api.Pending && op.status != api.Running {
 		op.lock.Unlock()
-		return fmt.Errorf("Only pending or running operations can be updated")
+		return errors.New("Only pending or running operations can be updated")
 	}
 
 	if op.readonly {
 		op.lock.Unlock()
-		return fmt.Errorf("Read-only operations can't be updated")
+		return errors.New("Read-only operations can't be updated")
 	}
 
 	// Parse the new metadata.
@@ -617,9 +619,7 @@ func (op *Operation) ExtendMetadata(metadata any) error {
 	if op.metadata == nil {
 		newMetadata = extraMetadata
 	} else {
-		for k, v := range extraMetadata {
-			newMetadata[k] = v
-		}
+		maps.Copy(newMetadata, extraMetadata)
 	}
 
 	// Update the operation.

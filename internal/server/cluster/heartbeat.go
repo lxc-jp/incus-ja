@@ -31,6 +31,19 @@ const (
 	heartbeatInitial
 )
 
+func (m *heartbeatMode) name() string {
+	switch *m {
+	case heartbeatNormal:
+		return "normal"
+	case heartbeatImmediate:
+		return "immediate"
+	case heartbeatInitial:
+		return "initial"
+	default:
+		return "unknown"
+	}
+}
+
 // APIHeartbeatMember contains specific cluster node info.
 type APIHeartbeatMember struct {
 	ID            int64            // ID field value in nodes table.
@@ -348,13 +361,7 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 		return
 	}
 
-	modeStr := "normal"
-	switch mode {
-	case heartbeatImmediate:
-		modeStr = "immediate"
-	case heartbeatInitial:
-		modeStr = "initial"
-	}
+	modeStr := mode.name()
 
 	if mode != heartbeatNormal {
 		// Log unscheduled heartbeats with a higher level than normal heartbeats.
@@ -463,7 +470,7 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 	err = query.Retry(ctx, func(ctx context.Context) error {
 		// Durating cluster member fluctuations/upgrades the cluster can become unavailable so check here.
 		if g.Cluster == nil {
-			return fmt.Errorf("Cluster unavailable")
+			return errors.New("Cluster unavailable")
 		}
 
 		return g.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -563,7 +570,7 @@ func HeartbeatNode(taskCtx context.Context, address string, networkCert *localtl
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Heartbeat request failed with status: %w", api.StatusErrorf(response.StatusCode, response.Status))
+		return fmt.Errorf("Heartbeat request failed with status: %w", api.StatusErrorf(response.StatusCode, "%s", response.Status))
 	}
 
 	return nil

@@ -5,6 +5,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -60,7 +61,7 @@ func (c *ClusterTx) UpdateStorageVolumeSnapshot(ctx context.Context, projectName
 	var err error
 
 	if !strings.Contains(volumeName, internalInstance.SnapshotDelimiter) {
-		return fmt.Errorf("Volume is not a snapshot")
+		return errors.New("Volume is not a snapshot")
 	}
 
 	volume, err := c.GetStoragePoolVolume(ctx, poolID, projectName, volumeType, volumeName, true)
@@ -112,7 +113,7 @@ WHERE volumes.id=?
 
 	err := dbQueryRowScan(ctx, c, q, arg1, outfmt)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return args, api.StatusErrorf(http.StatusNotFound, "Storage pool volume snapshot not found")
 		}
 
@@ -120,7 +121,7 @@ WHERE volumes.id=?
 	}
 
 	if !strings.Contains(args.Name, internalInstance.SnapshotDelimiter) {
-		return args, fmt.Errorf("Volume is not a snapshot")
+		return args, errors.New("Volume is not a snapshot")
 	}
 
 	args.TypeName = StoragePoolVolumeTypeNames[args.Type]
@@ -138,7 +139,7 @@ func (c *ClusterTx) GetStorageVolumeSnapshotExpiry(ctx context.Context, volumeID
 
 	err := dbQueryRowScan(ctx, c, query, inargs, outargs)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return expiry, api.StatusErrorf(http.StatusNotFound, "Storage pool volume snapshot not found")
 		}
 

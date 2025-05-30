@@ -2,8 +2,10 @@ package addressset
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	incus "github.com/lxc/incus/v6/client"
@@ -66,7 +68,7 @@ func (d *common) Info() *api.NetworkAddressSet {
 	info := api.NetworkAddressSet{}
 	info.Name = d.info.Name
 	info.Description = d.info.Description
-	info.Addresses = append([]string(nil), d.info.Addresses...)
+	info.Addresses = slices.Clone(d.info.Addresses)
 	info.Config = localUtil.CopyConfig(d.info.Config)
 	info.UsedBy = nil // To indicate its not populated (use Usedby() function to populate).
 	info.Project = d.projectName
@@ -94,7 +96,7 @@ func (d *common) usedBy(firstOnly bool) ([]string, error) {
 		return nil
 	}, d.info.Name)
 	if err != nil {
-		if err == db.ErrInstanceListStop {
+		if errors.Is(err, db.ErrInstanceListStop) {
 			return usedBy, nil
 		}
 
@@ -357,7 +359,7 @@ func (d *common) Rename(newName string) error {
 	}
 
 	if len(usedBy) > 0 {
-		return fmt.Errorf("Cannot rename address set that is in use")
+		return errors.New("Cannot rename address set that is in use")
 	}
 
 	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -379,14 +381,14 @@ func (d *common) Delete() error {
 	}
 
 	if len(usedBy) > 0 {
-		return fmt.Errorf("Cannot delete address set that is in use")
+		return errors.New("Cannot delete address set that is in use")
 	}
 
 	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 		return dbCluster.DeleteNetworkAddressSet(ctx, tx.Tx(), d.projectName, d.info.Name)
 	})
 	if err != nil {
-		return fmt.Errorf("Error while deleting address set from db")
+		return errors.New("Error while deleting address set from db")
 	}
 
 	return nil

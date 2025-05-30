@@ -2147,7 +2147,7 @@ func updateFromV42(ctx context.Context, tx *sql.Tx) error {
 		rowIDs := strings.Split(r.dupeRowIDs, ",")
 
 		// Iterate and delete all but 1 of the rowIDs so we leave just one left.
-		for i := 0; i < len(rowIDs)-1; i++ {
+		for i := range len(rowIDs) - 1 {
 			rowID, err := strconv.Atoi(rowIDs[i])
 			if err != nil {
 				return fmt.Errorf("Failed converting row ID: %w", err)
@@ -2213,7 +2213,7 @@ func updateFromV41(ctx context.Context, tx *sql.Tx) error {
 		rowIDs := strings.Split(r.dupeRowIDs, ",")
 
 		// Iterate and delete all but 1 of the rowIDs so we leave just one left.
-		for i := 0; i < len(rowIDs)-1; i++ {
+		for i := range len(rowIDs) - 1 {
 			rowID, err := strconv.Atoi(rowIDs[i])
 			if err != nil {
 				return fmt.Errorf("Failed converting row ID: %w", err)
@@ -4457,7 +4457,7 @@ FROM storage_volumes
 
 	// Duplicate each volume row across all nodes, and keep track of the
 	// new volume IDs that we've inserted.
-	created := make(map[int][]int64, 0) // Existing volume ID to new volumes IDs.
+	created := make(map[int][]int64) // Existing volume ID to new volumes IDs.
 	columns := []string{"name", "storage_pool_id", "node_id", "type", "description"}
 	for _, volume := range volumes {
 		for _, nodeID := range nodeIDs {

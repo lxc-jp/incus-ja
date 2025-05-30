@@ -2,6 +2,7 @@ package zone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"github.com/lxc/incus/v6/internal/server/cluster"
 	"github.com/lxc/incus/v6/internal/server/cluster/request"
 	"github.com/lxc/incus/v6/internal/server/db"
+	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
 	"github.com/lxc/incus/v6/internal/server/network"
 	"github.com/lxc/incus/v6/internal/server/response"
 	"github.com/lxc/incus/v6/internal/server/state"
@@ -150,11 +152,11 @@ func (d *zone) Etag() []any {
 // validateName checks name is valid.
 func (d *zone) validateName(name string) error {
 	if name == "" {
-		return fmt.Errorf("Name is required")
+		return errors.New("Name is required")
 	}
 
 	if strings.HasPrefix(name, "/") {
-		return fmt.Errorf(`Name cannot start with "/"`)
+		return errors.New(`Name cannot start with "/"`)
 	}
 
 	return nil
@@ -270,15 +272,34 @@ func (d *zone) Update(config *api.NetworkZonePut, clientType request.ClientType)
 		return err
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	// Update the database and notify the rest of the cluster.
 	if clientType == request.ClientTypeNormal {
 		oldConfig := d.info.NetworkZonePut
 
 		// Update database.
-		err = d.state.DB.Cluster.UpdateNetworkZone(d.id, config)
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			dbZone := dbCluster.NetworkZone{
+				ID:          int(d.id),
+				Project:     d.projectName,
+				Name:        d.info.Name,
+				Description: config.Description,
+			}
+
+			err := dbCluster.UpdateNetworkZone(ctx, tx.Tx(), dbZone.Project, dbZone.Name, dbZone)
+			if err != nil {
+				return err
+			}
+
+			err = dbCluster.UpdateNetworkZoneConfig(ctx, tx.Tx(), int64(dbZone.ID), config.Config)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
 		if err != nil {
 			return err
 		}
@@ -287,8 +308,27 @@ func (d *zone) Update(config *api.NetworkZonePut, clientType request.ClientType)
 		d.info.NetworkZonePut = *config
 		d.init(d.state, d.id, d.projectName, d.info)
 
-		revert.Add(func() {
-			_ = d.state.DB.Cluster.UpdateNetworkZone(d.id, &oldConfig)
+		reverter.Add(func() {
+			_ = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				dbZone := dbCluster.NetworkZone{
+					ID:          int(d.id),
+					Project:     d.projectName,
+					Name:        d.info.Name,
+					Description: oldConfig.Description,
+				}
+
+				err := dbCluster.UpdateNetworkZone(ctx, tx.Tx(), dbZone.Project, dbZone.Name, dbZone)
+				if err != nil {
+					return err
+				}
+
+				err = dbCluster.UpdateNetworkZoneConfig(ctx, tx.Tx(), int64(dbZone.ID), oldConfig.Config)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
 			d.info.NetworkZonePut = oldConfig
 			d.init(d.state, d.id, d.projectName, d.info)
 		})
@@ -313,7 +353,7 @@ func (d *zone) Update(config *api.NetworkZonePut, clientType request.ClientType)
 		return err
 	}
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -325,12 +365,12 @@ func (d *zone) Delete() error {
 	}
 
 	if isUsed {
-		return fmt.Errorf("Cannot delete a zone that is in use")
+		return errors.New("Cannot delete a zone that is in use")
 	}
 
 	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 		// Delete the database record.
-		err = tx.DeleteNetworkZone(ctx, d.id)
+		err = dbCluster.DeleteNetworkZone(ctx, tx.Tx(), int(d.id))
 
 		return err
 	})
@@ -364,9 +404,14 @@ func (d *zone) Content() (*strings.Builder, error) {
 			return fmt.Errorf("Failed to load all networks: %w", err)
 		}
 
-		zoneProjects, err = tx.GetNetworkZones(ctx)
+		zones, err := dbCluster.GetNetworkZones(ctx, tx.Tx())
 		if err != nil {
 			return fmt.Errorf("Failed to load all network zones: %w", err)
+		}
+
+		zoneProjects = make(map[string]string)
+		for _, zone := range zones {
+			zoneProjects[zone.Name] = zone.Project
 		}
 
 		return nil

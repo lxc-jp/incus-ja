@@ -25,7 +25,6 @@ import (
 	"github.com/gorilla/mux"
 	liblxc "github.com/lxc/go-lxc"
 	"golang.org/x/sys/unix"
-	yaml "gopkg.in/yaml.v2"
 
 	internalIO "github.com/lxc/incus/v6/internal/io"
 	"github.com/lxc/incus/v6/internal/linux"
@@ -422,7 +421,7 @@ func (d *Daemon) checkTrustedClient(r *http.Request) error {
 			return err
 		}
 
-		return fmt.Errorf("Not authorized")
+		return errors.New("Not authorized")
 	}
 
 	return nil
@@ -512,22 +511,22 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 
 	// DevIncus unix socket credentials on main API.
 	if r.RemoteAddr == "@dev_incus" {
-		return false, "", "", fmt.Errorf("Main API query can't come from /dev/incus socket")
+		return false, "", "", errors.New("Main API query can't come from /dev/incus socket")
 	}
 
 	// Cluster notification with wrong certificate.
 	if isClusterNotification(r) {
-		return false, "", "", fmt.Errorf("Cluster notification isn't using trusted server certificate")
+		return false, "", "", errors.New("Cluster notification isn't using trusted server certificate")
 	}
 
 	// Cluster internal client with wrong certificate.
 	if isClusterInternal(r) {
-		return false, "", "", fmt.Errorf("Cluster internal client isn't using trusted server certificate")
+		return false, "", "", errors.New("Cluster internal client isn't using trusted server certificate")
 	}
 
 	// Bad query, no TLS found.
 	if r.TLS == nil {
-		return false, "", "", fmt.Errorf("Bad/missing TLS on network query")
+		return false, "", "", errors.New("Bad/missing TLS on network query")
 	}
 
 	// Load the certificates.
@@ -639,7 +638,7 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 			select {
 			case <-d.setupChan:
 			default:
-				response := response.Unavailable(fmt.Errorf("Daemon is starting up"))
+				response := response.Unavailable(errors.New("Daemon is starting up"))
 				_ = response.Render(w)
 				return
 			}
@@ -648,8 +647,8 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 		// Authentication
 		trusted, username, protocol, err := d.Authenticate(w, r)
 		if err != nil {
-			_, ok := err.(*oidc.AuthError)
-			if ok {
+			var authError *oidc.AuthError
+			if errors.As(err, &authError) {
 				// Ensure the OIDC headers are set if needed.
 				if d.oidcVerifier != nil {
 					_ = d.oidcVerifier.WriteHeaders(w)
@@ -747,8 +746,8 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 			return false
 		}
 
-		if d.shutdownCtx.Err() == context.Canceled && !allowedDuringShutdown() {
-			_ = response.Unavailable(fmt.Errorf("Shutting down")).Render(w)
+		if errors.Is(d.shutdownCtx.Err(), context.Canceled) && !allowedDuringShutdown() {
+			_ = response.Unavailable(errors.New("Shutting down")).Render(w)
 			return
 		}
 
@@ -1360,7 +1359,7 @@ func (d *Daemon) init() error {
 
 	// Mount the storage pools.
 	logger.Infof("Initializing storage pools")
-	err = storageStartup(d.State(), false)
+	err = storageStartup(d.State())
 	if err != nil {
 		return err
 	}
@@ -1830,7 +1829,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 
 		// Full shutdown requested.
 		if sig == unix.SIGPWR {
-			instancesShutdown(s, instances)
+			instancesShutdown(instances)
 
 			logger.Info("Stopping networks")
 			networkShutdown(s)
@@ -1963,10 +1962,10 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string) er
 		"openfga.store.id":  storeID,
 	}
 
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
-	revert.Add(func() {
+	reverter.Add(func() {
 		// Reset to default authorizer.
 		d.authorizer, _ = auth.LoadAuthorizer(d.shutdownCtx, auth.DriverTLS, logger.Log, d.clientCerts)
 	})
@@ -2222,7 +2221,7 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string) er
 
 	d.authorizer = openfgaAuthorizer
 
-	revert.Success()
+	reverter.Success()
 	return nil
 }
 
@@ -2336,9 +2335,7 @@ func (d *Daemon) hasMemberStateChanged(heartbeatData *cluster.APIHeartbeat) bool
 }
 
 // heartbeatHandler handles heartbeat requests from other cluster members.
-func (d *Daemon) heartbeatHandler(w http.ResponseWriter, r *http.Request, isLeader bool, hbData *cluster.APIHeartbeat) {
-	s := d.State()
-
+func (d *Daemon) heartbeatHandler(w http.ResponseWriter, _ *http.Request, isLeader bool, hbData *cluster.APIHeartbeat) {
 	var err error
 
 	// Look for time skews.
@@ -2427,55 +2424,6 @@ func (d *Daemon) heartbeatHandler(w http.ResponseWriter, r *http.Request, isLead
 		}
 
 		logger.Debug("Partial heartbeat received")
-	}
-
-	// Refresh cluster member resource info cache.
-	var muRefresh sync.Mutex
-
-	for _, member := range hbData.Members {
-		// Ignore offline servers.
-		if !member.Online {
-			continue
-		}
-
-		if member.Name == s.ServerName {
-			continue
-		}
-
-		go func(name string, address string) {
-			muRefresh.Lock()
-			defer muRefresh.Unlock()
-
-			// Check if we have a recent local cache entry already.
-			resourcesPath := internalUtil.CachePath("resources", fmt.Sprintf("%s.yaml", name))
-			fi, err := os.Stat(resourcesPath)
-			if err == nil && time.Since(fi.ModTime()) < time.Hour {
-				return
-			}
-
-			// Connect to the server.
-			client, err := cluster.Connect(address, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
-			if err != nil {
-				return
-			}
-
-			// Get the server resources.
-			resources, err := client.GetServerResources()
-			if err != nil {
-				return
-			}
-
-			// Write to cache.
-			data, err := yaml.Marshal(resources)
-			if err != nil {
-				return
-			}
-
-			err = os.WriteFile(resourcesPath, data, 0o600)
-			if err != nil {
-				return
-			}
-		}(member.Name, member.Address)
 	}
 }
 

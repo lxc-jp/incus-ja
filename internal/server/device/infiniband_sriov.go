@@ -1,6 +1,7 @@
 package device
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func (d *infinibandSRIOV) validateConfig(instConf instance.ConfigReader) error {
 // validateEnvironment checks the runtime environment for correctness.
 func (d *infinibandSRIOV) validateEnvironment() error {
 	if d.inst.Type() == instancetype.Container && d.config["name"] == "" {
-		return fmt.Errorf("Requires name property to start")
+		return errors.New("Requires name property to start")
 	}
 
 	if !util.PathExists(fmt.Sprintf("/sys/class/net/%s", d.config["parent"])) {
@@ -90,7 +91,7 @@ func (d *infinibandSRIOV) startContainer() (*deviceConfig.RunConfig, error) {
 	}
 
 	if len(ibDevs) < 1 {
-		return nil, fmt.Errorf("All virtual functions on parent device are already in use")
+		return nil, errors.New("All virtual functions on parent device are already in use")
 	}
 
 	// Get first VF device that is free.
@@ -201,7 +202,7 @@ func (d *infinibandSRIOV) startVM() (*deviceConfig.RunConfig, error) {
 	}
 
 	if vfID == -1 {
-		return nil, fmt.Errorf("All virtual functions on parent device are already in use")
+		return nil, errors.New("All virtual functions on parent device are already in use")
 	}
 
 	vfPCIDev, err := d.setupSriovParent(parentPCIAddress, vfID, saveData)
@@ -323,8 +324,8 @@ func (d *infinibandSRIOV) postStop() error {
 // setupSriovParent configures a SR-IOV virtual function (VF) device on parent and stores original properties of
 // the physical device into voltatile for restoration on detach. Returns VF PCI device info.
 func (d *infinibandSRIOV) setupSriovParent(parentPCIAddress string, vfID int, volatile map[string]string) (pcidev.Device, error) {
-	revert := revert.New()
-	defer revert.Fail()
+	reverter := revert.New()
+	defer reverter.Fail()
 
 	volatile["last_state.pci.parent"] = parentPCIAddress
 	volatile["last_state.vf.id"] = fmt.Sprintf("%d", vfID)
@@ -342,7 +343,7 @@ func (d *infinibandSRIOV) setupSriovParent(parentPCIAddress string, vfID int, vo
 		return vfPCIDev, err
 	}
 
-	revert.Add(func() { _ = pcidev.DeviceProbe(vfPCIDev) })
+	reverter.Add(func() { _ = pcidev.DeviceProbe(vfPCIDev) })
 
 	// Register VF device with vfio-pci driver so it can be passed to VM.
 	err = pcidev.DeviceDriverOverride(vfPCIDev, "vfio-pci")
@@ -353,7 +354,7 @@ func (d *infinibandSRIOV) setupSriovParent(parentPCIAddress string, vfID int, vo
 	// Record original driver used by VF device for restore.
 	volatile["last_state.pci.driver"] = vfPCIDev.Driver
 
-	revert.Success()
+	reverter.Success()
 
 	return vfPCIDev, nil
 }
@@ -386,7 +387,7 @@ func (d *infinibandSRIOV) findFreeVirtualFunction(parentDev pcidev.Device) (int,
 
 	vfID := -1
 
-	for i := 0; i < sriovNum; i++ {
+	for i := range sriovNum {
 		pciDev, err := pcidev.ParseUeventFile(fmt.Sprintf("/sys/bus/pci/devices/%s/virtfn%d/uevent", parentDev.SlotName, i))
 		if err != nil {
 			return 0, err

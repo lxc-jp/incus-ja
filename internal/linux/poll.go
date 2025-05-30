@@ -2,7 +2,7 @@ package linux
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"time"
@@ -23,7 +23,7 @@ func GetPollRevents(fd int, timeout int, flags int) (int, int, error) {
 again:
 	n, err := unix.Poll(pollFds, timeout)
 	if err != nil {
-		if err == unix.EAGAIN || err == unix.EINTR {
+		if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EINTR) {
 			goto again
 		}
 
@@ -73,9 +73,9 @@ func (w *execWrapper) Read(p []byte) (int, error) {
 			case err != nil:
 				opErr = err
 			case revents&unix.POLLERR > 0:
-				opErr = fmt.Errorf("Got POLLERR event")
+				opErr = errors.New("Got POLLERR event")
 			case revents&unix.POLLNVAL > 0:
-				opErr = fmt.Errorf("Got POLLNVAL event")
+				opErr = errors.New("Got POLLNVAL event")
 			case revents&(unix.POLLIN|unix.POLLPRI) > 0:
 				// If there is something to read then read it.
 				n, opErr = unix.Read(int(fd), p)
