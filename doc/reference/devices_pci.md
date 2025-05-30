@@ -15,6 +15,8 @@ PCI デバイスは生の PCI デバイスをホストから仮想マシンに�
 
 `pci` デバイスには以下のデバイスオプションがあります:
 
-キー      | 型     | デフォルト値 | 必須 | 説明
-:--       | :--    | :--          | :--  | :--
-`address` | string | -            | yes  | デバイスのPCIアドレス
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-pci start -->
+    :end-before: <!-- config group devices-pci end -->
+```

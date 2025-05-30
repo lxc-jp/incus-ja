@@ -2764,3 +2764,27 @@ OVNではこのために十分柔軟なSNATをサポートしていないため�
 ## `memory_hotplug`
 
 これはVMにメモリーホットプラグを追加し、実行時に再起動せずにメモリを追加できるようにします。
+
+## `instance_nic_routed_host_tables`
+
+これはルーテッドモードを使う`nic`デバイス上でホストルーティングテーブルを設定できるようにします。
+
+## `instance_publish_split`
+
+これは既存ノインスタンスから分割した形式のイメージを作成できるようにします。
+
+## `init_preseed_certificates`
+
+このAPI拡張はプレシードの初期化の際に証明書を設定できるようにします。
+
+## `custom_volume_sftp`
+
+これはカスタムストレージボリュームにSFTP APIを追加します。
+
+## `network_ovn_external_nic_address`
+
+これはネットワークフォワード経由でインスタンスにアドレスが利用できる限りにおいてカスタムの外部IPv4またはIPv6アドレスを設定できるようにします。
+
+## `network_physical_gateway_hwaddr`
+
+OVNを使用する際にIPv4とIPv6ゲートウェイのMACアドレスを設定できるようにします。

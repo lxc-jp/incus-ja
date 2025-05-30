@@ -31,6 +31,6 @@ Incus では、InfiniBand デバイスに対する 2 種類の異なったネッ
 
 % Include content from [config_options.txt](../config_options.txt)
 ```{include} ../config_options.txt
-    :start-after: <!-- config group infiniband-common start -->
-    :end-before: <!-- config group infiniband-common end -->
+    :start-after: <!-- config group devices-infiniband start -->
+    :end-before: <!-- config group devices-infiniband end -->
 ```

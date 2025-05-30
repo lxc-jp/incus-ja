@@ -25,27 +25,65 @@
 
 物理ネットワークタイプには以下の設定オプションがあります:
 
-キー                      | 型      | 条件          | デフォルト         | 説明
-:--                       | :--     | :--           | :--                | :--
-`gvrp`                    | bool    | -             | `false`            | GARP VLAN Registration Protocol を使って VLAN を登録する
-`mtu`                     | integer | -             | -                  | 作成するインターフェースの MTU
-`parent`                  | string  | -             | -                  | ネットワークで使う既存のインターフェース
-`vlan`                    | integer | -             | -                  | アタッチする先の VLAN ID
-`bgp.peers.NAME.address`  | string  | BGP server    | -                  | `ovn` ダウンストリームネットワークで使用するピアアドレス (IPv4 か IPv6)
-`bgp.peers.NAME.asn`      | integer | BGP server    | -                  | `ovn` ダウンストリームネットワークで使用する AS 番号
-`bgp.peers.NAME.password` | string  | BGP server    | - (パスワード無し) | `ovn` ダウンストリームネットワークで使用するピアのセッションパスワード（省略可能）
-`bgp.peers.NAME.holdtime` | integer | BGP server    | `180`              | ピアセッションホールドタイム (秒で指定、省略可能)
-`dns.nameservers`         | string  | 標準モード    | -                  | 物理 (`physical`) ネットワークの DNS サーバー IP のリスト
-`ipv4.gateway`            | string  | 標準モード    | -                  | ゲートウェイとネットワークの IPv4 アドレス（CIDR表記）
-`ipv4.ovn.ranges`         | string  | -             | -                  | 子供の OVN ネットワークルーターに使用する IPv4 アドレスの範囲（開始-終了 形式) のカンマ区切りリスト
-`ipv4.routes`             | string  | IPv4 アドレス | -                  | 子供の OVN ネットワークの `ipv4.routes.external` 設定で利用可能な追加の IPv4 CIDR サブネットのカンマ区切りリスト
-`ipv4.routes.anycast`     | bool    | IPv4 アドレス | `false`            | 複数のネットワーク／NICで同時にオーバーラップするルートが使われることを許可するかどうか
-`ipv6.gateway`            | string  | 標準モード    | -                  | ゲートウェイとネットワークの IPv6 アドレス（CIDR表記）
-`ipv6.ovn.ranges`         | string  | -             | -                  | 子供の OVN ネットワークルーターに使用する IPv6 アドレスの範囲（開始-終了 形式) のカンマ区切りリスト
-`ipv6.routes`             | string  | IPv6 アドレス | -                  | 子供の OVN ネットワークの `ipv6.routes.external` 設定で利用可能な追加の IPv6 CIDR サブネットのカンマ区切りリスト
-`ipv6.routes.anycast`     | bool    | IPv6 アドレス | `false`            | 複数のネットワーク／NICで同時にオーバーラップするルートが使われることを許可するかどうか
-`ovn.ingress_mode`        | string  | 標準モード    | `l2proxy`          | OVN NIC の外部 IP アドレスがアップリンクネットワークで広告される方法を設定します。 `l2proxy` (proxy ARP/NDP) か `routed` です。
-`user.*`                  | string  | -             | -                  | ユーザー指定の自由形式のキー／バリューペア
+## BGPオプション
+
+OVNダウンストリームネットワークのBGPピアの設定には以下のオプションがあります:
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_physical-bgp start -->
+    :end-before: <!-- config group network_physical-bgp end -->
+```
+
+## DNSオプション
+
+物理ネットワークで使われるDNSサーバーとサーチドメインを制御するには以下のオプションがあります:
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_physical-dns start -->
+    :end-before: <!-- config group network_physical-dns end -->
+```
+
+## IPV4オプション
+
+物理ネットワークのIPv4の設定には以下のオプションがあります:
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_physical-ipv4 start -->
+    :end-before: <!-- config group network_physical-ipv4 end -->
+```
+
+## IPV6オプション
+
+物理ネットワークのIPv6の設定には以下のオプションがあります:
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_physical-ipv6 start -->
+    :end-before: <!-- config group network_physical-ipv6 end -->
+```
+
+## OVNオプション
+
+物理ネットワークをOVNアップリンクとして使用する際に適用するオプションには以下があります:
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_physical-ovn start -->
+    :end-before: <!-- config group network_physical-ovn end -->
+```
+
+## 共通オプション
+
+これらは他の機能に関係なくすべての物理ネットワークに適用されるオプションです:
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_physical-common start -->
+    :end-before: <!-- config group network_physical-common end -->
+```
 
 (network-physical-features)=
 ## サポートされている機能

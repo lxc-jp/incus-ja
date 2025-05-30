@@ -21,9 +21,8 @@
 
 `sriov` ネットワークタイプには以下の設定オプションがあります。
 
-キー     | 型      | 条件 | デフォルト | 説明
-:--      | :--     | :--  | :--        | :--
-`mtu`    | integer | -    | -          | 作成するインターフェースの MTU
-`parent` | string  | -    | -          | `sriov` NIC を作成する親のインターフェース
-`vlan`   | integer | -    | -          | アタッチする先の VLAN ID
-`user.*` | string  | -    | -          | ユーザー指定の自由形式のキー／バリューペア
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_sriov-common start -->
+    :end-before: <!-- config group network_sriov-common end -->
+```

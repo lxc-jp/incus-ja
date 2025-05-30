@@ -58,6 +58,16 @@ Incus ブリッジネットワークでファイアウォールを設定する�
     :end-before: <!-- config group network_bridge-common end -->
 ```
 
+## BGPオプション
+
+OVNダウンストリームネットワークのBGPピアを設定するために以下のオプションがあります:
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_bridge-bgp start -->
+    :end-before: <!-- config group network_bridge-bgp end -->
+```
+
 ```{note}
 `bridge.external_interfaces` オプションは拡張された形式をサポートし、存在しない VLAN インターフェースを作成できるようにします。
 

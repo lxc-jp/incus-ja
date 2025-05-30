@@ -28,10 +28,8 @@ macvlan は仮想的な {abbr}`LAN (Local Area Network)` で同じネットワ�
 
 `macvlan` ネットワークタイプでは以下の設定オプションが使用できます:
 
-キー     | 型      | 条件 | デフォルト | 説明
-:--      | :--     | :--  | :--        | :--
-`gvrp`   | bool    | -    | `false`    | GARP VLAN Registration Protocol を使って VLAN を登録する
-`mtu`    | integer | -    | -          | 作成するインターフェースの MTU
-`parent` | string  | -    | -          | `macvlan` NIC を作成する親のインターフェース
-`vlan`   | integer | -    | -          | アタッチする先の VLAN ID
-`user.*` | string  | -    | -          | ユーザー指定の自由形式のキー／バリューペア
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group network_macvlan-common start -->
+    :end-before: <!-- config group network_macvlan-common end -->
+```
