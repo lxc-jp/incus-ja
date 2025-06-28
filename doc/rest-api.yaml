@@ -25,6 +25,41 @@ definitions:
         title: AccessEntry represents an entity having access to the resource.
         type: object
         x-go-package: github.com/lxc/incus/v6/shared/api
+    BackupTarget:
+        properties:
+            access_key:
+                description: AccessKey is the S3 API access key
+                example: GOOG1234
+                type: string
+                x-go-name: AccessKey
+            bucket_name:
+                description: BucketName is the name of the S3 bucket.
+                example: my_bucket
+                type: string
+                x-go-name: BucketName
+            path:
+                description: Path is the target path.
+                example: foo/test.tar
+                type: string
+                x-go-name: Path
+            protocol:
+                description: Protocol is the upload protocol.
+                example: S3
+                type: string
+                x-go-name: Protocol
+            secret_key:
+                description: SecretKey is the S3 API access key
+                example: secret123
+                type: string
+                x-go-name: SecretKey
+            url:
+                description: URL is the HTTPS URL for the backup
+                example: https://storage.googleapis.com
+                type: string
+                x-go-name: URL
+        title: BackupTarget represents the target storage server for an instance or volume backup.
+        type: object
+        x-go-package: github.com/lxc/incus/v6/shared/api
     Certificate:
         description: Certificate represents a certificate
         properties:
@@ -1619,6 +1654,8 @@ definitions:
                 example: true
                 type: boolean
                 x-go-name: OptimizedStorage
+            target:
+                $ref: '#/definitions/BackupTarget'
         title: InstanceBackupsPost represents the fields available for a new instance backup.
         type: object
         x-go-package: github.com/lxc/incus/v6/shared/api
@@ -4563,6 +4600,19 @@ definitions:
                 x-go-name: Total
         type: object
         x-go-package: github.com/lxc/incus/v6/shared/api
+    ResourcesCPUAddressSizes:
+        properties:
+            physical_bits:
+                format: uint64
+                type: integer
+                x-go-name: PhysicalBits
+            virtual_bits:
+                format: uint64
+                type: integer
+                x-go-name: VirtualBits
+        title: ResourcesCPUAddressSizes resprents address size information for a CPU socket.
+        type: object
+        x-go-package: github.com/lxc/incus/v6/shared/api
     ResourcesCPUCache:
         description: ResourcesCPUCache represents a CPU cache
         properties:
@@ -4624,6 +4674,8 @@ definitions:
     ResourcesCPUSocket:
         description: ResourcesCPUSocket represents a CPU socket on the system
         properties:
+            address_sizes:
+                $ref: '#/definitions/ResourcesCPUAddressSizes'
             cache:
                 description: List of CPU caches
                 items:
@@ -6550,6 +6602,8 @@ definitions:
                 example: true
                 type: boolean
                 x-go-name: OptimizedStorage
+            target:
+                $ref: '#/definitions/BackupTarget'
             volume_only:
                 description: Whether to ignore snapshots
                 example: false

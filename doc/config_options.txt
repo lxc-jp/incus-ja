@@ -2501,6 +2501,13 @@ cronの式（`<minute> <hour> <dom> <month> <dow>`）かスケジュールのエ
 cron設定自体がカンマを含むため、他の多くの設定キーと異なり、この設定は単なるカンマ区切りではなくカンマと空白区切りであることに注意してください。
 ```
 
+```{config:option} snapshots.expiry.manual instance-snapshots
+:liveupdate: "no"
+:shortdesc: "（スケジュールで作られたのではない）スナップショットをいつ削除するか"
+:type: "string"
+`1M 2H 3d 4w 5m 6y`のような式を指定します。
+```
+
 ```{config:option} snapshots.schedule.stopped instance-snapshots
 :defaultdesc: "`false`"
 :liveupdate: "no"
