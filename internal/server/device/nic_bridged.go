@@ -865,9 +865,22 @@ func (d *nicBridged) Start() (*deviceConfig.RunConfig, error) {
 			var listenAddresses map[int64]string
 
 			err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-				listenAddresses, err = tx.GetNetworkForwardListenAddresses(ctx, d.network.ID(), true)
+				networkID := d.network.ID()
+				dbRecords, err := cluster.GetNetworkForwards(ctx, tx.Tx(), cluster.NetworkForwardFilter{
+					NetworkID: &networkID,
+				})
+				if err != nil {
+					return err
+				}
 
-				return err
+				listenAddresses = make(map[int64]string)
+				for _, dbRecord := range dbRecords {
+					if !dbRecord.NodeID.Valid || (dbRecord.NodeID.Int64 == tx.GetNodeID()) {
+						listenAddresses[dbRecord.ID] = dbRecord.ListenAddress
+					}
+				}
+
+				return nil
 			})
 			if err != nil {
 				return nil, fmt.Errorf("Failed loading network forwards: %w", err)
@@ -1988,22 +2001,22 @@ func (d *nicBridged) State() (*api.InstanceStateNetwork, error) {
 	// Get IP addresses from IP neighbour cache if present.
 	neighIPs, err := network.GetNeighbourIPs(d.config["parent"], hwAddr)
 	if err == nil {
-		validStates := []string{
-			string(ip.NeighbourIPStatePermanent),
-			string(ip.NeighbourIPStateNoARP),
-			string(ip.NeighbourIPStateReachable),
+		validStates := []ip.NeighbourIPState{
+			ip.NeighbourIPStatePermanent,
+			ip.NeighbourIPStateNoARP,
+			ip.NeighbourIPStateReachable,
 		}
 
 		// Add any valid-state neighbour IP entries first.
 		for _, neighIP := range neighIPs {
-			if slices.Contains(validStates, string(neighIP.State)) {
+			if slices.Contains(validStates, neighIP.State) {
 				ipStore(neighIP.Addr)
 			}
 		}
 
 		// Add any non-failed-state entries.
 		for _, neighIP := range neighIPs {
-			if neighIP.State != ip.NeighbourIPStateFailed && !slices.Contains(validStates, string(neighIP.State)) {
+			if neighIP.State != ip.NeighbourIPStateFailed && !slices.Contains(validStates, neighIP.State) {
 				ipStore(neighIP.Addr)
 			}
 		}

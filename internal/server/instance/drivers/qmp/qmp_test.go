@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -37,7 +39,8 @@ func (r *testingErrReader) Read(b []byte) (int, error) {
 
 func TestConnectDisconnect(t *testing.T) {
 	eg := &errgroup.Group{}
-	m := mockMonitorServer(t, eg)
+	m := &qemuMachineProtocol{}
+	mockMonitorServer(t, eg, m)
 
 	err := m.connect()
 	if err != nil {
@@ -63,8 +66,9 @@ func TestEvents(t *testing.T) {
 		{Event: "RESET"},
 	}
 
-	m := mockMonitorServer(t, eg, func(tc net.Conn) error {
-		enc := json.NewEncoder(tc)
+	m := &qemuMachineProtocol{}
+	mockMonitorServer(t, eg, m, func(nc net.Conn) error {
+		enc := json.NewEncoder(nc)
 		for i, e := range es {
 			err := enc.Encode(e)
 			if err != nil {
@@ -100,7 +104,7 @@ func TestEvents(t *testing.T) {
 }
 
 func TestListenEmptyStream(t *testing.T) {
-	mon := &qemuMachineProtocal{}
+	mon := &qemuMachineProtocol{}
 
 	r := strings.NewReader("")
 
@@ -121,7 +125,7 @@ func TestListenEmptyStream(t *testing.T) {
 }
 
 func TestListenScannerErr(t *testing.T) {
-	mon := &qemuMachineProtocal{}
+	mon := &qemuMachineProtocol{}
 
 	errFoo := errors.New("foo")
 	r := &testingErrReader{err: errFoo}
@@ -148,7 +152,7 @@ func TestListenScannerErr(t *testing.T) {
 }
 
 func TestListenInvalidJson(t *testing.T) {
-	mon := &qemuMachineProtocal{}
+	mon := &qemuMachineProtocol{}
 
 	r := strings.NewReader("<html>")
 
@@ -164,7 +168,7 @@ func TestListenInvalidJson(t *testing.T) {
 }
 
 func TestListenStreamResponse(t *testing.T) {
-	mon := &qemuMachineProtocal{}
+	mon := &qemuMachineProtocol{}
 	id := uint32(1)
 	want := `{"foo": "bar", "id": 1}`
 	r := strings.NewReader(want)
@@ -186,7 +190,7 @@ func TestListenStreamResponse(t *testing.T) {
 }
 
 func TestListenEventNoListeners(t *testing.T) {
-	mon := &qemuMachineProtocal{}
+	mon := &qemuMachineProtocol{}
 
 	r := strings.NewReader(`{"event":"STOP"}`)
 
@@ -202,7 +206,7 @@ func TestListenEventNoListeners(t *testing.T) {
 }
 
 func TestListenEventOneListener(t *testing.T) {
-	mon := &qemuMachineProtocal{}
+	mon := &qemuMachineProtocol{}
 	mon.listeners.Store(1)
 
 	eventStop := "STOP"
@@ -220,18 +224,29 @@ func TestListenEventOneListener(t *testing.T) {
 	}
 }
 
-func mockMonitorServer(t *testing.T, eg *errgroup.Group, hands ...func(net.Conn) error) *qemuMachineProtocal {
+func mockMonitorServer(t *testing.T, eg *errgroup.Group, qmp *qemuMachineProtocol, hands ...func(net.Conn) error) {
 	t.Helper()
-	sc, tc := net.Pipe()
+	unixsock := filepath.Join(t.TempDir(), "mockmonitor.sock")
+	unixaddr, err := net.ResolveUnixAddr("unix", unixsock)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	m := &qemuMachineProtocal{
-		c: sc,
+	l, err := net.ListenUnix("unix", unixaddr)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	eg.Go(func() error {
+		tc, err := l.Accept()
+		if err != nil {
+			t.Log(err)
+			return err
+		}
+
 		enc := json.NewEncoder(tc)
 		dec := json.NewDecoder(tc)
-		err := enc.Encode(testingGreeting)
+		err = enc.Encode(testingGreeting)
 		if err != nil {
 			t.Logf("unexpected error: %v", err)
 			return err
@@ -259,6 +274,11 @@ func mockMonitorServer(t *testing.T, eg *errgroup.Group, hands ...func(net.Conn)
 			return err
 		}
 
+		// wait client listen ready
+		for qmp.events == nil {
+			time.Sleep(time.Millisecond * 10)
+		}
+
 		for i, hand := range hands {
 			err = hand(tc)
 			if err != nil {
@@ -270,5 +290,23 @@ func mockMonitorServer(t *testing.T, eg *errgroup.Group, hands ...func(net.Conn)
 		return err
 	})
 
-	return m
+	for qmp.uc == nil {
+		uc, err := net.DialUnix("unix", nil, unixaddr)
+		if err != nil {
+			// Wait unix socket being created
+			t.Log(err)
+			time.Sleep(time.Millisecond * 10)
+			continue
+		}
+
+		qmp.uc = uc
+	}
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_ = l.Close()
+	})
 }
