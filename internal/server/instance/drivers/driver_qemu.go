@@ -17,6 +17,7 @@ import (
 	"io"
 	"io/fs"
 	"maps"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -1652,8 +1653,12 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 		}
 	}
 
-	if util.IsFalseOrEmpty(d.expandedConfig["migration.stateful"]) {
-		// Add +invtsc for fast TSC when not expected to be migratable.
+	// Get the feature flags.
+	info := DriverStatuses()[instancetype.VM].Info
+	_, nested := info.Features["nested"]
+
+	// Add +invtsc for fast TSC on x86 when not expected to be migratable and not nested.
+	if !nested && d.architecture == osarch.ARCH_64BIT_INTEL_X86 && util.IsFalseOrEmpty(d.expandedConfig["migration.stateful"]) {
 		cpuExtensions = append(cpuExtensions, "migratable=no", "+invtsc")
 	}
 
@@ -1668,7 +1673,7 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	}
 
 	// Generate the QEMU configuration.
-	monHooks, err := d.generateQemuConfig(machineDefinition, cpuInfo, mountInfo, qemuBus, vsockFD, devConfs, &fdFiles)
+	monHooks, err := d.generateQemuConfig(machineDefinition, strings.Split(cpuType, ",")[0], cpuInfo, mountInfo, qemuBus, vsockFD, devConfs, &fdFiles)
 	if err != nil {
 		op.Done(err)
 		return err
@@ -3550,13 +3555,13 @@ func (d *qemu) onRTCChange(change int) error {
 }
 
 // generateQemuConfig generates the QEMU configuration.
-func (d *qemu) generateQemuConfig(machineDefinition string, cpuInfo *cpuTopology, mountInfo *storagePools.MountInfo, busName string, vsockFD int, devConfs []*deviceConfig.RunConfig, fdFiles *[]*os.File) ([]monitorHook, error) {
+func (d *qemu) generateQemuConfig(machineDefinition string, cpuType string, cpuInfo *cpuTopology, mountInfo *storagePools.MountInfo, busName string, vsockFD int, devConfs []*deviceConfig.RunConfig, fdFiles *[]*os.File) ([]monitorHook, error) {
 	var monHooks []monitorHook
 
 	isWindows := d.isWindows()
 	conf := qemuBase(&qemuBaseOpts{d.Architecture(), util.IsTrue(d.expandedConfig["security.iommu"]), machineDefinition})
 
-	err := d.addCPUMemoryConfig(&conf, cpuInfo)
+	err := d.addCPUMemoryConfig(&conf, cpuType, cpuInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -4138,7 +4143,7 @@ func (d *qemu) getCPUOpts(cpuInfo *cpuTopology, memSizeBytes int64) (*qemuCPUOpt
 
 // addCPUMemoryConfig adds the qemu config required for setting the number of virtualised CPUs and memory.
 // If sb is nil then no config is written.
-func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) error {
+func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuType string, cpuInfo *cpuTopology) error {
 	// Configure memory limit.
 	memSize := d.expandedConfig["limits.memory"]
 	if memSize == "" {
@@ -4157,12 +4162,52 @@ func (d *qemu) addCPUMemoryConfig(conf *[]cfg.Section, cpuInfo *cpuTopology) err
 
 	cpuPinning := cpuInfo.vcpus != nil
 
-	maxMemoryBytes, err := linux.DeviceTotalMemory()
-	if err != nil {
-		return err
-	}
+	// Set hotplug limits.
+	// kvm64 has a limit of 39 bits for aarch64 and 40 bits on x86_64, so just limit everyone to 39 bits (512GB).
+	// Other types we don't know so just don't allow hotplug.
 
-	if maxMemoryBytes < memSizeBytes {
+	var maxMemoryBytes int64
+	cpuPhysBits := uint64(39)
+	if cpuType == "host" || cpuType == "kvm64" {
+		// Attempt to get the CPU physical address space limits.
+		cpu, err := resources.GetCPU()
+		if err != nil {
+			return err
+		}
+
+		var lowestPhysBits uint64
+
+		for _, socket := range cpu.Sockets {
+			if socket.AddressSizes != nil && (socket.AddressSizes.PhysicalBits < lowestPhysBits || lowestPhysBits == 0) {
+				lowestPhysBits = socket.AddressSizes.PhysicalBits
+			}
+		}
+
+		if cpuType == "host" && lowestPhysBits > 0 {
+			// Line up cpuPhysBits with the lowest physical CPU value.
+			cpuPhysBits = lowestPhysBits
+		} else if lowestPhysBits < cpuPhysBits {
+			// Reduce curPhysBits below the default of 39 if a physical CPU uses a lower value.
+			cpuPhysBits = lowestPhysBits
+		}
+
+		// Reduce the maximum by one bit to allow QEMU some headroom.
+		cpuPhysBits--
+
+		// Calculate the max memory limit.
+		maxMemoryBytes = int64(math.Pow(2, float64(cpuPhysBits)))
+
+		// Cap to 1TB.
+		if maxMemoryBytes > 1024*1024*1024*1024 {
+			maxMemoryBytes = 1024 * 1024 * 1024 * 1024
+		}
+
+		// Allow the user to go past any expected limit.
+		if maxMemoryBytes < memSizeBytes {
+			maxMemoryBytes = memSizeBytes
+		}
+	} else {
+		// Prevent memory hotplug.
 		maxMemoryBytes = memSizeBytes
 	}
 
@@ -6878,7 +6923,12 @@ func (d *qemu) Export(metaWriter io.Writer, rootfsWriter io.Writer, properties m
 	// Convert to qcow2 image.
 	cmd := []string{
 		"nice", "-n19", // Run with low priority to reduce CPU impact on other processes.
-		"qemu-img", "convert", "-p", "-f", "raw", "-O", "qcow2", "-c",
+		"qemu-img", "convert", "-p", "-f", "raw", "-O", "qcow2",
+	}
+
+	if rootfsWriter != nil {
+		// Compress the qcow2 image if publishing a split image.
+		cmd = append(cmd, "-c")
 	}
 
 	reverter := revert.New()
@@ -7268,6 +7318,16 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 			return fmt.Errorf("Failed setting migration capabilities: %w", err)
 		}
 
+		parameters := map[string]any{
+			"cpu-throttle-initial":       50,
+			"throttle-trigger-threshold": 20,
+		}
+
+		err = monitor.MigrateSetParameters(parameters)
+		if err != nil {
+			return fmt.Errorf("Failed setting migration parameters: %w", err)
+		}
+
 		// Create snapshot of the root disk.
 		// We use the VM's config volume for this so that the maximum size of the snapshot can be limited
 		// by setting the root disk's `size.state` property.
@@ -7363,6 +7423,16 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 		err = monitor.MigrateSetCapabilities(capabilities)
 		if err != nil {
 			return fmt.Errorf("Failed setting migration capabilities: %w", err)
+		}
+
+		parameters := map[string]any{
+			"cpu-throttle-initial":       50,
+			"throttle-trigger-threshold": 20,
+		}
+
+		err = monitor.MigrateSetParameters(parameters)
+		if err != nil {
+			return fmt.Errorf("Failed setting migration parameters: %w", err)
 		}
 	}
 
@@ -7508,6 +7578,45 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 		return fmt.Errorf("Failed starting state transfer to target: %w", err)
 	}
 
+	// Start monitoring the migration progress.
+	chMonitor := make(chan bool, 1)
+
+	if d.op != nil {
+		go func() {
+			for {
+				// Wait for next update.
+				select {
+				case <-chMonitor:
+					return
+
+				case <-time.After(time.Second):
+				}
+
+				// Get current migration progress.
+				progress, err := monitor.QueryMigrate()
+				if err != nil {
+					// Stop monitoring on error.
+					return
+				}
+
+				// Post update.
+				percent := int64(float64(progress.RAM.Transferred) / float64(progress.RAM.Total) * float64(100))
+				speed := int64(progress.RAM.MBps * 1024 * 1024 / 8)
+
+				metadata := map[string]any{}
+				metadata["progress"] = map[string]string{
+					"stage":     "live_migrate_instance",
+					"processed": strconv.FormatInt(progress.RAM.Transferred, 10),
+					"percent":   strconv.FormatInt(percent, 10),
+					"speed":     strconv.FormatInt(speed, 10),
+				}
+
+				metadata["live_migrate_instance_progress"] = fmt.Sprintf("Live migration: %s remaining (%s/s) (%d%% CPU throttle)", units.GetByteSizeString(progress.RAM.Remaining, 2), units.GetByteSizeString(speed, 2), progress.CPUThrottlePercentage)
+				_ = d.op.UpdateMetadata(metadata)
+			}
+		}()
+	}
+
 	// Non-shared storage snapshot transfer finalization.
 	if !sameSharedStorage {
 		// Wait until state transfer has reached pre-switchover state (the guest OS will remain paused).
@@ -7541,6 +7650,8 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 	if err != nil {
 		return fmt.Errorf("Failed waiting for state transfer to reach completed stage: %w", err)
 	}
+
+	close(chMonitor)
 
 	d.logger.Debug("Stateful migration checkpoint send finished")
 
@@ -9402,6 +9513,25 @@ func (d *qemu) checkFeatures(hostArch int, qemuPath string) (map[string]any, err
 	// Check if vhost-net accelerator (for NIC CPU offloading) is available.
 	if util.PathExists("/dev/vhost-net") {
 		features["vhost_net"] = struct{}{}
+	}
+
+	// Check if running nested.
+	cpus, err := resources.GetCPU()
+	if err != nil {
+		return nil, err
+	}
+
+	nested := false
+	for _, socket := range cpus.Sockets {
+		for _, core := range socket.Cores {
+			if slices.Contains(core.Flags, "hypervisor") {
+				nested = true
+			}
+		}
+	}
+
+	if nested {
+		features["nested"] = struct{}{}
 	}
 
 	// Get the host CPU model (x86_64 only for now).

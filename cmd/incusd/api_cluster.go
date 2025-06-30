@@ -328,6 +328,20 @@ func clusterPutBootstrap(d *Daemon, r *http.Request, req api.ClusterPut) respons
 			return err
 		}
 
+		// Return the new server certificate to the client.
+		clusterCertPath := internalUtil.VarPath("cluster.crt")
+		if util.PathExists(clusterCertPath) {
+			cert, err := os.ReadFile(clusterCertPath)
+			if err != nil {
+				return err
+			}
+
+			err = op.UpdateMetadata(map[string]any{"certificate": string(cert)})
+			if err != nil {
+				return err
+			}
+		}
+
 		s.Events.SendLifecycle(request.ProjectParam(r), lifecycle.ClusterEnabled.Event(req.ServerName, op.Requestor(), nil))
 
 		return nil
@@ -468,7 +482,7 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 			}
 
 			_, err = config.Patch(map[string]string{
-				"cluster.https_address": localHTTPSAddress,
+				"cluster.https_address": req.ServerAddress,
 			})
 			return err
 		})

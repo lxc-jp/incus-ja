@@ -80,22 +80,23 @@ Thin provisioning はクラスタ LVM とは互換性がないので、ディス
 (storage-lvm-vol-config)=
 ## ストレージボリューム設定
 
-キー                  | 型     | 条件                                             | デフォルト値                                 | 説明
-:--                   | :---   | :--------                                        | :------                                      | :----------
-`block.filesystem`    | string |                                                  | `volume.block.filesystem` と同じ             | {{block_filesystem}}
-`block.mount_options` | string |                                                  | `volume.block.mount_options` と同じ          | block-backedなファイルシステムボリュームのマウントオプション
-`initial.gid`         | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.uid`と同じか`0`              | インスタンス内のボリュームの所有者のGID
-`initial.mode`        | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.mode`と同じか`711`           | インスタンス内のボリュームのモード
-`initial.uid`         | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.gid`と同じか`0`              | インスタンス内のボリュームの所有者のUID
-`lvm.stripes`         | string |                                                  | `volume.lvm.stripes` と同じ                  | 新しいボリューム（あるいは thin pool ボリューム）に使用するストライプ数
-`lvm.stripes.size`    | string |                                                  | `volume.lvm.stripes.size` と同じ             | 使用するストライプのサイズ（最低 4096 バイトで 512 バイトの倍数を指定）
-`security.shifted`    | bool   | カスタムボリューム                               | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
-`security.unmapped`   | bool   | カスタムボリューム                               | `volume.security.unmapped` と同じか `false`  | ボリュームへの ID マッピングを無効にする
-`security.shared`     | bool   | カスタムブロックボリューム                       | `volume.security.shared` と同じか `false`    | 複数のインスタンスでのボリュームの共有を有効にする
-`size`                | string |                                                  | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
-`snapshots.expiry`    | string | カスタムボリューム                               | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
-`snapshots.pattern`   | string | カスタムボリューム                               | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
-`snapshots.schedule`  | string | カスタムボリューム                               | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
+キー                      | 型     | 条件                                             | デフォルト値                                 | 説明
+:--                       | :---   | :--------                                        | :------                                      | :----------
+`block.filesystem`        | string |                                                  | `volume.block.filesystem` と同じ             | {{block_filesystem}}
+`block.mount_options`     | string |                                                  | `volume.block.mount_options` と同じ          | block-backedなファイルシステムボリュームのマウントオプション
+`initial.gid`             | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.uid`と同じか`0`              | インスタンス内のボリュームの所有者のGID
+`initial.mode`            | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.mode`と同じか`711`           | インスタンス内のボリュームのモード
+`initial.uid`             | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.gid`と同じか`0`              | インスタンス内のボリュームの所有者のUID
+`lvm.stripes`             | string |                                                  | `volume.lvm.stripes` と同じ                  | 新しいボリューム（あるいは thin pool ボリューム）に使用するストライプ数
+`lvm.stripes.size`        | string |                                                  | `volume.lvm.stripes.size` と同じ             | 使用するストライプのサイズ（最低 4096 バイトで 512 バイトの倍数を指定）
+`security.shifted`        | bool   | カスタムボリューム                               | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
+`security.unmapped`       | bool   | カスタムボリューム                               | `volume.security.unmapped` と同じか `false`  | ボリュームへの ID マッピングを無効にする
+`security.shared`         | bool   | カスタムブロックボリューム                       | `volume.security.shared` と同じか `false`    | 複数のインスタンスでのボリュームの共有を有効にする
+`size`                    | string |                                                  | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
+`snapshots.expiry`        | string | カスタムボリューム                               | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
+`snapshots.expiry.manual` | string | カスタムボリューム                               | `volume.snapshots.expiry.manual` と同じ      | {{snapshot_expiry_format}}
+`snapshots.pattern`       | string | カスタムボリューム                               | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
+`snapshots.schedule`      | string | カスタムボリューム                               | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
 
 [^*]: {{snapshot_pattern_detail}}
 

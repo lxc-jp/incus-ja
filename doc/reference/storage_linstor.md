@@ -94,6 +94,7 @@ Incusインストール環境間でのリソースグループの共有
 `security.unmapped`               | bool   | カスタムボリューム                                      | `volume.security.unmapped`と同じか`false`        | ボリュームにIPマッピングを無効化するか
 `size`                            | string |                                                         | `volume.size`と同じ                              | ストレージボリュームのサイズ／クォータ
 `snapshots.expiry`                | string | カスタムボリューム                                      | `volume.snapshots.expiry`                        | {{snapshot_expiry_format}}
+`snapshots.expiry.manual`         | string | カスタムボリューム                                      | `volume.snapshots.expiry.manual` と同じ          | {{snapshot_expiry_format}}
 `snapshots.pattern`               | string | カスタムボリューム                                      | `volume.snapshots.pattern`と同じか`snap%d`       | {{snapshot_pattern_format}} [^*]
 `snapshots.schedule`              | string | カスタムボリューム                                      | `volume.snapshots.schedule`と同じ                | {{snapshot_schedule_format}}
 `drbd.on_no_quorum`               | string |                                                         | -                                                | クオラムが失われた際に使用されるDRBDポリシー（リソースグループに適用される）

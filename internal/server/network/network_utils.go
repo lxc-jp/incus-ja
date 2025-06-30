@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"math/rand"
 	"net"
+	"net/netip"
 	"os"
 	"slices"
 	"strconv"
@@ -136,9 +137,27 @@ func UsedBy(s *state.State, networkProjectName string, networkID int64, networkN
 		var peers map[int64]*api.NetworkPeer
 
 		err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-			peers, err = tx.GetNetworkPeers(ctx, networkID)
+			// Use generated function to get peers.
+			filter := cluster.NetworkPeerFilter{NetworkID: &networkID}
+			dbPeers, err := cluster.GetNetworkPeers(ctx, tx.Tx(), filter)
+			if err != nil {
+				return fmt.Errorf("Failed loading network peer DB objects: %w", err)
+			}
 
-			return err
+			// Convert DB objects to API objects and build the map.
+			peers = make(map[int64]*api.NetworkPeer, len(dbPeers))
+			for _, dbPeer := range dbPeers {
+				peer, err := dbPeer.ToAPI(ctx, tx.Tx())
+				if err != nil {
+					// Log the error but continue, as one peer failing shouldn't stop the whole check.
+					logger.Error("Failed converting network peer DB object to API object", logger.Ctx{"peerID": dbPeer.ID, "err": err})
+					continue
+				}
+
+				peers[dbPeer.ID] = peer
+			}
+
+			return nil
 		})
 		if err != nil {
 			return nil, fmt.Errorf("Failed getting network peers: %w", err)
@@ -1480,4 +1499,68 @@ func validateExternalInterfaces(value string) error {
 	}
 
 	return nil
+}
+
+// complementRanges returns the complement of the provided IP network ranges.
+// It calculates the IP ranges that are *not* covered by the input slice.
+func complementRanges(ranges []*iprange.Range, netAddr *net.IPNet) ([]iprange.Range, error) {
+	var complement []iprange.Range
+
+	ipv4NetPrefix, err := netip.ParsePrefix(netAddr.String())
+	if err != nil {
+		return nil, err
+	}
+
+	previousEnd := ipv4NetPrefix.Addr()
+
+	for _, r := range ranges {
+		startAddr, err := netip.ParseAddr(r.Start.String())
+		if err != nil {
+			return nil, err
+		}
+
+		endAddr, err := netip.ParseAddr(r.End.String())
+		if err != nil {
+			return nil, err
+		}
+
+		if startAddr.Compare(previousEnd.Next()) == 1 {
+			newStart := previousEnd.Next()
+			newEnd := startAddr.Prev()
+
+			if newStart.Compare(newEnd) == 0 {
+				complement = append(complement, iprange.Range{Start: net.ParseIP(newStart.String())})
+			} else {
+				complement = append(complement, iprange.Range{Start: net.ParseIP(newStart.String()), End: net.ParseIP(newEnd.String())})
+			}
+		}
+
+		if endAddr.Compare(previousEnd) == 1 {
+			previousEnd = endAddr
+		}
+	}
+
+	endAddr, err := netip.ParseAddr(dhcpalloc.GetIP(netAddr, -2).String())
+	if err != nil {
+		return nil, err
+	}
+
+	if previousEnd.Compare(endAddr) == -1 {
+		complement = append(complement, iprange.Range{Start: net.ParseIP(previousEnd.Next().String()), End: net.ParseIP(endAddr.String())})
+	}
+
+	return complement, nil
+}
+
+// ipInRanges checks whether the given IP address is contained within any of the
+// provided IP network ranges.
+func ipInRanges(ipAddr net.IP, ipRanges []iprange.Range) bool {
+	for _, r := range ipRanges {
+		containsIP := r.ContainsIP(ipAddr)
+		if containsIP {
+			return true
+		}
+	}
+
+	return false
 }
