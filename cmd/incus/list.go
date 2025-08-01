@@ -134,7 +134,7 @@ incus list -c ns,user.comment:comment
 
 	cmd.RunE = c.Run
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultColumns, i18n.G("Columns")+"``")
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 	cmd.Flags().BoolVar(&c.flagFast, "fast", false, i18n.G("Fast mode (same as --columns=nsacPt)"))
 	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Display instances from all projects"))
 
@@ -541,13 +541,6 @@ func (c *cmdList) parseColumns(clustered bool) ([]column, bool, error) {
 		columnsShorthandMap['L'] = column{
 			i18n.G("LOCATION"), c.locationColumnData, false, false,
 		}
-	} else {
-		if c.flagColumns != defaultColumns && c.flagColumns != defaultColumnsAllProjects {
-			if strings.ContainsAny(c.flagColumns, "L") {
-				return nil, false, errors.New(i18n.G("Can't specify column L when not clustered"))
-			}
-		}
-		c.flagColumns = strings.ReplaceAll(c.flagColumns, "L", "")
 	}
 
 	columnList := strings.Split(c.flagColumns, ",")
@@ -562,6 +555,15 @@ func (c *cmdList) parseColumns(clustered bool) ([]column, bool, error) {
 		// Config keys always contain a period, parse anything without a
 		// period as a series of shorthand runes.
 		if !strings.Contains(columnEntry, ".") {
+			if !clustered {
+				if columnEntry != defaultColumns && columnEntry != defaultColumnsAllProjects {
+					if strings.ContainsAny(columnEntry, "L") {
+						return nil, false, errors.New(i18n.G("Can't specify column L when not clustered"))
+					}
+				}
+				columnEntry = strings.ReplaceAll(columnEntry, "L", "")
+			}
+
 			for _, columnRune := range columnEntry {
 				column, ok := columnsShorthandMap[columnRune]
 				if !ok {

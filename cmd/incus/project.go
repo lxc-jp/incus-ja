@@ -550,7 +550,7 @@ u - Used By`))
 
 	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultProjectColumns, i18n.G("Columns")+"``")
 
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
@@ -1095,7 +1095,7 @@ func (c *cmdProjectInfo) Command() *cobra.Command {
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Get a summary of resource allocations`))
 	cmd.Flags().BoolVar(&c.flagShowAccess, "show-access", false, i18n.G("Show the instance's access list"))
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
@@ -1226,17 +1226,26 @@ func (c *cmdProjectGetCurrent) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Show the current project
-	remote, ok := conf.Remotes[conf.DefaultRemote]
-	if !ok {
-		return fmt.Errorf(i18n.G("Remote %s doesn't exist"), conf.DefaultRemote)
+	// Parse remote
+	remote := conf.DefaultRemote
+	if len(args) > 0 {
+		remote = args[0]
 	}
 
-	if remote.Project == "" {
-		fmt.Println(api.ProjectDefaultName)
-	} else {
-		fmt.Println(remote.Project)
+	resources, err := c.global.parseServers(remote)
+	if err != nil {
+		return err
 	}
+
+	resource := resources[0]
+
+	serverInfo, _, err := resource.server.GetServer()
+	if err != nil {
+		return err
+	}
+
+	// Print the project name.
+	fmt.Println(serverInfo.Environment.Project)
 
 	return nil
 }

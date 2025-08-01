@@ -59,12 +59,18 @@ type ConnectionArgs struct {
 	// OpenID Connect tokens
 	OIDCTokens *oidc.Tokens[*oidc.IDTokenClaims]
 
+	// Skip the event listener endpoint
+	SkipGetEvents bool
+
 	// Skip automatic GetServer request upon connection
 	SkipGetServer bool
 
 	// Caching support for image servers
 	CachePath   string
 	CacheExpiry time.Duration
+
+	// Temp storage.
+	TempPath string
 }
 
 // ConnectIncus lets you connect to a remote Incus daemon over HTTPs.
@@ -125,6 +131,8 @@ func ConnectIncusHTTPWithContext(ctx context.Context, args *ConnectionArgs, clie
 		ctxConnectedCancel: ctxConnectedCancel,
 		eventConns:         make(map[string]*websocket.Conn),
 		eventListeners:     make(map[string][]*EventListener),
+		skipEvents:         args.SkipGetEvents,
+		tempPath:           args.TempPath,
 	}
 
 	// Setup the HTTP client
@@ -212,7 +220,9 @@ func ConnectIncusUnixWithContext(ctx context.Context, path string, args *Connect
 		ctxConnectedCancel: ctxConnectedCancel,
 		eventConns:         make(map[string]*websocket.Conn),
 		eventListeners:     make(map[string][]*EventListener),
+		skipEvents:         args.SkipGetEvents,
 		project:            projectName,
+		tempPath:           args.TempPath,
 	}
 
 	// Setup the HTTP client
@@ -275,6 +285,7 @@ func ConnectSimpleStreams(uri string, args *ConnectionArgs) (ImageServer, error)
 		httpHost:        uri,
 		httpUserAgent:   args.UserAgent,
 		httpCertificate: args.TLSServerCert,
+		tempPath:        args.TempPath,
 	}
 
 	// Setup the HTTP client
@@ -336,7 +347,8 @@ func ConnectOCI(uri string, args *ConnectionArgs) (ImageServer, error) {
 		httpUserAgent:   args.UserAgent,
 		httpCertificate: args.TLSServerCert,
 
-		cache: map[string]ociInfo{},
+		cache:    map[string]ociInfo{},
+		tempPath: args.TempPath,
 	}
 
 	// Setup the HTTP client
@@ -375,6 +387,8 @@ func httpsIncus(ctx context.Context, requestURL string, args *ConnectionArgs) (I
 		ctxConnectedCancel: ctxConnectedCancel,
 		eventConns:         make(map[string]*websocket.Conn),
 		eventListeners:     make(map[string][]*EventListener),
+		skipEvents:         args.SkipGetEvents,
+		tempPath:           args.TempPath,
 	}
 
 	if slices.Contains([]string{api.AuthenticationMethodOIDC}, args.AuthType) {
@@ -403,5 +417,6 @@ func httpsIncus(ctx context.Context, requestURL string, args *ConnectionArgs) (I
 			return nil, err
 		}
 	}
+
 	return &server, nil
 }

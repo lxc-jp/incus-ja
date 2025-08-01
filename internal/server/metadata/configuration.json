@@ -52,6 +52,15 @@
 			"disk": {
 				"keys": [
 					{
+						"attached": {
+							"default": "`true`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Only for VMs: Whether the disk is attached or ejected",
+							"type": "bool"
+						}
+					},
+					{
 						"boot.priority": {
 							"longdesc": "",
 							"required": "no",
@@ -129,7 +138,7 @@
 					},
 					{
 						"path": {
-							"longdesc": "",
+							"longdesc": "This controls which path inside the instance the disk should be mounted on.\n\nWith containers, this option supports mounting file system disk devices, and paths and single files within them.\n\nWith VMs, this option supports mounting file system disk devices and paths within them. Mounting single files is not supported.",
 							"required": "yes",
 							"shortdesc": "Path inside the instance where the disk will be mounted (only for file system disk devices)",
 							"type": "string"
@@ -217,6 +226,15 @@
 							"required": "yes",
 							"shortdesc": "Source of a file system or block device (see {ref}`devices-disk-types` for details)",
 							"type": "string"
+						}
+					},
+					{
+						"wwn": {
+							"default": "``",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "Only for VMs: Set the disk World Wide Name (only supported on `virtio-scsi` bus)",
+							"type": "bool"
 						}
 					}
 				]
@@ -2437,6 +2455,16 @@
 							"liveupdate": "yes",
 							"longdesc": "If the instance's memory limit is `hard`, the instance cannot exceed its limit.\nIf it is `soft`, the instance can exceed its memory limit when extra host memory is available.",
 							"shortdesc": "Whether the memory limit is `hard` or `soft`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.memory.hotplug": {
+							"condition": "virtual machine",
+							"defaultdesc": "`true`",
+							"liveupdate": "yes",
+							"longdesc": "If this option is set to `false`, disable memory hotplug entirely.\nAlternatively, it can be set to a bytes value which will define an upper limit for hotplugged memory.\nThe value must be greater than or equal to limits.memory.",
+							"shortdesc": "Control upper limit for hotplugged memory or disable memory hotplug.",
 							"type": "string"
 						}
 					},
@@ -5393,7 +5421,7 @@
 						"logging.NAME.target.type": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "The type of the logger, e.g., syslog",
+							"shortdesc": "The type of the logger. One of `loki`, `syslog` or `webhook`.",
 							"type": "string"
 						}
 					},

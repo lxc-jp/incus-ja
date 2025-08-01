@@ -1,9 +1,11 @@
 package ip
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
+	"syscall"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -202,7 +204,7 @@ func routeFilterMask(route *netlink.Route) uint64 {
 	var filterMask uint64
 
 	// we always filter by interface because that is required to be set on our route type
-	filterMask |= netlink.RT_FILTER_IIF
+	filterMask |= netlink.RT_FILTER_OIF
 
 	if route.Dst != nil {
 		filterMask |= netlink.RT_FILTER_DST
@@ -234,6 +236,13 @@ func (r *Route) Flush() error {
 
 	err = netlink.RouteListFilteredIter(route.Family, route, routeFilterMask(route), func(route netlink.Route) (cont bool) {
 		iterErr = netlink.RouteDel(&route)
+		// Ignore missing routes.
+		if errors.Is(iterErr, syscall.ESRCH) {
+			iterErr = nil
+
+			return true
+		}
+
 		return iterErr == nil
 	})
 	if err != nil {

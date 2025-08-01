@@ -1,14 +1,13 @@
 package cliconfig
 
 import (
-	"crypto/ecdsa"
-	"crypto/rsa"
-	"crypto/x509"
+	"bytes"
+	"context"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"runtime"
 	"slices"
@@ -16,23 +15,24 @@ import (
 	"time"
 
 	"github.com/zitadel/oidc/v3/pkg/oidc"
-	"golang.org/x/crypto/ssh"
 
 	incus "github.com/lxc/incus/v6/client"
 	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/subprocess"
 	"github.com/lxc/incus/v6/shared/util"
 )
 
 // Remote holds details for communication with a remote daemon.
 type Remote struct {
-	Addr      string `yaml:"addr"`
-	AuthType  string `yaml:"auth_type,omitempty"`
-	KeepAlive int    `yaml:"keepalive,omitempty"`
-	Project   string `yaml:"project,omitempty"`
-	Protocol  string `yaml:"protocol,omitempty"`
-	Public    bool   `yaml:"public"`
-	Global    bool   `yaml:"-"`
-	Static    bool   `yaml:"-"`
+	Addr       string `yaml:"addr"`
+	AuthType   string `yaml:"auth_type,omitempty"`
+	KeepAlive  int    `yaml:"keepalive,omitempty"`
+	Project    string `yaml:"project,omitempty"`
+	Protocol   string `yaml:"protocol,omitempty"`
+	CredHelper string `yaml:"credentials_helper,omitempty"`
+	Public     bool   `yaml:"public"`
+	Global     bool   `yaml:"-"`
+	Static     bool   `yaml:"-"`
 }
 
 // ParseRemote splits remote and object.
@@ -202,6 +202,39 @@ func (c *Config) GetImageServer(name string) (incus.ImageServer, error) {
 
 	// HTTPs (OCI)
 	if remote.Protocol == "oci" {
+		// Handle credentials helper.
+		if remote.CredHelper != "" {
+			// Parse the URL.
+			u, err := url.Parse(remote.Addr)
+			if err != nil {
+				return nil, err
+			}
+
+			// Call the helper.
+			var stdout bytes.Buffer
+
+			err = subprocess.RunCommandWithFds(
+				context.TODO(),
+				strings.NewReader(fmt.Sprintf("%s://%s", u.Scheme, u.Host)),
+				&stdout,
+				remote.CredHelper,
+				"get")
+			if err != nil {
+				return nil, err
+			}
+
+			// Parse credential helper response.
+			var res map[string]string
+			err = json.Unmarshal(stdout.Bytes(), &res)
+			if err != nil {
+				return nil, err
+			}
+
+			// Update the URL to include the credentials.
+			u.User = url.UserPassword(res["Username"], res["Secret"])
+			remote.Addr = u.String()
+		}
+
 		d, err := incus.ConnectOCI(remote.Addr, args)
 		if err != nil {
 			return nil, err
@@ -298,95 +331,12 @@ func (c *Config) getConnectionArgs(name string) (*incus.ConnectionArgs, error) {
 		return &args, nil
 	}
 
-	// Certificate paths.
-	var pathClientCertificate string
-	var pathClientKey string
-	var pathClientCA string
-	if c.HasRemoteClientCertificate(name) {
-		pathClientCertificate = c.ConfigPath("clientcerts", fmt.Sprintf("%s.crt", name))
-		pathClientKey = c.ConfigPath("clientcerts", fmt.Sprintf("%s.key", name))
-		pathClientCA = c.ConfigPath("clientcerts", fmt.Sprintf("%s.ca", name))
-	} else {
-		pathClientCertificate = c.ConfigPath("client.crt")
-		pathClientKey = c.ConfigPath("client.key")
-		pathClientCA = c.ConfigPath("client.ca")
-	}
-
 	// Client certificate
-	if util.PathExists(pathClientCertificate) {
-		content, err := os.ReadFile(pathClientCertificate)
-		if err != nil {
-			return nil, err
-		}
+	var err error
 
-		args.TLSClientCert = string(content)
-	}
-
-	// Client CA
-	if util.PathExists(pathClientCA) {
-		content, err := os.ReadFile(pathClientCA)
-		if err != nil {
-			return nil, err
-		}
-
-		args.TLSCA = string(content)
-	}
-
-	// Client key
-	if util.PathExists(pathClientKey) {
-		content, err := os.ReadFile(pathClientKey)
-		if err != nil {
-			return nil, err
-		}
-
-		pemKey, _ := pem.Decode(content)
-		// Golang has deprecated all methods relating to PEM encryption due to a vulnerability.
-		// However, the weakness does not make PEM unsafe for our purposes as it pertains to password protection on the
-		// key file (client.key is only readable to the user in any case), so we'll ignore deprecation.
-		isEncrypted := x509.IsEncryptedPEMBlock(pemKey) //nolint:staticcheck
-		isSSH := pemKey.Type == "OPENSSH PRIVATE KEY"
-		if isEncrypted || isSSH {
-			if c.PromptPassword == nil {
-				return nil, errors.New("Private key is password protected and no helper was configured")
-			}
-
-			password, err := c.PromptPassword(pathClientKey)
-			if err != nil {
-				return nil, err
-			}
-
-			if isSSH {
-				sshKey, err := ssh.ParseRawPrivateKeyWithPassphrase(content, []byte(password))
-				if err != nil {
-					return nil, err
-				}
-
-				ecdsaKey, okEcdsa := (sshKey).(*ecdsa.PrivateKey)
-				rsaKey, okRsa := (sshKey).(*rsa.PrivateKey)
-				if okEcdsa {
-					derKey, err := x509.MarshalECPrivateKey(ecdsaKey)
-					if err != nil {
-						return nil, err
-					}
-
-					content = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: derKey})
-				} else if okRsa {
-					derKey := x509.MarshalPKCS1PrivateKey(rsaKey)
-					content = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: derKey})
-				} else {
-					return nil, fmt.Errorf("Unsupported key type: %T", sshKey)
-				}
-			} else {
-				derKey, err := x509.DecryptPEMBlock(pemKey, []byte(password)) //nolint:staticcheck
-				if err != nil {
-					return nil, err
-				}
-
-				content = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: derKey})
-			}
-		}
-
-		args.TLSClientKey = string(content)
+	args.TLSClientCert, args.TLSClientKey, args.TLSCA, err = c.GetClientCertificate(name)
+	if err != nil {
+		return nil, err
 	}
 
 	return &args, nil
