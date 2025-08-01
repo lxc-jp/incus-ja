@@ -114,7 +114,7 @@ func (n *NetworkPeer) ToAPI(ctx context.Context, tx *sql.Tx) (*api.NetworkPeer, 
 	if n.TargetNetworkID.Valid {
 		// This is a workaround until networks themselves are ported over to the generator.
 		dest := func(scan func(dest ...any) error) error {
-			err := scan(&resp.TargetProject, &resp.TargetNetwork)
+			err := scan(&resp.TargetNetwork, &resp.TargetProject)
 			if err != nil {
 				return err
 			}
@@ -130,7 +130,7 @@ func (n *NetworkPeer) ToAPI(ctx context.Context, tx *sql.Tx) (*api.NetworkPeer, 
 
 	// Get the target integration name if needed.
 	if n.Type == NetworkPeerTypeRemote {
-		idInt := int(n.ID)
+		idInt := int(n.TargetNetworkIntegrationID.Int64)
 		integrations, err := GetNetworkIntegrations(ctx, tx, NetworkIntegrationFilter{ID: &idInt})
 		if err != nil {
 			return nil, err

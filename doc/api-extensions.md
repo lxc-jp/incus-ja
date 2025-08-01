@@ -2802,3 +2802,34 @@ OVNを使用する際にIPv4とIPv6ゲートウェイのMACアドレスを設定
 
 リソースAPIでCPUのアドレスサイズをトラッキングできるようにします。
 これの主な利用法はクラスター内で仮想マシン内にホットプラグできる最大のメモリ量を計算することです。
+
+## `disk_attached`
+
+これはディスクが取り付けられているか取り外されているかを示す`attached`プロパティをディスクデバイスに追加します。
+
+## `limits_memory_hotplug`
+
+`limits.memory.hotplug`オプションはメモリーホットプラグが仮想マシンでどのように処理されるかを制御します。
+`false`に設定すると、メモリーホットプラグを完全に無効化します。
+あるいは、VMがホットプラグで使用できるメモリーの最大量を定義する値に設定することもできます。
+この値は`limits.memory`以上である必要があります。
+
+## `disk_wwn`
+
+新しく追加された`wwn`ディスク設定オプションによりディスクのWorld Wide Nameを設定できるようにします。
+
+## `server_logging_webhook`
+
+これは基本的なwebhookをログターゲットとして使えるようにします。
+
+`logging.NAME.target.type`を`webhook`という値に設定することで使えるようになります。
+
+以下のターゲットキーがサポートされます:
+
+* `logging.NAME.target.address` （ターゲットのURL）
+* `logging.NAME.target.ca_cert` （自己証明書を使ったHTTPSターゲットを使う場合の証明書）
+* `logging.NAME.target.username` （HTTP認証のユーザー名）
+* `logging.NAME.target.password` （HTTP認証のパスワード）
+* `logging.NAME.target.retry` （転送の最大リトライ回数）
+
+webhookのデータは既存のイベントAPIで送信されるデータと同等です。

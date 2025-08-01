@@ -318,7 +318,11 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		"boot.priority": validate.Optional(validate.IsUint32),
 
 		// gendoc:generate(entity=devices, group=disk, key=path)
+		// This controls which path inside the instance the disk should be mounted on.
 		//
+		// With containers, this option supports mounting file system disk devices, and paths and single files within them.
+		//
+		// With VMs, this option supports mounting file system disk devices and paths within them. Mounting single files is not supported.
 		// ---
 		//  type: string
 		//  required: yes
@@ -363,6 +367,24 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		//  required: no
 		//  shortdesc: Only for VMs: Override the bus for the device
 		"io.bus": validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "auto", "9p", "virtiofs", "usb")),
+
+		// gendoc:generate(entity=devices, group=disk, key=attached)
+		//
+		// ---
+		//  type: bool
+		//  default: `true`
+		//  required: no
+		//  shortdesc: Only for VMs: Whether the disk is attached or ejected
+		"attached": validate.Optional(validate.IsBool),
+
+		// gendoc:generate(entity=devices, group=disk, key=wwn)
+		//
+		// ---
+		//  type: bool
+		//  default: ``
+		//  required: no
+		//  shortdesc: Only for VMs: Set the disk World Wide Name (only supported on `virtio-scsi` bus)
+		"wwn": validate.Optional(validate.IsWWN),
 	}
 
 	err := d.config.Validate(rules)
@@ -376,6 +398,14 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 
 	if instConf.Type() == instancetype.Container && d.config["io.cache"] != "" {
 		return errors.New("IO cache configuration cannot be applied to containers")
+	}
+
+	if instConf.Type() == instancetype.Container && d.config["wwn"] != "" {
+		return errors.New("WWN cannot be applied to containers")
+	}
+
+	if d.config["wwn"] != "" && !slices.Contains([]string{"", "virtio-scsi"}, d.config["io.bus"]) {
+		return errors.New("WWN can only be set on virtio-scsi disks")
 	}
 
 	if d.config["required"] != "" && d.config["optional"] != "" {
@@ -471,8 +501,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 			}
 
 			// Parse the volume name and path.
-			volFields := strings.SplitN(d.config["source"], "/", 2)
-			volName := volFields[0]
+			volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
 
 			// GetStoragePoolVolume returns a volume with an empty Location field for remote drivers.
 			err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -542,11 +571,9 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 				}
 
 				// Parse the volume name and path.
-				volFields := strings.SplitN(d.config["source"], "/", 2)
+				volName, volPath := internalInstance.SplitVolumeSource(d.config["source"])
 
 				if dbVolume == nil {
-					volName := volFields[0]
-
 					// GetStoragePoolVolume returns a volume with an empty Location field for remote drivers.
 					err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 						dbVolume, err = tx.GetStoragePoolVolume(ctx, d.pool.ID(), storageProjectName, db.StoragePoolVolumeTypeCustom, volName, true)
@@ -573,6 +600,16 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 					return err
 				}
 
+				if d.config["attached"] != "" {
+					if instConf.Type() == instancetype.Container {
+						return errors.New("Attached configuration cannot be applied to containers")
+					} else if instConf.Type() == instancetype.Any {
+						return errors.New("Attached configuration cannot be applied to profiles")
+					} else if contentType != db.StoragePoolVolumeContentTypeISO {
+						return errors.New("Attached configuration can only be applied to ISO volumes")
+					}
+				}
+
 				if contentType == db.StoragePoolVolumeContentTypeBlock {
 					if instConf.Type() == instancetype.Container {
 						return errors.New("Custom block volumes cannot be used on containers")
@@ -582,7 +619,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 						return errors.New("Custom block volumes cannot have a path defined")
 					}
 
-					if len(volFields) > 1 {
+					if volPath != "" {
 						return errors.New("Custom block volume snapshots cannot be used directly")
 					}
 
@@ -771,8 +808,7 @@ func (d *disk) Register() error {
 		}
 
 		// Parse the volume name and path.
-		volFields := strings.SplitN(d.config["source"], "/", 2)
-		volName := volFields[0]
+		volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
 
 		// Try to mount the volume that should already be mounted to reinitialize the ref counter.
 		_, err = pool.MountCustomVolume(storageProjectName, volName, nil)
@@ -901,8 +937,7 @@ func (d *disk) startContainer() (*deviceConfig.RunConfig, error) {
 			}
 
 			// Parse the volume name and path.
-			volFields := strings.SplitN(d.config["source"], "/", 2)
-			volName := volFields[0]
+			volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
 
 			var dbVolume *db.StorageVolume
 			err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -1043,6 +1078,14 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 		opts = append(opts, fmt.Sprintf("cache=%s", d.config["io.cache"]))
 	}
 
+	// Apply the WWN if provided.
+	if d.config["wwn"] != "" {
+		opts = append(opts, fmt.Sprintf("wwn=%s", d.config["wwn"]))
+	}
+
+	// Setup the attached status.
+	attached := util.IsTrueOrEmpty(d.config["attached"])
+
 	// Add I/O limits if set.
 	var diskLimits *deviceConfig.DiskLimits
 	if d.config["limits.read"] != "" || d.config["limits.write"] != "" || d.config["limits.max"] != "" {
@@ -1099,10 +1142,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 		// Encode the file descriptor and original isoPath into the DevPath field.
 		runConf.Mounts = []deviceConfig.MountEntryItem{
 			{
-				DevPath: fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
-				DevName: d.name,
-				FSType:  "iso9660",
-				Opts:    opts,
+				DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
+				DevName:  d.name,
+				FSType:   "iso9660",
+				Opts:     opts,
+				Attached: attached,
 			},
 		}
 
@@ -1129,10 +1173,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 		// Encode the file descriptor and original isoPath into the DevPath field.
 		runConf.Mounts = []deviceConfig.MountEntryItem{
 			{
-				DevPath: fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
-				DevName: d.name,
-				FSType:  "iso9660",
-				Opts:    opts,
+				DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
+				DevName:  d.name,
+				FSType:   "iso9660",
+				Opts:     opts,
+				Attached: attached,
 			},
 		}
 
@@ -1147,19 +1192,21 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 			clusterName, userName := d.cephCreds()
 			runConf.Mounts = []deviceConfig.MountEntryItem{
 				{
-					DevPath: DiskGetRBDFormat(clusterName, userName, fields[0], fields[1]),
-					DevName: d.name,
-					Opts:    opts,
-					Limits:  diskLimits,
+					DevPath:  DiskGetRBDFormat(clusterName, userName, fields[0], fields[1]),
+					DevName:  d.name,
+					Opts:     opts,
+					Limits:   diskLimits,
+					Attached: attached,
 				},
 			}
 		} else {
 			// Default to block device or image file passthrough first.
 			mount := deviceConfig.MountEntryItem{
-				DevPath: d.config["source"],
-				DevName: d.name,
-				Opts:    opts,
-				Limits:  diskLimits,
+				DevPath:  d.config["source"],
+				DevName:  d.name,
+				Opts:     opts,
+				Limits:   diskLimits,
+				Attached: attached,
 			}
 
 			// Mount the pool volume and update srcPath to mount path so it can be recognised as dir
@@ -1175,8 +1222,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				}
 
 				// Parse the volume name and path.
-				volFields := strings.SplitN(d.config["source"], "/", 2)
-				volName := volFields[0]
+				volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
 
 				// GetStoragePoolVolume returns a volume with an empty Location field for remote drivers.
 				var dbVolume *db.StorageVolume
@@ -1214,10 +1260,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					}
 
 					mount := deviceConfig.MountEntryItem{
-						DevPath: DiskGetRBDFormat(clusterName, userName, poolName, d.config["source"]),
-						DevName: d.name,
-						Opts:    opts,
-						Limits:  diskLimits,
+						DevPath:  DiskGetRBDFormat(clusterName, userName, poolName, d.config["source"]),
+						DevName:  d.name,
+						Opts:     opts,
+						Limits:   diskLimits,
+						Attached: attached,
 					}
 
 					if contentType == db.StoragePoolVolumeContentTypeISO {
@@ -1359,6 +1406,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					mount.Opts = append(mount.Opts, "bus=virtiofs")
 				}
 			} else {
+				// Forbid mounting files to FS paths.
+				if d.config["path"] != "" {
+					return nil, errors.New(`The "path" setting is not supported on VMs for non-directory sources`)
+				}
+
 				// Confirm we're dealing with block options.
 				err := validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "usb"))(d.config["io.bus"])
 				if err != nil {
@@ -1416,9 +1468,10 @@ func (d *disk) postStart() error {
 
 // Update applies configuration changes to a started device.
 func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
+	expandedDevices := d.inst.ExpandedDevices()
+
 	if internalInstance.IsRootDiskDevice(d.config) {
 		// Make sure we have a valid root disk device (and only one).
-		expandedDevices := d.inst.ExpandedDevices()
 		newRootDiskDeviceKey, _, err := internalInstance.GetRootDiskDevice(expandedDevices.CloneNative())
 		if err != nil {
 			return fmt.Errorf("Detect root disk device: %w", err)
@@ -1492,7 +1545,7 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 	}
 
-	// Only apply IO limits if instance is running.
+	// Only apply IO limits and attach/detach logic if instance is running.
 	if isRunning {
 		runConf := deviceConfig.RunConfig{}
 
@@ -1504,25 +1557,41 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 
 		if d.inst.Type() == instancetype.VM {
-			// Parse the limits into usable values.
-			readBps, readIops, writeBps, writeIops, err := d.parseLimit(d.config)
-			if err != nil {
-				return err
-			}
+			var diskLimits *deviceConfig.DiskLimits
+			runConf.Mounts = []deviceConfig.MountEntryItem{}
+			if d.config["limits.read"] != "" || d.config["limits.write"] != "" || d.config["limits.max"] != "" {
+				// Parse the limits into usable values.
+				readBps, readIops, writeBps, writeIops, err := d.parseLimit(d.config)
+				if err != nil {
+					return err
+				}
 
-			// Apply the limits to a minimal mount entry.
-			diskLimits := &deviceConfig.DiskLimits{
-				ReadBytes:  readBps,
-				ReadIOps:   readIops,
-				WriteBytes: writeBps,
-				WriteIOps:  writeIops,
-			}
+				// Apply the limits to a minimal mount entry.
+				diskLimits = &deviceConfig.DiskLimits{
+					ReadBytes:  readBps,
+					ReadIOps:   readIops,
+					WriteBytes: writeBps,
+					WriteIOps:  writeIops,
+				}
 
-			runConf.Mounts = []deviceConfig.MountEntryItem{
-				{
+				runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
 					DevName: d.name,
 					Limits:  diskLimits,
-				},
+				})
+			}
+
+			oldAttached := util.IsTrueOrEmpty(oldDevices[d.name]["attached"])
+			newAttached := util.IsTrueOrEmpty(expandedDevices[d.name]["attached"])
+			if !oldAttached && newAttached {
+				runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
+					DevName:  d.name,
+					Attached: true,
+				})
+			} else if oldAttached && !newAttached {
+				runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
+					DevName:  d.name,
+					Attached: false,
+				})
 			}
 		}
 
@@ -1696,8 +1765,7 @@ func (d *disk) mountPoolVolume() (func(), string, *storagePools.MountInfo, error
 	}
 
 	// Parse the volume name and path.
-	volFields := strings.SplitN(d.config["source"], "/", 2)
-	volName := volFields[0]
+	volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
 
 	// Only custom volumes can be attached currently.
 	storageProjectName, err := project.StorageVolumeProject(d.state.DB.Cluster, d.inst.Project().Name, db.StoragePoolVolumeTypeCustom)
@@ -1840,33 +1908,31 @@ func (d *disk) createDevice(srcPath string) (func(), string, bool, error) {
 		}
 	} else if d.config["source"] != "" {
 		// Handle mounting a sub-path.
-		volFields := strings.SplitN(d.config["source"], "/", 2)
-		if len(volFields) == 2 {
-			subPath := volFields[1]
-
+		_, volPath := internalInstance.SplitVolumeSource(d.config["source"])
+		if volPath != "" {
 			// Open file handle to parent for use with openat2 later.
 			// Has to use unix.O_PATH to support directories and sockets.
-			volPath, err := os.OpenFile(srcPath, unix.O_PATH, 0)
+			srcVolPath, err := os.OpenFile(srcPath, unix.O_PATH, 0)
 			if err != nil {
 				return nil, "", false, fmt.Errorf("Failed opening volume path %q: %w", srcPath, err)
 			}
 
-			defer func() { _ = volPath.Close() }()
+			defer func() { _ = srcVolPath.Close() }()
 
 			// Use openat2 to prevent resolving to a mount path outside of the volume.
-			fd, err := unix.Openat2(int(volPath.Fd()), subPath, &unix.OpenHow{
+			fd, err := unix.Openat2(int(srcVolPath.Fd()), volPath, &unix.OpenHow{
 				Flags:   unix.O_PATH | unix.O_CLOEXEC,
 				Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS,
 			})
 			if err != nil {
 				if errors.Is(err, unix.EXDEV) {
-					return nil, "", false, fmt.Errorf("Volume sub-path %q resolves outside of the volume", subPath)
+					return nil, "", false, fmt.Errorf("Volume sub-path %q resolves outside of the volume", volPath)
 				}
 
-				return nil, "", false, fmt.Errorf("Failed opening volume sub-path %q: %w", subPath, err)
+				return nil, "", false, fmt.Errorf("Failed opening volume sub-path %q: %w", volPath, err)
 			}
 
-			srcPathFd := os.NewFile(uintptr(fd), subPath)
+			srcPathFd := os.NewFile(uintptr(fd), volPath)
 			defer func() { _ = srcPathFd.Close() }()
 
 			srcPath = fmt.Sprintf("/proc/self/fd/%d", srcPathFd.Fd())
@@ -2193,8 +2259,7 @@ func (d *disk) postStop() error {
 		}
 
 		// Parse the volume name and path.
-		volFields := strings.SplitN(d.config["source"], "/", 2)
-		volName := volFields[0]
+		volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
 
 		_, err = d.pool.UnmountCustomVolume(storageProjectName, volName, nil)
 		if err != nil && !errors.Is(err, storageDrivers.ErrInUse) {

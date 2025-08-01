@@ -41,6 +41,14 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 
 <!-- config group cluster_group-common end -->
 <!-- config group devices-disk start -->
+```{config:option} attached devices-disk
+:default: "`true`"
+:required: "no"
+:shortdesc: "VMのみ: ディスクが取り付けられているか取り出されているか"
+:type: "bool"
+
+```
+
 ```{config:option} boot.priority devices-disk
 :required: "no"
 :shortdesc: "VM のブート優先度（高いほうが先にブート）"
@@ -133,7 +141,11 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 :required: "yes"
 :shortdesc: "ディスクをマウントするインスタンス内のパス（ファイルシステムディスクデバイスのみ）"
 :type: "string"
+これはインスタンス内部でディスクがマウントされるパスを制御します。
 
+コンテナでは、このオプションはファイルシステムディスクデバイスとそれらの中の複数のパスと単一ファイルのマウントのみをサポートします。
+
+VMでは、このオプションはファイルシステムディスクデバイスとそれらの中の複数のパスのマウントのみをサポートします。単一ファイルのマウントはサポートされません。
 ```
 
 ```{config:option} pool devices-disk
@@ -207,6 +219,14 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 :required: "yes"
 :shortdesc: "ファイルシステムまたはブロックデバイスのソース（詳細は{ref}`devices-disk-types`参照）"
 :type: "string"
+
+```
+
+```{config:option} wwn devices-disk
+:default: "``"
+:required: "no"
+:shortdesc: "VMのみ: ディスクのWorld Wide Nameを設定する（`virtio-scsi`バスでのみサポート）"
+:type: "bool"
 
 ```
 
@@ -2164,6 +2184,17 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 :type: "string"
 インスタンスの目盛リミットが`hard`の場合、インスタンスはそのリミットを超えられません。
 `soft`の場合、ホストのメモリに余裕があればインスタンスはそのリミットを超えられます。
+```
+
+```{config:option} limits.memory.hotplug instance-resource-limits
+:condition: "virtual machine"
+:defaultdesc: "`true`"
+:liveupdate: "yes"
+:shortdesc: "ホットプラグされるメモリーの上限を制御するかまたはメモリホットプラグを無効にする。"
+:type: "string"
+このオプションを`false`に設定すると、メモリホットプラグを完全に無効にします。
+あるいは、ホットプラグされるメモリーの上限を指定するバイト数を設定できます。
+値はlimits.memory以上にする必要があります。
 ```
 
 ```{config:option} limits.memory.hugepages instance-resource-limits
@@ -4732,7 +4763,7 @@ Lokiログエントリーのラベルとして使われる値のカンマ区切�
 
 ```{config:option} logging.NAME.target.type server-logging
 :scope: "global"
-:shortdesc: "ロガーの種別、例、syslog"
+:shortdesc: "ロガーの種別。`loki`、`syslog`、`webhook`のいずれか。"
 :type: "string"
 
 ```

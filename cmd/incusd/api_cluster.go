@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/mux"
 
 	incus "github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/internal/filter"
 	internalInstance "github.com/lxc/incus/v6/internal/instance"
 	"github.com/lxc/incus/v6/internal/server/auth"
 	"github.com/lxc/incus/v6/internal/server/certificate"
@@ -425,76 +426,81 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 		return response.BadRequest(fmt.Errorf("Invalid server address %q: %w", req.ServerAddress, err))
 	}
 
-	localHTTPSAddress := s.LocalConfig.HTTPSAddress()
-
-	var config *node.Config
-
-	if localHTTPSAddress == "" {
-		// As the user always provides a server address, but no networking
-		// was setup on this node, let's do the job and open the
-		// port. We'll use the same address both for the REST API and
-		// for clustering.
-
-		// First try to listen to the provided address. If we fail, we
-		// won't actually update the database config.
-		err := s.Endpoints.NetworkUpdateAddress(req.ServerAddress)
-		if err != nil {
-			return response.SmartError(err)
-		}
-
-		err = s.DB.Node.Transaction(r.Context(), func(ctx context.Context, tx *db.NodeTx) error {
-			config, err = node.ConfigLoad(ctx, tx)
-			if err != nil {
-				return fmt.Errorf("Failed to load cluster config: %w", err)
-			}
-
-			_, err = config.Patch(map[string]string{
-				"core.https_address":    req.ServerAddress,
-				"cluster.https_address": req.ServerAddress,
-			})
-			return err
-		})
-		if err != nil {
-			return response.SmartError(err)
-		}
-
-		localHTTPSAddress = req.ServerAddress
-	} else {
-		// The user has previously set core.https_address and
-		// is now providing a cluster address as well. If they
-		// differ we need to listen to it.
+	// Verify provided address against cluster.https_address if set.
+	localHTTPSAddress := s.LocalConfig.ClusterAddress()
+	if localHTTPSAddress != "" {
 		if !internalUtil.IsAddressCovered(req.ServerAddress, localHTTPSAddress) {
-			err := s.Endpoints.ClusterUpdateAddress(req.ServerAddress)
+			return response.BadRequest(fmt.Errorf(`Server address %q is not covered by %q from "cluster.https_address"`, req.ServerAddress, localHTTPSAddress))
+		}
+	} else {
+		// If cluster.https_address is not set, check against core.https_address
+		localHTTPSAddress = s.LocalConfig.HTTPSAddress()
+
+		var config *node.Config
+
+		if localHTTPSAddress == "" {
+			// As the user always provides a server address, but no networking
+			// was setup on this node, let's do the job and open the
+			// port. We'll use the same address both for the REST API and
+			// for clustering.
+
+			// First try to listen to the provided address. If we fail, we
+			// won't actually update the database config.
+			err := s.Endpoints.NetworkUpdateAddress(req.ServerAddress)
 			if err != nil {
 				return response.SmartError(err)
 			}
 
-			localHTTPSAddress = req.ServerAddress
-		}
+			err = s.DB.Node.Transaction(r.Context(), func(ctx context.Context, tx *db.NodeTx) error {
+				config, err = node.ConfigLoad(ctx, tx)
+				if err != nil {
+					return fmt.Errorf("Failed to load cluster config: %w", err)
+				}
 
-		// Update the cluster.https_address config key.
-		err := s.DB.Node.Transaction(r.Context(), func(ctx context.Context, tx *db.NodeTx) error {
-			var err error
-
-			config, err = node.ConfigLoad(ctx, tx)
+				_, err = config.Patch(map[string]string{
+					"core.https_address":    req.ServerAddress,
+					"cluster.https_address": req.ServerAddress,
+				})
+				return err
+			})
 			if err != nil {
-				return fmt.Errorf("Failed to load cluster config: %w", err)
+				return response.SmartError(err)
+			}
+		} else {
+			// The user has previously set core.https_address and
+			// is now providing a cluster address as well. If they
+			// differ we need to listen to it.
+			if !internalUtil.IsAddressCovered(req.ServerAddress, localHTTPSAddress) {
+				err := s.Endpoints.ClusterUpdateAddress(req.ServerAddress)
+				if err != nil {
+					return response.SmartError(err)
+				}
 			}
 
-			_, err = config.Patch(map[string]string{
-				"cluster.https_address": req.ServerAddress,
-			})
-			return err
-		})
-		if err != nil {
-			return response.SmartError(err)
-		}
-	}
+			// Update the cluster.https_address config key.
+			err := s.DB.Node.Transaction(r.Context(), func(ctx context.Context, tx *db.NodeTx) error {
+				var err error
 
-	// Update local config cache.
-	d.globalConfigMu.Lock()
-	d.localConfig = config
-	d.globalConfigMu.Unlock()
+				config, err = node.ConfigLoad(ctx, tx)
+				if err != nil {
+					return fmt.Errorf("Failed to load cluster config: %w", err)
+				}
+
+				_, err = config.Patch(map[string]string{
+					"cluster.https_address": req.ServerAddress,
+				})
+				return err
+			})
+			if err != nil {
+				return response.SmartError(err)
+			}
+		}
+
+		// Update local config cache.
+		d.globalConfigMu.Lock()
+		d.localConfig = config
+		d.globalConfigMu.Unlock()
+	}
 
 	// Client parameters to connect to the target cluster node.
 	serverCert := s.ServerCert()
@@ -644,7 +650,7 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 		})
 
 		// Now request for this node to be added to the list of cluster nodes.
-		info, err := clusterAcceptMember(client, req.ServerName, localHTTPSAddress, cluster.SchemaVersion, version.APIExtensionsCount(), pools, networks)
+		info, err := clusterAcceptMember(client, req.ServerName, req.ServerAddress, cluster.SchemaVersion, version.APIExtensionsCount(), pools, networks)
 		if err != nil {
 			return fmt.Errorf("Failed request to add member: %w", err)
 		}
@@ -1038,7 +1044,7 @@ func clusterInitMember(d incus.InstanceServer, client incus.InstanceServer, memb
 						continue
 					}
 
-					if !slices.Contains(db.NodeSpecificNetworkConfig, config.Key) {
+					if !db.IsNodeSpecificNetworkConfig(config.Key) {
 						logger.Warnf("Ignoring config key %q for network %q in project %q", config.Key, config.Name, p.Name)
 						continue
 					}
@@ -1101,6 +1107,12 @@ func clusterAcceptMember(client incus.InstanceServer, name string, address strin
 //  ---
 //  produces:
 //    - application/json
+//  parameters:
+//    - in: query
+//      name: filter
+//      description: Collection filter
+//      type: string
+//      example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -1144,6 +1156,12 @@ func clusterAcceptMember(client incus.InstanceServer, name string, address strin
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: query
+//	    name: filter
+//	    description: Collection filter
+//	    type: string
+//	    example: default
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -1176,6 +1194,13 @@ func clusterNodesGet(d *Daemon, r *http.Request) response.Response {
 	recursion := localUtil.IsRecursionRequest(r)
 	s := d.State()
 
+	// Parse filter value.
+	filterStr := r.FormValue("filter")
+	clauses, err := filter.Parse(filterStr, filter.QueryOperatorSet())
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid filter: %w", err))
+	}
+
 	leaderAddress, err := s.Cluster.LeaderAddress()
 	if err != nil {
 		return response.InternalError(err)
@@ -1194,8 +1219,7 @@ func clusterNodesGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	var members []db.NodeInfo
-	var membersInfo []api.ClusterMember
+	var members []api.ClusterMember
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		failureDomains, err := tx.GetFailureDomainsNames(ctx)
 		if err != nil {
@@ -1207,7 +1231,7 @@ func clusterNodesGet(d *Daemon, r *http.Request) response.Response {
 			return fmt.Errorf("Failed loading member failure domains: %w", err)
 		}
 
-		members, err = tx.GetNodes(ctx)
+		nodes, err := tx.GetNodes(ctx)
 		if err != nil {
 			return fmt.Errorf("Failed getting cluster members: %w", err)
 		}
@@ -1226,16 +1250,14 @@ func clusterNodesGet(d *Daemon, r *http.Request) response.Response {
 			RaftNodes:            raftNodes,
 		}
 
-		if recursion {
-			membersInfo = make([]api.ClusterMember, 0, len(members))
-			for i := range members {
-				member, err := members[i].ToAPI(ctx, tx, args)
-				if err != nil {
-					return err
-				}
-
-				membersInfo = append(membersInfo, *member)
+		members = make([]api.ClusterMember, 0, len(nodes))
+		for i := range nodes {
+			member, err := nodes[i].ToAPI(ctx, tx, args)
+			if err != nil {
+				return err
 			}
+
+			members = append(members, *member)
 		}
 
 		return nil
@@ -1244,13 +1266,32 @@ func clusterNodesGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	if recursion {
-		return response.SyncResponse(true, membersInfo)
+	// Apply filters.
+	filtered := make([]api.ClusterMember, 0)
+	for _, member := range members {
+		if clauses != nil && len(clauses.Clauses) > 0 {
+			match, err := filter.Match(member, *clauses)
+			if err != nil {
+				return response.SmartError(err)
+			}
+
+			if !match {
+				continue
+			}
+		}
+
+		filtered = append(filtered, member)
 	}
 
+	// Return full responses.
+	if recursion {
+		return response.SyncResponse(true, filtered)
+	}
+
+	// Return URLs only.
 	urls := make([]string, 0, len(members))
 	for _, member := range members {
-		u := api.NewURL().Path(version.APIVersion, "cluster", "members", member.Name)
+		u := api.NewURL().Path(version.APIVersion, "cluster", "members", member.ServerName)
 		urls = append(urls, u.String())
 	}
 
@@ -2681,8 +2722,9 @@ func clusterCheckNetworksMatch(ctx context.Context, clusterDB *db.Cluster, reqNe
 					}
 
 					// Exclude the keys which are node-specific.
-					exclude := db.NodeSpecificNetworkConfig
-					err = localUtil.CompareConfigs(network.Config, reqNetwork.Config, exclude)
+					networkConfigWithoutNodeSpecific := db.StripNodeSpecificNetworkConfig(network.Config)
+					reqNetworkConfigwithoutNodeSpecific := db.StripNodeSpecificNetworkConfig(reqNetwork.Config)
+					err = localUtil.CompareConfigs(networkConfigWithoutNodeSpecific, reqNetworkConfigwithoutNodeSpecific, nil)
 					if err != nil {
 						return fmt.Errorf("Mismatching config for network %q in project %q: %w", network.Name, networkProjectName, err)
 					}
