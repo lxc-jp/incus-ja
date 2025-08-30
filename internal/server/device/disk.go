@@ -47,6 +47,12 @@ const diskSourceCloudInit = "cloud-init:config"
 // Special disk "source" value used for generating a VM agent ISO.
 const diskSourceAgent = "agent:config"
 
+// Special disk "source" identifier used for tmpfs mounts.
+const diskSourceTmpfs = "tmpfs:"
+
+// Special disk "source" identifier for tmpfs in overlayfs mounts.
+const diskSourceTmpfsOverlay = "tmpfs-overlay:"
+
 // DiskVirtiofsdSockMountOpt indicates the mount option prefix used to provide the virtiofsd socket path to
 // the QEMU driver.
 const DiskVirtiofsdSockMountOpt = "virtiofsdSock"
@@ -93,6 +99,9 @@ type disk struct {
 
 	restrictedParentSourcePath string
 	pool                       storagePools.Pool
+
+	// io.bus can contain imprecise information about the actual bus being used.
+	bus string
 }
 
 // CanMigrate returns whether the device can be migrated to any other cluster member.
@@ -108,7 +117,7 @@ func (d *disk) CanMigrate() bool {
 	}
 
 	// Virtual disks are migratable.
-	if slices.Contains([]string{diskSourceCloudInit, diskSourceAgent}, d.config["source"]) {
+	if slices.Contains([]string{diskSourceCloudInit, diskSourceAgent, diskSourceTmpfs, diskSourceTmpfsOverlay}, d.config["source"]) {
 		return true
 	}
 
@@ -127,8 +136,18 @@ func (d *disk) sourceIsCeph() bool {
 
 // CanHotPlug returns whether the device can be managed whilst the instance is running.
 func (d *disk) CanHotPlug() bool {
-	// All disks can be hot-plugged.
-	return true
+	if d.config["source"] == diskSourceTmpfs || d.config["source"] == diskSourceTmpfsOverlay {
+		return false
+	}
+
+	// 9p mounts cannot be hotplugged. However, with io.bus=auto, we can't know at startup time
+	// if we are dealing with a 9p mount. Still, it's better to fail early. At stop time, we can
+	// extract the info from the volatile key. All other disks can be hotplugged.
+	if d.bus == "" || d.bus == "auto" {
+		return d.volatileGet()["io.bus"] != "9p"
+	}
+
+	return d.bus != "9p"
 }
 
 // isRequired indicates whether the supplied device config requires this device to start OK.
@@ -153,6 +172,10 @@ func (d *disk) sourceIsLocalPath(source string) bool {
 	}
 
 	if source == diskSourceAgent {
+		return false
+	}
+
+	if source == diskSourceTmpfs || source == diskSourceTmpfsOverlay {
 		return false
 	}
 
@@ -359,8 +382,12 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		//
 		// For file systems (shared directories or custom volumes), this is one of:
 		// - `9p`
-		// - `auto` (default) (`virtiofs` + `9p`, just `9p` if `virtiofsd` is missing)
+		// - `auto` (default) (`virtiofs` if possible, else `9p`)
 		// - `virtiofs`
+		//
+		// `9p` doesn't support hotplugging and `virtiofs` doesn't support live migration. `auto` tries
+		// to use `virtiofs` if possible (`migration.stateful` not set to `true` and host support for
+		// `virtiofsd`) and falls back to `9p` otherwise.
 		// ---
 		//  type: string
 		//  default: `virtio-scsi` for block, `auto` for file system
@@ -424,8 +451,8 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		return errors.New(`Root disk entry must have a "pool" property set`)
 	}
 
-	if d.config["size"] != "" && d.config["path"] != "/" {
-		return errors.New("Only the root disk may have a size quota")
+	if d.config["size"] != "" && d.config["path"] != "/" && d.config["source"] != diskSourceTmpfs && d.config["source"] != diskSourceTmpfsOverlay {
+		return errors.New("Only root or tmpfs disks can have a size quota")
 	}
 
 	if d.config["size.state"] != "" && d.config["path"] != "/" {
@@ -443,6 +470,10 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 	// Check ceph options are only used when ceph or cephfs type source is specified.
 	if !(d.sourceIsCeph() || d.sourceIsCephFs()) && (d.config["ceph.cluster_name"] != "" || d.config["ceph.user_name"] != "") {
 		return fmt.Errorf("Invalid options ceph.cluster_name/ceph.user_name for source %q", d.config["source"])
+	}
+
+	if (d.config["source"] == diskSourceTmpfs || d.config["source"] == diskSourceTmpfsOverlay) && d.config["path"] == "" {
+		return errors.New(`Missing mount "path" setting`)
 	}
 
 	// Check no other devices also have the same path as us. Use LocalDevices for this check so
@@ -683,16 +714,14 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 
 	// Restrict disks allowed when live-migratable.
 	if instConf.Type() == instancetype.VM && util.IsTrue(instConf.ExpandedConfig()["migration.stateful"]) {
-		if d.config["path"] != "" && d.config["path"] != "/" {
-			return errors.New("Shared filesystem are incompatible with migration.stateful=true")
-		}
-
 		if d.config["pool"] == "" && !slices.Contains([]string{diskSourceCloudInit, diskSourceAgent}, d.config["source"]) {
 			return errors.New("Only Incus-managed disks are allowed with migration.stateful=true")
 		}
 
 		if d.config["io.bus"] == "nvme" {
 			return errors.New("NVME disks aren't supported with migration.stateful=true")
+		} else if d.config["io.bus"] == "virtiofs" {
+			return errors.New("Virtiofs mounts aren't supported with migration.stateful=true")
 		}
 
 		if d.config["path"] != "/" && d.pool != nil && !d.pool.Driver().Info().Remote {
@@ -700,6 +729,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		}
 	}
 
+	d.bus = d.config["io.bus"]
 	return nil
 }
 
@@ -757,6 +787,10 @@ func (d *disk) validateEnvironmentSourcePath() error {
 func (d *disk) validateEnvironment() error {
 	if d.inst.Type() != instancetype.VM && slices.Contains([]string{diskSourceCloudInit, diskSourceAgent}, d.config["source"]) {
 		return fmt.Errorf("disks with source=%s are only supported by virtual machines", d.config["source"])
+	}
+
+	if d.inst.Type() != instancetype.Container && slices.Contains([]string{diskSourceTmpfs, diskSourceTmpfsOverlay}, d.config["source"]) {
+		return fmt.Errorf("disks with source=%s are only supported by containers", d.config["source"])
 	}
 
 	err := d.validateEnvironmentSourcePath()
@@ -822,6 +856,12 @@ func (d *disk) Register() error {
 
 // PreStartCheck checks the storage pool is available (if relevant).
 func (d *disk) PreStartCheck() error {
+	// volatile.<disk>.io.bus needs to be reset so that we aren't reading the previous one.
+	err := d.volatileSet(map[string]string{"io.bus": ""})
+	if err != nil {
+		return err
+	}
+
 	// Non-pool disks are not relevant for checking pool availability.
 	if d.pool == nil {
 		return nil
@@ -911,6 +951,118 @@ func (d *disk) startContainer() (*deviceConfig.RunConfig, error) {
 		}
 
 		runConf.RootFS = rootfs
+	} else if d.config["source"] == diskSourceTmpfs || d.config["source"] == diskSourceTmpfsOverlay {
+		srcPath := d.config["source"]
+
+		destPath := d.config["path"]
+		relativeDestPath := strings.TrimPrefix(destPath, "/")
+
+		options := []string{}
+		if d.config["size"] != "" {
+			size, err := units.ParseByteSizeString(d.config["size"])
+			if err != nil {
+				return nil, err
+			}
+
+			options = append(options, fmt.Sprintf("size=%d", size))
+		}
+
+		if d.config["initial.mode"] != "" {
+			options = append(options, fmt.Sprintf("mode=%s", d.config["initial.mode"]))
+		}
+
+		if d.config["initial.uid"] != "" {
+			options = append(options, fmt.Sprintf("uid=%s", d.config["initial.uid"]))
+		}
+
+		if d.config["initial.gid"] != "" {
+			options = append(options, fmt.Sprintf("gid=%s", d.config["initial.gid"]))
+		}
+
+		if srcPath == diskSourceTmpfsOverlay {
+			procUpperPath := "proc/upper"
+			procWorkPath := "proc/work"
+			overlayPath := relativeDestPath
+
+			rootFsPaths := []string{
+				"/opt/incus/lib/lxc/rootfs/",
+				"/usr/lib/x86_64-linux-gnu/lxc/rootfs/",
+				"/usr/lib/aarch64-linux-gnu/lxc/rootfs/",
+			}
+
+			rootFsPath := ""
+			for _, path := range rootFsPaths {
+				if util.PathExists(path) {
+					rootFsPath = path
+					break
+				}
+			}
+
+			if rootFsPath == "" {
+				return nil, fmt.Errorf("Cannot find rootfs path for container")
+			}
+
+			lowerDirOpt := fmt.Sprintf("lowerdir=%s", filepath.Join(rootFsPath, overlayPath))
+			upperDirOpt := fmt.Sprintf("upperdir=%s", filepath.Join(rootFsPath, procUpperPath))
+			workDirOpt := fmt.Sprintf("workdir=%s", filepath.Join(rootFsPath, procWorkPath))
+
+			mounts := []deviceConfig.MountEntryItem{
+				{
+					DevName:    d.name,
+					DevPath:    "none",
+					TargetPath: "proc",
+					FSType:     "tmpfs",
+					Opts:       append(options, "defaults"),
+				},
+				{
+					DevName:    d.name,
+					DevPath:    "none",
+					TargetPath: procUpperPath,
+					FSType:     "invalid",
+					Opts:       []string{"defaults", "create=dir", "optional"},
+				},
+				{
+					DevName:    d.name,
+					DevPath:    "none",
+					TargetPath: procWorkPath,
+					FSType:     "invalid",
+					Opts:       []string{"defaults", "create=dir", "optional"},
+				},
+				{
+					DevName:    d.name,
+					DevPath:    "none",
+					TargetPath: "sys",
+					FSType:     "overlay",
+					Opts:       []string{"userxattr", lowerDirOpt, upperDirOpt, workDirOpt},
+				},
+				{
+					DevName:    d.name,
+					DevPath:    filepath.Join(rootFsPath, "proc"),
+					TargetPath: overlayPath,
+					FSType:     "none",
+					Opts:       []string{"move"},
+				},
+				{
+					DevName:    d.name,
+					DevPath:    filepath.Join(rootFsPath, "sys"),
+					TargetPath: overlayPath,
+					FSType:     "none",
+					Opts:       []string{"move"},
+				},
+			}
+
+			runConf.Mounts = append(runConf.Mounts, mounts...)
+		} else {
+			options := append(options, "create=dir")
+
+			runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
+				DevName:    d.name,
+				DevPath:    "tmpfs",
+				TargetPath: relativeDestPath,
+				FSType:     "tmpfs",
+				Opts:       options,
+			})
+		}
 	} else {
 		// Source path.
 		srcPath := d.config["source"]
@@ -1058,6 +1210,16 @@ func (d *disk) detectVMPoolMountOpts() []string {
 	return opts
 }
 
+// setBus adds bus overrides to mount options and sets the io.bus volatile key.
+func (d *disk) setBus(entry *deviceConfig.MountEntryItem) error {
+	if d.bus == "" {
+		return nil
+	}
+
+	entry.Opts = append(entry.Opts, "bus="+d.bus)
+	return d.volatileSet(map[string]string{"io.bus": d.bus})
+}
+
 // startVM starts the disk device for a virtual machine instance.
 func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 	runConf := deviceConfig.RunConfig{}
@@ -1067,11 +1229,6 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 
 	// Handle user overrides.
 	opts := []string{}
-
-	// Allow the user to override the bus.
-	if d.config["io.bus"] != "" {
-		opts = append(opts, fmt.Sprintf("bus=%s", d.config["io.bus"]))
-	}
 
 	// Allow the user to override the caching mode.
 	if d.config["io.cache"] != "" {
@@ -1112,15 +1269,19 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 
 		opts = append(opts, d.detectVMPoolMountOpts()...)
 
-		runConf.Mounts = []deviceConfig.MountEntryItem{
-			{
-				TargetPath: d.config["path"], // Indicator used that this is the root device.
-				DevName:    d.name,
-				Opts:       opts,
-				Limits:     diskLimits,
-			},
+		mount := deviceConfig.MountEntryItem{
+			TargetPath: d.config["path"], // Indicator used that this is the root device.
+			DevName:    d.name,
+			Opts:       opts,
+			Limits:     diskLimits,
 		}
 
+		err = d.setBus(&mount)
+		if err != nil {
+			return nil, err
+		}
+
+		runConf.Mounts = []deviceConfig.MountEntryItem{mount}
 		return &runConf, nil
 	} else if d.config["source"] == diskSourceAgent {
 		// This is a special virtual disk source that can be attached to a VM to provide agent binary and config.
@@ -1140,16 +1301,20 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 		runConf.Revert = func() { _ = f.Close() } // Close file on VM start failure.
 
 		// Encode the file descriptor and original isoPath into the DevPath field.
-		runConf.Mounts = []deviceConfig.MountEntryItem{
-			{
-				DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
-				DevName:  d.name,
-				FSType:   "iso9660",
-				Opts:     opts,
-				Attached: attached,
-			},
+		mount := deviceConfig.MountEntryItem{
+			DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
+			DevName:  d.name,
+			FSType:   "iso9660",
+			Opts:     opts,
+			Attached: attached,
 		}
 
+		err = d.setBus(&mount)
+		if err != nil {
+			return nil, err
+		}
+
+		runConf.Mounts = []deviceConfig.MountEntryItem{mount}
 		reverter.Success()
 
 		return &runConf, nil
@@ -1171,16 +1336,20 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 		runConf.Revert = func() { _ = f.Close() } // Close file on VM start failure.
 
 		// Encode the file descriptor and original isoPath into the DevPath field.
-		runConf.Mounts = []deviceConfig.MountEntryItem{
-			{
-				DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
-				DevName:  d.name,
-				FSType:   "iso9660",
-				Opts:     opts,
-				Attached: attached,
-			},
+		mount := deviceConfig.MountEntryItem{
+			DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
+			DevName:  d.name,
+			FSType:   "iso9660",
+			Opts:     opts,
+			Attached: attached,
 		}
 
+		err = d.setBus(&mount)
+		if err != nil {
+			return nil, err
+		}
+
+		runConf.Mounts = []deviceConfig.MountEntryItem{mount}
 		reverter.Success()
 
 		return &runConf, nil
@@ -1190,15 +1359,20 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 			fields := strings.SplitN(d.config["source"], ":", 2)
 			fields = strings.SplitN(fields[1], "/", 2)
 			clusterName, userName := d.cephCreds()
-			runConf.Mounts = []deviceConfig.MountEntryItem{
-				{
-					DevPath:  DiskGetRBDFormat(clusterName, userName, fields[0], fields[1]),
-					DevName:  d.name,
-					Opts:     opts,
-					Limits:   diskLimits,
-					Attached: attached,
-				},
+			mount := deviceConfig.MountEntryItem{
+				DevPath:  DiskGetRBDFormat(clusterName, userName, fields[0], fields[1]),
+				DevName:  d.name,
+				Opts:     opts,
+				Limits:   diskLimits,
+				Attached: attached,
 			}
+
+			err := d.setBus(&mount)
+			if err != nil {
+				return nil, err
+			}
+
+			runConf.Mounts = []deviceConfig.MountEntryItem{mount}
 		} else {
 			// Default to block device or image file passthrough first.
 			mount := deviceConfig.MountEntryItem{
@@ -1207,6 +1381,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				Opts:     opts,
 				Limits:   diskLimits,
 				Attached: attached,
+			}
+
+			err := d.setBus(&mount)
+			if err != nil {
+				return nil, err
 			}
 
 			// Mount the pool volume and update srcPath to mount path so it can be recognised as dir
@@ -1267,6 +1446,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 						Attached: attached,
 					}
 
+					err = d.setBus(&mount)
+					if err != nil {
+						return nil, err
+					}
+
 					if contentType == db.StoragePoolVolumeContentTypeISO {
 						mount.FSType = "iso9660"
 					}
@@ -1295,7 +1479,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 			// indicate to the VM the target path to mount to.
 			if internalUtil.IsDir(mount.DevPath) || d.sourceIsCephFs() {
 				// Confirm we're using filesystem options.
-				err := validate.Optional(validate.IsOneOf("auto", "9p", "virtiofs"))(d.config["io.bus"])
+				err := validate.Optional(validate.IsOneOf("auto", "9p", "virtiofs"))(d.bus)
 				if err != nil {
 					return nil, err
 				}
@@ -1329,16 +1513,19 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					return nil, fmt.Errorf(`Failed parsing instance "raw.idmap": %w`, err)
 				}
 
-				busOption := d.config["io.bus"]
-				if busOption == "" {
-					busOption = "auto"
+				if d.bus == "" || d.bus == "auto" {
+					if d.inst.CanLiveMigrate() {
+						d.bus = "9p"
+					} else {
+						d.bus = "auto"
+					}
 				}
 
-				// Start virtiofsd for virtio-fs share. The agent prefers to use this over the
-				// 9p share. The 9p share will only be used as a fallback.
+				// Start virtiofsd for virtio-fs share. If for some reason we can't, create a 9p share as
+				// a fallback.
 				err = func() error {
 					// Check if we should start virtiofsd.
-					if busOption != "auto" && busOption != "virtiofs" {
+					if d.bus != "auto" && d.bus != "virtiofs" {
 						return nil
 					}
 
@@ -1348,15 +1535,11 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 
 					revertFunc, unixListener, err := DiskVMVirtiofsdStart(d.state.OS.ExecPath, d.inst, sockPath, pidPath, logPath, mount.DevPath, rawIDMaps.Entries, d.config["io.cache"])
 					if err != nil {
-						if busOption == "virtiofs" {
-							return err
-						}
-
 						var errUnsupported UnsupportedError
-						if errors.As(err, &errUnsupported) {
+						if d.bus != "virtiofs" && errors.As(err, &errUnsupported) {
 							d.logger.Warn("Unable to use virtio-fs for device, using 9p as a fallback", logger.Ctx{"err": errUnsupported})
 							// Fallback to 9p-only.
-							busOption = "9p"
+							d.bus = "9p"
 
 							if errors.Is(errUnsupported, ErrMissingVirtiofsd) {
 								_ = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -1374,6 +1557,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					}
 
 					reverter.Add(revertFunc)
+					d.bus = "virtiofs"
 
 					// Request the unix listener is closed after QEMU has connected on startup.
 					runConf.PostHooks = append(runConf.PostHooks, unixListener.Close)
@@ -1396,14 +1580,24 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					return nil, fmt.Errorf("Failed to setup virtiofsd for device %q: %w", d.name, err)
 				}
 
-				// If an idmap is specified, disable 9p.
-				if len(rawIDMaps.Entries) > 0 {
-					// If we are 9p-only, return an error.
-					if busOption == "9p" {
-						return nil, errors.New("9p shares do not support identity mapping")
+				// Once we're here, we know which bus to use. Because 9p mounts cannot be hotplugged, we
+				// need to check if the instance is running.
+				if d.bus == "9p" && d.inst.IsRunning() {
+					if d.config["io.bus"] == "9p" {
+						return nil, errors.New("9p doesn't support hotplugging")
 					}
 
-					mount.Opts = append(mount.Opts, "bus=virtiofs")
+					return nil, errors.New("Virtiofsd cannot be used for this share, and 9p doesn't support hotplugging")
+				}
+
+				err = d.setBus(&mount)
+				if err != nil {
+					return nil, err
+				}
+
+				// 9p doesn't support idmap
+				if d.bus == "9p" && len(rawIDMaps.Entries) > 0 {
+					return nil, errors.New("9p shares do not support identity mapping")
 				}
 			} else {
 				// Forbid mounting files to FS paths.
@@ -1412,7 +1606,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				}
 
 				// Confirm we're dealing with block options.
-				err := validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "usb"))(d.config["io.bus"])
+				err := validate.Optional(validate.IsOneOf("nvme", "virtio-blk", "virtio-scsi", "usb"))(d.bus)
 				if err != nil {
 					return nil, err
 				}

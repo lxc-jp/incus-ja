@@ -493,6 +493,8 @@ var APIExtensions = []string{
 	"limits_memory_hotplug",
 	"disk_wwn",
 	"server_logging_webhook",
+	"storage_driver_truenas",
+	"container_disk_tmpfs",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

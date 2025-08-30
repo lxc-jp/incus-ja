@@ -17,9 +17,9 @@ import (
 	"github.com/lxc/incus/v6/internal/server/ip"
 	"github.com/lxc/incus/v6/internal/server/network"
 	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/resources"
 	"github.com/lxc/incus/v6/internal/server/state"
 	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/resources"
 	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/util"
 )
@@ -523,20 +523,7 @@ func IsPhysicalNICWithBridge(s *state.State, deviceProjectName string, d deviceC
 			return false
 		}
 
-		err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-			_, netInfo, _, err = tx.GetNetworkInAnyState(ctx, networkProjectName, parent)
-
-			return err
-		})
-		if err != nil {
-			return false
-		}
-
-		if netInfo.Type != "bridge" {
-			return false
-		}
-
-		return true
+		return util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", parent))
 	}
 
 	return false

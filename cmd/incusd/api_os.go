@@ -9,7 +9,6 @@ import (
 
 	"github.com/lxc/incus/v6/internal/server/auth"
 	"github.com/lxc/incus/v6/internal/server/response"
-	internalutil "github.com/lxc/incus/v6/internal/util"
 )
 
 var apiOS = APIEndpoint{
@@ -22,9 +21,17 @@ var apiOS = APIEndpoint{
 	Head:   APIEndpointAction{Handler: apiOSProxy, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
 }
 
-func apiOSProxy(_ *Daemon, r *http.Request) response.Response {
+func apiOSProxy(d *Daemon, r *http.Request) response.Response {
+	s := d.State()
+
+	// If a target was specified, forward the request to the relevant node.
+	resp := forwardedResponseIfTargetIsRemote(s, r)
+	if resp != nil {
+		return resp
+	}
+
 	// Check if this is an Incus OS system.
-	if !internalutil.IsIncusOS() {
+	if !s.OS.IncusOS {
 		return response.BadRequest(errors.New("System isn't running Incus OS"))
 	}
 

@@ -363,6 +363,11 @@ func projectsPost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Quick checks.
+	err = validate.IsAPIName(project.Name, false)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid project name: %w", err))
+	}
+
 	err = projectValidateName(project.Name)
 	if err != nil {
 		return response.BadRequest(err)
@@ -888,9 +893,14 @@ func projectPost(d *Daemon, r *http.Request) response.Response {
 				return fmt.Errorf("Failed getting project ID for project %q: %w", name, err)
 			}
 
+			err = validate.IsAPIName(name, false)
+			if err != nil {
+				return fmt.Errorf("Invalid project name: %w", err)
+			}
+
 			err = projectValidateName(req.Name)
 			if err != nil {
-				return err
+				return fmt.Errorf("Invalid project name: %w", err)
 			}
 
 			return cluster.RenameProject(ctx, tx.Tx(), name, req.Name)
@@ -957,6 +967,7 @@ func projectDelete(d *Daemon, r *http.Request) response.Response {
 	}
 
 	var id int64
+	var projectConfig map[string]string
 	var usedBy []string
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		project, err := cluster.GetProject(ctx, tx.Tx(), name)
@@ -983,6 +994,11 @@ func projectDelete(d *Daemon, r *http.Request) response.Response {
 		id, err = cluster.GetProjectID(ctx, tx.Tx(), name)
 		if err != nil {
 			return fmt.Errorf("Fetch project id %q: %w", name, err)
+		}
+
+		projectConfig, err = cluster.GetProjectConfig(ctx, tx.Tx(), int(id))
+		if err != nil {
+			return fmt.Errorf("Fetch project config %q: %w", name, err)
 		}
 
 		return nil
@@ -1133,10 +1149,12 @@ func projectDelete(d *Daemon, r *http.Request) response.Response {
 			count--
 		}
 
-		// Empty the default profile.
-		err = target.UpdateProfile("default", api.ProfilePut{}, "")
-		if err != nil {
-			return response.InternalError(err)
+		// Empty the default profile, if the project owns one.
+		if util.IsTrue(projectConfig["features.profiles"]) {
+			err = target.UpdateProfile("default", api.ProfilePut{}, "")
+			if err != nil {
+				return response.InternalError(err)
+			}
 		}
 
 		// Delete images.
@@ -1846,18 +1864,6 @@ func projectValidateConfig(s *state.State, config map[string]string) error {
 }
 
 func projectValidateName(name string) error {
-	if name == "" {
-		return errors.New("No name provided")
-	}
-
-	if strings.Contains(name, "/") {
-		return errors.New("Project names may not contain slashes")
-	}
-
-	if strings.Contains(name, " ") {
-		return errors.New("Project names may not contain spaces")
-	}
-
 	if strings.Contains(name, "_") {
 		return errors.New("Project names may not contain underscores")
 	}
@@ -1985,6 +1991,11 @@ func projectAccess(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Quick checks.
+	err = validate.IsAPIName(name, false)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid project name: %w", err))
+	}
+
 	err = projectValidateName(name)
 	if err != nil {
 		return response.BadRequest(err)

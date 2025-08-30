@@ -1746,7 +1746,10 @@ func (d *lxc) deviceHandleMounts(mounts []deviceConfig.MountEntryItem) error {
 
 				// Only remove mountpoints created in /dev.
 				if strings.HasPrefix(mount.TargetPath, "dev/") {
-					return files.Remove(relativeTargetPath)
+					err := files.Remove(relativeTargetPath)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -2326,7 +2329,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 
 		// Allow unprivileged users to use ping (requires a 6.6 kernel at least).
 		minVer, _ := version.NewDottedVersion("6.6.0")
-		if d.state.OS.KernelVersion.Compare(minVer) >= 0 {
+		if !d.state.OS.RunningInUserNS && d.state.OS.KernelVersion.Compare(minVer) >= 0 {
 			maxGid := int64(4294967294)
 
 			if !d.IsPrivileged() {
@@ -2704,7 +2707,7 @@ func (d *lxc) detachInterfaceRename(netns string, ifName string, hostName string
 // Start starts the instance.
 func (d *lxc) Start(stateful bool) error {
 	// Check that migration.stateful is set for stateful actions.
-	if stateful && util.IsFalseOrEmpty(d.expandedConfig["migration.stateful"]) {
+	if stateful && !d.CanLiveMigrate() {
 		return errors.New("Stateful start requires that the instance migration.stateful be set to true")
 	}
 
@@ -2996,7 +2999,7 @@ func (d *lxc) Stop(stateful bool) error {
 	defer d.logger.Debug("Stop finished", logger.Ctx{"stateful": stateful})
 
 	// Check that migration.stateful is set for stateful actions.
-	if stateful && util.IsFalseOrEmpty(d.expandedConfig["migration.stateful"]) {
+	if stateful && !d.CanLiveMigrate() {
 		return errors.New("Stateful stop requires the instance to have migration.stateful be set to true")
 	}
 
@@ -3701,6 +3704,7 @@ func (d *lxc) Render() (any, any, error) {
 		// Prepare the response.
 		snapState := api.InstanceSnapshot{
 			CreatedAt:       d.creationDate,
+			Description:     d.description,
 			ExpandedConfig:  d.expandedConfig,
 			ExpandedDevices: d.expandedDevices.CloneNative(),
 			LastUsedAt:      d.lastUsedDate,
@@ -3855,7 +3859,7 @@ func (d *lxc) RenderState(hostInterfaces []net.Interface) (*api.InstanceState, e
 // snapshot creates a snapshot of the instance.
 func (d *lxc) snapshot(name string, expiry time.Time, stateful bool) error {
 	// Check that migration.stateful is set for stateful actions.
-	if stateful && util.IsFalseOrEmpty(d.expandedConfig["migration.stateful"]) {
+	if stateful && !d.CanLiveMigrate() {
 		return errors.New("Stateful snapshots require that the instance has migration.stateful be set to true")
 	}
 
@@ -6544,6 +6548,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 				CreatedAt:    d.CreationDate(),
 				LastUsedAt:   d.LastUsedDate(),
 				Config:       d.LocalConfig(),
+				Description:  d.Description(),
 				Devices:      d.LocalDevices().CloneNative(),
 				Ephemeral:    d.IsEphemeral(),
 				Stateful:     d.IsStateful(),
@@ -9178,4 +9183,9 @@ func (d *lxc) ReloadDevice(devName string) error {
 	}
 
 	return dev.Update(d.expandedDevices, true)
+}
+
+// CanLiveMigrate returns whether the container is live-migratable.
+func (d *lxc) CanLiveMigrate() bool {
+	return util.IsTrue(d.expandedConfig["migration.stateful"])
 }

@@ -393,7 +393,7 @@ func (n *ovn) getExternalSubnetInUse(uplinkNetworkName string) ([]externalSubnet
 }
 
 // Validate network config.
-func (n *ovn) Validate(config map[string]string) error {
+func (n *ovn) Validate(config map[string]string, clientType request.ClientType) error {
 	rules := map[string]func(value string) error{
 		// gendoc:generate(entity=network_ovn, group=common, key=network)
 		//
@@ -722,7 +722,7 @@ func (n *ovn) Validate(config map[string]string) error {
 	var uplink *api.Network
 	projectRestrictedSubnets := []*net.IPNet{}
 
-	if n.config["network"] != "none" {
+	if n.config["network"] != "none" && clientType != request.ClientTypeNotifier {
 		uplinkNetworkName, err := n.validateUplinkNetwork(p, config["network"])
 		if err != nil {
 			return err
@@ -2152,7 +2152,7 @@ func (n *ovn) populateAutoConfig(config map[string]string) error {
 
 	// Re-validate config if changed.
 	if changedConfig && n.state != nil {
-		return n.Validate(config)
+		return n.Validate(config, request.ClientTypeNormal)
 	}
 
 	return nil
@@ -3275,7 +3275,7 @@ func (n *ovn) ensureNetworkPortGroup(projectID int64) error {
 	if intPortGroupUUID == "" {
 		// Create internal port group and associate it with the logical switch, so that it will be
 		// removed when the logical switch is removed.
-		err = n.ovnnb.CreatePortGroup(context.TODO(), projectID, intPortGroupName, "", n.getIntSwitchName())
+		err = n.ovnnb.CreatePortGroup(context.TODO(), projectID, intPortGroupName, []networkOVN.OVNPortGroup{}, n.getIntSwitchName())
 		if err != nil {
 			return fmt.Errorf("Failed creating port group %q for network %q setup: %w", intPortGroupName, n.Name(), err)
 		}
@@ -3936,6 +3936,9 @@ func (n *ovn) Update(newNetwork api.NetworkPut, targetNode string, clientType re
 					}
 				}
 
+				ingressAction, ingressLogged := n.instanceDeviceACLDefaults(nicConfig, "ingress")
+				egressAction, egressLogged := n.instanceDeviceACLDefaults(nicConfig, "egress")
+
 				// Check whether we need to add any of the new ACLs to the NIC.
 				for _, addedACL := range addedACLs {
 					if slices.Contains(nicACLs, addedACL) {
@@ -3947,10 +3950,29 @@ func (n *ovn) Update(newNetwork api.NetworkPut, targetNode string, clientType re
 						return fmt.Errorf("Cannot find security ACL ID for %q", addedACL)
 					}
 
+					directionalPortGroups := acl.OVNACLDirectionalPortGroups(aclID)
 					// Add NIC port to ACL port group.
-					portGroupName := acl.OVNACLPortGroupName(aclID)
-					acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, portGroupName)
-					n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": addedACL, "portGroup": portGroupName, "port": instancePortName})
+					var ingressPortGroupName networkOVN.OVNPortGroup
+					if ingressAction == "allow" {
+						ingressPortGroupName = directionalPortGroups.IngressReversed
+					} else {
+						ingressPortGroupName = directionalPortGroups.Ingress
+					}
+
+					acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, ingressPortGroupName)
+					n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": addedACL, "portGroup": ingressPortGroupName, "port": instancePortName})
+
+					var egressPortGroupName networkOVN.OVNPortGroup
+					if egressAction == "allow" {
+						egressPortGroupName = directionalPortGroups.EgressReversed
+					} else {
+						egressPortGroupName = directionalPortGroups.Egress
+					}
+
+					acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, egressPortGroupName)
+					n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": addedACL, "portGroup": egressPortGroupName, "port": instancePortName})
+					acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, directionalPortGroups.All)
+					n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": addedACL, "portGroup": directionalPortGroups.All, "port": instancePortName})
 				}
 
 				// Check whether we need to remove any of the removed ACLs from the NIC.
@@ -3965,9 +3987,9 @@ func (n *ovn) Update(newNetwork api.NetworkPut, targetNode string, clientType re
 					}
 
 					// Remove NIC port from ACL port group.
-					portGroupName := acl.OVNACLPortGroupName(aclID)
-					acl.OVNPortGroupInstanceNICSchedule(portUUID, removeChangeSet, portGroupName)
-					n.logger.Debug("Scheduled logical port for ACL port group removal", logger.Ctx{"networkACL": removedACL, "portGroup": portGroupName, "port": instancePortName})
+					directionalPortGroups := acl.OVNACLDirectionalPortGroups(aclID)
+					directionalPortGroups.AddToChangeSet(portUUID, removeChangeSet)
+					n.logger.Debug("Scheduled logical port for ACL port group removal", logger.Ctx{"networkACL": removedACL, "portGroup": directionalPortGroups.Ingress, "port": instancePortName})
 				}
 
 				// If there are no ACLs being applied to the NIC (either from network or NIC) then
@@ -3999,9 +4021,6 @@ func (n *ovn) Update(newNetwork api.NetworkPut, targetNode string, clientType re
 					// the default rule to the NIC.
 					if defaultRuleChange || len(oldACLs) <= 0 {
 						// Set the automatic default ACL rule for the port.
-						ingressAction, ingressLogged := n.instanceDeviceACLDefaults(nicConfig, "ingress")
-						egressAction, egressLogged := n.instanceDeviceACLDefaults(nicConfig, "egress")
-
 						logPrefix := fmt.Sprintf("%s-%s", inst.Config["volatile.uuid"], nicName)
 						err = acl.OVNApplyInstanceNICDefaultRules(n.ovnnb, acl.OVNIntSwitchPortGroupName(n.ID()), logPrefix, instancePortName, ingressAction, ingressLogged, egressAction, egressLogged)
 						if err != nil {
@@ -4804,6 +4823,9 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 	acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, acl.OVNIntSwitchPortGroupName(n.ID()))
 	n.logger.Debug("Scheduled logical port for network port group addition", logger.Ctx{"portGroup": acl.OVNIntSwitchPortGroupName(n.ID()), "port": instancePortName})
 
+	ingressAction, ingressLogged := n.instanceDeviceACLDefaults(opts.DeviceConfig, "ingress")
+	egressAction, egressLogged := n.instanceDeviceACLDefaults(opts.DeviceConfig, "egress")
+
 	if len(nicACLNames) > 0 || len(securityACLsRemove) > 0 {
 		var aclNameIDs map[string]int64
 
@@ -4851,10 +4873,30 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 					return "", nil, fmt.Errorf("Cannot find security ACL ID for %q", aclName)
 				}
 
+				directionalPortGroups := acl.OVNACLDirectionalPortGroups(aclID)
 				// Add NIC port to ACL port group.
-				portGroupName := acl.OVNACLPortGroupName(aclID)
-				acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, portGroupName)
-				n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": aclName, "portGroup": portGroupName, "port": instancePortName})
+				var ingressPortGroupName networkOVN.OVNPortGroup
+				if ingressAction == "allow" {
+					ingressPortGroupName = directionalPortGroups.IngressReversed
+				} else {
+					ingressPortGroupName = directionalPortGroups.Ingress
+				}
+
+				acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, ingressPortGroupName)
+				n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": aclName, "portGroup": ingressPortGroupName, "port": instancePortName})
+
+				var egressPortGroupName networkOVN.OVNPortGroup
+				if egressAction == "allow" {
+					egressPortGroupName = directionalPortGroups.EgressReversed
+				} else {
+					egressPortGroupName = directionalPortGroups.Egress
+				}
+
+				acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, egressPortGroupName)
+				n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": aclName, "portGroup": egressPortGroupName, "port": instancePortName})
+
+				acl.OVNPortGroupInstanceNICSchedule(portUUID, addChangeSet, directionalPortGroups.All)
+				n.logger.Debug("Scheduled logical port for ACL port group addition", logger.Ctx{"networkACL": aclName, "portGroup": directionalPortGroups.All, "port": instancePortName})
 			}
 		}
 
@@ -4871,10 +4913,8 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 				return "", nil, fmt.Errorf("Cannot find security ACL ID for %q", aclName)
 			}
 
-			// Remove NIC port from ACL port group.
-			portGroupName := acl.OVNACLPortGroupName(aclID)
-			acl.OVNPortGroupInstanceNICSchedule(portUUID, removeChangeSet, portGroupName)
-			n.logger.Debug("Scheduled logical port for ACL port group removal", logger.Ctx{"networkACL": aclName, "portGroup": portGroupName, "port": instancePortName})
+			directionalPortGroups := acl.OVNACLDirectionalPortGroups(aclID)
+			directionalPortGroups.AddToChangeSet(portUUID, removeChangeSet)
 		}
 	}
 
@@ -4889,9 +4929,6 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 
 	// Set the automatic default ACL rule for the port.
 	if len(nicACLNames) > 0 {
-		ingressAction, ingressLogged := n.instanceDeviceACLDefaults(opts.DeviceConfig, "ingress")
-		egressAction, egressLogged := n.instanceDeviceACLDefaults(opts.DeviceConfig, "egress")
-
 		logPrefix := fmt.Sprintf("%s-%s", opts.InstanceUUID, opts.DeviceName)
 		err = acl.OVNApplyInstanceNICDefaultRules(n.ovnnb, acl.OVNIntSwitchPortGroupName(n.ID()), logPrefix, instancePortName, ingressAction, ingressLogged, egressAction, egressLogged)
 		if err != nil {

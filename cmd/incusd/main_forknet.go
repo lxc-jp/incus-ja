@@ -216,6 +216,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -242,8 +243,8 @@ type cmdForknet struct {
 	global *cmdGlobal
 
 	applyDNSMu      sync.Mutex
-	dhcpv4Lease     *nclient4.Lease
-	dhcpv6Lease     *dhcpv6.Message
+	dhcpv4Leases    map[string]*nclient4.Lease
+	dhcpv6Leases    map[string]*dhcpv6.Message
 	instNetworkPath string
 }
 
@@ -317,21 +318,6 @@ func (c *cmdForknet) runDHCP(_ *cobra.Command, args []string) error {
 		logger.SetOutput(io.Discard)
 	}
 
-	iface := "eth0"
-
-	logger.WithField("interface", iface).Info("running dhcp")
-
-	// Bring the interface up.
-	link := &ip.Link{
-		Name: iface,
-	}
-
-	err := link.SetUp()
-	if err != nil {
-		logger.WithField("interface", iface).Error("Giving up on DHCP, couldn't bring up interface")
-		return nil
-	}
-
 	// Read the hostname.
 	bb, err := os.ReadFile(filepath.Join(c.instNetworkPath, "hostname"))
 	if err != nil {
@@ -347,25 +333,68 @@ func (c *cmdForknet) runDHCP(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	errorChannel := make(chan error, 2)
-	go c.dhcpRunV4(errorChannel, iface, hostname, logger)
-	go c.dhcpRunV6(errorChannel, iface, hostname, logger)
-
-	err1 := <-errorChannel
-	if err1 != nil {
-		logger.WithError(err1).Error("DHCP client failed")
+	// Enumerate network interfaces and skip loopback.
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		logger.WithError(err).Error("Giving up on DHCP, couldn't list interfaces")
+		return err
 	}
 
-	err2 := <-errorChannel
-	if err2 != nil {
-		logger.WithError(err2).Error("DHCP client failed")
+	var names []string
+	for _, ifi := range ifaces {
+		if ifi.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		names = append(names, ifi.Name)
 	}
 
-	if err1 == nil && err2 == nil {
+	if len(names) == 0 {
+		logger.Info("No non-loopback interfaces found; nothing to do for DHCP")
 		return nil
 	}
 
-	return fmt.Errorf("DHCP failure, client1=%v client2=%v", err1, err2)
+	// Initialize per-interface lease maps.
+	c.applyDNSMu.Lock()
+	c.dhcpv4Leases = map[string]*nclient4.Lease{}
+	c.dhcpv6Leases = map[string]*dhcpv6.Message{}
+	c.applyDNSMu.Unlock()
+
+	// Buffer size is 2 goroutines per iface.
+	errorChannel := make(chan error, len(names)*2)
+
+	// Launch DHCP clients for each iface.
+	for _, iface := range names {
+		logger := logger.WithField("interface", iface).Logger
+		logger.Info("running dhcp on interface")
+
+		link := &ip.Link{
+			Name: iface,
+		}
+
+		err := link.SetUp()
+		if err != nil {
+			logger.WithField("interface", iface).WithError(err).Error("Giving up on DHCP for this interface, couldn't bring up interface")
+
+			// continue to try other interfaces
+			continue
+		}
+
+		go c.dhcpRunV4(errorChannel, iface, hostname, logger)
+		go c.dhcpRunV6(errorChannel, iface, hostname, logger)
+	}
+
+	// Wait for all goroutines to return (2 per interface).
+	var finalErr error
+	for i := 0; i < len(names)*2; i++ {
+		err := <-errorChannel
+		if err != nil {
+			logger.WithError(err).Error("DHCP client failed")
+			finalErr = fmt.Errorf("some DHCP clients failed (one or more)")
+		}
+	}
+
+	return finalErr
 }
 
 func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname string, logger *logrus.Logger) {
@@ -379,7 +408,19 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 
 	defer func() { _ = client.Close() }()
 
-	lease, err := client.Request(context.Background(), dhcpv4.WithOption(dhcpv4.OptHostName(hostname)))
+	lease, err := client.Request(context.Background(),
+		dhcpv4.WithoutOption(dhcpv4.OptionIPAddressLeaseTime),
+		dhcpv4.WithRequestedOptions(
+			dhcpv4.OptionSubnetMask,           // 1
+			dhcpv4.OptionRouter,               // 3
+			dhcpv4.OptionDomainNameServer,     // 6
+			dhcpv4.OptionDomainName,           // 15
+			dhcpv4.OptionClasslessStaticRoute, // 121 (if present)
+			dhcpv4.OptionIPAddressLeaseTime,   // 51
+			dhcpv4.OptionRenewTimeValue,       // 58 (T1)
+			dhcpv4.OptionRebindingTimeValue,   // 59 (T2)
+		),
+		dhcpv4.WithOption(dhcpv4.OptHostName(hostname)))
 	if err != nil {
 		logger.WithError(err).WithField("hostname", hostname).
 			Error("Giving up on DHCPv4, couldn't get a lease")
@@ -402,7 +443,7 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 	}
 
 	c.applyDNSMu.Lock()
-	c.dhcpv4Lease = lease
+	c.dhcpv4Leases[iface] = lease
 	c.applyDNSMu.Unlock()
 
 	err = c.dhcpApplyDNS(logger)
@@ -449,28 +490,61 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 			}
 		}
 	} else {
-		route := &ip.Route{
-			DevName: iface,
-			Route:   nil,
-			Via:     lease.Offer.Router()[0],
-			Family:  ip.FamilyV4,
-		}
+		gws := lease.Offer.Router()
 
-		err = route.Add()
-		if err != nil {
-			logger.WithError(err).Error("Giving up on DHCPv4, couldn't add default route")
-			errorChannel <- err
-			return
+		if len(gws) == 0 || gws[0] == nil || gws[0].IsUnspecified() {
+			logger.WithField("interface", iface).Info("No default gateway provided by DHCPv4; skipping default route")
+		} else {
+			err := c.installDefaultRouteV4(iface, gws[0])
+			if err != nil {
+				logger.WithError(err).Error("Giving up on DHCPv4, couldn't add default route")
+				errorChannel <- err
+				return
+			}
 		}
 	}
 
 	// Handle DHCP renewal.
 	for {
+
+		// Calculate the renewal time.
+		var t1 time.Duration
+
+		if lease.ACK != nil {
+			t1 = lease.ACK.IPAddressRenewalTime(0)
+		}
+
+		if t1 == 0 && lease.Offer != nil {
+			t1 = lease.Offer.IPAddressRenewalTime(0)
+		}
+
+		if t1 == 0 && lease.Offer != nil {
+			lt := lease.Offer.IPAddressLeaseTime(0)
+			if lt > 0 {
+				t1 = lt / 2
+			}
+		}
+
+		if t1 == 0 {
+			t1 = time.Minute
+		}
+
+		j := time.Duration(int64(t1) / 20) // 5%
+		if j > 0 {
+			t1 += time.Duration(rand.Int63n(int64(2*j))) - j
+		}
+
 		// Wait until it's renewal time.
-		time.Sleep(lease.Offer.IPAddressRenewalTime(time.Minute))
+		time.Sleep(t1)
 
 		// Renew the lease.
-		newLease, err := client.Renew(context.Background(), lease, dhcpv4.WithOption(dhcpv4.OptHostName(hostname)))
+		newLease, err := client.Renew(context.Background(), lease,
+			dhcpv4.WithRequestedOptions(
+				dhcpv4.OptionIPAddressLeaseTime, // 51
+				dhcpv4.OptionRenewTimeValue,     // 58
+				dhcpv4.OptionRebindingTimeValue, // 59
+			),
+			dhcpv4.WithOption(dhcpv4.OptHostName(hostname)))
 		if err != nil {
 			logger.WithError(err).Error("Giving up on DHCPv4, couldn't renew the lease")
 			errorChannel <- err
@@ -532,7 +606,7 @@ func (c *cmdForknet) dhcpRunV6(errorChannel chan error, iface string, hostname s
 
 		// Update DNS.
 		c.applyDNSMu.Lock()
-		c.dhcpv6Lease = reply
+		c.dhcpv6Leases[iface] = reply
 		c.applyDNSMu.Unlock()
 
 		err = c.dhcpApplyDNS(logger)
@@ -555,7 +629,7 @@ func (c *cmdForknet) dhcpRunV6(errorChannel chan error, iface string, hostname s
 	}
 
 	c.applyDNSMu.Lock()
-	c.dhcpv6Lease = reply
+	c.dhcpv6Leases[iface] = reply
 	c.applyDNSMu.Unlock()
 
 	err = c.dhcpApplyDNS(logger)
@@ -631,13 +705,55 @@ func (c *cmdForknet) dhcpRunV6(errorChannel chan error, iface string, hostname s
 }
 
 func (c *cmdForknet) dhcpApplyDNS(logger *logrus.Logger) error {
-	c.applyDNSMu.Lock()
-	defer c.applyDNSMu.Unlock()
+	nameservers := map[string]struct{}{}
+	searchLabels := []string{}
+	domainNames := []string{}
 
-	// Skip touching resolv.conf if no leases.
-	if c.dhcpv4Lease == nil && c.dhcpv6Lease == nil {
-		return nil
+	c.applyDNSMu.Lock()
+
+	// IPv4 leases.
+	for _, lease := range c.dhcpv4Leases {
+		if lease == nil || lease.Offer == nil {
+			continue
+		}
+
+		// Nameservers from DHCPv4.
+		for _, ns := range lease.Offer.DNS() {
+			nameservers[ns.String()] = struct{}{}
+		}
+
+		// Domain name (option 15).
+		dn := lease.Offer.DomainName()
+		if dn != "" {
+			domainNames = append(domainNames, dn)
+		}
+
+		// Domain search list (option 119).
+		ds := lease.Offer.DomainSearch()
+		if ds != nil && len(ds.Labels) > 0 {
+			searchLabels = append(searchLabels, ds.Labels...)
+		}
 	}
+
+	// IPv6 leases.
+	for _, reply := range c.dhcpv6Leases {
+		if reply == nil {
+			continue
+		}
+
+		// Nameservers from DHCPv6.
+		for _, ns := range reply.Options.DNS() {
+			nameservers[ns.String()] = struct{}{}
+		}
+
+		// Domain search list.
+		dsl := reply.Options.DomainSearchList()
+		if dsl != nil && len(dsl.Labels) > 0 {
+			searchLabels = append(searchLabels, dsl.Labels...)
+		}
+	}
+
+	c.applyDNSMu.Unlock()
 
 	// Create resolv.conf.
 	f, err := os.Create(filepath.Join(c.instNetworkPath, "resolv.conf"))
@@ -648,54 +764,112 @@ func (c *cmdForknet) dhcpApplyDNS(logger *logrus.Logger) error {
 
 	defer f.Close()
 
-	// IPv4 addresses.
-	if c.dhcpv4Lease != nil {
-		if len(c.dhcpv4Lease.Offer.DNS()) > 0 {
-			for _, nameserver := range c.dhcpv4Lease.Offer.DNS() {
-				_, err = fmt.Fprintf(f, "nameserver %s\n", nameserver)
-				if err != nil {
-					logger.WithError(err).Error("Giving up on DHCPv4, couldn't prepare resolv.conf")
-					return err
-				}
-			}
-
-			if c.dhcpv4Lease.Offer.DomainName() != "" {
-				_, err = fmt.Fprintf(f, "domain %s\n", c.dhcpv4Lease.Offer.DomainName())
-				if err != nil {
-					logger.WithError(err).Error("Giving up on DHCPv4, couldn't prepare resolv.conf")
-					return err
-				}
-			}
-
-			if c.dhcpv4Lease.Offer.DomainSearch() != nil && len(c.dhcpv4Lease.Offer.DomainSearch().Labels) > 0 {
-				_, err = fmt.Fprintf(f, "search %s\n", strings.Join(c.dhcpv4Lease.Offer.DomainSearch().Labels, ", "))
-				if err != nil {
-					logger.WithError(err).Error("Giving up on DHCPv4, couldn't prepare resolv.conf")
-					return err
-				}
-			}
+	// Write unique nameservers.
+	for ns := range nameservers {
+		_, err = fmt.Fprintf(f, "nameserver %s\n", ns)
+		if err != nil {
+			logger.WithError(err).Error("Giving up on DHCP, couldn't write resolv.conf")
+			return err
 		}
 	}
 
-	// IPv6 addresses.
-	if c.dhcpv6Lease != nil {
-		if len(c.dhcpv6Lease.Options.DNS()) > 0 {
-			for _, nameserver := range c.dhcpv6Lease.Options.DNS() {
-				_, err = fmt.Fprintf(f, "nameserver %s\n", nameserver)
-				if err != nil {
-					logger.WithError(err).Error("Giving up on DHCPv6, couldn't prepare resolv.conf")
-					return err
-				}
+	// Prefer a search list if present; otherwise write a single domain if available.
+	if len(searchLabels) > 0 {
+		seen := map[string]struct{}{}
+		out := []string{}
+
+		for _, s := range searchLabels {
+			if s == "" {
+				continue
 			}
 
-			if c.dhcpv6Lease.Options.DomainSearchList() != nil && len(c.dhcpv6Lease.Options.DomainSearchList().Labels) > 0 {
-				_, err = fmt.Fprintf(f, "search %s\n", strings.Join(c.dhcpv6Lease.Options.DomainSearchList().Labels, ", "))
-				if err != nil {
-					logger.WithError(err).Error("Giving up on DHCPv6, couldn't prepare resolv.conf")
-					return err
-				}
+			_, ok := seen[s]
+			if ok {
+				continue
+			}
+
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+
+		if len(out) > 0 {
+			_, err = fmt.Fprintf(f, "search %s\n", strings.Join(out, ", "))
+			if err != nil {
+				logger.WithError(err).Error("Giving up on DHCP, couldn't write resolv.conf")
+				return err
 			}
 		}
+	} else if len(domainNames) > 0 {
+		_, err = fmt.Fprintf(f, "domain %s\n", domainNames[0])
+		if err != nil {
+			logger.WithError(err).Error("Giving up on DHCP, couldn't write resolv.conf")
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *cmdForknet) installDefaultRouteV4(iface string, gw net.IP) error {
+	// List all IPv4 routes in the main table; we'll filter default routes (Dst == nil) locally.
+	routes, err := (&ip.Route{
+		Family: ip.FamilyV4,
+		Table:  "main",
+	}).List()
+	if err != nil {
+		return err
+	}
+
+	var currentOwnerIf string
+	var currentOwnerGw net.IP
+
+	for _, r := range routes {
+		// Only consider default routes (no destination)
+		if r.Route != nil {
+			continue
+		}
+
+		// r.DevName may be empty if not resolvable; skip such entries
+		if r.DevName == "" {
+			continue
+		}
+
+		if currentOwnerIf == "" || r.DevName < currentOwnerIf {
+			currentOwnerIf = r.DevName
+			currentOwnerGw = r.Via
+		}
+	}
+
+	// Decide based on lexical order.
+	switch {
+	case currentOwnerIf == "":
+		// No default route yet; we can install ours.
+
+	case currentOwnerIf == iface:
+		// We already own the default; if gateway unchanged, nothing to do.
+		if currentOwnerGw != nil && gw != nil && currentOwnerGw.Equal(gw) {
+			return nil
+		}
+
+	case iface < currentOwnerIf:
+		// We win; replace the current default with ours.
+
+	default:
+		// We lose; keep existing default route.
+		return nil
+	}
+
+	defRoute := &ip.Route{
+		DevName: iface,
+		Route:   nil,
+		Via:     gw,
+		Family:  ip.FamilyV4,
+		Proto:   "dhcp",
+	}
+
+	err = defRoute.Replace()
+	if err != nil {
+		return err
 	}
 
 	return nil

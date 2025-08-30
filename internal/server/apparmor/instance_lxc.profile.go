@@ -12,6 +12,9 @@ profile "{{ .name }}" flags=(attach_disconnected,mediate_deleted) {
   file,
   network,
   umount,
+{{- if .feature_userns }}
+  userns,
+{{- end }}
 
   # Extra binaries
 {{- range $index, $element := .extra_binaries }}

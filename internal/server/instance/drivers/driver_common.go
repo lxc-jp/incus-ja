@@ -33,12 +33,12 @@ import (
 	"github.com/lxc/incus/v6/internal/server/locking"
 	"github.com/lxc/incus/v6/internal/server/operations"
 	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/resources"
 	"github.com/lxc/incus/v6/internal/server/state"
 	storagePools "github.com/lxc/incus/v6/internal/server/storage"
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/resources"
 	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/subprocess"
 	"github.com/lxc/incus/v6/shared/util"
@@ -794,6 +794,7 @@ func (d *common) snapshotCommon(inst instance.Instance, name string, expiry time
 		Project:      inst.Project().Name,
 		Architecture: inst.Architecture(),
 		Config:       inst.LocalConfig(),
+		Description:  inst.Description(),
 		Type:         inst.Type(),
 		Snapshot:     true,
 		Devices:      inst.LocalDevices(),
