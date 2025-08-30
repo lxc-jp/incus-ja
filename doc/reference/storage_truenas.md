@@ -27,21 +27,21 @@
 必要なツールをインストールするには、[`truenas\_incus\_ctl` GitHub page](https://github.com/truenas/truenas_incus_ctl)から最新版（v0.7.2+が必要）をダウンロードしてください。
 さらに`open-iscsi`を以下のコマンドでインストールしてください:
 
-    `sudo apt install open-iscsi`
+    sudo apt install open-iscsi
 
 ## TrueNASホストへのログイン
 
 APIキーを手動で作成し`truenas.api_key`プロパティでそれを指定する代わりに、`truenas_incus_ctl`ツールでリモートサーバーにログインすることもできます。
 
-    `sudo truenas_incus_ctl config login`
+    sudo truenas_incus_ctl config login
 
 するとTrueNASサーバーへ接続する詳細情報（認証の詳細を含む）がプロンプトで表示されます。そして設定をローカルファイルに保存します。ログインした後、iSCSIのセットアップを以下のコマンドで確認できます:
 
-    `sudo truenas_incus_ctl share iscsi setup --test`
+    sudo truenas_incus_ctl share iscsi setup --test
 
 ツールが設定されたら、これを使ってリモートのデータセットを使ってストレージプールを作成できます:
 
-    `incus storage create <poolname> truenas source=[host:]<pool>[/<dataset>]/[remote-poolname]`
+    incus storage create <poolname> truenas source=[host:]<pool>[/<dataset>]/[remote-poolname]
 
 上記のコマンドでは:
 
