@@ -25,6 +25,7 @@ Incus はデータを（イメージやインスタンスのように）コン�
 - [CephFS - `cephfs`](storage-cephfs)
 - [Ceph Object - `cephobject`](storage-cephobject)
 - [LINSTOR - `linstor`](storage-linstor)
+- [TrueNAS - `truenas`](storage-truenas)
 
 さらなる情報については以下の how-to ガイドを参照してください:
 
@@ -74,6 +75,7 @@ Incus ではメインドライブ上にループファイルを作成して選�
 `ceph`、`cephfs`、`cephobject` ドライバーはデータを完全に独立な Ceph ストレージクラスタに保管します。これは別途セットアップが必要です。
 `lvmcluster` ドライバーは共有のブロックデバイスが全てのクラスターメンバーに共有されていて`lvmlockd`を事前にセットアップしておく必要があります。
 `linstor`ドライバーは別途セットアップが必要なLINSTORストレージクラスターにデータを保管します。
+`truenas`ドライバーは別途セットアップが必要なTrueNASストレージ上にデータを保管します。
 
 (storage-default-pool)=
 ### デフォルトストレージプール

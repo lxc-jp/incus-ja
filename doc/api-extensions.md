@@ -2833,3 +2833,14 @@ OVNを使用する際にIPv4とIPv6ゲートウェイのMACアドレスを設定
 * `logging.NAME.target.retry` （転送の最大リトライ回数）
 
 webhookのデータは既存のイベントAPIで送信されるデータと同等です。
+
+## `storage_driver_truenas`
+
+これはTrueNASストレージドライバーを追加します。
+
+## `container_disk_tmpfs`
+
+これはディスクデバイスにtmpfsのサポートを追加します。
+
+* `source=tmpfs:` tmpfsファイルシステムをマウントします。`size`、`uid`、`gid`、`mode`オプションを指定できます。
+* `source=tmpfs-overlay:` tmpfsと同じですがoverlayfsの挙動が追加されます。

@@ -89,32 +89,23 @@ Incusと依存パッケージはChimera Linuxの`user`レポジトリ内で`incu
 ```
 
 ```{group-tab} Debian
-Debian ユーザーには現在 3 つの選択肢があります。
+Debianユーザーには現在2つの選択肢があります。
 
 1. ネイティブの`incus`と`incus-base`パッケージ
 
-    ネイティブの`incus`と`incus-base`パッケージは現在 Debian の testing と unstable レポジトリ内で利用できます。
-    このパッケージは次回の Debian 13 (`trixie`) リリース内に含まれる予定です。
+    ネイティブの`incus`と`incus-base`パッケージはDebian 13 (`trixie`)リリースで利用できるようになりました。
 
     Debianのリリースサイクルとサポートポリシーにより適合するので、DebianのパッケージングではIncusのLTSリリースを追跡します。
 
-    それらのシステムでは、`apt install incus`と実行すればIncusがコンテナと仮想マシンを動かすのに必要なすべての依存パッケージとともにインストールされます。
+    毎月のIncusの機能リリースはベストエフォートでexperimentalにアップロードされ、経験豊富なユーザーが使うことを意図しています。
+
+    Debianシステムで、コンテナと仮想マシンを動かすために必要なすべての依存ライブラリを含めてIncusをインストールするには`apt install incus`を実行します。
     Incusでコンテナを動かしたいだけであれば、単に`apt install incus-base`と実行すればよいです。
     LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
 
-1. ネイティブの`incus`と`incus-base`のバックポートされたパッケージ
-
-   ネイティブの`incus`と`incus-base`のバックポートされたパッケージが現在 Debian 12 (`bookworm`) ユーザーに提供されています。
-
-    それらのシステムでは、`apt install incus/bookworm-backports`と実行すればIncusがコンテナと仮想マシンを動かすのに必要なすべての依存パッケージとともにインストールされます。
-    Incusでコンテナを動かしたいだけであれば、単に`apt install incus-base/bookworm-backports`と実行すればよいです。
-    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-extra/bookworm-backports`も実行します。
-
-   ****NOTE:**** バックポートされたパッケージのユーザーは Debian Bug Tracker にはバグ報告しないでください。代わりに [Incus のフォーラム](https://discuss.linuxcontainers.org) に報告するか Debian のパッケージ作成者に直接報告してください。
-
 1. Zabbly パッケージレポジトリ
 
-    [Zabbly](https://zabbly.com) は Debian の安定版リリース(11と12)と次期のDebian 13 (`trixie`)リリース用の最新でありサポート対象である Incus のパッケージを提供します。
+    [Zabbly](https://zabbly.com) はDebian 13 (`trixie`)、12（`bookworm`）、11（`bullsyey`）に最新でありサポート対象である Incus のパッケージを提供します。
     これらのパッケージは Incus の全ての機能を使用するために必要なすべてを含んでいます。
 
     最新のインストール手順はこちらを参照してください: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)
@@ -238,7 +229,7 @@ Ubuntu ユーザーには現在 2 つの選択肢があります。
 
 1. Zabbly パッケージレポジトリ
 
-    [Zabbly](https://zabbly.com) は Ubuntu の LTS リリース (20.04 と 22.04) 用の最新でありサポート対象である Incus のパッケージを提供します。
+    [Zabbly](https://zabbly.com) は Ubuntu の LTS リリース (22.04 と 24.04) 用の最新でありサポート対象である Incus のパッケージを提供します。
     これらのパッケージは Incus の全ての機能を使用するために必要なすべてを含んでいます。
 
     最新のインストール手順はこちらを参照してください: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)

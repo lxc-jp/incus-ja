@@ -78,6 +78,23 @@ VM `agent`
 
       incus config device add <instance_name> <device_name> disk source=agent:config
 
+Tmpfs
+: `tmpfs:`のソースを使うことでディスクデバイスをメモリ内のファイルシステムでバックアップできます。
+
+      incus config device add <instance_name> <device_name> disk source=tmpfs: path=<path_in_instance> [size=<size>] [initial.uid=<uid>] [initial.gid=<gid>] [initial.mode=<mode>]
+
+  `source`と`path`の両方が必須です。
+  これによりインスタンス内に`tmpfs`のマウントを作成します。オプションでサイズ、所有者、パーミッションのプロパティをサポートします。
+
+overlayfsの挙動を使ったTmpfs
+: 上記と同じtmpfsの挙動をoverlayfsのセマンティクスと組み合わせて使うには、ソースに`tmpfs-overlay:`を使います。
+
+      incus config device add <instance_name> <device_name> disk source=tmpfs-overlay: path=<path_in_instance> [size=<size>] [initial.uid=<uid>] [initial.gid=<gid>] [initial.mode=<mode>]
+
+  `source`と`path`の両方が必須です。
+  さらに、ターゲットの`path`はコンテナ内部にし事前に存在する必要があります。
+  これによりoverlayfsの処理を備えたメモリ内の一時的なファイルシステムを提供します。
+
 (devices-disk-initial-config)=
 ## インスタンスルートディスクデバイスの初期ボリューム設定
 
