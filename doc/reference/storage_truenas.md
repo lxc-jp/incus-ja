@@ -21,7 +21,7 @@
 ## 要件
 
 このドライバーはTrueNAS APIを使ってリモートサーバー上でアクションを実行するために[`truenas_incus_ctl`](https://github.com/truenas/truenas_incus_ctl)ツールに依存しています。
-このツールはさらに`open-iscsi`を経由してリモートんおZFSボリュームのアクティベーションとデアクティベーションを管理もしています。
+このツールはさらに`open-iscsi`を経由してリモートのZFSボリュームのアクティベーションとデアクティベーションを管理もしています。
 `truenas_incus_ctl`がインストールされていないかシステムのPATHに存在しない場合、ドライバーは無効化されます。
 
 必要なツールをインストールするには、[`truenas\_incus\_ctl` GitHub page](https://github.com/truenas/truenas_incus_ctl)から最新版（v0.7.2+が必要）をダウンロードしてください。
@@ -59,7 +59,7 @@ APIキーを手動で作成し`truenas.api_key`プロパティでそれを指定
 キー                     | 型      | デフォルト値 | 説明
 :--                      | :---    | :------      | :----------
 `source`                 | string  | -            | リモートのTrueNASホスト上で使用するZFSデータセット。形式: `[<host>:]<pool>[/<dataset>][/]`。ここで`host`を省略すると、`truenas.host`で設定する必要あり。
-`truenas.allow_insecure` | boolean | false        | `true`に設定すると、TrueNAS APIへの安全でない（非TLS）接続を可します。
+`truenas.allow_insecure` | boolean | false        | `true`に設定すると、TrueNAS APIへの安全でない（非TLS）接続を許可します。
 `truenas.api_key`        | string  | -            | TrueNASホストへの認証に使うAPIキー
 `truenas.dataset`        | string  | -            | リモートデータセット名。通常は`source`から推測されるが、上書きも可能。
 `truenas.host`           | string  | -            | TrueNASシステムのホスト名またはIPアドレス。`source`内に含まれるか、設定が使われる場合は設定不要。
