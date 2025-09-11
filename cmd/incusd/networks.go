@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	osapi "github.com/lxc/incus-os/incus-osd/api"
 
 	incus "github.com/lxc/incus/v6/client"
 	"github.com/lxc/incus/v6/internal/filter"
@@ -31,7 +32,6 @@ import (
 	"github.com/lxc/incus/v6/internal/server/network"
 	"github.com/lxc/incus/v6/internal/server/project"
 	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/resources"
 	"github.com/lxc/incus/v6/internal/server/response"
 	"github.com/lxc/incus/v6/internal/server/state"
 	localUtil "github.com/lxc/incus/v6/internal/server/util"
@@ -39,8 +39,10 @@ import (
 	"github.com/lxc/incus/v6/internal/version"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/resources"
 	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v6/shared/validate"
 )
 
 // Lock to prevent concurrent networks creation.
@@ -57,7 +59,7 @@ var networkCmd = APIEndpoint{
 	Path: "networks/{networkName}",
 
 	Delete: APIEndpointAction{Handler: networkDelete, AccessHandler: allowPermission(auth.ObjectTypeNetwork, auth.EntitlementCanEdit, "networkName")},
-	Get:    APIEndpointAction{Handler: networkGet, AccessHandler: allowPermission(auth.ObjectTypeNetwork, auth.EntitlementCanView, "networkName")},
+	Get:    APIEndpointAction{Handler: networkGet, AccessHandler: allowAuthenticated},
 	Patch:  APIEndpointAction{Handler: networkPatch, AccessHandler: allowPermission(auth.ObjectTypeNetwork, auth.EntitlementCanEdit, "networkName")},
 	Post:   APIEndpointAction{Handler: networkPost, AccessHandler: allowPermission(auth.ObjectTypeNetwork, auth.EntitlementCanEdit, "networkName")},
 	Put:    APIEndpointAction{Handler: networkPut, AccessHandler: allowPermission(auth.ObjectTypeNetwork, auth.EntitlementCanEdit, "networkName")},
@@ -210,6 +212,7 @@ func networksGet(d *Daemon, r *http.Request) response.Response {
 	mustLoadObjects := recursion || (clauses != nil && len(clauses.Clauses) > 0)
 
 	allProjects := util.IsTrue(r.FormValue("all-projects"))
+	unmanagedNetworkNames := []string{}
 
 	var networkNames map[string][]string
 
@@ -239,37 +242,78 @@ func networksGet(d *Daemon, r *http.Request) response.Response {
 
 	// Get list of actual network interfaces on the host as well if the effective project is Default.
 	if projectName == api.ProjectDefaultName {
-		ifaces, err := net.Interfaces()
-		if err != nil {
-			return response.InternalError(err)
-		}
-
-		for _, iface := range ifaces {
-			// Ignore veth pairs (for performance reasons).
-			if strings.HasPrefix(iface.Name, "veth") {
-				continue
+		if s.OS.IncusOS {
+			// When running on Incus OS, limit the list to those with the "instances" role.
+			client := &http.Client{
+				Transport: &http.Transport{
+					DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+						return net.Dial("unix", "/run/incus-os/unix.socket")
+					},
+				},
 			}
 
-			// Append to the list of networks if a managed network of same name doesn't exist.
-			if !slices.Contains(networkNames[projectName], iface.Name) {
-				networkNames[projectName] = append(networkNames[projectName], iface.Name)
+			// Query the OS network state.
+			resp, err := client.Get("http://incus-os/1.0/system/network")
+			if err != nil {
+				return response.InternalError(err)
+			}
+
+			defer resp.Body.Close()
+
+			// Convert to an Incus response struct.
+			apiResp := &api.Response{}
+
+			err = json.NewDecoder(resp.Body).Decode(apiResp)
+			if err != nil {
+				return response.InternalError(err)
+			}
+
+			// Quick validation.
+			if apiResp.Type != "sync" || apiResp.StatusCode != http.StatusOK {
+				return response.InternalError(errors.New("Bad network state from Incus OS"))
+			}
+
+			// Parse the response.
+			ns := &osapi.SystemNetwork{}
+
+			err = apiResp.MetadataAsStruct(ns)
+			if err != nil {
+				return response.InternalError(err)
+			}
+
+			// Get the interfaces.
+			for _, iface := range ns.State.GetInterfaceNamesByRole("instances") {
+				// Append to the list of networks if a managed network of same name doesn't exist.
+				if !slices.Contains(networkNames[projectName], iface) {
+					networkNames[projectName] = append(networkNames[projectName], iface)
+					unmanagedNetworkNames = append(unmanagedNetworkNames, iface)
+				}
+			}
+		} else {
+			ifaces, err := net.Interfaces()
+			if err != nil {
+				return response.InternalError(err)
+			}
+
+			for _, iface := range ifaces {
+				// Ignore veth pairs (for performance reasons).
+				if strings.HasPrefix(iface.Name, "veth") {
+					continue
+				}
+
+				// Append to the list of networks if a managed network of same name doesn't exist.
+				if !slices.Contains(networkNames[projectName], iface.Name) {
+					networkNames[projectName] = append(networkNames[projectName], iface.Name)
+					unmanagedNetworkNames = append(unmanagedNetworkNames, iface.Name)
+				}
 			}
 		}
-	}
-
-	userHasPermission, err := s.Authorizer.GetPermissionChecker(r.Context(), r, auth.EntitlementCanView, auth.ObjectTypeNetwork)
-	if err != nil {
-		return response.InternalError(err)
 	}
 
 	linkResults := make([]string, 0)
 	fullResults := make([]api.Network, 0)
 	for projectName, networks := range networkNames {
 		for _, networkName := range networks {
-			if !userHasPermission(auth.ObjectNetwork(projectName, networkName)) {
-				continue
-			}
-
 			if mustLoadObjects {
 				netInfo, err := doNetworkGet(s, r, s.ServerClustered, projectName, reqProject.Config, networkName)
 				if err != nil {
@@ -289,7 +333,12 @@ func networksGet(d *Daemon, r *http.Request) response.Response {
 
 				fullResults = append(fullResults, netInfo)
 			} else {
-				if !project.NetworkAllowed(reqProject.Config, networkName, true) {
+				ok, err := canAccessNetwork(s, r, projectName, reqProject.Config, networkName, !slices.Contains(unmanagedNetworkNames, networkName))
+				if err != nil {
+					return response.SmartError(err)
+				}
+
+				if !ok {
 					continue
 				}
 			}
@@ -368,7 +417,12 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if req.Name == "none" {
-		return response.BadRequest(errors.New("Network name 'none' is not valid"))
+		return response.BadRequest(errors.New("Invalid network name: 'none' is a reserved name"))
+	}
+
+	err = validate.IsAPIName(req.Name, false)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid network name: %w", err))
 	}
 
 	// Check if project allows access to network.
@@ -393,9 +447,10 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(err)
 	}
 
+	// Driver specific name validation.
 	err = netType.ValidateName(req.Name)
 	if err != nil {
-		return response.BadRequest(err)
+		return response.BadRequest(fmt.Errorf("Invalid network name: %w", err))
 	}
 
 	netTypeInfo := netType.Info()
@@ -463,6 +518,11 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 			if !db.IsNodeSpecificNetworkConfig(key) {
 				return response.BadRequest(fmt.Errorf("Config key %q may not be used as member-specific key", key))
 			}
+		}
+
+		// Make sure that no description is set through the member-specific path.
+		if req.Description != "" {
+			return response.BadRequest(errors.New("The network description cannot be set for a specific member"))
 		}
 
 		exists := false
@@ -533,7 +593,7 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 				for _, member := range members {
 					// Don't pass in any config, as these nodes don't have any node-specific
 					// config and we don't want to create duplicate global config.
-					err = tx.CreatePendingNetwork(ctx, member.Name, projectName, req.Name, req.Description, netType.DBType(), nil)
+					err = tx.CreatePendingNetwork(ctx, member.Name, projectName, req.Name, "", netType.DBType(), nil)
 					if err != nil && !errors.Is(err, db.ErrAlreadyDefined) {
 						return fmt.Errorf("Failed creating pending network for member %q: %w", member.Name, err)
 					}
@@ -703,6 +763,12 @@ func networksPostCluster(ctx context.Context, s *state.State, projectName string
 			return err
 		}
 
+		// Set the network description if provided
+		err = tx.UpdateNetworkDescription(networkID, req.Description)
+		if err != nil {
+			return err
+		}
+
 		// Assume failure unless we succeed later on.
 		return tx.NetworkErrored(projectName, req.Name)
 	})
@@ -810,7 +876,7 @@ func doNetworksCreate(ctx context.Context, s *state.State, n network.Network, cl
 	}
 
 	// Validate so that when run on a cluster node the full config (including node specific config) is checked.
-	err := n.Validate(validateConfig)
+	err := n.Validate(validateConfig, clientType)
 	if err != nil {
 		return err
 	}
@@ -930,6 +996,42 @@ func networkGet(d *Daemon, r *http.Request) response.Response {
 	return response.SyncResponseETag(true, &n, etag)
 }
 
+// canAccessNetwork checks if the network can be viewed/accessed by the user.
+func canAccessNetwork(s *state.State, r *http.Request, projectName string, projectConfig map[string]string, networkName string, managed bool) (bool, error) {
+	// Don't allow retrieving info about the local server interfaces when not using default project.
+	if projectName != api.ProjectDefaultName && !managed {
+		return false, nil
+	}
+
+	// Check for basic access.
+	if managed {
+		userHasPermission, err := s.Authorizer.GetPermissionChecker(r.Context(), r, auth.EntitlementCanView, auth.ObjectTypeNetwork)
+		if err != nil {
+			return false, err
+		}
+
+		if !userHasPermission(auth.ObjectNetwork(projectName, networkName)) {
+			return false, nil
+		}
+	} else {
+		userHasResourcesPermission, err := s.Authorizer.GetPermissionChecker(r.Context(), r, auth.EntitlementCanViewResources, auth.ObjectTypeServer)
+		if err != nil {
+			return false, err
+		}
+
+		if !userHasResourcesPermission(auth.ObjectServer()) {
+			return false, nil
+		}
+	}
+
+	// Check if project allows access to network.
+	if !project.NetworkAllowed(projectConfig, networkName, managed) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // doNetworkGet returns information about the specified network.
 // If the network being requested is a managed network and allNodes is true then node specific config is removed.
 // Otherwise if allNodes is false then the network's local status is returned.
@@ -945,16 +1047,17 @@ func doNetworkGet(s *state.State, r *http.Request, allNodes bool, projectName st
 		return api.Network{}, fmt.Errorf("Failed loading network: %w", err)
 	}
 
-	// Don't allow retrieving info about the local server interfaces when not using default project.
-	if projectName != api.ProjectDefaultName && n == nil {
+	// Validate access.
+	ok, err := canAccessNetwork(s, r, projectName, reqProjectConfig, networkName, n != nil)
+	if err != nil {
+		return api.Network{}, err
+	}
+
+	if !ok {
 		return api.Network{}, api.StatusErrorf(http.StatusNotFound, "Network not found")
 	}
 
-	// Check if project allows access to network.
-	if !project.NetworkAllowed(reqProjectConfig, networkName, n != nil && n.IsManaged()) {
-		return api.Network{}, api.StatusErrorf(http.StatusNotFound, "Network not found")
-	}
-
+	// Get OS network details.
 	osInfo, _ := net.InterfaceByName(networkName)
 
 	// Quick check.
@@ -1235,9 +1338,16 @@ func networkPost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(errors.New("New network name not provided"))
 	}
 
+	// Perform generic name validation.
+	err = validate.IsAPIName(req.Name, false)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid network name: %w", err))
+	}
+
+	// Perform driver-specific name validation.
 	err = n.ValidateName(req.Name)
 	if err != nil {
-		return response.BadRequest(err)
+		return response.BadRequest(fmt.Errorf("Invalid network name: %w", err))
 	}
 
 	// Check network isn't in use.
@@ -1496,7 +1606,7 @@ func doNetworkUpdate(n network.Network, req api.NetworkPut, targetNode string, c
 	}
 
 	// Validate the merged configuration.
-	err := n.Validate(req.Config)
+	err := n.Validate(req.Config, clientType)
 	if err != nil {
 		return response.BadRequest(err)
 	}
@@ -1691,7 +1801,7 @@ func networkStartup(s *state.State) error {
 		}
 
 		netConfig := n.Config()
-		err = n.Validate(netConfig)
+		err = n.Validate(netConfig, clusterRequest.ClientTypeNormal)
 		if err != nil {
 			return fmt.Errorf("Failed validating: %w", err)
 		}

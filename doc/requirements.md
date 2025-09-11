@@ -47,6 +47,13 @@ OCIコンテナを動かすには、Incusは現状では`skopeo`に依存して�
 
 `virtiofsd`を使用する場合、`virtiofsd`の[Rustでのリライト](https://gitlab.com/virtio-fs/virtiofsd)のみサポートされます。
 
+## OVS/OVN
+
+IncusでOVNネットワークを使う際に必要なOVSとOVNの最小バージョンは以下のとおりです:
+
+* OVS: 2.15.0
+* OVN: 23.03.0
+
 ## 追加のライブラリ（と開発用のヘッダ）
 
 Incus はデータベースとして`cowsql`を使用しています。

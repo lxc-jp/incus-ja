@@ -21,12 +21,12 @@ import (
 	"github.com/lxc/incus/v6/internal/server/db"
 	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
 	"github.com/lxc/incus/v6/internal/server/network/acl"
-	"github.com/lxc/incus/v6/internal/server/resources"
 	"github.com/lxc/incus/v6/internal/server/state"
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/internal/version"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/resources"
 	"github.com/lxc/incus/v6/shared/util"
 	"github.com/lxc/incus/v6/shared/validate"
 )
@@ -219,11 +219,6 @@ func (n *common) validateZoneNames(config map[string]string) error {
 
 // ValidateName validates network name.
 func (n *common) ValidateName(name string) error {
-	err := validate.IsURLSegmentSafe(name)
-	if err != nil {
-		return err
-	}
-
 	if strings.Contains(name, ":") {
 		return fmt.Errorf("Cannot contain %q", ":")
 	}
@@ -399,7 +394,7 @@ func (n *common) update(applyNetwork api.NetworkPut, targetNode string, clientTy
 			sendNetwork.Config = make(map[string]string)
 
 			// Don't forward node specific keys (these will be merged in on recipient node).
-			applyNetwork.Config = db.StripNodeSpecificNetworkConfig(applyNetwork.Config)
+			sendNetwork.Config = db.StripNodeSpecificNetworkConfig(applyNetwork.Config)
 
 			err = notifier(func(client incus.InstanceServer) error {
 				return client.UseProject(n.project).UpdateNetwork(n.name, sendNetwork, "")

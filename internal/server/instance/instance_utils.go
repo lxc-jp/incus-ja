@@ -30,7 +30,6 @@ import (
 	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
 	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
 	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/resources"
 	"github.com/lxc/incus/v6/internal/server/seccomp"
 	"github.com/lxc/incus/v6/internal/server/state"
 	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
@@ -42,6 +41,7 @@ import (
 	"github.com/lxc/incus/v6/shared/idmap"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v6/shared/resources"
 	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/units"
 	"github.com/lxc/incus/v6/shared/util"
@@ -1224,6 +1224,7 @@ func SnapshotProtobufToInstanceArgs(s *state.State, inst Instance, snap *migrati
 	args := db.InstanceArgs{
 		Architecture: int(snap.GetArchitecture()),
 		Config:       config,
+		Description:  inst.Description(),
 		Type:         inst.Type(),
 		Snapshot:     true,
 		Devices:      devices,

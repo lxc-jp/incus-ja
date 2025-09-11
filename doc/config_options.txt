@@ -94,8 +94,11 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 
 ファイルシステム（共有ディレクトリまたはカスタムボリューム）では、これは以下のいずれかです:
 - `9p`
-- `auto` （デフォルト） （`virtiofs` + `9p`、`virtiofsd`がない場合は`9p`のみ）
+- `auto` （デフォルト） （利用可能なら`virtiofs`、そうでなければ`9p`）
 - `virtiofs`
+
+`9p`はホットプラグに非対応で、`virtiofs`はライブマイグレーションに非対応です。
+`auto`は可能なら（`migration.stateful`が`true`に設定され、ホストが`virtiofsd`をサポートする場合）`virtiofs`を使おうとし、それ以外は`9p`にフォールバックします。
 ```
 
 ```{config:option} io.cache devices-disk
@@ -2571,6 +2574,12 @@ cron設定自体がカンマを含むため、他の多くの設定キーと異�
 :shortdesc: "ネットワークデバイスのMACアドレス"
 :type: "string"
 ネットワークデバイスのMACアドレスはデバイス自身に`hwaddr`プロパティが設定されていない場合に使用されます。
+```
+
+```{config:option} volatile.<name>.io.bus instance-volatile
+:shortdesc: "使用中のIOバス"
+:type: "string"
+この値は`io.bus=auto`の場合に使用され、登録されている実際のIOバスに設定されます。
 ```
 
 ```{config:option} volatile.<name>.last_state.created instance-volatile

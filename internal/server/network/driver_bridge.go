@@ -154,7 +154,7 @@ func (n *bridge) populateAutoConfig(config map[string]string) error {
 
 	// Re-validate config if changed.
 	if changedConfig && n.state != nil {
-		return n.Validate(config)
+		return n.Validate(config, request.ClientTypeNormal)
 	}
 
 	return nil
@@ -172,7 +172,7 @@ func (n *bridge) ValidateName(name string) error {
 }
 
 // Validate network config.
-func (n *bridge) Validate(config map[string]string) error {
+func (n *bridge) Validate(config map[string]string, clientType request.ClientType) error {
 	// Build driver specific rules dynamically.
 	rules := map[string]func(value string) error{
 		// gendoc:generate(entity=network_bridge, group=common, key=bgp.ipv4.nexthop)
@@ -1597,6 +1597,8 @@ func (n *bridge) setup(oldConfig map[string]string) error {
 			} else {
 				dnsmasqCmd = append(dnsmasqCmd, fmt.Sprintf("--dhcp-option-force=option6:dns-server,[%s]", strings.Join(dnsIPv6, ",")))
 			}
+		} else {
+			dnsmasqCmd = append(dnsmasqCmd, fmt.Sprintf("--dhcp-option-force=option6:dns-server,[%s]", ipAddress.String()))
 		}
 
 		// Allow forwarding.
@@ -3428,7 +3430,15 @@ func (n *bridge) UsesDNSMasq() bool {
 
 	// Start dnsmassq if IPv6 is used (needed for SLAAC or DHCPv6).
 	if !util.IsNoneOrEmpty(n.config["ipv6.address"]) {
-		return true
+		ipAddress, _, err := net.ParseCIDR(n.config["ipv6.address"])
+		if err != nil {
+			return true
+		}
+
+		// Only require dnsmasq if using a global address.
+		if !ipAddress.IsLinkLocalUnicast() {
+			return true
+		}
 	}
 
 	// Start dnsmasq if IPv4 DHCP is used.

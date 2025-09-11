@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/mux"
@@ -31,6 +30,7 @@ import (
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/logger"
 	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v6/shared/validate"
 )
 
 // Lock to prevent concurrent storage pools creation.
@@ -318,8 +318,9 @@ func storagePoolsPost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(errors.New("No name provided"))
 	}
 
-	if strings.Contains(req.Name, "/") {
-		return response.BadRequest(errors.New("Storage pool names may not contain slashes"))
+	err = validate.IsAPIName(req.Name, false)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid storage pool name: %w", err))
 	}
 
 	if req.Driver == "" {
@@ -379,6 +380,11 @@ func storagePoolsPost(d *Daemon, r *http.Request) response.Response {
 			if !slices.Contains(db.NodeSpecificStorageConfig, key) {
 				return response.SmartError(fmt.Errorf("Config key %q may not be used as member-specific key", key))
 			}
+		}
+
+		// Make sure that no description is set through the member-specific path.
+		if req.Description != "" {
+			return response.BadRequest(errors.New("The storage pool description cannot be set for a specific member"))
 		}
 
 		err = storagePoolValidate(s, req.Name, req.Driver, req.Config)

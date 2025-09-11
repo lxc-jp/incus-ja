@@ -19,10 +19,11 @@ import (
 	"github.com/lxc/incus/v6/internal/server/instance/drivers/cfg"
 	"github.com/lxc/incus/v6/internal/server/instance/drivers/qmp"
 	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/resources"
 	"github.com/lxc/incus/v6/internal/server/state"
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/resources"
 	"github.com/lxc/incus/v6/shared/units"
 )
 
@@ -52,7 +53,8 @@ func GetClusterCPUFlags(ctx context.Context, s *state.State, servers []string, a
 		// Get node resources.
 		res, err := getNodeResources(s, node.Name, node.Address)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to get resources for %s: %w", node.Name, err)
+			logger.Errorf("Failed to get resources for CPU baseline on %q: %v", node.Name, err)
+			continue
 		}
 
 		// Skip if not the correct architecture.

@@ -120,8 +120,13 @@ Docker をアンインストールする
 : このような問題を防ぐ最も簡単な方法は、Incus を実行しているシステムから Docker をアンインストールしてシステムを再起動することです。
   代わりに、Incus のコンテナや仮想マシンの中で Docker を実行できます。
 
+Dockerがトラフィックをドロップするのを防ぐ
+: Dockerのネットワークのほとんどの問題は直接管理しないすべてのトラフィックをドロップすることに起因します。
+  このふるまいは`daemon.json`内の`ip-forward-no-drop`のDocker設定オプションで変更できます。
+  IncusとDockerを同じシステム上で稼働させるには、このオプションを`true`にすれば十分です。
+
 IPv4 の転送を有効にする
-: Docker をアンインストールすることができない場合、Docker サービスが開始する前に IPv4 転送を有効にすることで、Docker がグローバル FORWARD ポリシーを変更するのを防ぐことができます。
+: Docker をアンインストールあるいは設定変更することができない場合、Docker サービスが開始する前に IPv4 転送を有効にすることで、Docker がグローバル FORWARD ポリシーを変更するのを防ぐことができます。
   Incus ブリッジネットワークは通常、この設定を有効にします。
   しかし、Incus が Docker の後に起動すると、Docker は既にグローバル FORWARD ポリシーを変更している可能性があります。
 
@@ -152,6 +157,11 @@ IPv4 の転送を有効にする
 
       iptables -I DOCKER-USER -i <network_bridge> -j ACCEPT
       iptables -I DOCKER-USER -o <network_bridge> -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+  あるいは、等価な`nft`のコマンドは以下のとおりです:
+
+      nft insert rule ip filter DOCKER-USER iifname incusbr0 counter accept
+      nft insert rule ip filter DOCKER-USER oifname incusbr0 ct state related,established counter accept
 
   たとえば、Incus の管理ブリッジが`incusbr0`と呼ばれている場合、次のコマンドを使用して外向きトラフィックのフローを許可できます:
 
