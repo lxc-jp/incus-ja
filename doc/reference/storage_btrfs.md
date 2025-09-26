@@ -59,30 +59,30 @@ Btrfs qgroups は階層的ですが、新しいサブボリュームは親のサ
 (storage-btrfs-pool-config)=
 ## ストレージプール設定
 
-キー                  | 型     | デフォルト値                                               | 説明
-:--                   | :---   | :--------                                                  | :----------
-`btrfs.mount_options` | string | `user_subvol_rm_allowed`                                   | ブロックデバイスのマウントオプション
-`size`                | string | 自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB） | ループベースのプールを作成する際のストレージプールのサイズ（バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大）
-`source`              | string | -                                                          | 既存のブロックデバイス、ループファイル、あるいはBtrfsサブボリュームのパス
-`source.wipe`         | bool   | `false`                                                    | ストレージプールを作成する前に`source`で指定されたブロックデバイスの中身を消去する
+| キー                  | 型     | デフォルト値                                               | 説明                                                                                                                                   |
+| :---                  | :---   | :---                                                       | :---                                                                                                                                   |
+| `btrfs.mount_options` | string | `user_subvol_rm_allowed`                                   | ブロックデバイスのマウントオプション                                                                                                   |
+| `size`                | string | 自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB） | ループベースのプールを作成する際のストレージプールのサイズ（バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大） |
+| `source`              | string | -                                                          | 既存のブロックデバイス、ループファイル、あるいはBtrfsサブボリュームのパス                                                              |
+| `source.wipe`         | bool   | `false`                                                    | ストレージプールを作成する前に`source`で指定されたブロックデバイスの中身を消去する                                                     |
 
 {{volume_configuration}}
 
 ### ストレージボリューム設定
 
-キー                      | 型     | 条件                                             | デフォルト値                                 | 説明
-:--                       | :---   | :--------                                        | :------                                      | :----------
-`initial.gid`             | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.uid`と同じか`0`              | インスタンス内のボリュームの所有者のGID
-`initial.mode`            | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.mode`と同じか`711`           | インスタンス内のボリュームのモード
-`initial.uid`             | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.gid`と同じか`0`              | インスタンス内のボリュームの所有者のUID
-`security.shared`         | bool   | カスタムブロックボリューム                       | `volume.security.shared` と同じか `false`    | 複数のインスタンスでのボリュームの共有を有効にする
-`security.shifted`        | bool   | カスタムボリューム                               | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}
-`security.unmapped`       | bool   | カスタムボリューム                               | `volume.security.unmapped` と同じか `false`  | ボリュームへの id マッピングを無効にする
-`size`                    | string | 適切なドライバー                                 | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ
-`snapshots.expiry`        | string | カスタムボリューム                               | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}
-`snapshots.expiry.manual` | string | カスタムボリューム                               | `volume.snapshots.expiry.manual` と同じ      | {{snapshot_expiry_format}}
-`snapshots.pattern`       | string | カスタムボリューム                               | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]
-`snapshots.schedule`      | string | カスタムボリューム                               | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}
+| キー                      | 型     | 条件                                             | デフォルト値                                 | 説明                                               |
+| :---                      | :---   | :---                                             | :---                                         | :---                                               |
+| `initial.gid`             | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.uid`と同じか`0`              | インスタンス内のボリュームの所有者のGID            |
+| `initial.mode`            | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.mode`と同じか`711`           | インスタンス内のボリュームのモード                 |
+| `initial.uid`             | int    | コンテントタイプ`filesystem`のカスタムボリューム | `volume.initial.gid`と同じか`0`              | インスタンス内のボリュームの所有者のUID            |
+| `security.shared`         | bool   | カスタムブロックボリューム                       | `volume.security.shared` と同じか `false`    | 複数のインスタンスでのボリュームの共有を有効にする |
+| `security.shifted`        | bool   | カスタムボリューム                               | `volume.security.shifted` と同じか `false`   | {{enable_ID_shifting}}                             |
+| `security.unmapped`       | bool   | カスタムボリューム                               | `volume.security.unmapped` と同じか `false`  | ボリュームへの id マッピングを無効にする           |
+| `size`                    | string | 適切なドライバー                                 | `volume.size` と同じ                         | ストレージボリュームのサイズ/クォータ              |
+| `snapshots.expiry`        | string | カスタムボリューム                               | `volume.snapshots.expiry` と同じ             | {{snapshot_expiry_format}}                         |
+| `snapshots.expiry.manual` | string | カスタムボリューム                               | `volume.snapshots.expiry.manual` と同じ      | {{snapshot_expiry_format}}                         |
+| `snapshots.pattern`       | string | カスタムボリューム                               | `volume.snapshots.pattern` と同じか `snap%d` | {{snapshot_pattern_format}} [^*]                   |
+| `snapshots.schedule`      | string | カスタムボリューム                               | `volume.snapshots.schedule` と同じ           | {{snapshot_schedule_format}}                       |
 
 [^*]: {{snapshot_pattern_detail}}
 
@@ -90,6 +90,6 @@ Btrfs qgroups は階層的ですが、新しいサブボリュームは親のサ
 
 ローカルのストレージプールドライバーでストレージバケットを有効にし、 S3 プロトコル経由でアプリケーションがバケットにアクセスできるようにするには{config:option}`server-core:core.storage_buckets_address`サーバー設定を調整する必要があります。
 
-キー   | 型     | 条件             | デフォルト値         | 説明
-:--    | :---   | :--------        | :------              | :----------
-`size` | string | 適切なドライバー | `volume.size` と同じ | ストレージバケットのサイズ/クォータ
+| キー   | 型     | 条件             | デフォルト値         | 説明                                |
+| :---   | :---   | :---             | :---                 | :---                                |
+| `size` | string | 適切なドライバー | `volume.size` と同じ | ストレージバケットのサイズ/クォータ |

@@ -2,7 +2,7 @@
 以下はネイティブまたはプラグイン経由で Incus をサポートする一般的な運用ツールの一覧です。
 
 ## Terraform / OpenTofu
-[Terraform](https://www.terraform.io)と[OpenTofu](https://opentofu.org)は infrastructure as code のツールでインフラストラクチャー自体を作成することにフォーカスしたツールです。
+[Terraform](https://developer.hashicorp.com/terraform)と[OpenTofu](https://opentofu.org)は infrastructure as code のツールでインフラストラクチャー自体を作成することにフォーカスしたツールです。
 Incus に関しては、これはプロジェクト、プロファイル、ネットワーク、ストレージボリューム、そしてインスタンスを作成できることを意味します。
 
 たいていの場合、一旦インスタンスとインスタンスに必要なその他すべてが用意されたら、その後の環境構築は Ansible を使うでしょう。
@@ -18,7 +18,7 @@ Incus との統合は[Incus 専用のプロバイダー](https://github.com/lxc/
 これにより、最初に SSH をセットアップすることなしに Incus のインスタンス内にソフトウェアを簡単にデプロイできます。
 
 ## Packer
-[Packer](https://www.packer.io) はカスタム OS イメージを幅広い様々なプラットフォーム用に生成するツールです。
+[Packer](https://developer.hashicorp.com/packer) はカスタム OS イメージを幅広い様々なプラットフォーム用に生成するツールです。
 
 Packer が Incus のイメージを直接生成できるようにする [プラグイン](https://developer.hashicorp.com/packer/integrations/bketelsen/incus) が存在します。
 

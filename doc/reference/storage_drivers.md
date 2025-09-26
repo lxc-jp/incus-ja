@@ -25,21 +25,21 @@ storage_truenas
 
 可能であれば、各システムの高度な機能を使って、Incus は操作を最適化しようとします。
 
-機能                                               | ディレクトリー | Btrfs | LVM  | ZFS     | Ceph RBD | CephFS | Ceph Object | LINSTOR | TRUENAS
-:---                                               | :---           | :---  | :--- | :---    | :---     | :---   | :---        | :--     | :--
-{ref}`storage-optimized-image-storage`             | no             | yes   | yes  | yes     | yes      | n/a    | n/a         | yes     | yes
-最適化されたインスタンスの作成                     | no             | yes   | yes  | yes     | yes      | n/a    | n/a         | yes     | yes
-最適化されたスナップショットの作成                 | no             | yes   | yes  | yes     | yes      | yes    | n/a         | yes     | yes
-最適化されたイメージの転送                         | no             | yes   | no   | yes     | yes      | n/a    | n/a         | no      | no
-{ref}`storage-optimized-volume-transfer`           | no             | yes   | no   | yes     | yes      | n/a    | n/a         | no      | no
-コピーオンライト                                   | no             | yes   | yes  | yes     | yes      | yes    | n/a         | yes     | yes
-ブロックデバイスベース                             | no             | no    | yes  | no      | yes      | no     | n/a         | yes     | yes
-インスタントクローン                               | no             | yes   | yes  | yes     | yes      | yes    | n/a         | yes     | yes
-コンテナ内でストレージドライバーの使用             | yes            | yes   | no   | yes[^1] | no       | n/a    | n/a         | no      | no
-古い（最新ではない）スナップショットからのリストア | yes            | yes   | yes  | no      | yes      | yes    | n/a         | no      | no
-ストレージクオータ                                 | yes[^2]        | yes   | yes  | yes     | yes      | yes    | yes         | yes     | yes
-`incus admin init` で利用可能                      | yes            | yes   | yes  | yes     | yes      | no     | no          | no      | no
-オブジェクトストレージ                             | yes            | yes   | yes  | yes     | no       | no     | yes         | no      | no
+| 機能                                               | ディレクトリー | Btrfs | LVM  | ZFS     | Ceph RBD | CephFS | Ceph Object | LINSTOR | TRUENAS |
+| :---                                               | :---           | :---  | :--- | :---    | :---     | :---   | :---        | :---    | :---    |
+| {ref}`storage-optimized-image-storage`             | no             | yes   | yes  | yes     | yes      | n/a    | n/a         | yes     | yes     |
+| 最適化されたインスタンスの作成                     | no             | yes   | yes  | yes     | yes      | n/a    | n/a         | yes     | yes     |
+| 最適化されたスナップショットの作成                 | no             | yes   | yes  | yes     | yes      | yes    | n/a         | yes     | yes     |
+| 最適化されたイメージの転送                         | no             | yes   | no   | yes     | yes      | n/a    | n/a         | no      | no      |
+| {ref}`storage-optimized-volume-transfer`           | no             | yes   | no   | yes     | yes      | n/a    | n/a         | no      | no      |
+| コピーオンライト                                   | no             | yes   | yes  | yes     | yes      | yes    | n/a         | yes     | yes     |
+| ブロックデバイスベース                             | no             | no    | yes  | no      | yes      | no     | n/a         | yes     | yes     |
+| インスタントクローン                               | no             | yes   | yes  | yes     | yes      | yes    | n/a         | yes     | yes     |
+| コンテナ内でストレージドライバーの使用             | yes            | yes   | no   | yes[^1] | no       | n/a    | n/a         | no      | no      |
+| 古い（最新ではない）スナップショットからのリストア | yes            | yes   | yes  | no      | yes      | yes    | n/a         | no      | no      |
+| ストレージクオータ                                 | yes[^2]        | yes   | yes  | yes     | yes      | yes    | yes         | yes     | yes     |
+| `incus admin init` で利用可能                      | yes            | yes   | yes  | yes     | yes      | no     | no          | no      | no      |
+| オブジェクトストレージ                             | yes            | yes   | yes  | yes     | no       | no     | yes         | no      | no      |
 
 [^1]: [`zfs.delegate`](storage-zfs-vol-config)を有効にする必要があります。
 [^2]: % Include content from [storage_dir.md](storage_dir.md)

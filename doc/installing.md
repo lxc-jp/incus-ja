@@ -198,9 +198,9 @@ LXDからマイグレートする場合は、`lxd-to-incus`コマンドのため
 ```
 
 ```{group-tab} Rocky Linux
-RPMパッケージとその依存ライブラリはExtra Packages for Enterprise Linux (EPEL)レポジトリにはまだありませんが、Rocky Linux 9用の[`neil/incus`](https://copr.fedorainfracloud.org/coprs/neil/incus/) Community Project (COPR)レポジトリで利用できます。
+RPMパッケージとその依存ライブラリはExtra Packages for Enterprise Linux (EPEL)レポジトリにはまだありませんが、Rocky Linux 9用の[`neil/incus`](https://copr.fedorainfracloud.org/coprs/neil/incus/)とRocky Linux 10用の[`neelc/incus`](https://copr.fedorainfracloud.org/coprs/neelc/incus/) Community Project (COPR)レポジトリで利用できます。
 
-依存パッケージのためにEPELレポジトリをインストールし、その後COPRレポジトリをインストールしてください:
+Rocky Linux 9では依存パッケージのためにEPELレポジトリをインストールし、その後COPRレポジトリをインストールしてください:
 
     dnf -y install epel-release
     dnf copr enable neil/incus
@@ -208,6 +208,14 @@ RPMパッケージとその依存ライブラリはExtra Packages for Enterprise
 他の依存パッケージのために`CodeReady Builder` (`CRB`)を有効にしてください:
 
     dnf config-manager --enable crb
+
+Rocky Linux 10では依存パッケージのためにEPELレポジトリをインストールし、その後COPRレポジトリをインストールしてください:
+
+    dnf config-manager --enable crb
+    cd /etc/yum.repos.d
+    wget https://copr.fedorainfracloud.org/coprs/neelc/incus/repo/rhel+epel-10/neelc-incus-rhel+epel-10.repo
+
+`CRB`はRocky Linux 10では必須ではありません。
 
 その後Incusと任意選択でIncus toolsをインストールします:
 

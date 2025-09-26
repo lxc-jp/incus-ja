@@ -32,12 +32,12 @@ incus network forward create <network_name> <listen_address> [configuration_opti
 
 ネットワークフォワードのプロパティには以下のものがあります:
 
-プロパティ       | 型         | 必須 | 説明
-:--              | :--        | :--  | :--
-`listen_address` | string     | yes  | リッスンする IP アドレス
-`description`    | string     | no   | ネットワークフォワードの説明
-`config`         | string set | no   | 下記のテーブル参照
-`ports`          | port list  | no   | {ref}`ポート指定 <network-forwards-port-specifications>` のリスト
+| プロパティ       | 型         | 必須 | 説明                                                              |
+| :---             | :---       | :--- | :---                                                              |
+| `listen_address` | string     | yes  | リッスンする IP アドレス                                          |
+| `description`    | string     | no   | ネットワークフォワードの説明                                      |
+| `config`         | string set | no   | 下記のテーブル参照                                                |
+| `ports`          | port list  | no   | {ref}`ポート指定 <network-forwards-port-specifications>` のリスト |
 
 ### フォワードの設定
 
@@ -87,14 +87,14 @@ incus network forward port add <network_name> <listen_address> <protocol> <liste
 
 ネットワークフォワードポートのプロパティには以下のものがあります:
 
-プロパティ       | 型     | 必須 | 説明
-:--              | :--    | :--  | :--
-`protocol`       | string | yes  | ポートのプロトコル（`tcp` または `udp`）
-`listen_port`    | string | yes  | リッスンするポート（例 `80,90-100`）
-`target_address` | string | yes  | フォワード先の IP アドレス
-`target_port`    | string | no   | ターゲットのポート（例 `70,80-90` または `90`）、 空の場合は `listen_port` と同じ
-`description`    | string | no   | ポートの説明
-`snat`           | bool   | no   | マッチングするSNATルールを配置してターゲットから来る新しいトラフィックを書き換えるかどうか
+| プロパティ       | 型     | 必須 | 説明                                                                                       |
+| :---             | :---   | :--- | :---                                                                                       |
+| `protocol`       | string | yes  | ポートのプロトコル（`tcp` または `udp`）                                                   |
+| `listen_port`    | string | yes  | リッスンするポート（例 `80,90-100`）                                                       |
+| `target_address` | string | yes  | フォワード先の IP アドレス                                                                 |
+| `target_port`    | string | no   | ターゲットのポート（例 `70,80-90` または `90`）、 空の場合は `listen_port` と同じ          |
+| `description`    | string | no   | ポートの説明                                                                               |
+| `snat`           | bool   | no   | マッチングするSNATルールを配置してターゲットから来る新しいトラフィックを書き換えるかどうか |
 
 ```{note}
 `snat`プロパティは現在は`nftables`ファイアウォールドライバーを使う管理された`bridge`ネットワークでのみサポートされます。

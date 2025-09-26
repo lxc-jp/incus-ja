@@ -112,11 +112,11 @@ DHCPv4 を使用しているインスタンスには、IPv4 アドレスが割�
 
 ブリッジ型 NIC には、以下のようなセキュリティー機能があります:
 
-キー                      | タイプ | デフォルト | 必須 | 説明
-:--                       | :--    | :--        | :--  | :--
-`security.mac_filtering`  | bool   | `false`    | no   | インスタンスが他のインスタンスの MAC アドレスを詐称することを防ぐ。
-`security.ipv4_filtering` | bool   | `false`    | no   | インスタンスが他のインスタンスの IPv4 アドレスになりすますことを防ぎます(`mac_filtering` を有効にします)。
-`security.ipv6_filtering` | bool   | `false`    | no   | インスタンスが他のインスタンスの IPv6 アドレスになりすますことを防ぎます(`mac_filtering` を有効にします)。
+| キー                      | タイプ | デフォルト | 必須 | 説明                                                                                                       |
+| :---                      | :---   | :---       | :--- | :---                                                                                                       |
+| `security.mac_filtering`  | bool   | `false`    | no   | インスタンスが他のインスタンスの MAC アドレスを詐称することを防ぐ。                                        |
+| `security.ipv4_filtering` | bool   | `false`    | no   | インスタンスが他のインスタンスの IPv4 アドレスになりすますことを防ぎます(`mac_filtering` を有効にします)。 |
+| `security.ipv6_filtering` | bool   | `false`    | no   | インスタンスが他のインスタンスの IPv6 アドレスになりすますことを防ぎます(`mac_filtering` を有効にします)。 |
 
 プロファイルで設定されたデフォルトのブリッジ型 NIC の設定は、インスタンスごとに以下の方法で上書きすることができます:
 

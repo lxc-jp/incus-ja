@@ -2209,6 +2209,17 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 このオプションが`false`に設定された場合、通常のシステムメモリが使用されます。
 ```
 
+```{config:option} limits.memory.oom_priority instance-resource-limits
+:defaultdesc: "`0`"
+:liveupdate: "yes"
+:shortdesc: "インスタンスのOut Of Memoryキラーの優先度調整"
+:type: "integer"
+-1000と1000の間の整数を指定します。
+負の値はインスタンスをOut of Memoryキラーに殺されにくくします。
+正の値は殺されやすくします。
+デフォルト値の0はOut of Memoryスコアを調整しないことを意味します。
+```
+
 ```{config:option} limits.memory.swap instance-resource-limits
 :condition: "container"
 :defaultdesc: "`true`"
@@ -3731,6 +3742,70 @@ NVIDIA仮想GPUインスタンスUUID。
 :default: "`false`"
 :shortdesc: "どのACLルールにもマッチしないイングレス・トラフィックをログ出力するかどうか"
 :type: "bool"
+
+```
+
+```{config:option} tunnel.NAME.group network_ovn-common
+:condition: "`vxlan`"
+:default: "`239.0.0.1`"
+:shortdesc: "`vxlan`のマルチキャストアドレス"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.id network_ovn-common
+:condition: "`vxlan`"
+:default: "`0`"
+:shortdesc: "`vxlan`トンネルで使うトンネルID"
+:type: "integer"
+
+```
+
+```{config:option} tunnel.NAME.interface network_ovn-common
+:condition: "`vxlan`"
+:default: "-"
+:shortdesc: "トンネルで使うホストインターフェース"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.local network_ovn-common
+:condition: "`gre`"
+:default: "-"
+:shortdesc: "トンネルのローカルアドレス"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.port network_ovn-common
+:condition: "`vxlan`"
+:default: "`0`"
+:shortdesc: "`vxlan`トンネルで使うポート"
+:type: "integer"
+
+```
+
+```{config:option} tunnel.NAME.protocol network_ovn-common
+:condition: "standard mode"
+:default: "-"
+:shortdesc: "トンネルプロトコル：`vxlan`か`gre`"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.remote network_ovn-common
+:condition: "`gre`"
+:default: "-"
+:shortdesc: "トンネルのリモートアドレス"
+:type: "string"
+
+```
+
+```{config:option} tunnel.NAME.ttl network_ovn-common
+:condition: "`vxlan`"
+:default: "`1`"
+:shortdesc: "マルチキャストのルーティングトポロジーで使用するTTL"
+:type: "integer"
 
 ```
 
