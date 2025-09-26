@@ -2844,3 +2844,20 @@ webhookのデータは既存のイベントAPIで送信されるデータと同�
 
 * `source=tmpfs:` tmpfsファイルシステムをマウントします。`size`、`uid`、`gid`、`mode`オプションを指定できます。
 * `source=tmpfs-overlay:` tmpfsと同じですがoverlayfsの挙動が追加されます。
+
+## `instance_limits_oom`
+
+`limits.memory.oom_priority`設定オプションを追加します。
+コンテナや仮想マシンのOut Of Memoryスコアを設定します。
+
+## `backup_override_config`
+
+`X-Incus-config`と`X-Incus-devices`のHTTPヘッダーを使って、バックアップのインポート中に設定とデバイスの両方をオーバーライドできるようにします。
+
+## `network_ovn_tunnels`
+
+OVNネットワークでネットワークトンネルを使えるようにします。
+
+## `init_preseed_cluster_groups`
+
+プリシードによる初期化でクラスターグループを設定できるようにします。

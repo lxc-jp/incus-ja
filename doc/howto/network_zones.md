@@ -191,12 +191,12 @@ incus network zone record create <network_zone> <record_name>
 
 レコードは以下のプロパティを持ちます。
 
-プロパティ    | 型         | 必須 | 説明
-:--           | :--        | :--  | :--
-`name`        | string     | yes  | レコードのユニークな名前
-`description` | string     | no   | レコードの説明
-`entries`     | entry list | no   | DNS エントリのリスト
-`config`      | string set | no   | キー／バリュー形式の設定オプション（`user.*` カスタムキーのみサポート）
+| プロパティ    | 型         | 必須 | 説明                                                                    |
+| :---          | :---       | :--- | :---                                                                    |
+| `name`        | string     | yes  | レコードのユニークな名前                                                |
+| `description` | string     | no   | レコードの説明                                                          |
+| `entries`     | entry list | no   | DNS エントリのリスト                                                    |
+| `config`      | string set | no   | キー／バリュー形式の設定オプション（`user.*` カスタムキーのみサポート） |
 
 ### エントリを追加または削除する
 

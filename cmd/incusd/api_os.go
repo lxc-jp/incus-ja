@@ -30,9 +30,9 @@ func apiOSProxy(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	// Check if this is an Incus OS system.
-	if !s.OS.IncusOS {
-		return response.BadRequest(errors.New("System isn't running Incus OS"))
+	// Check if this is an IncusOS system.
+	if s.OS.IncusOS == nil {
+		return response.BadRequest(errors.New("System isn't running IncusOS"))
 	}
 
 	// Prepare the proxy.
@@ -47,6 +47,9 @@ func apiOSProxy(d *Daemon, r *http.Request) response.Response {
 			r.URL.Host = "incus-os"
 		},
 	}
+
+	// Allow IncusOS to adjust the returned paths to the prefix used by the proxy.
+	r.Header.Add("X-IncusOS-Proxy", "/os")
 
 	// Handle the request.
 	return response.ManualResponse(func(w http.ResponseWriter) error {

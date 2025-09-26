@@ -198,6 +198,11 @@ do_storage_driver_zfs() {
         return
     fi
 
+    if [ "${filesystem}" = "xfs" ] && grep -q noble /etc/os-release; then
+        echo "==> SKIP: Skipping block mode test on ${filesystem} due to broken OS tools."
+        return
+    fi
+
     # shellcheck disable=2039,3043
     local INCUS_STORAGE_DIR incus_backend
 
@@ -337,6 +342,7 @@ do_storage_driver_zfs() {
     [ "$(zfs get -H -o value type incustest-"$(basename "${INCUS_DIR}")/containers/c4@snapshot-snap0")" = "snapshot" ]
     incus start c4
     incus exec c4 -- test -f /root/foo
+    rm "${INCUS_DIR}/c4.tar.gz"
 
     # Snapshot and restore
     incus snapshot create c4 snap1

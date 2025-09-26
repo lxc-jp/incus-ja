@@ -29,11 +29,11 @@ LINSTORはサテライトノード間でボリュームを移動することと�
 
 Incusの`linstor`ドライバーはリソースグループを使ってリソースを管理とスポーンします。次の表はIncusとLINSTORの概念のマッピングを表しています:
 
-Incusの概念 | LINSTORの概念
-:--           | :--
-ストレージプール  | リソースグループ
-ボリューム        | リソース定義
-スナップショット      | スナップショット
+| Incusの概念      | LINSTORの概念    |
+| :---             | :---             |
+| ストレージプール | リソースグループ |
+| ボリューム       | リソース定義     |
+| スナップショット | スナップショット |
 
 IncusはLINSTORリソースグループの完全な制御を持っていることを前提とします。
 このため、IncusのLINSTORリソースグループ内にIncusで所有されてないエンティティは決して作ってはいけません。作るとIncusが削除してしまうかもしれないからです。
@@ -67,40 +67,40 @@ Incusインストール環境間でのリソースグループの共有
 (storage-linstor-pool-config)=
 ### ストレージプール設定
 
-キー                                  | 型     | デフォルト値    | 設定
-:--                                   | :---   | :------         | :----------
-`linstor.resource_group.name`         | string | `incus`         | ストレージプールで使用されるLINSTORリソースグループ名
-`linstor.resource_group.place_count`  | int    | 2               | リソースグループ内のリソースのために作成されるべきディスクフルレプリカの数。すでにボリュームがあるプールでこのオプションの値を増やすと、LINSTORはすべての既存のリソースが新しい値に合致するように新しくディスクフルレプリカを作成することになります
-`linstor.resource_group.storage_pool` | string | -               | サテライトノード上にリソースが配置されるストレージプール名
-`linstor.volume.prefix`               | string | `incus-volume-` | LINSTORが管理するボリュームの内部名に使われる接頭辞。ストレージプール作成後は変更不可
-`drbd.on_no_quorum`                   | string | -               | クオラムが失われた際に使用されるDRBDポリシー（リソースグループに適用される）
-`drbd.auto_diskful`                   | string | -               | ノード上のストレージが利用可能な場合にプライマリのディスクレスリソースがディスクフルに変換されるまでの期間を表す文字列（リソースグループに適用される）
-`drbd.auto_add_quorum_tiebreaker`     | bool   | `true`          | LINSTORが必要に応じて自動的にディスクレスリソースを作ってクオラムのタイブレーカーとして振る舞わせることを許可するかどうか（リソースグループに適用される）
+| キー                                  | 型     | デフォルト値    | 設定                                                                                                                                                                                                                                                 |
+| :---                                  | :---   | :---            | :---                                                                                                                                                                                                                                                 |
+| `linstor.resource_group.name`         | string | `incus`         | ストレージプールで使用されるLINSTORリソースグループ名                                                                                                                                                                                                |
+| `linstor.resource_group.place_count`  | int    | 2               | リソースグループ内のリソースのために作成されるべきディスクフルレプリカの数。すでにボリュームがあるプールでこのオプションの値を増やすと、LINSTORはすべての既存のリソースが新しい値に合致するように新しくディスクフルレプリカを作成することになります |
+| `linstor.resource_group.storage_pool` | string | -               | サテライトノード上にリソースが配置されるストレージプール名                                                                                                                                                                                           |
+| `linstor.volume.prefix`               | string | `incus-volume-` | LINSTORが管理するボリュームの内部名に使われる接頭辞。ストレージプール作成後は変更不可                                                                                                                                                                |
+| `drbd.on_no_quorum`                   | string | -               | クオラムが失われた際に使用されるDRBDポリシー（リソースグループに適用される）                                                                                                                                                                         |
+| `drbd.auto_diskful`                   | string | -               | ノード上のストレージが利用可能な場合にプライマリのディスクレスリソースがディスクフルに変換されるまでの期間を表す文字列（リソースグループに適用される）                                                                                               |
+| `drbd.auto_add_quorum_tiebreaker`     | bool   | `true`          | LINSTORが必要に応じて自動的にディスクレスリソースを作ってクオラムのタイブレーカーとして振る舞わせることを許可するかどうか（リソースグループに適用される）                                                                                            |
 
 {{volume_configuration}}
 
 (storage-linstor-vol-config)=
 ### ストレージボリューム設定
 
-キー                              | 型     | 条件                                                    | デフォルト値                                     | 説明
-:--                               | :---   | :--------                                               | :------                                          | :----------
-`block.filesystem`                | string | content type `filesystem`をもつブロックベースボリューム | `volume.block.filesystem`と同じ                  | {{block_filesystem}}
-`block.mount_options`             | string | content type `filesystem`をもつブロックベースボリューム | `volume.block.mount_options`と同じ               | ブロックベースのファイルシステムボリュームのマウントオプション
-`initial.gid`                     | int    | content type `filesystem`をもつカスタムボリューム       | `volume.initial.uid`と同じか`0`                  | インスタンス内のボリューム所有者のGID
-`initial.mode`                    | int    | content type `filesystem`をもつカスタムボリューム       | `volume.initial.mode`と同じか`711`               | インスタンス内のボリュームのモード
-`initial.uid`                     | int    | content type `filesystem`をもつカスタムボリューム       | `volume.initial.gid`と同じか`0`                  | インスタンス内のボリューム所有者のUID
-`security.shared`                 | bool   | カスタムブロックボリューム                              | `volume.security.shared`と同じか`false`          | 複数のインスタンス間でのボリュームの共有を有効にするか
-`security.shifted`                | bool   | カスタムボリューム                                      | `volume.security.shifted`と同じか`false`         | {{enable_ID_shifting}}
-`security.unmapped`               | bool   | カスタムボリューム                                      | `volume.security.unmapped`と同じか`false`        | ボリュームにIPマッピングを無効化するか
-`size`                            | string |                                                         | `volume.size`と同じ                              | ストレージボリュームのサイズ／クォータ
-`snapshots.expiry`                | string | カスタムボリューム                                      | `volume.snapshots.expiry`                        | {{snapshot_expiry_format}}
-`snapshots.expiry.manual`         | string | カスタムボリューム                                      | `volume.snapshots.expiry.manual` と同じ          | {{snapshot_expiry_format}}
-`snapshots.pattern`               | string | カスタムボリューム                                      | `volume.snapshots.pattern`と同じか`snap%d`       | {{snapshot_pattern_format}} [^*]
-`snapshots.schedule`              | string | カスタムボリューム                                      | `volume.snapshots.schedule`と同じ                | {{snapshot_schedule_format}}
-`drbd.on_no_quorum`               | string |                                                         | -                                                | クオラムが失われた際に使用されるDRBDポリシー（リソースグループに適用される）
-`drbd.auto_diskful`               | string |                                                         | -                                                | ノード上のストレージが利用可能な場合にプライマリのディスクレスリソースがディスクフルに変換されるまでの期間を表す文字列（リソースグループに適用される）
-`drbd.auto_add_quorum_tiebreaker` | bool   |                                                         | `true`                                           | LINSTORが必要に応じて自動的にディスクレスリソースを作ってクオラムのタイブレーカーとして振る舞わせることを許可するかどうか（リソースグループに適用される）
-`linstor.remove_snapshots`        | bool   |                                                         | `volume.linstor.remove_snapshots`と同じか`false` | 必要に応じてスナップショットを削除するか
+| キー                              | 型     | 条件                                                    | デフォルト値                                     | 説明                                                                                                                                                      |
+| :---                              | :---   | :---                                                    | :---                                             | :---                                                                                                                                                      |
+| `block.filesystem`                | string | content type `filesystem`をもつブロックベースボリューム | `volume.block.filesystem`と同じ                  | {{block_filesystem}}                                                                                                                                      |
+| `block.mount_options`             | string | content type `filesystem`をもつブロックベースボリューム | `volume.block.mount_options`と同じ               | ブロックベースのファイルシステムボリュームのマウントオプション                                                                                            |
+| `initial.gid`                     | int    | content type `filesystem`をもつカスタムボリューム       | `volume.initial.uid`と同じか`0`                  | インスタンス内のボリューム所有者のGID                                                                                                                     |
+| `initial.mode`                    | int    | content type `filesystem`をもつカスタムボリューム       | `volume.initial.mode`と同じか`711`               | インスタンス内のボリュームのモード                                                                                                                        |
+| `initial.uid`                     | int    | content type `filesystem`をもつカスタムボリューム       | `volume.initial.gid`と同じか`0`                  | インスタンス内のボリューム所有者のUID                                                                                                                     |
+| `security.shared`                 | bool   | カスタムブロックボリューム                              | `volume.security.shared`と同じか`false`          | 複数のインスタンス間でのボリュームの共有を有効にするか                                                                                                    |
+| `security.shifted`                | bool   | カスタムボリューム                                      | `volume.security.shifted`と同じか`false`         | {{enable_ID_shifting}}                                                                                                                                    |
+| `security.unmapped`               | bool   | カスタムボリューム                                      | `volume.security.unmapped`と同じか`false`        | ボリュームにIPマッピングを無効化するか                                                                                                                    |
+| `size`                            | string |                                                         | `volume.size`と同じ                              | ストレージボリュームのサイズ／クォータ                                                                                                                    |
+| `snapshots.expiry`                | string | カスタムボリューム                                      | `volume.snapshots.expiry`                        | {{snapshot_expiry_format}}                                                                                                                                |
+| `snapshots.expiry.manual`         | string | カスタムボリューム                                      | `volume.snapshots.expiry.manual` と同じ          | {{snapshot_expiry_format}}                                                                                                                                |
+| `snapshots.pattern`               | string | カスタムボリューム                                      | `volume.snapshots.pattern`と同じか`snap%d`       | {{snapshot_pattern_format}} [^*]                                                                                                                          |
+| `snapshots.schedule`              | string | カスタムボリューム                                      | `volume.snapshots.schedule`と同じ                | {{snapshot_schedule_format}}                                                                                                                              |
+| `drbd.on_no_quorum`               | string |                                                         | -                                                | クオラムが失われた際に使用されるDRBDポリシー（リソースグループに適用される）                                                                              |
+| `drbd.auto_diskful`               | string |                                                         | -                                                | ノード上のストレージが利用可能な場合にプライマリのディスクレスリソースがディスクフルに変換されるまでの期間を表す文字列（リソースグループに適用される）    |
+| `drbd.auto_add_quorum_tiebreaker` | bool   |                                                         | `true`                                           | LINSTORが必要に応じて自動的にディスクレスリソースを作ってクオラムのタイブレーカーとして振る舞わせることを許可するかどうか（リソースグループに適用される） |
+| `linstor.remove_snapshots`        | bool   |                                                         | `volume.linstor.remove_snapshots`と同じか`false` | 必要に応じてスナップショットを削除するか                                                                                                                  |
 
 [^*]: {{snapshot_pattern_detail}}
 

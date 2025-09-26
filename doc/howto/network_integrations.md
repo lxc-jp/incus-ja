@@ -49,11 +49,11 @@ incus network peer create default region ovn-region --type=remote
 
 アドレスセットは以下のプロパティを持ちます:
 
-プロパティ    | 型     | 必須 | 説明
-:--           | :--    | :--  | :--
-`name`        | string | yes  | ネットワークインテグレーション名
-`description` | string | no   | ネットワークインテグレーションの説明
-`type`        | string | yes  | ネットワークインテグレーションのタイプ（現状は`ovn`のみ）
+| プロパティ    | 型     | 必須 | 説明                                                      |
+| :---          | :---   | :--- | :---                                                      |
+| `name`        | string | yes  | ネットワークインテグレーション名                          |
+| `description` | string | no   | ネットワークインテグレーションの説明                      |
+| `type`        | string | yes  | ネットワークインテグレーションのタイプ（現状は`ovn`のみ） |
 
 ## インテグレーション設定オプション
 

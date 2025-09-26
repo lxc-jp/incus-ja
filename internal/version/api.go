@@ -495,6 +495,10 @@ var APIExtensions = []string{
 	"server_logging_webhook",
 	"storage_driver_truenas",
 	"container_disk_tmpfs",
+	"instance_limits_oom",
+	"backup_override_config",
+	"network_ovn_tunnels",
+	"init_preseed_cluster_groups",
 }
 
 // APIExtensionsCount returns the number of available API extensions.
