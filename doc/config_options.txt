@@ -2212,10 +2212,10 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 ```{config:option} limits.memory.oom_priority instance-resource-limits
 :defaultdesc: "`0`"
 :liveupdate: "yes"
-:shortdesc: "インスタンスのOut Of Memoryキラーの優先度調整"
+:shortdesc: "インスタンスのOOM killer (Out Of Memory killer)の優先度調整"
 :type: "integer"
 -1000と1000の間の整数を指定します。
-負の値はインスタンスをOut of Memoryキラーに殺されにくくします。
+負の値はインスタンスをOOM killer (Out Of Memory killer)に殺されにくくします。
 正の値は殺されやすくします。
 デフォルト値の0はOut of Memoryスコアを調整しないことを意味します。
 ```
