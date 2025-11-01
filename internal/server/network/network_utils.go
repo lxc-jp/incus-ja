@@ -962,21 +962,6 @@ func usesIPv6Firewall(netConfig map[string]string) bool {
 	return false
 }
 
-// RandomHwaddr generates a random MAC address from the provided random source.
-func randomHwaddr(r *rand.Rand) string {
-	// Generate a new random MAC address using the usual prefix.
-	ret := bytes.Buffer{}
-	for _, c := range "10:66:6a:xx:xx:xx" {
-		if c == 'x' {
-			ret.WriteString(fmt.Sprintf("%x", r.Int31n(16)))
-		} else {
-			ret.WriteString(string(c))
-		}
-	}
-
-	return ret.String()
-}
-
 // parseIPRange parses an IP range in the format "start-end" and converts it to a iprange.Range.
 // If allowedNets are supplied, then each IP in the range is checked that it belongs to at least one of them.
 // IPs in the range can be zero prefixed, e.g. "::1" or "0.0.0.1", however they should not overlap with any
@@ -1155,6 +1140,34 @@ func IPInSlice(key net.IP, list []net.IP) bool {
 		}
 	}
 	return false
+}
+
+// IPisBroadcast returns true if the IP address is a broadcast address.
+func IPisBroadcast(subnet *net.IPNet, ipAddress net.IP) bool {
+	if ipAddress == nil || subnet == nil {
+		return false
+	}
+
+	ipv4 := ipAddress.To4()
+	if ipv4 == nil {
+		return false
+	}
+
+	broadcast := make(net.IP, 4)
+	for i := 0; i < 4; i++ {
+		broadcast[i] = subnet.IP[i] | ^subnet.Mask[i]
+	}
+
+	return ipv4.Equal(broadcast)
+}
+
+// IPisNetworkID returns true if the IP address is a network ID.
+func IPisNetworkID(subnet *net.IPNet, ipAddress net.IP) bool {
+	if ipAddress == nil || subnet == nil {
+		return false
+	}
+
+	return ipAddress.Equal(subnet.IP)
 }
 
 // SubnetContains returns true if outerSubnet contains innerSubnet.

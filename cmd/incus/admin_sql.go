@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 
 	incus "github.com/lxc/incus/v6/client"
-	cli "github.com/lxc/incus/v6/internal/cmd"
 	"github.com/lxc/incus/v6/internal/i18n"
 	internalSQL "github.com/lxc/incus/v6/internal/sql"
+	cli "github.com/lxc/incus/v6/shared/cmd"
 )
 
 type cmdAdminSQL struct {
@@ -27,7 +27,7 @@ type cmdAdminSQL struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdAdminSQL) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = usage("sql", i18n.G("<local|global> <query>"))
+	cmd.Use = cli.Usage("sql", i18n.G("<local|global> <query>"))
 	cmd.Short = i18n.G("Execute a SQL query against the local or global database")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Execute a SQL query against the local or global database
 
@@ -49,6 +49,9 @@ func (c *cmdAdminSQL) Command() *cobra.Command {
 
   If <query> is the special value ".schema", the command returns the SQL
   text schema of the given database.
+
+  If <query> is the special value ".tables", the command returns the SQL
+  text tables of the given database.
 
   This internal command is mostly useful for debugging and disaster
   recovery. The development team will occasionally provide hotfixes to users as a
@@ -104,10 +107,13 @@ func (c *cmdAdminSQL) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if query == ".dump" || query == ".schema" {
+	if query == ".dump" || query == ".schema" || query == ".tables" {
 		url := fmt.Sprintf("/internal/sql?database=%s", database)
-		if query == ".schema" {
-			url += "&schema=1"
+		switch query {
+		case ".schema":
+			url += "&dump=1"
+		case ".tables":
+			url += "&dump=2"
 		}
 
 		response, _, err := d.RawQuery("GET", url, nil, "")

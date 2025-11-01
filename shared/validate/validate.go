@@ -2,6 +2,7 @@ package validate
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -260,6 +261,16 @@ func IsNetworkMAC(value string) error {
 	// Check is valid Ethernet MAC length and delimiter.
 	if err != nil || len(value) != 17 || strings.ContainsAny(value, "-.") {
 		return errors.New("Invalid MAC address, must be 6 bytes of hex separated by colons")
+	}
+
+	return nil
+}
+
+// IsMACPattern validates whether the string is a MAC address pattern.
+func IsMACPattern(value string) error {
+	match, _ := regexp.MatchString(`^(?:[0-9a-fA-FxX]{2}:){5}[0-9a-fA-FxX]{2}$`, value)
+	if !match {
+		return errors.New("Invalid MAC address pattern, must be 6 bytes (hex characters or `x` to denote a wildcard) separated by colons")
 	}
 
 	return nil
@@ -941,4 +952,14 @@ func IsMinimumDuration(minimum time.Duration) func(value string) error {
 
 		return nil
 	}
+}
+
+// IsBase64 validates whether the string is Base64 encoded.
+func IsBase64(value string) error {
+	_, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(value, "="))
+	if err != nil {
+		return fmt.Errorf("Invalid value for a base64 string %q: %w", value, err)
+	}
+
+	return nil
 }

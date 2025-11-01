@@ -366,7 +366,8 @@ func (d *qemu) qmpConnect() (*qmp.Monitor, error) {
 // Callers should check that the instance is running (and therefore mounted) before calling this function,
 // otherwise the qmp.Connect call will fail to use the monitor socket file.
 func (d *qemu) getAgentClient() (*http.Client, error) {
-	if d.isWindows() {
+	// Only Linux supports VirtIO vsock.
+	if d.GuestOS() != "unknown" {
 		// Get known network details.
 		networks, err := d.getNetworkState()
 		if err != nil {
@@ -1735,7 +1736,7 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 	adjustment := d.getStartupRTCAdjustment()
 
 	base := time.Now().Add(adjustment)
-	if d.isWindows() {
+	if d.GuestOS() == "windows" {
 		// Set base to localtime on windows.
 		base = base.Local()
 	} else {
@@ -1751,11 +1752,27 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 		qemuArgs = append(qemuArgs, "-smbios", "type=2,manufacturer=LinuxContainers,product=Incus")
 
 		for k, v := range d.expandedConfig {
-			if !strings.HasPrefix(k, "smbios11.") {
+			var configPrefix, smbiosPrefix string
+			if strings.HasPrefix(k, "smbios11.") {
+				configPrefix = "smbios11."
+				smbiosPrefix = ""
+			} else if strings.HasPrefix(k, "systemd.credential.") {
+				configPrefix = "systemd.credential."
+				smbiosPrefix = "io.systemd.credential:"
+			} else if strings.HasPrefix(k, "systemd.credential-binary.") {
+				configPrefix = "systemd.credential-binary."
+				smbiosPrefix = "io.systemd.credential.binary:"
+				data, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(v, "="))
+				if err != nil {
+					return fmt.Errorf("Invalid base64 value for %q: %q", k, v)
+				}
+
+				v = base64.StdEncoding.EncodeToString(data)
+			} else {
 				continue
 			}
 
-			qemuArgs = append(qemuArgs, "-smbios", fmt.Sprintf("type=11,value=%s=%s", strings.TrimPrefix(k, "smbios11."), qemuEscapeCmdline(v)))
+			qemuArgs = append(qemuArgs, "-smbios", fmt.Sprintf("type=11,value=%s%s=%s", smbiosPrefix, strings.TrimPrefix(k, configPrefix), qemuEscapeCmdline(v)))
 		}
 	}
 
@@ -3026,7 +3043,6 @@ func (d *qemu) spiceCmdlineConfig() string {
 // inside the VM's config volume so that it can be restricted by quota.
 // Requires the instance be mounted before calling this function.
 func (d *qemu) generateConfigShare() error {
-	isWindows := d.isWindows()
 	configDrivePath := filepath.Join(d.Path(), "config")
 
 	// Create config drive dir if doesn't exist, if it does exist, leave it around so we don't regenerate all
@@ -3036,12 +3052,18 @@ func (d *qemu) generateConfigShare() error {
 		return err
 	}
 
-	if !isWindows {
+	guestOS := d.GuestOS()
+	if guestOS == "unknown" {
+		guestOS = "linux"
+	}
+
+	// Windows doesn't handle shares.
+	if guestOS != "windows" {
 		// Add the VM agent loader.
 		agentSrcPath, _ := exec.LookPath("incus-agent")
 		if util.PathExists(os.Getenv("INCUS_AGENT_PATH")) {
 			// Install incus-agent script (loads from agent share).
-			agentFile, err := incusAgentLoader.ReadFile("agent-loader/incus-agent")
+			agentFile, err := incusAgentLoader.ReadFile("agent-loader/incus-agent-" + guestOS)
 			if err != nil {
 				return err
 			}
@@ -3051,13 +3073,11 @@ func (d *qemu) generateConfigShare() error {
 				return err
 			}
 
-			if !isWindows {
-				// Legacy support.
-				_ = os.Remove(filepath.Join(configDrivePath, "lxd-agent"))
-				err = os.Symlink("incus-agent", filepath.Join(configDrivePath, "lxd-agent"))
-				if err != nil {
-					return err
-				}
+			// Legacy support.
+			_ = os.Remove(filepath.Join(configDrivePath, "lxd-agent"))
+			err = os.Symlink("incus-agent", filepath.Join(configDrivePath, "lxd-agent"))
+			if err != nil {
+				return err
 			}
 		} else if agentSrcPath != "" {
 			// Install agent into config drive dir if found.
@@ -3144,7 +3164,9 @@ func (d *qemu) generateConfigShare() error {
 		return err
 	}
 
-	if !isWindows {
+	// OS-specific configuration.
+	switch guestOS {
+	case "linux":
 		// Systemd units.
 		err = os.MkdirAll(filepath.Join(configDrivePath, "systemd"), 0o500)
 		if err != nil {
@@ -3167,7 +3189,7 @@ func (d *qemu) generateConfigShare() error {
 		// Setup script for incus-agent that is executed by the incus-agent systemd unit before incus-agent is started.
 		// The script sets up a temporary mount point, copies data from the mount (including incus-agent binary),
 		// and then unmounts it. It also ensures appropriate permissions for the Incus agent's runtime directory.
-		agentFile, err = incusAgentLoader.ReadFile("agent-loader/incus-agent-setup")
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/incus-agent-setup-linux")
 		if err != nil {
 			return err
 		}
@@ -3194,7 +3216,49 @@ func (d *qemu) generateConfigShare() error {
 		}
 
 		// Install script for manual installs.
-		agentFile, err = incusAgentLoader.ReadFile("agent-loader/install.sh")
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/install-linux.sh")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "install.sh"), agentFile, 0o700)
+		if err != nil {
+			return err
+		}
+
+	case "macos":
+		// Launchd daemons.
+		err = os.MkdirAll(filepath.Join(configDrivePath, "launchd"), 0o500)
+		if err != nil {
+			return err
+		}
+
+		// Launchd daemon for incus-agent.
+		agentFile, err := incusAgentLoader.ReadFile("agent-loader/launchd/org.linuxcontainers.incus.macos-agent.plist")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "launchd", "org.linuxcontainers.incus.macos-agent.plist"), agentFile, 0o644)
+		if err != nil {
+			return err
+		}
+
+		// Setup script for incus-agent that is executed by launchd. For convenience, this script also
+		// launches the agent. Because of Apple TCC, sh must be given full disk access in the relevant
+		// system settings page. Other than that, this agent behaves roughly the same as the Linux one.
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/incus-agent-setup-macos")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "incus-agent-setup"), agentFile, 0o500)
+		if err != nil {
+			return err
+		}
+
+		// Install script for manual installs.
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/install-macos.sh")
 		if err != nil {
 			return err
 		}
@@ -3247,7 +3311,8 @@ func (d *qemu) generateConfigShare() error {
 		}
 	}
 
-	if !isWindows {
+	// Only Linux guests support dynamic NIC configuration.
+	if guestOS == "linux" {
 		// Clear NICConfigDir to ensure that no leftover configuration is erroneously applied by the agent.
 		nicConfigPath := filepath.Join(configDrivePath, deviceConfig.NICConfigDir)
 		_ = os.RemoveAll(nicConfigPath)
@@ -3452,11 +3517,6 @@ func (d *qemu) deviceBootPriorities(base int) (map[string]int, error) {
 	return sortedDevs, nil
 }
 
-// isWindows returns whether the VM is Windows.
-func (d *qemu) isWindows() bool {
-	return strings.Contains(strings.ToLower(d.expandedConfig["image.os"]), "windows")
-}
-
 func (d *qemu) getStartupRTCAdjustment() time.Duration {
 	// Get the current values.
 	adjustment := d.parseRTC("volatile.vm.rtc_adjustment")
@@ -3516,7 +3576,7 @@ func (d *qemu) onRTCChange(change int) error {
 func (d *qemu) generateQemuConfig(machineDefinition string, cpuType string, cpuInfo *cpuTopology, mountInfo *storagePools.MountInfo, busName string, vsockFD int, devConfs []*deviceConfig.RunConfig, fdFiles *[]*os.File) ([]monitorHook, error) {
 	var monHooks []monitorHook
 
-	isWindows := d.isWindows()
+	isWindows := d.GuestOS() == "windows"
 	conf := qemuBase(&qemuBaseOpts{d.Architecture(), util.IsTrue(d.expandedConfig["security.iommu"]), machineDefinition})
 
 	err := d.addCPUMemoryConfig(&conf, cpuType, cpuInfo)
@@ -3700,6 +3760,19 @@ func (d *qemu) generateQemuConfig(machineDefinition string, cpuType string, cpuI
 		}
 
 		conf = append(conf, qemuUSB(&usbOpts)...)
+	}
+
+	// virtio-sound-pci devices can't be migrated and don't have a CCW equivalent.
+	if !d.CanLiveMigrate() && d.architecture != osarch.ARCH_64BIT_S390_BIG_ENDIAN {
+		devBus, devAddr, multi = bus.allocate(busFunctionGroupGeneric)
+		audioOpts := qemuDevOpts{
+			busName:       bus.name,
+			devBus:        devBus,
+			devAddr:       devAddr,
+			multifunction: multi,
+		}
+
+		conf = append(conf, qemuAudio(&audioOpts)...)
 	}
 
 	if util.IsTrue(d.expandedConfig["security.csm"]) {
@@ -3951,7 +4024,7 @@ func (d *qemu) generateQemuConfig(machineDefinition string, cpuType string, cpuI
 		bus.allocate(busFunctionGroupNone)
 	}
 
-	if !d.isWindows() {
+	if !isWindows {
 		// Write the agent mount config.
 		agentMountJSON, err := json.Marshal(agentMounts)
 		if err != nil {
@@ -4229,7 +4302,6 @@ func (d *qemu) addRootDriveConfig(qemuDev map[string]any, mountInfo *storagePool
 		Opts:       rootDriveConf.Opts,
 		TargetPath: rootDriveConf.TargetPath,
 		Limits:     rootDriveConf.Limits,
-		Attached:   true,
 	}
 
 	if d.storagePool.Driver().Info().Remote {
@@ -4743,7 +4815,7 @@ func (d *qemu) addDriveConfig(qemuDev map[string]any, bootIndexes map[string]int
 			blockDev["filename"] = fmt.Sprintf("/dev/fdset/%d", info.ID)
 		}
 
-		err := m.AddBlockDevice(blockDev, qemuDev, driveConf.Attached, bus == "usb")
+		err := m.AddBlockDevice(blockDev, qemuDev, bus == "usb")
 		if err != nil {
 			return fmt.Errorf("Failed adding block device for disk device %q: %w", driveConf.DevName, err)
 		}
@@ -7550,7 +7622,7 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 				"driver":   "file",
 				"filename": fmt.Sprintf("/dev/fdset/%d", info.ID),
 			},
-		}, nil, true, false)
+		}, nil, false)
 		if err != nil {
 			return fmt.Errorf("Failed adding migration storage snapshot block device: %w", err)
 		}
@@ -7693,7 +7765,7 @@ func (d *qemu) migrateSendLive(pool storagePools.Pool, clusterMoveSourceName str
 					"path":     strings.TrimPrefix(listener.Addr().String(), "@"),
 				},
 			},
-		}, nil, true, false)
+		}, nil, false)
 		if err != nil {
 			return fmt.Errorf("Failed adding NBD device: %w", err)
 		}
@@ -8943,29 +9015,6 @@ func (d *qemu) DeviceEventHandler(runConf *deviceConfig.RunConfig) error {
 	// Handle disk reconfiguration.
 	for _, mount := range runConf.Mounts {
 		if mount.Limits == nil && mount.Size == 0 {
-			// This special case allows handling live attach/detach logic.
-			config, ok := d.expandedDevices[mount.DevName]
-			if !ok {
-				return fmt.Errorf("Couldn't find device %q", mount.DevName)
-			}
-
-			dev, err := d.deviceLoad(d, mount.DevName, config)
-			if err != nil {
-				return err
-			}
-
-			if mount.Attached {
-				_, err = d.deviceStart(dev, true)
-				if err != nil {
-					return err
-				}
-			} else {
-				err = d.deviceStop(dev, true, "")
-				if err != nil {
-					return err
-				}
-			}
-
 			continue
 		}
 
@@ -9227,7 +9276,7 @@ func (d *qemu) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConf
 		volatileHwaddr := d.localConfig[configKey]
 		if volatileHwaddr == "" {
 			// Generate a new MAC address.
-			volatileHwaddr, err = instance.DeviceNextInterfaceHWAddr()
+			volatileHwaddr, err = instance.DeviceNextInterfaceHWAddr(d.MACPattern())
 			if err != nil || volatileHwaddr == "" {
 				return nil, fmt.Errorf("Failed generating %q: %w", configKey, err)
 			}
@@ -9657,7 +9706,7 @@ func (d *qemu) checkFeatures(hostArch int, qemuPath string) (map[string]any, err
 		"aio":       "io_uring",
 	}
 
-	err = monitor.AddBlockDevice(blockDev, nil, true, false)
+	err = monitor.AddBlockDevice(blockDev, nil, false)
 	if err != nil {
 		logger.Debug("Failed adding block device during VM feature check", logger.Ctx{"err": err})
 	} else {
@@ -10317,4 +10366,16 @@ func (d *qemu) DumpGuestMemory(w *os.File, format string) error {
 // CanLiveMigrate returns whether the VM is live-migratable.
 func (d *qemu) CanLiveMigrate() bool {
 	return util.IsTrue(d.expandedConfig["migration.stateful"])
+}
+
+// GuestOS returns the guest OS. In this driver, we consider anything unknown to be Linux.
+func (d *qemu) GuestOS() string {
+	imageOS := strings.ToLower(d.expandedConfig["image.os"])
+	if strings.Contains(imageOS, "windows") {
+		return "windows"
+	} else if strings.Contains(imageOS, "darwin") || strings.Contains(imageOS, "macos") || strings.Contains(imageOS, "mac os") {
+		return "macos"
+	}
+
+	return "unknown"
 }

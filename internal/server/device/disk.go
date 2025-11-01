@@ -34,6 +34,7 @@ import (
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/idmap"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/osarch"
 	"github.com/lxc/incus/v6/shared/revert"
 	"github.com/lxc/incus/v6/shared/subprocess"
 	"github.com/lxc/incus/v6/shared/units"
@@ -1222,6 +1223,11 @@ func (d *disk) setBus(entry *deviceConfig.MountEntryItem) error {
 
 // startVM starts the disk device for a virtual machine instance.
 func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
+	// Ignore detached disks.
+	if !util.IsTrueOrEmpty(d.config["attached"]) {
+		return nil, nil
+	}
+
 	runConf := deviceConfig.RunConfig{}
 
 	reverter := revert.New()
@@ -1239,9 +1245,6 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 	if d.config["wwn"] != "" {
 		opts = append(opts, fmt.Sprintf("wwn=%s", d.config["wwn"]))
 	}
-
-	// Setup the attached status.
-	attached := util.IsTrueOrEmpty(d.config["attached"])
 
 	// Add I/O limits if set.
 	var diskLimits *deviceConfig.DiskLimits
@@ -1302,11 +1305,10 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 
 		// Encode the file descriptor and original isoPath into the DevPath field.
 		mount := deviceConfig.MountEntryItem{
-			DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
-			DevName:  d.name,
-			FSType:   "iso9660",
-			Opts:     opts,
-			Attached: attached,
+			DevPath: fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
+			DevName: d.name,
+			FSType:  "iso9660",
+			Opts:    opts,
 		}
 
 		err = d.setBus(&mount)
@@ -1337,11 +1339,10 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 
 		// Encode the file descriptor and original isoPath into the DevPath field.
 		mount := deviceConfig.MountEntryItem{
-			DevPath:  fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
-			DevName:  d.name,
-			FSType:   "iso9660",
-			Opts:     opts,
-			Attached: attached,
+			DevPath: fmt.Sprintf("%s:%d:%s", DiskFileDescriptorMountPrefix, f.Fd(), isoPath),
+			DevName: d.name,
+			FSType:  "iso9660",
+			Opts:    opts,
 		}
 
 		err = d.setBus(&mount)
@@ -1360,11 +1361,10 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 			fields = strings.SplitN(fields[1], "/", 2)
 			clusterName, userName := d.cephCreds()
 			mount := deviceConfig.MountEntryItem{
-				DevPath:  DiskGetRBDFormat(clusterName, userName, fields[0], fields[1]),
-				DevName:  d.name,
-				Opts:     opts,
-				Limits:   diskLimits,
-				Attached: attached,
+				DevPath: DiskGetRBDFormat(clusterName, userName, fields[0], fields[1]),
+				DevName: d.name,
+				Opts:    opts,
+				Limits:  diskLimits,
 			}
 
 			err := d.setBus(&mount)
@@ -1376,11 +1376,10 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 		} else {
 			// Default to block device or image file passthrough first.
 			mount := deviceConfig.MountEntryItem{
-				DevPath:  d.config["source"],
-				DevName:  d.name,
-				Opts:     opts,
-				Limits:   diskLimits,
-				Attached: attached,
+				DevPath: d.config["source"],
+				DevName: d.name,
+				Opts:    opts,
+				Limits:  diskLimits,
 			}
 
 			err := d.setBus(&mount)
@@ -1439,11 +1438,10 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 					}
 
 					mount := deviceConfig.MountEntryItem{
-						DevPath:  DiskGetRBDFormat(clusterName, userName, poolName, d.config["source"]),
-						DevName:  d.name,
-						Opts:     opts,
-						Limits:   diskLimits,
-						Attached: attached,
+						DevPath: DiskGetRBDFormat(clusterName, userName, poolName, d.config["source"]),
+						DevName: d.name,
+						Opts:    opts,
+						Limits:  diskLimits,
 					}
 
 					err = d.setBus(&mount)
@@ -1771,20 +1769,6 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 				runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
 					DevName: d.name,
 					Limits:  diskLimits,
-				})
-			}
-
-			oldAttached := util.IsTrueOrEmpty(oldDevices[d.name]["attached"])
-			newAttached := util.IsTrueOrEmpty(expandedDevices[d.name]["attached"])
-			if !oldAttached && newAttached {
-				runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
-					DevName:  d.name,
-					Attached: true,
-				})
-			} else if oldAttached && !newAttached {
-				runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
-					DevName:  d.name,
-					Attached: false,
 				})
 			}
 		}
@@ -2902,16 +2886,22 @@ func (d *disk) generateVMAgentDrive() (string, error) {
 
 	// Include the most likely agent.
 	if util.PathExists(os.Getenv("INCUS_AGENT_PATH")) {
-		var srcFilename string
-		var dstFilename string
+		dstFilename := "incus-agent"
+		guestOS := d.inst.GuestOS()
 
-		if strings.Contains(strings.ToLower(d.inst.ExpandedConfig()["image.os"]), "windows") {
-			srcFilename = fmt.Sprintf("incus-agent.windows.%s", d.state.OS.Uname.Machine)
+		switch guestOS {
+		case "unknown":
+			guestOS = "linux"
+		case "windows":
 			dstFilename = "incus-agent.exe"
-		} else {
-			srcFilename = fmt.Sprintf("incus-agent.linux.%s", d.state.OS.Uname.Machine)
-			dstFilename = "incus-agent"
 		}
+
+		archName, err := osarch.ArchitectureName(d.inst.Architecture())
+		if err != nil {
+			return "", err
+		}
+
+		srcFilename := fmt.Sprintf("incus-agent.%s.%s", guestOS, archName)
 
 		agentInstallPath := filepath.Join(scratchDir, dstFilename)
 		os.Remove(agentInstallPath)

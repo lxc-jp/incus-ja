@@ -140,6 +140,7 @@ type Instance interface {
 	Description() string
 	CreationDate() time.Time
 	LastUsedDate() time.Time
+	GuestOS() string
 
 	Profiles() []api.Profile
 	InitPID() int
@@ -148,6 +149,7 @@ type Instance interface {
 	FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfig.Device, error)
 
 	ETag() []any
+	MACPattern() string
 
 	// Paths.
 	Path() string

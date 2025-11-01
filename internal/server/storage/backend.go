@@ -685,7 +685,7 @@ func (b *backend) CreateInstance(inst instance.Instance, op *operations.Operatio
 	var filler *drivers.VolumeFiller
 	if inst.Type() == instancetype.Container {
 		filler = &drivers.VolumeFiller{
-			Fill: func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool) (int64, error) {
+			Fill: func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool, targetIsZero bool) (int64, error) {
 				// Create an empty rootfs.
 				err := os.Mkdir(filepath.Join(vol.MountPath(), "rootfs"), 0o755)
 				if err != nil && !os.IsExist(err) {
@@ -1707,8 +1707,8 @@ func (b *backend) RefreshInstance(inst instance.Instance, src instance.Instance,
 // imageFiller returns a function that can be used as a filler function with CreateVolume().
 // The function returned will unpack the specified image archive into the specified mount path
 // provided, and for VM images, a raw root block path is required to unpack the qcow2 image into.
-func (b *backend) imageFiller(fingerprint string, op *operations.Operation) func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool) (int64, error) {
-	return func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool) (int64, error) {
+func (b *backend) imageFiller(fingerprint string, op *operations.Operation) func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool, targetIsZero bool) (int64, error) {
+	return func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool, targetIsZero bool) (int64, error) {
 		var tracker *ioprogress.ProgressTracker
 		if op != nil { // Not passed when being done as part of pre-migration setup.
 			metadata := make(map[string]any)
@@ -1721,15 +1721,15 @@ func (b *backend) imageFiller(fingerprint string, op *operations.Operation) func
 		}
 
 		imageFile := internalUtil.VarPath("images", fingerprint)
-		return ImageUnpack(imageFile, vol, rootBlockPath, b.state.OS, allowUnsafeResize, tracker)
+		return ImageUnpack(imageFile, vol, rootBlockPath, b.state.OS, allowUnsafeResize, targetIsZero, tracker)
 	}
 }
 
 // isoFiller returns a function that can be used as a filler function with CreateVolume().
 // The function returned will copy the ISO content into the specified mount path
 // provided.
-func (b *backend) isoFiller(data io.Reader) func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool) (int64, error) {
-	return func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool) (int64, error) {
+func (b *backend) isoFiller(data io.Reader) func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool, targetIsZero bool) (int64, error) {
+	return func(vol drivers.Volume, rootBlockPath string, allowUnsafeResize bool, targetIsZero bool) (int64, error) {
 		f, err := os.OpenFile(rootBlockPath, os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			return -1, err
@@ -5689,6 +5689,9 @@ func (b *backend) DeleteCustomVolume(projectName string, volName string, op *ope
 	// There's no need to pass config as it's not needed when deleting a volume.
 	vol := b.GetVolume(drivers.VolumeTypeCustom, contentType, volStorageName, nil)
 
+	// Forcefully stop any forkfile process if running.
+	vol.StopForkfile()
+
 	// Delete the volume from the storage device. Must come after snapshots are removed.
 	volExists, err := b.driver.HasVolume(vol)
 	if err != nil {
@@ -7069,7 +7072,8 @@ func (b *backend) ImportInstance(inst instance.Instance, poolVol *backupConfig.C
 	return cleanup, err
 }
 
-func (b *backend) BackupCustomVolume(projectName string, volName string, tarWriter *instancewriter.InstanceTarWriter, optimized bool, snapshots bool, op *operations.Operation) error {
+// BackupCustomVolume creates a custom volume backup.
+func (b *backend) BackupCustomVolume(projectName string, volName string, writer instancewriter.InstanceWriter, optimized bool, snapshots bool, op *operations.Operation) error {
 	l := b.logger.AddContext(logger.Ctx{"project": projectName, "volume": volName, "optimized": optimized, "snapshots": snapshots})
 	l.Debug("BackupCustomVolume started")
 	defer l.Debug("BackupCustomVolume finished")
@@ -7092,7 +7096,7 @@ func (b *backend) BackupCustomVolume(projectName string, volName string, tarWrit
 		return err
 	}
 
-	if contentType != drivers.ContentTypeFS && contentType != drivers.ContentTypeBlock {
+	if contentType != drivers.ContentTypeFS && contentType != drivers.ContentTypeBlock && contentType != drivers.ContentTypeISO {
 		return fmt.Errorf("Volume of content type %q cannot be backed up", contentType)
 	}
 
@@ -7113,7 +7117,7 @@ func (b *backend) BackupCustomVolume(projectName string, volName string, tarWrit
 
 	vol := b.GetVolume(drivers.VolumeTypeCustom, drivers.ContentType(volume.ContentType), volStorageName, volume.Config)
 
-	err = b.driver.BackupVolume(vol, tarWriter, optimized, snapNames, op)
+	err = b.driver.BackupVolume(vol, writer, optimized, snapNames, op)
 	if err != nil {
 		return err
 	}
