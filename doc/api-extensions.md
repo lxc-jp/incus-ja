@@ -2861,3 +2861,33 @@ OVNネットワークでネットワークトンネルを使えるようにし�
 ## `init_preseed_cluster_groups`
 
 プリシードによる初期化でクラスターグループを設定できるようにします。
+
+## `usb_attached`
+
+USBデバイスが接続されているかいないかを示す`attached`プロパティーを追加します。
+
+## `backup_iso`
+
+ISOカスタムボリュームを単にコピーするだけでバックアップできるようにします。`incus storage volume export`でISOボリュームをエクスポートすることでISOイメージを取得できます。
+
+## `instance_systemd_credentials`
+
+設定オプションに`systemd.credential.*`と`systemd.credential-binary.*`という2つのカテゴリを追加します。コンテナにはbindマウントしたディレクトリー、仮想マシンには`SMBIOS Type 11`を通じてsystemdに機密情報を渡せるようになります。
+
+## `cluster_group_usedby`
+
+`GET /1.0/cluster/groups/{name}`エンドポイントに`used_by`フィールドを追加します。
+`used_by`はクラスターグループを使用しているすべてのインスタンスとプロジェクトのURLを含みます。
+
+## `bpf_token_delegation`
+
+[eBPFトークン移譲](https://docs.ebpf.io/linux/concepts/token/)を使えるようにします。
+
+## `file_storage_volume`
+
+カスタムボリュームにファイル転送APIを追加します。
+`/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}/files`エンドポイントに`DELETE`、`GET`、`HEAD`、`POST`の操作を実装します。
+
+## `network_hwaddr_pattern`
+
+MACアドレス割り当てをカスタマイズするために`network.hwaddr_pattern`というグローバルとプロジェクト毎の設定キーを追加します。

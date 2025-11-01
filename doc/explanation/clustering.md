@@ -36,13 +36,14 @@ voter のメンバーがオフラインになると stand-by メンバーが自�
 以下のロールが Incus クラスタメンバーに割り当て可能です。
 自動のロールは Incus 自身によって割り当てられユーザーによる変更は出来ません。
 
-| ロール                  | 自動     | 説明 |
-| :---                  | :--------     | :---------- |
-| `database`            | yes           | 分散データベースの voter メンバー |
-| `database-leader`     | yes           | 分散データベースの現在のリーダー |
-| `database-standby`    | yes           | 分散データベースの stand-by（voter ではない）メンバー |
-| `event-hub`           | no            | 内部 Incus イベントへの交換ポイント（hub）（最低 2 つは必要）|
-| `ovn-chassis`         | no            | OVN ネットワークのアップリンクゲートウェイの候補 |
+| ロール             | 自動      | 説明                                                                |
+| :---               | :-------- | :----------                                                         |
+| `database`         | yes       | 分散データベースの voter メンバー                                   |
+| `database-client`  | no        | 影響を受けたクラスタメンバーがvoterやstand-byに昇格されることを防ぐ |
+| `database-leader`  | yes       | 分散データベースの現在のリーダー                                    |
+| `database-standby` | yes       | 分散データベースの stand-by（voter ではない）メンバー               |
+| `event-hub`        | no        | 内部 Incus イベントへの交換ポイント（hub）（最低 2 つは必要）       |
+| `ovn-chassis`      | no        | OVN ネットワークのアップリンクゲートウェイの候補                    |
 
 
 voter メンバーのデフォルトの数（{config:option}`server-cluster:cluster.max_voters`）は 3 です。
@@ -120,6 +121,23 @@ Incus のクラスタではクラスタグループにメンバーを追加で�
 デフォルトでは、すべてのクラスタメンバーは `default` グループに属します。
 
 詳細は {ref}`howto-cluster-groups` と {ref}`cluster-target-instance` を参照してください。
+
+(cluster-cpu)=
+## クラスタCPUベースライン
+
+仮想マシンのライブマイグレーションを可能にするには、ターゲットサーバーのCPUがマイグレーション元のCPUと最低でも同じケーパビリティーを持つ必要があります。
+これを実現するため、Incusはクラスタ内のすべてのサーバーのCPUの機能を自動的にスキャンしCPUケーパビリティーのベースラインセットを算出しようとします。
+
+次にこれらのケーパビリティーを持つ仮想QEMU CPUをゲストに公開します。
+
+CPUケーパビリティーが同質のクラスターではこの機能をオフにしてホストのCPUをゲストに直接公開するのが極めて有益です:
+
+    incus cluster group set default instances.vm.cpu.x86_64.baseline=host
+
+```{note}
+自動で算出されるベースラインはすべての環境、特にCPUの世代やベンダーが混在する環境ではうまく動作しないかもしれません。
+これらが混在した環境では、プラットフォームごとにクラスタグループを作ることを推奨します。
+```
 
 (clustering-instance-placement)=
 ## インスタンスの自動配置

@@ -120,10 +120,6 @@ CRIU の制限のためコンテナではこの機能は完全にはサポート
 
 ファイルパスを指定しない場合、エクスポートファイルは作業ディレクトリーに `<instance_name>.<extension>` （たとえば、`my-container.tar.gz`）という名前で保存されます。
 
-```{warning}
-出力ファイル（`<instance_name>.<extension>` または指定した名前）がすでに存在する場合、コマンドは警告なしで既存のファイルを上書きします。
-```
-
 % Include content from [storage_backup_volume.md](storage_backup_volume.md)
 ```{include} storage_backup_volume.md
     :start-after: <!-- Include start export info -->
