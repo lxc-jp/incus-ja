@@ -59,17 +59,16 @@ Ceph クラスタをどのようにセットアップするかの情報につい
 (storage-cephobject-pool-config)=
 ### ストレージプール設定
 
-| キー                                    | 型     | デフォルト値 | 説明                                                                      |
-| :---                                    | :---   | :---         | :---                                                                      |
-| `cephobject.bucket.name_prefix`         | string | -            | Ceph 内のバケット名に追加する接頭辞                                       |
-| `cephobject.cluster_name`               | string | `ceph`       | 使用する Ceph クラスタ                                                    |
-| `cephobject.radosgw.endpoint`           | string | -            | `radosgw` ゲートウェイプロセスのURL                                       |
-| `cephobject.radosgw.endpoint_cert_file` | string | -            | エンドポイント通信に使用する TLS クライアント証明書を含むファイルへのパス |
-| `cephobject.user.name`                  | string | `admin`      | 使用する Ceph ユーザー                                                    |
-| `volatile.pool.pristine`                | string | `true`       | 作成時に `radosgw` `lxd-admin` ユーザーが存在したかどうか                 |
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group storage_cephobject-common start -->
+    :end-before: <!-- config group storage_cephobject-common end -->
+```
 
 ### ストレージバケット設定
 
-| キー   | 型     | デフォルト値 | 説明                         |
-| :---   | :---   | :---         | :---                         |
-| `size` | string | -            | ストレージバケットのクォータ |
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group storage_bucket_cephobject-common start -->
+    :end-before: <!-- config group storage_bucket_cephobject-common end -->
+```

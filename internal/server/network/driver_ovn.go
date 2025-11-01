@@ -20,8 +20,8 @@ import (
 
 	"github.com/flosch/pongo2/v6"
 	"github.com/mdlayher/netx/eui64"
-	ovsClient "github.com/ovn-org/libovsdb/client"
-	ovsdbModel "github.com/ovn-org/libovsdb/model"
+	ovsClient "github.com/ovn-kubernetes/libovsdb/client"
+	ovsdbModel "github.com/ovn-kubernetes/libovsdb/model"
 
 	incus "github.com/lxc/incus/v6/client"
 	"github.com/lxc/incus/v6/internal/iprange"
@@ -590,6 +590,15 @@ func (n *ovn) Validate(config map[string]string, clientType request.ClientType) 
 		//  shortdesc: Domain to advertise to DHCP clients and use for DNS resolution
 		"dns.domain": validate.IsAny,
 
+		// gendoc:generate(entity=network_ovn, group=common, key=dns.mode)
+		//
+		// ---
+		//  type: string
+		//  condition: -
+		//  default: `managed`
+		//  shortdesc: DNS registration mode: none for no DNS record, managed for OVN managed records
+		"dns.mode": validate.Optional(validate.IsOneOf("managed", "none")),
+
 		// gendoc:generate(entity=network_ovn, group=common, key=dns.search)
 		//
 		// ---
@@ -829,7 +838,7 @@ func (n *ovn) Validate(config map[string]string, clientType request.ClientType) 
 	var uplink *api.Network
 	projectRestrictedSubnets := []*net.IPNet{}
 
-	if n.config["network"] != "none" && clientType != request.ClientTypeNotifier {
+	if config["network"] != "none" && clientType != request.ClientTypeNotifier {
 		uplinkNetworkName, err := n.validateUplinkNetwork(p, config["network"])
 		if err != nil {
 			return err
@@ -1235,7 +1244,7 @@ func (n *ovn) getRouterMAC() (net.HardwareAddr, error) {
 			return nil, fmt.Errorf("Failed generating stable random router MAC: %w", err)
 		}
 
-		hwAddr = randomHwaddr(r)
+		hwAddr = n.randomHwaddr(r)
 		n.logger.Debug("Stable MAC generated", logger.Ctx{"seed": seed, "hwAddr": hwAddr})
 	}
 
@@ -4763,15 +4772,17 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 		}
 	}
 
-	dnsName := fmt.Sprintf("%s.%s", opts.DNSName, n.getDomainName())
-	dnsUUID, err := n.ovnnb.UpdateLogicalSwitchPortDNS(context.TODO(), n.getIntSwitchName(), instancePortName, dnsName, dnsIPs)
-	if err != nil {
-		return "", nil, fmt.Errorf("Failed setting DNS for %q: %w", dnsName, err)
-	}
+	if n.config["dns.mode"] == "managed" || n.config["dns.mode"] == "" {
+		dnsName := fmt.Sprintf("%s.%s", opts.DNSName, n.getDomainName())
+		dnsUUID, err := n.ovnnb.UpdateLogicalSwitchPortDNS(context.TODO(), n.getIntSwitchName(), instancePortName, dnsName, dnsIPs)
+		if err != nil {
+			return "", nil, fmt.Errorf("Failed setting DNS for %q: %w", dnsName, err)
+		}
 
-	reverter.Add(func() {
-		_ = n.ovnnb.DeleteLogicalSwitchPortDNS(context.TODO(), n.getIntSwitchName(), dnsUUID, false)
-	})
+		reverter.Add(func() {
+			_ = n.ovnnb.DeleteLogicalSwitchPortDNS(context.TODO(), n.getIntSwitchName(), dnsUUID, false)
+		})
+	}
 
 	// If NIC has static IPv4 address then ensure a DHCPv4 reservation exists.
 	// Do this at start time as well as add time in case an instance was copied (causing a duplicate address
@@ -5186,14 +5197,16 @@ func (n *ovn) InstanceDevicePortStop(ovsExternalOVNPort networkOVN.OVNSwitchPort
 
 	var uplink *api.Network
 
-	err = n.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-		// Load uplink network config.
-		_, uplink, _, err = tx.GetNetworkInAnyState(ctx, api.ProjectDefaultName, n.config["network"])
+	if n.config["network"] != "none" {
+		err = n.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			// Load uplink network config.
+			_, uplink, _, err = tx.GetNetworkInAnyState(ctx, api.ProjectDefaultName, n.config["network"])
 
-		return err
-	})
-	if err != nil {
-		return fmt.Errorf("Failed to load uplink network %q: %w", n.config["network"], err)
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("Failed to load uplink network %q: %w", n.config["network"], err)
+		}
 	}
 
 	// Get DNS records.
@@ -5234,7 +5247,7 @@ func (n *ovn) InstanceDevicePortStop(ovsExternalOVNPort networkOVN.OVNSwitchPort
 		removeRoutes = append(removeRoutes, *externalRoute)
 
 		// Remove the DNAT rules when using l2proxy ingress mode on uplink.
-		if slices.Contains([]string{"l2proxy", ""}, uplink.Config["ovn.ingress_mode"]) {
+		if uplink != nil && slices.Contains([]string{"l2proxy", ""}, uplink.Config["ovn.ingress_mode"]) {
 			err = SubnetIterate(externalRoute, func(ip net.IP) error {
 				removeNATIPs = append(removeNATIPs, ip)
 

@@ -73,7 +73,7 @@ myst:
 
 スナップショットを削除するには、以下のコマンドを使います:
 
-    incus storage volume delete <pool_name> <volume_name>/<snapshot_name>
+    incus storage volume snapshot delete <pool_name> <volume_name> <snapshot_name>
 
 ### カスタムストレージボリュームのスナップショット作成をスケジュールする
 

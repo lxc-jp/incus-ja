@@ -311,6 +311,16 @@ func (d *common) DeferTemplateApply(trigger instance.TemplateTrigger) error {
 	return nil
 }
 
+// MACPattern computes the most specific MAC address pattern for this instance.
+func (d *common) MACPattern() string {
+	macPattern, ok := d.project.Config["network.hwaddr_pattern"]
+	if !ok {
+		return d.state.GlobalConfig.NetworkHWAddrPattern()
+	}
+
+	return macPattern
+}
+
 // SetOperation sets the current operation.
 func (d *common) SetOperation(op *operations.Operation) {
 	d.op = op
@@ -857,8 +867,7 @@ func (d *common) updateProgress(progress string) {
 	}
 
 	if meta["container_progress"] != progress {
-		meta["container_progress"] = progress
-		_ = d.op.UpdateMetadata(meta)
+		_ = d.op.ExtendMetadata(map[string]any{"container_progress": progress})
 	}
 }
 

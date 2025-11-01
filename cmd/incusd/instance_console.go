@@ -186,6 +186,7 @@ func (s *consoleWs) connectVGA(r *http.Request, w http.ResponseWriter) error {
 
 			<-readDone
 			l.Debug("Finished mirroring console to websocket")
+			_ = conn.Close()
 			<-writeDone
 		}()
 
@@ -309,6 +310,7 @@ func (s *consoleWs) doConsole() error {
 
 		<-readDone
 		l.Debug("Finished mirroring console to websocket")
+		_ = conn.Close()
 		<-writeDone
 		close(mirrorDoneCh)
 	}()
@@ -489,7 +491,7 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 			return response.SmartError(err)
 		}
 
-		return operations.ForwardedOperationResponse(projectName, opAPI)
+		return operations.ForwardedOperationResponse(opAPI)
 	}
 
 	if post.Type == "" {

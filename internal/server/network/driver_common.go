@@ -1,10 +1,12 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"maps"
+	"math/rand"
 	"net"
 	"os"
 	"slices"
@@ -927,6 +929,14 @@ func (n *common) forwardValidate(listenAddress net.IP, forward *api.NetworkForwa
 		if netSubnet != nil && !SubnetContainsIP(netSubnet, defaultTargetAddress) {
 			return nil, errors.New("Default target address is not within the network subnet")
 		}
+
+		if defaultTargetIsIP4 && IPisBroadcast(netSubnet, defaultTargetAddress) {
+			return nil, errors.New("Default target address cannot be a broadcast address")
+		}
+
+		if IPisNetworkID(netSubnet, defaultTargetAddress) {
+			return nil, errors.New("Default target address cannot be a network ID address")
+		}
 	}
 
 	// Validate port rules.
@@ -962,6 +972,14 @@ func (n *common) forwardValidate(listenAddress net.IP, forward *api.NetworkForwa
 		// Check target address is within network's subnet.
 		if netSubnet != nil && !SubnetContainsIP(netSubnet, targetAddress) {
 			return nil, fmt.Errorf("Target address is not within the network subnet in port specification %d", portSpecID)
+		}
+
+		if targetIsIP4 && IPisBroadcast(netSubnet, targetAddress) {
+			return nil, errors.New("Default target address cannot be a broadcast address")
+		}
+
+		if IPisNetworkID(netSubnet, defaultTargetAddress) {
+			return nil, errors.New("Default target address cannot be a network ID address")
 		}
 
 		// Check valid listen port(s) supplied.
@@ -1641,6 +1659,10 @@ func (n *common) peerUsedBy(peerName string, firstOnly bool) ([]string, error) {
 }
 
 func (n *common) State() (*api.NetworkState, error) {
+	if n.config["parent"] != "" {
+		return resources.GetNetworkState(n.config["parent"])
+	}
+
 	return resources.GetNetworkState(n.name)
 }
 
@@ -1664,4 +1686,39 @@ func (n *common) setAvailable() {
 	unavailableNetworksMu.Lock()
 	delete(unavailableNetworks, pn)
 	unavailableNetworksMu.Unlock()
+}
+
+// RandomHwaddr generates a random MAC address from the provided random source.
+func (n *common) randomHwaddr(r *rand.Rand) string {
+	var pattern string
+	_ = n.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		dbProject, err := dbCluster.GetProject(ctx, tx.Tx(), n.project)
+		if err != nil {
+			return err
+		}
+
+		projectConfig, err := dbCluster.GetProjectConfig(ctx, tx.Tx(), dbProject.ID)
+		if err != nil {
+			return err
+		}
+
+		pattern = projectConfig["network.hwaddr_pattern"]
+		return nil
+	})
+
+	if pattern == "" {
+		pattern = n.state.GlobalConfig.NetworkHWAddrPattern()
+	}
+
+	// Generate a new random MAC address using the given pattern.
+	ret := bytes.Buffer{}
+	for _, c := range pattern {
+		if c == 'x' || c == 'X' {
+			ret.WriteString(fmt.Sprintf("%x", r.Int31n(16)))
+		} else {
+			ret.WriteString(string(c))
+		}
+	}
+
+	return ret.String()
 }

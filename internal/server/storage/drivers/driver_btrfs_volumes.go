@@ -90,7 +90,7 @@ func (d *btrfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Op
 		}
 	}
 
-	err = d.runFiller(vol, rootBlockPath, filler, false)
+	err = genericRunFiller(d, vol, rootBlockPath, filler, false)
 	if err != nil {
 		return err
 	}
@@ -998,6 +998,102 @@ func (d *btrfs) HasVolume(vol Volume) (bool, error) {
 
 // ValidateVolume validates the supplied volume config.
 func (d *btrfs) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=initial.gid)
+	//
+	// ---
+	//  type: int
+	//  condition: custom volume with content type `filesystem`
+	//  default: same as `volume.initial.gid` or `0`
+	//  shortdesc: GID of the volume owner in the instance
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=initial.mode)
+	//
+	// ---
+	//  type: int
+	//  condition: custom volume with content type `filesystem`
+	//  default: same as `volume.initial.mode` or `711`
+	//  shortdesc: Mode of the volume in the instance
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=initial.uid)
+	//
+	// ---
+	//  type: int
+	//  condition: custom volume with content type `filesystem`
+	//  default: same as `volume.initial.uid` or `0`
+	//  shortdesc: UID of the volume owner in the instance
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=security.shared)
+	//
+	// ---
+	//  type: bool
+	//  condition: custom block volume
+	//  default: same as `volume.security.shared` or `false`
+	//  shortdesc: Enable sharing the volume across multiple instances
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=security.shifted)
+	//
+	// ---
+	//  type: bool
+	//  condition: custom volume
+	//  default: same as `volume.security.shifted` or `false`
+	//  shortdesc: {{enable_ID_shifting}}
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=security.unmapped)
+	//
+	// ---
+	//  type: bool
+	//  condition: custom volume
+	//  default: same as `volume.security.unmapped` or `false`
+	//  shortdesc: Disable ID mapping for the volume
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=size)
+	//
+	// ---
+	//  type: string
+	//  condition: appropriate driver
+	//  default: same as `volume.size`
+	//  shortdesc: Size/quota of the storage volume
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=snapshots.expiry)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.expiry`
+	//  shortdesc: {{snapshot_expiry_format}}
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=snapshots.expiry.manual)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.expiry.manual`
+	//  shortdesc: {{snapshot_expiry_format}}
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=snapshots.pattern)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.pattern` or `snap%d`
+	//  shortdesc: {{snapshot_pattern_format}} [^*]
+
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=snapshots.schedule)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.schedule`
+	//  shortdesc: {{snapshot_schedule_format}}
+
+	// gendoc:generate(entity=storage_bucket_btrfs, group=common, key=size)
+	//
+	// ---
+	//  type: string
+	//  condition: appropriate driver
+	//  default: same as `volume.size`
+	//  shortdesc: Size/quota of the storage bucket
+
 	return d.validateVolume(vol, nil, removeUnknownKeys)
 }
 
@@ -1527,7 +1623,7 @@ func (d *btrfs) migrateVolumeOptimized(vol Volume, conn io.ReadWriteCloser, volS
 
 // BackupVolume copies a volume (and optionally its snapshots) to a specified target path.
 // This driver does not support optimized backups.
-func (d *btrfs) BackupVolume(vol Volume, tarWriter *instancewriter.InstanceTarWriter, optimized bool, snapshots []string, op *operations.Operation) error {
+func (d *btrfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, optimized bool, snapshots []string, op *operations.Operation) error {
 	// Handle the non-optimized tarballs through the generic packer.
 	if !optimized {
 		// Because the generic backup method will not take a consistent backup if files are being modified
@@ -1546,7 +1642,7 @@ func (d *btrfs) BackupVolume(vol Volume, tarWriter *instancewriter.InstanceTarWr
 			vol.mountCustomPath = snapshotPath
 		}
 
-		return genericVFSBackupVolume(d, vol, tarWriter, snapshots, op)
+		return genericVFSBackupVolume(d, vol, writer, snapshots, op)
 	}
 
 	// Optimized backup.
@@ -1581,7 +1677,7 @@ func (d *btrfs) BackupVolume(vol Volume, tarWriter *instancewriter.InstanceTarWr
 	}
 
 	// Write to tarball.
-	err = tarWriter.WriteFileFromReader(r, &indexFileInfo)
+	err = writer.WriteFileFromReader(r, &indexFileInfo)
 	if err != nil {
 		return err
 	}
@@ -1619,7 +1715,7 @@ func (d *btrfs) BackupVolume(vol Volume, tarWriter *instancewriter.InstanceTarWr
 			return err
 		}
 
-		err = tarWriter.WriteFile(fileName, tmpFile.Name(), tmpFileInfo, false)
+		err = writer.WriteFile(fileName, tmpFile.Name(), tmpFileInfo, false)
 		if err != nil {
 			return err
 		}

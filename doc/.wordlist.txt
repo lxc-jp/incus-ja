@@ -9,6 +9,7 @@ allocator
 AMD
 Ansible
 Ansible's
+API
 APIs
 AppArmor
 ARMv
@@ -306,6 +307,7 @@ syscall
 syscalls
 sysfs
 syslog
+systemd
 Tbit
 TCP
 Telegraf

@@ -1607,6 +1607,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 <!-- config group devices-unix-hotplug end -->
 <!-- config group devices-usb start -->
+```{config:option} attached devices-usb
+:default: "`true`"
+:required: "no"
+:shortdesc: "USBデバイスが接続されているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} busnum devices-usb
 :shortdesc: "USBデバイスがアタッチされている先のバスナンバー"
 :type: "int"
@@ -1908,6 +1916,20 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :shortdesc: "自由形式の`SMBIOS Type 11`のキー/バリュー"
 :type: "string"
 `SMBIOS Type 11`の設定キー。
+```
+
+```{config:option} systemd.credential-binary.* instance-miscellaneous
+:liveupdate: "yes"
+:shortdesc: "systemdの機密情報のキー/値、値はBase64エンコード"
+:type: "string"
+コンテナでは読み取り専用のbindマウント、仮想マシンでは`SMBIOS Type 11`のデータとして渡されるsystemdの機密情報のキー/値ペアー。値はBase64エンコードされます。
+```
+
+```{config:option} systemd.credential.* instance-miscellaneous
+:liveupdate: "yes"
+:shortdesc: "systemdの機密情報のキー/値"
+:type: "string"
+コンテナでは読み取り専用のbindマウント、仮想マシンでは`SMBIOS Type 11`のデータとして渡されるsystemdの機密情報のキー/値ペアー。
 ```
 
 ```{config:option} user.* instance-miscellaneous
@@ -2257,6 +2279,54 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 :liveupdate: "no"
 :shortdesc: "状態とメトリクスを`incus-agent`に問い合わせるかどうか"
 :type: "bool"
+
+```
+
+```{config:option} security.bpffs.delegate_attachs instance-security
+:condition: "unprivileged container"
+:liveupdate: "no"
+:shortdesc: "どのBPFアタッチタイプを移譲するか"
+:type: "string"
+詳細は{ref}`bpf-tokens`を参照してください。
+
+```
+
+```{config:option} security.bpffs.delegate_cmds instance-security
+:condition: "unprivileged container"
+:liveupdate: "no"
+:shortdesc: "どのBPFコマンドタイプを移譲するか"
+:type: "string"
+詳細は{ref}`bpf-tokens`を参照してください。
+
+```
+
+```{config:option} security.bpffs.delegate_maps instance-security
+:condition: "unprivileged container"
+:liveupdate: "no"
+:shortdesc: "どのBPFマップタイプを移譲するか"
+:type: "string"
+詳細は{ref}`bpf-tokens`を参照してください。
+
+```
+
+```{config:option} security.bpffs.delegate_progs instance-security
+:condition: "unprivileged container"
+:liveupdate: "no"
+:shortdesc: "どのBPFプログラムタイプを移譲するか"
+:type: "string"
+詳細は{ref}`bpf-tokens`を参照してください。
+
+```
+
+```{config:option} security.bpffs.path instance-security
+:condition: "unprivileged container"
+:defaultdesc: "`/sys/fs/bpf`"
+:liveupdate: "no"
+:shortdesc: "BPFファイルシステムをマウントするパス"
+:type: "string"
+指定されたパスはコンテナ内に存在する必要があります。
+BPFファイルシステムはいずれかの`security.bpffs.delegate_*`オプションが設定されている場合にのみマウントされます。
+詳細は{ref}`bpf-tokens`を参照してください。
 
 ```
 
@@ -3561,6 +3631,14 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```
 
+```{config:option} dns.mode network_ovn-common
+:condition: "-"
+:default: "`managed`"
+:shortdesc: "DNS登録モード：noneはDNSレコードなし、managedはOVNがレコードを管理"
+:type: "string"
+
+```
+
 ```{config:option} dns.nameservers network_ovn-common
 :default: "アップリンクのDNSサーバー（アップリンクが未設定の場合はIPv4とIPv6のアドレス）"
 :shortdesc: "DHCPクライアントへとルーターアドバータイズメント経由で広告するDNSサーバーのIPアドレス。IPv4とIPv6の両方のアドレスがDHCPクライアントに広告され、IPv6アドレスはさらにRA経由のRDNSSとしても広告されます。"
@@ -4402,6 +4480,15 @@ Possible values are `allow` or `block`.
 使用していないキャッシュされたイメージが期限切れになる日数を指定します。
 ```
 
+```{config:option} network.hwaddr_pattern project-specific
+:scope: "global"
+:shortdesc: "MACアドレステンプレート"
+:type: "string"
+クラスター内で使用するMACアドレステンプレート（例`10:66:6a:xx:xx:xx`）を指定します。
+テンプレート内の`x`は`0`-`f`のランダムな文字に置き換えられます。
+誕生日のパラドックスに注意してください！単独の`xx`はたった8個のアドレス、2つの`xx:xx`では118個のアドレス、3つの`xx:xx:xx`では1881個のアドレス、4つの`xx:xx:xx:xx`では30084個のアドレスでで衝突の確率が10%あります。これを保護するガードレールは一切提供していません。
+```
+
 ```{config:option} user.* project-specific
 :shortdesc: "ユーザーが指定する自由形式のキー／バリューペア"
 :type: "string"
@@ -5078,6 +5165,18 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```
 
 <!-- config group server-miscellaneous end -->
+<!-- config group server-network start -->
+```{config:option} network.hwaddr_pattern server-network
+:defaultdesc: "`10:66:6a:xx:xx:xx`"
+:scope: "global"
+:shortdesc: "MACアドレステンプレート"
+:type: "string"
+クラスター内で使用するMACアドレステンプレート（例`10:66:6a:xx:xx:xx`）を指定します。
+テンプレート内の`x`は`0`-`f`のランダムな文字に置き換えられます。
+誕生日のパラドックスに注意してください！単独の`xx`はたった8個のアドレス、2つの`xx:xx`では118個のアドレス、3つの`xx:xx:xx`では1881個のアドレス、4つの`xx:xx:xx:xx`では30084個のアドレスでで衝突の確率が10%あります。これを保護するガードレールは一切提供していません。
+```
+
+<!-- config group server-network end -->
 <!-- config group server-oidc start -->
 ```{config:option} oidc.audience server-oidc
 :scope: "global"
@@ -5138,3 +5237,1515 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```
 
 <!-- config group server-openfga end -->
+<!-- config group storage_btrfs-common start -->
+```{config:option} btrfs.mount_options storage_btrfs-common
+:default: "`user_subvol_rm_allowed`"
+:scope: "global"
+:shortdesc: "ブロックデバイスのマウントオプション"
+:type: "string"
+
+```
+
+```{config:option} size storage_btrfs-common
+:default: "自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB）"
+:scope: "local"
+:shortdesc: "ループベースのプールを作成する際のストレージプールのサイズ（バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大）"
+:type: "string"
+
+```
+
+```{config:option} source storage_btrfs-common
+:default: "-"
+:scope: "local"
+:shortdesc: "既存のブロックデバイス、ループファイル、あるいはBtrfsサブボリュームのパス"
+:type: "string"
+
+```
+
+```{config:option} source.wipe storage_btrfs-common
+:default: "`false`"
+:scope: "local"
+:shortdesc: "ストレージプールを作成する前に`source`で指定されたブロックデバイスの中身を消去する"
+:type: "bool"
+
+```
+
+<!-- config group storage_btrfs-common end -->
+<!-- config group storage_bucket_btrfs-common start -->
+```{config:option} size storage_bucket_btrfs-common
+:condition: "適切なドライバー"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージバケットのサイズ/クォータ"
+:type: "string"
+
+```
+
+<!-- config group storage_bucket_btrfs-common end -->
+<!-- config group storage_bucket_cephobject-common start -->
+```{config:option} size storage_bucket_cephobject-common
+:default: "-"
+:shortdesc: "ストレージバケットのクォータ"
+:type: "string"
+
+```
+
+<!-- config group storage_bucket_cephobject-common end -->
+<!-- config group storage_bucket_lvm-common start -->
+```{config:option} size storage_bucket_lvm-common
+:condition: "適切なドライバー"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージバケットのサイズ/クォータ"
+:type: "string"
+
+```
+
+<!-- config group storage_bucket_lvm-common end -->
+<!-- config group storage_bucket_zfs-common start -->
+```{config:option} size storage_bucket_zfs-common
+:condition: "適切なドライバー"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージバケットのサイズ/クォータ"
+:type: "string"
+
+```
+
+<!-- config group storage_bucket_zfs-common end -->
+<!-- config group storage_ceph-common start -->
+```{config:option} ceph.cluster_name storage_ceph-common
+:default: "`ceph`"
+:scope: "global"
+:shortdesc: "新しいストレージプールを作成するCephクラスタの名前"
+:type: "string"
+
+```
+
+```{config:option} ceph.osd.data_pool_name storage_ceph-common
+:default: "-"
+:scope: "global"
+:shortdesc: "OSDデータプールの名前"
+:type: "string"
+
+```
+
+```{config:option} ceph.osd.force_reuse storage_ceph-common
+:default: "-"
+:scope: "global"
+:shortdesc: "非推奨。使わないでください。"
+:type: "bool"
+
+```
+
+```{config:option} ceph.osd.pg_name storage_ceph-common
+:default: "`32`"
+:scope: "global"
+:shortdesc: "OSDストレージプール用のplacementグループの数"
+:type: "string"
+
+```
+
+```{config:option} ceph.osd.pool_name storage_ceph-common
+:default: "name of the pool"
+:scope: "global"
+:shortdesc: "OSDストレージプールの名前"
+:type: "string"
+
+```
+
+```{config:option} ceph.rbd.clone_copy storage_ceph-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "フルのデータセットコピーではなくRBDのライトウェイトクローンを使うかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ceph.rbd.du storage_ceph-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "停止したインスタンスのディスク使用データを取得するのにRBD `du`を使用するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} ceph.rbd.features storage_ceph-common
+:default: "`layering`"
+:scope: "global"
+:shortdesc: "ボリュームで有効にするRBDの機能のカンマ区切りリスト"
+:type: "string"
+
+```
+
+```{config:option} ceph.user.name storage_ceph-common
+:default: "`admin`"
+:scope: "global"
+:shortdesc: "ストレージプールとボリュームの作成に使用するCephユーザー"
+:type: "string"
+
+```
+
+```{config:option} source storage_ceph-common
+:default: "-"
+:scope: "local"
+:shortdesc: "使用する既存のOSDストレージプール"
+:type: "string"
+
+```
+
+```{config:option} volatile.pool.pristine storage_ceph-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "プールが作成時に空だったかどうか"
+:type: "string"
+
+```
+
+<!-- config group storage_ceph-common end -->
+<!-- config group storage_cephfs-common start -->
+```{config:option} cephfs.cluster_name storage_cephfs-common
+:default: "`ceph`"
+:scope: "global"
+:shortdesc: "CephFSファイルシステムを含むCephクラスタの名前"
+:type: "string"
+
+```
+
+```{config:option} cephfs.create_missing storage_cephfs-common
+:default: "`false`"
+:scope: "global"
+:shortdesc: "データとメタデータOSDプールが存在しない場合は作成しつつファイルシステムを作成"
+:type: "bool"
+
+```
+
+```{config:option} cephfs.data_pool storage_cephfs-common
+:default: "-"
+:scope: "global"
+:shortdesc: "ファイルシステム用に作成するデータOSDプール名"
+:type: "string"
+
+```
+
+```{config:option} cephfs.fscache storage_cephfs-common
+:default: "`false`"
+:scope: "global"
+:shortdesc: "カーネルの`fscache`と`cachefilesd`を使用するか"
+:type: "bool"
+
+```
+
+```{config:option} cephfs.meta_pool storage_cephfs-common
+:default: "-"
+:scope: "global"
+:shortdesc: "ファイルシステム用に作成するメタデータOSDプール名"
+:type: "string"
+
+```
+
+```{config:option} cephfs.osd_pg_num storage_cephfs-common
+:default: "-"
+:scope: "global"
+:shortdesc: "存在しないOSDプールを作成する際に使用するOSDプールの`pg_num`"
+:type: "string"
+
+```
+
+```{config:option} cephfs.path storage_cephfs-common
+:default: "`/`"
+:scope: "global"
+:shortdesc: "CephFSをマウントするベースのパス"
+:type: "string"
+
+```
+
+```{config:option} cephfs.user.name storage_cephfs-common
+:default: "`admin`"
+:scope: "global"
+:shortdesc: "使用するCephのユーザー"
+:type: "string"
+
+```
+
+```{config:option} source storage_cephfs-common
+:default: "-"
+:scope: "local"
+:shortdesc: "使用する既存のCephFSファイルシステムかファイルシステムパス"
+:type: "string"
+
+```
+
+```{config:option} volatile.pool.pristine storage_cephfs-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "作成時にCephFSファイルシステムが空だったか"
+:type: "string"
+
+```
+
+<!-- config group storage_cephfs-common end -->
+<!-- config group storage_cephobject-common start -->
+```{config:option} cephobject.bucket_name_prefix storage_cephobject-common
+:default: "-"
+:scope: "global"
+:shortdesc: "Ceph内のバケット名に追加する接頭辞"
+:type: "string"
+
+```
+
+```{config:option} cephobject.cluster_name storage_cephobject-common
+:default: "`ceph`"
+:scope: "global"
+:shortdesc: "使用するCephクラスタ"
+:type: "string"
+
+```
+
+```{config:option} cephobject.radosgw.endpoint storage_cephobject-common
+:default: "-"
+:scope: "global"
+:shortdesc: "`radosgw`ゲートウェイプロセスのURL"
+:type: "string"
+
+```
+
+```{config:option} cephobject.radosgw.endpoint_cert_file storage_cephobject-common
+:default: "-"
+:scope: "global"
+:shortdesc: "エンドポイント通信に使用するTLSクライアント証明書を含むファイルへのパス"
+:type: "string"
+
+```
+
+```{config:option} cephobject.user.name storage_cephobject-common
+:default: "`admin`"
+:scope: "global"
+:shortdesc: "使用するCephユーザー"
+:type: "string"
+
+```
+
+```{config:option} volatile.pool.pristine storage_cephobject-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "作成時に`radosgw` `lxd-admin`ユーザーが存在したかどうか"
+:type: "string"
+
+```
+
+<!-- config group storage_cephobject-common end -->
+<!-- config group storage_dir-common start -->
+```{config:option} rsync.bwlimit storage_dir-common
+:default: "`0` （無制限）"
+:scope: "global"
+:shortdesc: "ストレージエンティティの転送にrsyncを使う必要があるときにソケットI/Oに指定する上限を設定"
+:type: "string"
+
+```
+
+```{config:option} rsync.compression storage_dir-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "ストレージブールのマイグレーションの際に圧縮を使うかどうか"
+:type: "bool"
+
+```
+
+```{config:option} source storage_dir-common
+:default: "-"
+:scope: "local"
+:shortdesc: "既存のディレクトリーのパス"
+:type: "string"
+
+```
+
+<!-- config group storage_dir-common end -->
+<!-- config group storage_linstor-common start -->
+```{config:option} drbd.auto_add_quorum_tiebreaker storage_linstor-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "LINSTORが必要に応じて自動的にディスクレスリソースを作ってクオラムのタイブレーカーとして振る舞わせることを許可するかどうか（リソースグループに適用される）"
+:type: "bool"
+
+```
+
+```{config:option} drbd.auto_diskful storage_linstor-common
+:default: "-"
+:scope: "global"
+:shortdesc: "ノード上のストレージが利用可能な場合にプライマリのディスクレスリソースがディスクフルに変換されるまでの期間を表す文字列（リソースグループに適用される）"
+:type: "string"
+
+```
+
+```{config:option} drbd.on_no_quorum storage_linstor-common
+:default: "-"
+:scope: "global"
+:shortdesc: "クオラムが失われた際に使用されるDRBDポリシー（リソースグループに適用される）"
+:type: "string"
+
+```
+
+```{config:option} linstor.resource_group.name storage_linstor-common
+:default: "`incus`"
+:scope: "global"
+:shortdesc: "ストレージプールで使用されるLINSTORリソースグループ"
+:type: "string"
+
+```
+
+```{config:option} linstor.resource_group.place_count storage_linstor-common
+:default: "`2`"
+:scope: "global"
+:shortdesc: "リソースグループ内のリソースのために作成されるべきディスクフルレプリカの数。すでにボリュームがあるプールでこのオプションの値を増やすと、LINSTORはすべての既存のリソースが新しい値に合致するように新しくディスクフルレプリカを作成することになります"
+:type: "int"
+
+```
+
+```{config:option} linstor.resource_group.storage_pool storage_linstor-common
+:default: "-"
+:scope: "global"
+:shortdesc: "サテライトノード上にリソースが配置されるストレージプール"
+:type: "string"
+
+```
+
+```{config:option} linstor.volume.prefix storage_linstor-common
+:default: "`incus-volume-`"
+:scope: "global"
+:shortdesc: "LINSTORが管理するボリュームの内部名に使われる接頭辞。ストレージプール作成後は変更不可"
+:type: "string"
+
+```
+
+```{config:option} volatile.pool.pristine storage_linstor-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "作成時にプールが空だったかどうか"
+:type: "string"
+
+```
+
+<!-- config group storage_linstor-common end -->
+<!-- config group storage_lvm-common start -->
+```{config:option} lvm.metadata_size storage_lvm-common
+:default: "`0` （自動）"
+:scope: "global"
+:shortdesc: "物理ボリュームのメタデータ空間のサイズ"
+:type: "string"
+
+```
+
+```{config:option} lvm.thinpool_metadata_size storage_lvm-common
+:default: "`0` （自動）"
+:scope: "global"
+:shortdesc: "thin poolメタデータボリュームのサイズ（デフォルトは LVM が適切なサイズを計算）。`lvmcluster`では使用不可。"
+:type: "string"
+
+```
+
+```{config:option} lvm.thinpool_name storage_lvm-common
+:default: "`IncusThinPool`"
+:scope: "local"
+:shortdesc: "ボリュームが作成されるthin pool名。`lvmcluster`では使用不可。"
+:type: "string"
+
+```
+
+```{config:option} lvm.use_thinpool storage_lvm-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "ストレージプールは論理ボリュームにthin poolを使うかどうか。`lvmcluster`では使用不可。"
+:type: "bool"
+
+```
+
+```{config:option} lvm.vg.force_reuse storage_lvm-common
+:default: "`false`"
+:scope: "local"
+:shortdesc: "既存の空でないボリュームグループの使用を強制。`lvmcluster`では使用不可。"
+:type: "bool"
+
+```
+
+```{config:option} lvm.vg_name storage_lvm-common
+:default: "プールの名前"
+:scope: "local"
+:shortdesc: "作成するボリュームグループ名。"
+:type: "string"
+
+```
+
+```{config:option} size storage_lvm-common
+:default: "自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB）"
+:scope: "local"
+:shortdesc: "ループベースのプールを作成する際のストレージプールのサイズ (バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大)。`lvmcluster`では使用不可。"
+:type: "string"
+
+```
+
+```{config:option} source storage_lvm-common
+:default: "-"
+:scope: "local"
+:shortdesc: "既存のブロックデバイスかループファイルかLVMボリュームグループのパス。"
+:type: "string"
+
+```
+
+```{config:option} source.wipe storage_lvm-common
+:default: "`false`"
+:scope: "local"
+:shortdesc: "ストレージプールを作成する前に`source`で指定されたブロックデバイスの中身を消去する。"
+:type: "bool"
+
+```
+
+<!-- config group storage_lvm-common end -->
+<!-- config group storage_truenas-common start -->
+```{config:option} source storage_truenas-common
+:default: "-"
+:scope: "local"
+:shortdesc: "リモートのTrueNASホスト上で使用するZFSデータセット。形式: `[<host>:]<pool>[/<dataset>][/]`。ここで`host`を省略すると、`truenas.host`で設定する必要あり。"
+:type: "string"
+
+```
+
+```{config:option} truenas.allow_insecure storage_truenas-common
+:default: "`false`"
+:scope: "global"
+:shortdesc: "`true`に設定すると、TrueNAS APIへの安全でない（非TLS）接続を許可します。"
+:type: "bool"
+
+```
+
+```{config:option} truenas.api_key storage_truenas-common
+:default: "-"
+:scope: "global"
+:shortdesc: "TrueNASホストへの認証に使うAPIキー。"
+:type: "string"
+
+```
+
+```{config:option} truenas.clone_copy storage_truenas-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "フルの{spellexception}`dataset`コピーではなくライトウェイトなクローンを使うかどうか。"
+:type: "bool"
+
+```
+
+```{config:option} truenas.config storage_truenas-common
+:default: "-"
+:scope: "global"
+:shortdesc: "TrueNASクライアントツールの設定ファイルのパス。"
+:type: "string"
+
+```
+
+```{config:option} truenas.dataset storage_truenas-common
+:default: "-"
+:scope: "global"
+:shortdesc: "リモートデータセット名。通常は`source`から推測されるが、上書きも可能。"
+:type: "string"
+
+```
+
+```{config:option} truenas.force_reuse storage_truenas-common
+:default: "`false`"
+:scope: "global"
+:shortdesc: "既存の空でないプールを使うのを許可する。"
+:type: "bool"
+
+```
+
+```{config:option} truenas.host storage_truenas-common
+:default: "-"
+:scope: "global"
+:shortdesc: "TrueNASシステムのホスト名またはIPアドレス。`source`内に含まれるか、設定が使われる場合は設定不要。"
+:type: "string"
+
+```
+
+```{config:option} truenas.initiator storage_truenas-common
+:default: "-"
+:scope: "global"
+:shortdesc: "ブロックボリュームのアタッチの際に使われるiSCSIイニシエーター名。"
+:type: "string"
+
+```
+
+```{config:option} truenas.portal storage_truenas-common
+:default: "-"
+:scope: "global"
+:shortdesc: "ブロックボリュームの接続の際に使われるiSCSIポータルアドレス。"
+:type: "string"
+
+```
+
+<!-- config group storage_truenas-common end -->
+<!-- config group storage_volume_btrfs-common start -->
+```{config:option} initial.gid storage_volume_btrfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_btrfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_btrfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} security.shared storage_volume_btrfs-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_btrfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.unmapped storage_volume_btrfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} size storage_volume_btrfs-common
+:condition: "適切なドライバー"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_btrfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_btrfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_btrfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}} [^*]"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_btrfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+<!-- config group storage_volume_btrfs-common end -->
+<!-- config group storage_volume_ceph-common start -->
+```{config:option} block.filesystem storage_volume_ceph-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.filesystem`と同じ"
+:shortdesc: "{{block_filesystem}}"
+:type: "string"
+
+```
+
+```{config:option} block.mount_options storage_volume_ceph-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.mount_options`と同じ"
+:shortdesc: "block-backedなファイルシステムボリュームのマウントオプション"
+:type: "string"
+
+```
+
+```{config:option} initial.gid storage_volume_ceph-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_ceph-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_ceph-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} security.shared storage_volume_ceph-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_ceph-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.unmapped storage_volume_ceph-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} size storage_volume_ceph-common
+:condition: "-"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_ceph-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_ceph-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_ceph-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}} [^*]"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_ceph-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+<!-- config group storage_volume_ceph-common end -->
+<!-- config group storage_volume_cephfs-common start -->
+```{config:option} initial.gid storage_volume_cephfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_cephfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_cephfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} security.shared storage_volume_cephfs-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_cephfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.unmapped storage_volume_cephfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} size storage_volume_cephfs-common
+:condition: "適切なドライバー"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_cephfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_cephfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_cephfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}} [^*]"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_cephfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+<!-- config group storage_volume_cephfs-common end -->
+<!-- config group storage_volume_dir-common start -->
+```{config:option} initial.gid storage_volume_dir-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_dir-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_dir-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} security.shared storage_volume_dir-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_dir-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.size storage_volume_dir-common
+:condition: "適切なドライバー"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} security.unmapped storage_volume_dir-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_dir-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_dir-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_dir-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}}  [^*]"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_dir-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+<!-- config group storage_volume_dir-common end -->
+<!-- config group storage_volume_linstor-common start -->
+```{config:option} block.filesystem storage_volume_linstor-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.filesystem`と同じ"
+:shortdesc: "{{block_filesystem}}"
+:type: "string"
+
+```
+
+```{config:option} block.mount_options storage_volume_linstor-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.mount_options`と同じ"
+:shortdesc: "ブロックベースのファイルシステムボリュームのマウントオプション"
+:type: "string"
+
+```
+
+```{config:option} drbd.auto_add_quorum_tiebreaker storage_volume_linstor-common
+:condition: "-"
+:default: "`true`"
+:shortdesc: "LINSTORが必要に応じて自動的にディスクレスリソースを作ってクオラムのタイブレーカーとして振る舞わせることを許可するかどうか（リソースグループに適用される）"
+:type: "bool"
+
+```
+
+```{config:option} drbd.auto_diskful storage_volume_linstor-common
+:condition: "-"
+:default: "-"
+:shortdesc: "ノード上のストレージが利用可能な場合にプライマリのディスクレスリソースがディスクフルに変換されるまでの期間を表す文字列（リソースグループに適用される）"
+:type: "string"
+
+```
+
+```{config:option} drbd.on_no_quorum storage_volume_linstor-common
+:condition: "-"
+:default: "-"
+:shortdesc: "クオラムが失われた際に使用されるDRBDポリシー（リソースグループに適用される）"
+:type: "string"
+
+```
+
+```{config:option} initial.gid storage_volume_linstor-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_linstor-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_linstor-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} linstor.remove_snapshots storage_volume_linstor-common
+:condition: "-"
+:default: "`volume.linstor.remove_snapshots`と同じか`false`"
+:shortdesc: "必要に応じてスナップショットを削除するか"
+:type: "bool"
+
+```
+
+```{config:option} security.shared storage_volume_linstor-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_linstor-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.unmapped storage_volume_linstor-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} size storage_volume_linstor-common
+:condition: "-"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_linstor-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_linstor-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_linstor-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}} [^*]"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_linstor-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+<!-- config group storage_volume_linstor-common end -->
+<!-- config group storage_volume_lvm-common start -->
+```{config:option} block.filesystem storage_volume_lvm-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.filesystem`と同じ"
+:shortdesc: "{{block_filesystem}}"
+:type: "string"
+
+```
+
+```{config:option} block.mount_options storage_volume_lvm-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.mount_options`と同じ"
+:shortdesc: "ブロックベースのファイルシステムボリュームのマウントオプション"
+:type: "string"
+
+```
+
+```{config:option} initial.gid storage_volume_lvm-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_lvm-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_lvm-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} lvm.stripes storage_volume_lvm-common
+:condition: "-"
+:default: "`volume.lvm.stripes`と同じ"
+:shortdesc: "新しいボリューム（あるいはthin poolボリューム）に使用するストライプ数"
+:type: "string"
+
+```
+
+```{config:option} lvm.stripes.size storage_volume_lvm-common
+:condition: "-"
+:default: "`volume.lvm.stripes.size`と同じ"
+:shortdesc: "使用するストライプのサイズ（最低4096バイトで512バイトの倍数を指定）"
+:type: "string"
+
+```
+
+```{config:option} security.shared storage_volume_lvm-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_lvm-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.unmapped storage_volume_lvm-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} size storage_volume_lvm-common
+:condition: "default: same as `volume.size`"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_lvm-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_lvm-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_lvm-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}}  [^*]"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_lvm-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+<!-- config group storage_volume_lvm-common end -->
+<!-- config group storage_volume_truenas-common start -->
+```{config:option} block.filesystem storage_volume_truenas-common
+:condition: "-"
+:default: "`volume.block.filesystem`と同じ"
+:shortdesc: "{{block_filesystem}}"
+:type: "string"
+
+```
+
+```{config:option} block.mount_options storage_volume_truenas-common
+:condition: "-"
+:default: "`volume.block.mount_options`と同じ"
+:shortdesc: "ブロックベースのファイルシステムボリュームのマウントオプション"
+:type: "string"
+
+```
+
+```{config:option} initial.gid storage_volume_truenas-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_truenas-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_truenas-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} security.shared storage_volume_truenas-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_truenas-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.unmapped storage_volume_truenas-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} size storage_volume_truenas-common
+:condition: "適切なドライバー"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_truenas-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_truenas-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_truenas-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_truenas-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+```{config:option} truenas.blocksize storage_volume_truenas-common
+:condition: "-"
+:default: "`volume.truenas.blocksize`と同じ"
+:shortdesc: "ZFSブロックのサイズを512バイトから16MiBの間で（2のべき乗で）指定。ブロックボリュームではより大きな値を設定しても最大値の128KiBが使われます"
+:type: "string"
+
+```
+
+```{config:option} truenas.remove_snapshots storage_volume_truenas-common
+:condition: "-"
+:default: "`volume.truenas.remove_snapshots`と同じか`false`"
+:shortdesc: "必要に応じてスナップショットを削除する"
+:type: "bool"
+
+```
+
+```{config:option} truenas.use_refquota storage_volume_truenas-common
+:condition: "-"
+:default: "`volume.truenas.use_refquota`と同じか`false`"
+:shortdesc: "スペースの`quota`の代わりに`refquota`を使う"
+:type: "bool"
+
+```
+
+<!-- config group storage_volume_truenas-common end -->
+<!-- config group storage_volume_zfs-common start -->
+```{config:option} block.filesystem storage_volume_zfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム（`zfs.block_mode`が有効）"
+:default: "`volume.block.filesystem`と同じ"
+:shortdesc: "{{block_filesystem}}"
+:type: "string"
+
+```
+
+```{config:option} block.mount_options storage_volume_zfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム（`zfs.block_mode`が有効）"
+:default: "`volume.block.mount_options`と同じ"
+:shortdesc: "ブロックベースのファイルシステムボリュームのマウントオプション"
+:type: "string"
+
+```
+
+```{config:option} initial.gid storage_volume_zfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.gid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のGID"
+:type: "int"
+
+```
+
+```{config:option} initial.mode storage_volume_zfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.mode`と同じか`711`"
+:shortdesc: "インスタンス内のボリュームのモード"
+:type: "int"
+
+```
+
+```{config:option} initial.uid storage_volume_zfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム"
+:default: "`volume.initial.uid`と同じか`0`"
+:shortdesc: "インスタンス内のボリュームの所有者のUID"
+:type: "int"
+
+```
+
+```{config:option} security.shared storage_volume_zfs-common
+:condition: "カスタムブロックボリューム"
+:default: "`volume.security.shared`と同じか`false`"
+:shortdesc: "複数のインスタンスでのボリュームの共有を有効にする"
+:type: "bool"
+
+```
+
+```{config:option} security.shifted storage_volume_zfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.shifted`と同じか`false`"
+:shortdesc: "{{enable_ID_shifting}}"
+:type: "bool"
+
+```
+
+```{config:option} security.unmapped storage_volume_zfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.security.unmapped`と同じか`false`"
+:shortdesc: "ボリュームへのIDマッピングを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} size storage_volume_zfs-common
+:condition: "-"
+:default: "`volume.size`と同じ"
+:shortdesc: "ストレージボリュームのサイズ/クォータ"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry storage_volume_zfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.expiry.manual storage_volume_zfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.expiry.manual`と同じ"
+:shortdesc: "{{snapshot_expiry_format}}"
+:type: "string"
+
+```
+
+```{config:option} snapshots.pattern storage_volume_zfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.pattern`と同じか`snap%d`"
+:shortdesc: "{{snapshot_pattern_format}} [^*]"
+:type: "string"
+
+```
+
+```{config:option} snapshots.schedule storage_volume_zfs-common
+:condition: "カスタムボリューム"
+:default: "`volume.snapshots.schedule`と同じ"
+:shortdesc: "{{snapshot_schedule_format}}"
+:type: "string"
+
+```
+
+```{config:option} zfs.block_mode storage_volume_zfs-common
+:condition: "-"
+:default: "`volume.zfs.block_mode`と同じ"
+:shortdesc: "{spellexception}`dataset`よりもフォーマットした`zvol`を使うかどうか（`zfs.block_mode`はカスタムストレージボリュームにのみ設定できます。インスタンスボリュームを含むプール内のすべてのストレージボリュームにZFSブロックモードを有効にするには`volume.zfs.block_mode`を使ってください）"
+:type: "bool"
+
+```
+
+```{config:option} zfs.blocksize storage_volume_zfs-common
+:condition: "-"
+:default: "`volume.zfs.blocksize`と同じ"
+:shortdesc: "ZFSブロックのサイズを512バイト～16MiBの範囲で指定します（2の累乗でなければなりません）。ブロックボリュームでは、より大きな値が設定されていても、最大値の128KiBが使用されます"
+:type: "string"
+
+```
+
+```{config:option} zfs.delegate storage_volume_zfs-common
+:condition: "ZFS 2.2以上"
+:default: "`volume.zfs.delegate`と同じ"
+:shortdesc: "ZFSデータセットとそれに含まれるすべてを使用しているコンテナに移譲するかどうか。有効にするとコンテナ内で`zfs`コマンドが使えます"
+:type: "bool"
+
+```
+
+```{config:option} zfs.remove_snapshots storage_volume_zfs-common
+:condition: "-"
+:default: "`volume.zfs.remove_snapshots`と同じか`false`"
+:shortdesc: "必要に応じてスナップショットを削除するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} zfs.reserve_space storage_volume_zfs-common
+:condition: "-"
+:default: "`volume.zfs.reserve_space`と同じか`false`"
+:shortdesc: "`qouta`/`refquota`に加えて`reservation`/`refreservation`も使用するかどうか"
+:type: "bool"
+
+```
+
+```{config:option} zfs.use_refquota storage_volume_zfs-common
+:condition: "-"
+:default: "`volume.zfs.use_refquota`と同じか`false`"
+:shortdesc: "領域の`quota`の代わりに`refquota`を使うかどうか"
+:type: "bool"
+
+```
+
+<!-- config group storage_volume_zfs-common end -->
+<!-- config group storage_zfs-common start -->
+```{config:option} size storage_zfs-common
+:default: "自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB）"
+:scope: "local"
+:shortdesc: "ループベースのプールを作成する際のストレージプールのサイズ（バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大）"
+:type: "string"
+
+```
+
+```{config:option} source storage_zfs-common
+:default: "-"
+:scope: "local"
+:shortdesc: "既存のブロックデバイスかループファイルかZFSデータセット/プールのパス。複数のブロックデバイスは`,`で区切ります。ブロックデバイスをリストする際は`vdev`タイプを接頭辞として指定することもできます。`vdev`タイプを指定するには`vdev`タイプとブロックデバイスの間に`=`記号を書きます（例、`mirror=/dev/sda,/dev/sdb`）。`stripe`、`mirror`、`raidz1`、`raidz2`のみが`vdev`タイプとして使用できます。"
+:type: "string"
+
+```
+
+```{config:option} source.wipe storage_zfs-common
+:default: "`false`"
+:scope: "local"
+:shortdesc: "ストレージプールを作成する前に`source`で指定されたブロックデバイスの中身を消去する"
+:type: "bool"
+
+```
+
+```{config:option} zfs.clone_copy storage_zfs-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "Booleanの文字列を指定した場合はZFSのフルの{spellexception}`dataset`コピーの代わりに軽量なクローンを使うかどうかを制御し、`rebase`という文字列を指定した場合は初期イメージをベースにコピーします"
+:type: "string"
+
+```
+
+```{config:option} zfs.export storage_zfs-common
+:default: "`true`"
+:scope: "global"
+:shortdesc: "アンマウントの実行中にzpoolのエクスポートを無効にする"
+:type: "bool"
+
+```
+
+```{config:option} zfs.pool_name storage_zfs-common
+:default: "プールの名前"
+:scope: "local"
+:shortdesc: "zpoolの名前"
+:type: "string"
+
+```
+
+<!-- config group storage_zfs-common end -->

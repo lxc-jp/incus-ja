@@ -732,6 +732,59 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  shortdesc: Raw Seccomp configuration
 	"raw.seccomp": validate.IsAny,
 
+	// gendoc:generate(entity=instance, group=security, key=security.bpffs.delegate_cmds)
+	// See {ref}`bpf-tokens` for more information.
+	//
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: unprivileged container
+	//  shortdesc: What BPF command types to delegate
+	"security.bpffs.delegate_cmds": validate.Optional(validate.IsListOf(validate.IsAny)),
+
+	// gendoc:generate(entity=instance, group=security, key=security.bpffs.delegate_maps)
+	// See {ref}`bpf-tokens` for more information.
+	//
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: unprivileged container
+	//  shortdesc: What BPF map types to delegate
+	"security.bpffs.delegate_maps": validate.Optional(validate.IsListOf(validate.IsAny)),
+
+	// gendoc:generate(entity=instance, group=security, key=security.bpffs.delegate_progs)
+	// See {ref}`bpf-tokens` for more information.
+	//
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: unprivileged container
+	//  shortdesc: What BPF program types to delegate
+	"security.bpffs.delegate_progs": validate.Optional(validate.IsListOf(validate.IsAny)),
+
+	// gendoc:generate(entity=instance, group=security, key=security.bpffs.delegate_attachs)
+	// See {ref}`bpf-tokens` for more information.
+	//
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: unprivileged container
+	//  shortdesc: What BPF attach types to delegate
+	"security.bpffs.delegate_attachs": validate.Optional(validate.IsListOf(validate.IsAny)),
+
+	// gendoc:generate(entity=instance, group=security, key=security.bpffs.path)
+	// The specified path must exist in the container.
+	// The BPF file system is only mounted if any of the `security.bpffs.delegate_*` options are set.
+	// See {ref}`bpf-tokens` for more information.
+	//
+	// ---
+	//  type: string
+	//  defaultdesc: `/sys/fs/bpf`
+	//  liveupdate: no
+	//  condition: unprivileged container
+	//  shortdesc: The path to mount the BPF file system at
+	"security.bpffs.path": validate.Optional(validate.IsAbsFilePath),
+
 	// gendoc:generate(entity=instance, group=security, key=security.guestapi.images)
 	//
 	// ---
@@ -1588,6 +1641,26 @@ func ConfigKeyChecker(key string, instanceType api.InstanceType) (func(value str
 	if (instanceType == api.InstanceTypeAny || instanceType == api.InstanceTypeContainer) &&
 		strings.HasPrefix(key, "linux.sysctl.") {
 		return validate.IsAny, nil
+	}
+
+	// gendoc:generate(entity=instance, group=miscellaneous, key=systemd.credential.*)
+	// Systemd credential key/value pair passed as a read-only bind mount in containers and as `SMBIOS Type 11` data in virtual machines.
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  shortdesc: Systemd credential key/value
+	if strings.HasPrefix(key, "systemd.credential.") {
+		return validate.IsAny, nil
+	}
+
+	// gendoc:generate(entity=instance, group=miscellaneous, key=systemd.credential-binary.*)
+	// Systemd credential key/value pair passed as a read-only bind mount in containers and as `SMBIOS Type 11` data in virtual machines. The value is Base64 encoded.
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  shortdesc: Systemd credential key/value, where value is Base64 encoded
+	if strings.HasPrefix(key, "systemd.credential-binary.") {
+		return validate.IsBase64, nil
 	}
 
 	return nil, fmt.Errorf("Unknown configuration key: %s", key)

@@ -337,6 +337,7 @@ if [ "${1:-"all"}" != "cluster" ]; then
     run_test test_address_set "network address set"
     run_test test_network_forward "network address forwards"
     run_test test_network_zone "network DNS zones"
+    run_test test_network_hwaddr_pattern "network MAC address pattern"
     run_test test_idmap "id mapping"
     run_test test_template "file templating"
     run_test test_pki "PKI mode"
@@ -365,6 +366,7 @@ if [ "${1:-"all"}" != "cluster" ]; then
     run_test test_storage_bucket_export "storage buckets export and import"
     run_test test_storage_volume_import "storage volume import"
     run_test test_storage_volume_initial_config "storage volume initial configuration"
+    run_test test_storage_volume_filemanip "storage volume file manipulations"
     run_test test_resources "resources"
     run_test test_kernel_limits "kernel limits"
     run_test test_console "console"
@@ -391,6 +393,8 @@ if [ "${1:-"all"}" != "cluster" ]; then
     run_test test_storage_volume_recover "Recover storage volumes"
     run_test test_syslog_socket "Syslog socket"
     run_test test_incus_user "incus-user"
+    run_test test_systemd "systemd"
+    run_test test_container_bpf_token "BPF token delegation"
 fi
 
 # shellcheck disable=SC2034

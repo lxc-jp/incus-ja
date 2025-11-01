@@ -57,7 +57,7 @@ func (d *cephfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.O
 	}
 
 	// Fill the volume.
-	err = d.runFiller(vol, "", filler, false)
+	err = genericRunFiller(d, vol, "", filler, false)
 	if err != nil {
 		return err
 	}
@@ -286,6 +286,94 @@ func (d *cephfs) HasVolume(vol Volume) (bool, error) {
 
 // ValidateVolume validates the supplied volume config. Optionally removes invalid keys from the volume's config.
 func (d *cephfs) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=initial.gid)
+	//
+	// ---
+	//  type: int
+	//  condition: custom volume with content type `filesystem`
+	//  default: same as `volume.initial.gid` or `0`
+	//  shortdesc: GID of the volume owner in the instance
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=initial.mode)
+	//
+	// ---
+	//  type: int
+	//  condition: custom volume with content type `filesystem`
+	//  default: same as `volume.initial.mode` or `711`
+	//  shortdesc: Mode of the volume in the instance
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=initial.uid)
+	//
+	// ---
+	//  type: int
+	//  condition: custom volume with content type `filesystem`
+	//  default: same as `volume.initial.uid` or `0`
+	//  shortdesc: UID of the volume owner in the instance
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=security.shared)
+	//
+	// ---
+	//  type: bool
+	//  condition: custom block volume
+	//  default: same as `volume.security.shared` or `false`
+	//  shortdesc: Enable sharing the volume across multiple instances
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=security.shifted)
+	//
+	// ---
+	//  type: bool
+	//  condition: custom volume
+	//  default: same as `volume.security.shifted` or `false`
+	//  shortdesc: {{enable_ID_shifting}}
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=security.unmapped)
+	//
+	// ---
+	//  type: bool
+	//  condition: custom volume
+	//  default: same as `volume.security.unmapped` or `false`
+	//  shortdesc: Disable ID mapping for the volume
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=size)
+	//
+	// ---
+	//  type: string
+	//  condition: appropriate driver
+	//  default: same as `volume.size`
+	//  shortdesc: Size/quota of the storage volume
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=snapshots.expiry)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.expiry`
+	//  shortdesc: {{snapshot_expiry_format}}
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=snapshots.expiry.manual)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.expiry.manual`
+	//  shortdesc: {{snapshot_expiry_format}}
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=snapshots.pattern)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.pattern` or `snap%d`
+	//  shortdesc: {{snapshot_pattern_format}} [^*]
+
+	// gendoc:generate(entity=storage_volume_cephfs, group=common, key=snapshots.schedule)
+	//
+	// ---
+	//  type: string
+	//  condition: custom volume
+	//  default: same as `volume.snapshot.schedule`
+	//  shortdesc: {{snapshot_schedule_format}}
+
 	return d.validateVolume(vol, nil, removeUnknownKeys)
 }
 
@@ -482,8 +570,8 @@ func (d *cephfs) MigrateVolume(vol Volume, conn io.ReadWriteCloser, volSrcArgs *
 }
 
 // BackupVolume creates an exported version of a volume.
-func (d *cephfs) BackupVolume(vol Volume, tarWriter *instancewriter.InstanceTarWriter, optimized bool, snapshots []string, op *operations.Operation) error {
-	return genericVFSBackupVolume(d, vol, tarWriter, snapshots, op)
+func (d *cephfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, optimized bool, snapshots []string, op *operations.Operation) error {
+	return genericVFSBackupVolume(d, vol, writer, snapshots, op)
 }
 
 // CreateVolumeSnapshot creates a new snapshot.
