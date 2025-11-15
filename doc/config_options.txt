@@ -5526,7 +5526,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```{config:option} volatile.pool.pristine storage_cephobject-common
 :default: "`true`"
 :scope: "global"
-:shortdesc: "作成時に`radosgw` `lxd-admin`ユーザーが存在したかどうか"
+:shortdesc: "作成時に`radosgw` `incus-admin`ユーザーが存在したかどうか"
 :type: "string"
 
 ```

@@ -76,7 +76,7 @@ DNSSEC と DNS over TLS
 
 システムの起動時に適用され Incus がネットワークインターフェースを作成したときに有効になるように `systemd-resolved` の DNS 設定を自動化できます。
 
-そうするには、 `/etc/systemd/system/lxd-dns-<network_bridge>.service` という名前の `systemd` ユニットファイルを以下の内容で作成してください:
+そうするには、 `/etc/systemd/system/incus-dns-<network_bridge>.service` という名前の `systemd` ユニットファイルを以下の内容で作成してください:
 
 ```
 [Unit]

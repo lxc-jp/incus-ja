@@ -33,7 +33,7 @@ Incus にインスタンス名としてすでに存在する名前を持つコ�
 
 ## マイグレーションプロセスを開始する
 
-コンテナをマイグレートするには `sudo lxd.lxc-to-incus [flags]` と実行してください。
+コンテナをマイグレートするには `sudo lxc-to-incus [flags]` と実行してください。
 
 たとえば、すべてのコンテナをマイグレートするには:
 
@@ -55,7 +55,7 @@ Incus にインスタンス名としてすでに存在する名前を持つコ�
 
     sudo lxc-to-incus --all --rsync-args --bwlimit=5000
 
-すべての利用可能なフラグを確認するには `sudo lxd.lxc-to-incus --help` と実行してください。
+すべての利用可能なフラグを確認するには `sudo lxc-to-incus --help` と実行してください。
 
 ```{note}
 `linux64` アーキテクチャがサポートされない（`linux64` architecture isn't supported）というエラーが出る場合、ツールを最新版にアップデートするか LXC コンテナ内のアーキテクチャを `linux64` から `amd64` か `x86_64` に変更してください。

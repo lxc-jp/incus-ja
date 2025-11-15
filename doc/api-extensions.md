@@ -1721,7 +1721,7 @@ OVN NIC に `acceleration` 設定キーを追加し、ハードウェアオフ�
 * `cloud-init.user-data`
 * `cloud-init.network-config`
 
-これはまた `devlxd` にインスタンスのデバイスを表示する `/1.0/devices` エンドポイントを追加します。
+これはまた `/dev/incus` にインスタンスのデバイスを表示する `/1.0/devices` エンドポイントを追加します。
 
 ## `network_dns_nat`
 
@@ -1911,7 +1911,7 @@ Incus が使用する CPU 時間をミリ秒ではなく秒単位で出力する
 `instances.nic.host_name` サーバー設定キーを追加します。これは `random` か `mac` を指定できます。
 指定しない場合のデフォルト値は `random` です。
 `random` に設定するとランダムなホストインターフェース名を使用します。
-`mac` に設定すると `lxd1122334455` の形式で名前を生成します。
+`mac` に設定すると `inc1122334455` の形式で名前を生成します。
 
 ## `image_copy_profile`
 
@@ -1975,7 +1975,7 @@ storage bucket API を追加します。ストレージプールのために S3 
 
 ## `metrics_cpu_effective_total`
 
-これは `lxd_cpu_effective_total` メトリックを `/1.0/metrics` API に追加します。
+これは `incus_cpu_effective_total` メトリックを `/1.0/metrics` API に追加します。
 有効な CPU の総数を返します。
 
 ## `projects_networks_restricted_access`
