@@ -31,7 +31,13 @@ Incus は次世代の安全で強力なシステムコンテナおよび仮想�
 Incus はフリーソフトウェアであり [Apache 2 ライセンス](https://www.apache.org/licenses/LICENSE-2.0) で開発されています。
 これはコミュニティのプロジェクト、コントリビューション、提案、修正、建設的なフィードバックを温かく迎えるオープンソースプロジェクトです。
 
-- [Code of Conduct](https://github.com/lxc-jp/incus-ja/blob/main/CODE_OF_CONDUCT.md)
+- [行動規範](https://github.com/lxc-jp/incus-ja/blob/main/CODE_OF_CONDUCT.md)
+- [プロジェクトに貢献するには](contributing.md)
+- [リリースアナウンス](https://discuss.linuxcontainers.org/c/news/13)
+- [リリースtarball](https://github.com/lxc/incus/releases/)
+- [サポートを得る](support.md)
+- [YouTubeでチュートリアルやアナウンスを見る](https://www.youtube.com/@TheZabbly)
+- [フォーラムで質問したり回答する](https://discuss.linuxcontainers.org)
 
 ```{toctree}
 :hidden:

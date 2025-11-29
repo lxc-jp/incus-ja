@@ -13,7 +13,6 @@
 - ドキュメントの修正を依頼するために、[GitHub](https://github.com/canonical/incus/issues)でドキュメントに関するイシューを作成します。
 - 質問や提案を[フォーラム](https://discuss.linuxcontainers.org)に投稿してください。
   私たちはイシューを評価し、適切にドキュメントを更新します。
-- [IRC](https://web.libera.chat/#lxc)の`#lxc`チャンネルで質問したり提案してください。IRC の動的な性質のため、IRC の投稿に回答や反応することを保証はできませんが、チャンネルを注視して受け取ったフィードバックにもとづいてドキュメントを改善するつもりです。
 
 % Include content from [../README.md](../README.md)
 ```{include} ../README.md
