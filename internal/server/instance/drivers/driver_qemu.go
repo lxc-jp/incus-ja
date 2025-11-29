@@ -1732,21 +1732,6 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 		}
 	}
 
-	// APply the RTC configuration.
-	adjustment := d.getStartupRTCAdjustment()
-
-	base := time.Now().Add(adjustment)
-	if d.GuestOS() == "windows" {
-		// Set base to localtime on windows.
-		base = base.Local()
-	} else {
-		// set base to UTC on !windows.
-		base = base.UTC()
-	}
-
-	datetime := base.Format("2006-01-02T15:04:05")
-	qemuArgs = append(qemuArgs, "-rtc", fmt.Sprintf("base=%s", datetime))
-
 	// SMBIOS only on x86_64 and aarch64.
 	if d.architectureSupportsUEFI(d.architecture) {
 		qemuArgs = append(qemuArgs, "-smbios", "type=2,manufacturer=LinuxContainers,product=Incus")
@@ -1858,6 +1843,26 @@ func (d *qemu) start(stateful bool, op *operationlock.InstanceOperation) error {
 		}
 
 		qemuArgs = append(qemuArgs, fields...)
+	}
+
+	// Apply the RTC configuration.
+	// This needs to happen close to creating the full qemu cmd or the time might drift in between.
+	adjustment := d.getStartupRTCAdjustment()
+
+	// only apply the rtc adjustment if the adjustment is not zero
+	// this way qemu can take care of using the correct time
+	if adjustment != 0 {
+		base := time.Now().Add(adjustment)
+		if d.GuestOS() == "windows" {
+			// set base to localtime on windows.
+			base = base.Local()
+		} else {
+			// set base to UTC on !windows.
+			base = base.UTC()
+		}
+
+		datetime := base.Format("2006-01-02T15:04:05")
+		qemuArgs = append(qemuArgs, "-rtc", fmt.Sprintf("base=%s", datetime))
 	}
 
 	d.cmdArgs = qemuArgs
@@ -3267,6 +3272,41 @@ func (d *qemu) generateConfigShare() error {
 		if err != nil {
 			return err
 		}
+
+	case "windows":
+		// Setup script for incus-agent that is executed by Service Control Manager (SCM). Since by
+		// default Windows cannot run a PowerShell script as a service without the help of a third
+		// party, a bat file is used to then execute the PowerShell script doing the job.
+		agentFile, err := incusAgentLoader.ReadFile("agent-loader/incus-agent-setup.bat")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "incus-agent-setup.bat"), agentFile, 0o500)
+		if err != nil {
+			return err
+		}
+
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/incus-agent-setup.ps1")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "incus-agent-setup.ps1"), agentFile, 0o500)
+		if err != nil {
+			return err
+		}
+
+		// Install script for manual installs.
+		agentFile, err = incusAgentLoader.ReadFile("agent-loader/install.ps1")
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(filepath.Join(configDrivePath, "install.ps1"), agentFile, 0o700)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Templated files.
@@ -3763,7 +3803,7 @@ func (d *qemu) generateQemuConfig(machineDefinition string, cpuType string, cpuI
 	}
 
 	// virtio-sound-pci devices can't be migrated and don't have a CCW equivalent.
-	if !d.CanLiveMigrate() && d.architecture != osarch.ARCH_64BIT_S390_BIG_ENDIAN {
+	if !isWindows && !d.CanLiveMigrate() && d.architecture != osarch.ARCH_64BIT_S390_BIG_ENDIAN {
 		devBus, devAddr, multi = bus.allocate(busFunctionGroupGeneric)
 		audioOpts := qemuDevOpts{
 			busName:       bus.name,
@@ -5176,11 +5216,15 @@ func (d *qemu) writeNICDevConfig(mtuStr string, devName string, nicName string, 
 // addPCIDevConfig adds the qemu config required for adding a raw PCI device.
 func (d *qemu) addPCIDevConfig(conf *[]cfg.Section, bus *qemuBus, pciConfig []deviceConfig.RunConfigItem) error {
 	var devName, pciSlotName string
+
+	firmware := true
 	for _, pciItem := range pciConfig {
 		if pciItem.Key == "devName" {
 			devName = pciItem.Value
 		} else if pciItem.Key == "pciSlotName" {
 			pciSlotName = pciItem.Value
+		} else if pciItem.Key == "firmware" {
+			firmware = util.IsTrue(pciItem.Value)
 		}
 	}
 
@@ -5194,6 +5238,7 @@ func (d *qemu) addPCIDevConfig(conf *[]cfg.Section, bus *qemuBus, pciConfig []de
 		},
 		devName:     devName,
 		pciSlotName: pciSlotName,
+		firmware:    firmware,
 	}
 	*conf = append(*conf, qemuPCIPhysical(&pciPhysicalOpts)...)
 
@@ -6002,7 +6047,7 @@ func qemuDetachDisk(s *state.State, id int) func(string) error {
 
 // Detach a disk from the instance.
 func (d *qemu) detachDisk(name string) error {
-	diskName := strings.TrimPrefix(name, qemuDeviceIDPrefix)
+	diskName := linux.PathNameDecode(strings.TrimPrefix(name, qemuDeviceIDPrefix))
 
 	// Load and detach the disk.
 	config, ok := d.expandedDevices[diskName]

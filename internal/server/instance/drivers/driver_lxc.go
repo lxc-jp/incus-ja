@@ -1020,6 +1020,19 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		_ = lxcSetConfigItem(cc, "lxc.apparmor.profile", "unconfined")
 	}
 
+	// Setup SELinux.
+	if d.state.OS.SELinuxAvailable && d.state.OS.SELinuxContextInstanceLXC != "" {
+		seContext, err := d.selinuxContext(d.state.OS.SELinuxContextInstanceLXC)
+		if err != nil {
+			return nil, err
+		}
+
+		err = lxcSetConfigItem(cc, "lxc.selinux.context", seContext)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Setup Seccomp if necessary
 	if seccomp.InstanceNeedsPolicy(d) {
 		err = lxcSetConfigItem(cc, "lxc.seccomp.profile", seccomp.ProfilePath(d))
