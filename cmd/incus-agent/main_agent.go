@@ -46,10 +46,15 @@ func (c *cmdAgent) Command() *cobra.Command {
 }
 
 func (c *cmdAgent) Run(cmd *cobra.Command, args []string) error {
+	if c.global.flagService {
+		err := runService("Incus-Agent", c)
+		return err
+	}
+
 	// Setup logger.
 	err := logger.InitLogger("", "", c.global.flagLogVerbose, c.global.flagLogDebug, nil)
 	if err != nil {
-		os.Exit(1)
+		return fmt.Errorf("could not initialize logger: %w", err)
 	}
 
 	logger.Info("Starting")
@@ -174,19 +179,17 @@ func (c *cmdAgent) Run(cmd *cobra.Command, args []string) error {
 	chSignal := make(chan os.Signal, 1)
 	signal.Notify(chSignal, osShutdownSignal)
 
-	exitStatus := 0
-
 	select {
 	case <-chSignal:
 	case err := <-errChan:
-		fmt.Fprintln(os.Stderr, err)
-		exitStatus = 1
+		cancelStatusNotifier() // Ensure STOPPED status is written to QEMU status ringbuffer.
+		cancelFunc()
+
+		return err
 	}
 
 	cancelStatusNotifier() // Ensure STOPPED status is written to QEMU status ringbuffer.
 	cancelFunc()
-
-	os.Exit(exitStatus)
 
 	return nil
 }

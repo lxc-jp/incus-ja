@@ -659,10 +659,29 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 			}
 		}
 
-		// Reject internal queries to remote, non-cluster, clients
+		// Restrict internal queries to remote, non-cluster, clients
 		if version == "internal" && !slices.Contains([]string{"unix", "cluster"}, protocol) {
+			internalAllowed := func() bool {
+				// Reject any unauthenticated request.
+				if !trusted {
+					return false
+				}
+
+				// Allow select endpoints (unstable API but CLI supported).
+				if slices.Contains([]string{"recover/import", "recover/validate", "sql"}, c.Path) {
+					return true
+				}
+
+				if c.Path == "cluster/accept" && protocol == api.AuthenticationMethodTLS {
+					return true
+				}
+
+				// Default to rejecting access.
+				return false
+			}()
+
 			// Except for the initial cluster accept request (done over trusted TLS)
-			if !trusted || c.Path != "cluster/accept" || protocol != api.AuthenticationMethodTLS {
+			if !internalAllowed {
 				logger.Warn("Rejecting remote internal API request", logger.Ctx{"ip": r.RemoteAddr})
 				_ = response.Forbidden(nil).Render(w)
 				return
@@ -1113,20 +1132,35 @@ func (d *Daemon) init() error {
 		}
 	}
 
-	// Validate the devices storage.
-	testDev := internalUtil.VarPath("devices", ".test")
-	testDevNum := int(unix.Mkdev(0, 0))
-	_ = os.Remove(testDev)
-	err = unix.Mknod(testDev, 0o600|unix.S_IFCHR, testDevNum)
-	if err == nil {
-		fd, err := os.Open(testDev)
-		if err != nil && os.IsPermission(err) {
-			logger.Warn("Unable to access device nodes, likely running on a nodev mount")
-			d.os.Nodev = true
+	// Detect and setup missing temporary mounts.
+	if !d.os.MockMode {
+		devicesPath := filepath.Join(d.os.VarDir, "devices")
+		devIncusPath := filepath.Join(d.os.VarDir, "guestapi")
+
+		// Attempt to mount the devices tmpfs.
+		// NOTE: The check for devIncusPath is to handle initial rollout
+		// of the tmpfs on systems that have running instances. It can go away
+		// after a little while.
+		if !linux.IsMountPoint(devIncusPath) && !linux.IsMountPoint(devicesPath) {
+			err = unix.Mount("tmpfs", devicesPath, "tmpfs", 0, "size=50M,mode=0711")
+			if err != nil {
+				logger.Warn("Failed to set up devices tmpfs", logger.Ctx{"err": err})
+			}
 		}
 
-		_ = fd.Close()
-		_ = os.Remove(testDev)
+		// Attempt to mount the shmounts tmpfs.
+		err := setupSharedMounts()
+		if err != nil {
+			logger.Warn("Failed to set up shmounts tmpfs", logger.Ctx{"err": err})
+		}
+
+		// Attempt to mount the guestapi tmpfs
+		if !linux.IsMountPoint(devIncusPath) {
+			err = unix.Mount("tmpfs", devIncusPath, "tmpfs", 0, "size=100k,mode=0755")
+			if err != nil {
+				logger.Warn("Failed to set up guestapi tmpfs", logger.Ctx{"err": err})
+			}
+		}
 	}
 
 	/* Initialize the database */
@@ -1193,24 +1227,6 @@ func (d *Daemon) init() error {
 	}
 
 	d.gateway.HeartbeatNodeHook = d.nodeRefreshTask
-
-	/* Setup some mounts (nice to have) */
-	if !d.os.MockMode {
-		// Attempt to mount the shmounts tmpfs
-		err := setupSharedMounts()
-		if err != nil {
-			logger.Warn("Failed setting up shared mounts", logger.Ctx{"err": err})
-		}
-
-		// Attempt to Mount the devIncus tmpfs
-		devIncus := filepath.Join(d.os.VarDir, "guestapi")
-		if !linux.IsMountPoint(devIncus) {
-			err = unix.Mount("tmpfs", devIncus, "tmpfs", 0, "size=100k,mode=0755")
-			if err != nil {
-				logger.Warn("Failed to mount devIncus", logger.Ctx{"err": err})
-			}
-		}
-	}
 
 	logger.Info("Loading daemon configuration")
 	err = d.db.Node.Transaction(context.TODO(), func(ctx context.Context, tx *db.NodeTx) error {
@@ -1717,7 +1733,7 @@ func (d *Daemon) init() error {
 func (d *Daemon) startClusterTasks() {
 	// Add initial event listeners from global database members.
 	// Run asynchronously so that connecting to remote members doesn't delay starting up other cluster tasks.
-	go cluster.EventsUpdateListeners(d.endpoints, d.db.Cluster, d.serverCert, nil, d.events.Inject)
+	go cluster.EventsUpdateListeners(d.State(), nil, d.events.Inject)
 
 	// Heartbeats
 	d.taskClusterHeartbeat = d.clusterTasks.Add(cluster.HeartbeatTask(d.gateway))
@@ -1912,6 +1928,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 	if shouldUnmount {
 		logger.Info("Unmounting temporary filesystems")
 
+		_ = unix.Unmount(internalUtil.VarPath("devices"), unix.MNT_DETACH)
 		_ = unix.Unmount(internalUtil.VarPath("guestapi"), unix.MNT_DETACH)
 		_ = unix.Unmount(internalUtil.VarPath("shmounts"), unix.MNT_DETACH)
 
@@ -2489,7 +2506,7 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 
 	wg.Add(1)
 	go func() {
-		cluster.EventsUpdateListeners(d.endpoints, d.db.Cluster, d.serverCert, heartbeatData.Members, d.events.Inject)
+		cluster.EventsUpdateListeners(d.State(), heartbeatData.Members, d.events.Inject)
 		wg.Done()
 	}()
 

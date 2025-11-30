@@ -2891,3 +2891,28 @@ ISOカスタムボリュームを単にコピーするだけでバックアッ�
 ## `network_hwaddr_pattern`
 
 MACアドレス割り当てをカスタマイズするために`network.hwaddr_pattern`というグローバルとプロジェクト毎の設定キーを追加します。
+
+## `storage_volume_full`
+
+`/1.0/storage-pools/POOL/volumes/VOLUME`に`?recursion=1`のサポートを追加し、`/1.0/storage-pools/POOL/volumes`に`?recursion=2`のサポートを追加します。
+
+対応する`StorageVolumeFull`構造体にも同じサポートを追加します。
+
+## `storage_bucket_full`
+
+`/1.0/storage-pools/POOL/buckets/VOLUME`に`?recursion=1`のサポートを追加し、`/1.0/storage-pools/POOL/buckets`に`?recursion=2`のサポートを追加します。
+
+対応する`StorageBucketFull`構造体にも同じサポートを追加します。
+
+## `device_pci_firmware`
+
+この拡張はPCIデバイスに`firmware`というbooleanのオプションを追加します。
+`false`に背呈すると、IncusがQEMUにこのデバイスのROM-BARを無効にする（`rombar=0`）ように指示します。
+
+## `resources_serial`
+
+リソースAPIにシリアルデバイスのトラッキングを追加します。
+
+## `ovn_nic_limits`
+
+`ovn`タイプのネットワークに`limits.egress`、`limits.ingress`、`limits.max`、`limits.priority`を追加します。

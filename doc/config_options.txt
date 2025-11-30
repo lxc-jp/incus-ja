@@ -537,7 +537,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} limits.priority devices-nic_bridged
 :managed: "no"
-:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにkernel queuing disciplineによって使用される"
+:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにカーネルキューイング規律によって使用される"
 :type: "integer"
 
 ```
@@ -918,6 +918,35 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} limits.egress devices-nic_ovn
+:managed: "no"
+:shortdesc: "外向きトラフィックのI/O制限をbit/sで指定（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.ingress devices-nic_ovn
+:managed: "no"
+:shortdesc: "内向きトラフィックのI/O制限をbit/sで指定（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
+:type: "string"
+
+```
+
+```{config:option} limits.max devices-nic_ovn
+:managed: "no"
+:shortdesc: "内向きと外向きの両方のトラフィックのI/O制限をbit/sで指定（`limits.ingress`と`limits.egress`の両方に設定するのと同じ／`limits.ingress`と`limits.egress`とは相互排他）"
+:type: "string"
+
+```
+
+```{config:option} limits.priority devices-nic_ovn
+:default: "100"
+:managed: "no"
+:shortdesc: "外向きトラフィックの優先度、ネットワークパケットの優先度を決めるカーネルキューイング規律で使用"
+:type: "integer"
+
+```
+
 ```{config:option} mtu devices-nic_ovn
 :default: "親ネットワークのMTU"
 :managed: "yes"
@@ -1062,7 +1091,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} limits.priority devices-nic_p2p
-:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにkernel queuing disciplineによって使用される"
+:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにカーネルキューイング規律によって使用される"
 :type: "integer"
 
 ```
@@ -1288,13 +1317,13 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} limits.max devices-nic_routed
-:shortdesc: "内向きと外向き両方のトラフィックのI/O 制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
+:shortdesc: "内向きと外向き両方のトラフィックのI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
 :type: "string"
 
 ```
 
 ```{config:option} limits.priority devices-nic_routed
-:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにkernel queuing disciplineによって使用される"
+:shortdesc: "外向きトラフィックの優先度、カーネルでネットワークパケットに優先度をつけるためにカーネルキューイング規律によって使用される"
 :type: "integer"
 
 ```
@@ -1405,6 +1434,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :required: "yes"
 :shortdesc: "デバイスのPCIアドレス"
 :type: "string"
+
+```
+
+```{config:option} firmware devices-pci
+:default: "true"
+:required: "no"
+:shortdesc: "デバイスのオプションROMをVMに公開するかどうか"
+:type: "bool"
 
 ```
 

@@ -37,6 +37,7 @@
 | `INCUS_IDMAPPED_MOUNTS_DISABLE` | idmapを使ったマウントを無効にする（従来のUIDシフトを試す際に有用です） |
 | `INCUS_LXC_TEMPLATE_CONFIG`     | LXCテンプレート設定ディレクトリー                                      |
 | `INCUS_SECURITY_APPARMOR`       | `false`に設定するとAppArmorを無効にします                              |
+| `INCUS_SECURITY_SELINUX`        | `true`に設定するとSELinuxとの統合を有効にします                        |
 | `INCUS_SKIP_INSTANCE_TYPES`     | `true`に設定するとインスタンスタイプ定義のダウンロードをスキップします |
 | `INCUS_UI`                      | ウェブサーバーを配信する web UI のパス                                 |
 | `INCUS_USBIDS_PATH`             | hwdata `usb.ids` ファイルのパス                                        |

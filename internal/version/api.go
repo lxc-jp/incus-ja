@@ -506,6 +506,11 @@ var APIExtensions = []string{
 	"bpf_token_delegation",
 	"file_storage_volume",
 	"network_hwaddr_pattern",
+	"storage_volume_full",
+	"storage_bucket_full",
+	"device_pci_firmware",
+	"resources_serial",
+	"ovn_nic_limits",
 }
 
 // APIExtensionsCount returns the number of available API extensions.
