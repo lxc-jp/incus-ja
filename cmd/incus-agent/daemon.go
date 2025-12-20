@@ -8,8 +8,14 @@ import (
 
 // A Daemon can respond to requests from a shared client.
 type Daemon struct {
-	// Event servers
+	// Event servers.
 	events *events.Server
+
+	// Paths.
+	secretsLocation string
+
+	// Agent config.
+	Features map[string]bool
 
 	// ContextID and port of the host socket server.
 	serverCID         uint32
@@ -25,11 +31,12 @@ type Daemon struct {
 }
 
 // newDaemon returns a new Daemon object with the given configuration.
-func newDaemon(debug, verbose bool) *Daemon {
+func newDaemon(debug, verbose bool, secretsLocation string) *Daemon {
 	hostEvents := events.NewServer(debug, verbose, nil)
 
 	return &Daemon{
-		events:      hostEvents,
-		chConnected: make(chan struct{}),
+		secretsLocation: secretsLocation,
+		events:          hostEvents,
+		chConnected:     make(chan struct{}),
 	}
 }
