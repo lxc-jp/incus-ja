@@ -26,8 +26,11 @@ import (
 	"github.com/lxc/incus/v6/shared/logger"
 )
 
-// https://dev.to/cosmic_predator/writing-a-windows-service-in-go-1d1m
-var osBaseWorkingDirectory = "C:\\"
+var (
+	// https://dev.to/cosmic_predator/writing-a-windows-service-in-go-1d1m
+	osBaseWorkingDirectory = "C:\\"
+	osAgentConfigPath      = "C:\\Program Files\\Incus-Agent\\incus-agent.yml"
+)
 
 // Start of Windows service code block
 // Inspired of https://github.com/golang/sys/blob/master/windows/svc/example/service.go
@@ -44,7 +47,7 @@ func (m *incusAgentService) Execute(args []string, r <-chan svc.ChangeRequest, c
 
 	changes <- svc.Status{State: svc.StartPending}
 
-	d := newDaemon(m.agentCmd.global.flagLogDebug, m.agentCmd.global.flagLogVerbose)
+	d := newDaemon(m.agentCmd.global.flagLogDebug, m.agentCmd.global.flagLogVerbose, m.agentCmd.global.flagSecretsLocation)
 
 	// Start the server.
 	err := startHTTPServer(d, m.agentCmd.global.flagLogDebug)
@@ -237,5 +240,16 @@ func osExitStatus(err error) (int, error) {
 }
 
 func osSetEnv(post *api.InstanceExecPost, env map[string]string) {
-	env["PATH"] = "C:\\WINDOWS\\system32;C:\\WINDOWS"
+	// SystemRoot is already set by default
+	env["SystemDrive"] = "C:"
+	env["WINDIR"] = fmt.Sprintf("%s\\WINDOWS", env["SystemDrive"])
+	system32 := fmt.Sprintf("%s\\System32", env["WINDIR"])
+	env["TMP"] = fmt.Sprintf("%s\\Temp", env["WINDIR"])
+	env["TEMP"] = env["TMP"]
+	env["PATH"] = fmt.Sprintf("%s;%s;%s\\WindowsPowerShell\\v1.0", system32, env["WINDIR"], system32)
+
+	// Set the default working directory.
+	if post.Cwd == "" {
+		post.Cwd = system32
+	}
 }

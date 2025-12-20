@@ -147,7 +147,7 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 		//  default: randomly assigned
 		//  managed: no
 		//  shortdesc: The MAC address of the new interface
-		optionalFields = append(optionalFields, "hwaddr")
+		optionalFields = append(optionalFields, "hwaddr", "vlan")
 
 		// Copy certain keys verbatim from the network's settings.
 		for _, field := range optionalFields {
@@ -171,7 +171,8 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 
 // validateEnvironment checks the runtime environment for correctness.
 func (d *nicPhysical) validateEnvironment() error {
-	if d.inst.Type() == instancetype.VM && util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) {
+	isParentBridge := util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))
+	if d.inst.Type() == instancetype.VM && util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) && !isParentBridge {
 		return errors.New("Network physical devices cannot be used when migration.stateful is enabled")
 	}
 

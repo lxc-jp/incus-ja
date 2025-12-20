@@ -8575,8 +8575,10 @@ func (d *lxc) FillNetworkDevice(name string, m deviceConfig.Device) (deviceConfi
 		return nil, err
 	}
 
+	isPhysicalWithBridge := device.IsPhysicalNICWithBridge(d.state, d.Project().Name, m)
+
 	// Fill in the MAC address.
-	if !slices.Contains([]string{"physical", "ipvlan"}, nicType) && m["hwaddr"] == "" {
+	if (!slices.Contains([]string{"physical", "ipvlan"}, nicType) || isPhysicalWithBridge) && m["hwaddr"] == "" {
 		configKey := fmt.Sprintf("volatile.%s.hwaddr", name)
 		volatileHwaddr := d.localConfig[configKey]
 		if volatileHwaddr == "" {
@@ -9383,4 +9385,14 @@ func (d *lxc) setupCredentials(update bool) error {
 // GuestOS returns the guest OS. For containers, we can safely assume Linux.
 func (d *lxc) GuestOS() string {
 	return "linux"
+}
+
+// CreateQcow2Snapshot creates a qcow2 snapshot for a running instance. Not supported by containers.
+func (d *lxc) CreateQcow2Snapshot(snapName string, backingFilename string) error {
+	return nil
+}
+
+// DeleteQcow2Snapshot deletes a qcow2 snapshot for a running instance. Not supported by containers.
+func (d *lxc) DeleteQcow2Snapshot(snapshotIndex int, backingFilename string) error {
+	return nil
 }
