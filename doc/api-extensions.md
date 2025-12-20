@@ -2916,3 +2916,8 @@ MACアドレス割り当てをカスタマイズするために`network.hwaddr_p
 ## `ovn_nic_limits`
 
 `ovn`タイプのネットワークに`limits.egress`、`limits.ingress`、`limits.max`、`limits.priority`を追加します。
+
+## `storage_lvmcluster_qcow2`
+
+`QCOW2`イメージから仮想マシンを稼働するできるようにします。
+現時点ではこれができるのは`lvmcluster`ストレージドライバーに限られます。

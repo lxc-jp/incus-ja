@@ -31,8 +31,10 @@ Incus は [{abbr}`OpenFGA (Open Fine-Grained Authorization)`](https://openfga.de
 例えば、ユーザーアクセスを単一のインスタンスに制限するのに使えます。
 
 OpenFGA を認可に使うには、あなた自身で OpenFGA サーバーを設定し稼働させる必要があります。
-Incus でこの認可の方法を有効にするには、[`openfga.*`](server-options-openfga) サーバー設定オプションを設定する必要があります。
 Incus は OpenFGA サーバーに接続し、{ref}`openfga-model` を書き込み、以降の全てのリクエストへの認可をこのサーバーに問い合わせます。
+
+Incusでこの認可の方法を有効にするには、[`openfga.*`](server-options-openfga)サーバー設定オプションを設定してください。
+OpenFGAを有効にするには`openfga.api.url`と`openfga.api.token`の両方を設定する必要があります。`openfga.store.id`はオプショナルです。指定しない場合はIncusが新しいストアーを生成します。
 
 (openfga-model)=
 ### OpenFGA モデル

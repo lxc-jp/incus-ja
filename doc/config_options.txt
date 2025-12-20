@@ -5662,6 +5662,13 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group storage_linstor-common end -->
 <!-- config group storage_lvm-common start -->
+```{config:option} block.type storage_lvm-common
+:condition: "ブロックベースのボリューム"
+:default: "`volume.block.type`と同じ"
+:shortdesc: "ブロックボリュームのタイプ"
+
+```
+
 ```{config:option} lvm.metadata_size storage_lvm-common
 :default: "`0` （自動）"
 :scope: "global"

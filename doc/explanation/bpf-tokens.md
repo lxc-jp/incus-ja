@@ -10,23 +10,23 @@ IncusはLinuxカーネル6.9で追加された[BPFトークン](https://docs.ebp
 
 これらのオプションに設定可能な値はカーネルのバージョンに依存し、BPFのヘッダーファイル（カーネルツリー内では`include/uapi/linux/bpf.h`、ほとんどのディストリビューションではカーネルソースをインストールしていれば`/usr/include/linux/bpf.h`）内の`enums`で定義されています:
 
- キー                              | カーネルの`enum`   | 除去する接頭辞
- :--                               |:--                 | :--
- `security.bpffs.delegate_cmds`    | `bpf_cmd`          | `BPF_`
- `security.bpffs.delegate_maps`    | `bpf_map_type`     | `BPF_MAP_TYPE_`
- `security.bpffs.delegate_progs`   | `bpf_prog_type`    | `BPF_PROG_TYPE_`
- `security.bpffs.delegate_attachs` | `bpf_attach_type`  | `BPF_`
+| キー                              | カーネルの`enum`  | 除去する接頭辞   |
+| :---                              | :---              | :---             |
+| `security.bpffs.delegate_cmds`    | `bpf_cmd`         | `BPF_`           |
+| `security.bpffs.delegate_maps`    | `bpf_map_type`    | `BPF_MAP_TYPE_`  |
+| `security.bpffs.delegate_progs`   | `bpf_prog_type`   | `BPF_PROG_TYPE_` |
+| `security.bpffs.delegate_attachs` | `bpf_attach_type` | `BPF_`           |
 
 これらの設定オプションはカンマ区切りリストの値をとり、さらに`any`という値を指定するとそのタイプのすべての可能な値を移譲します。
 
 ## 例
 
- キー                              | 値
- :--                               | :--
- `security.bpffs.delegate_cmds`    | `map_create,obj_get,link_create`
- `security.bpffs.delegate_maps`    | `hash,array,devmap,queue,stack`
- `security.bpffs.delegate_progs`   | `socket_filter,kprobe,cgroup_sysctl`
- `security.bpffs.delegate_attachs` | `any`
+| キー                              | 値                                   |
+| :---                              | :---                                 |
+| `security.bpffs.delegate_cmds`    | `map_create,obj_get,link_create`     |
+| `security.bpffs.delegate_maps`    | `hash,array,devmap,queue,stack`      |
+| `security.bpffs.delegate_progs`   | `socket_filter,kprobe,cgroup_sysctl` |
+| `security.bpffs.delegate_attachs` | `any`                                |
 
 ```bash
 $ mount -t bpf
