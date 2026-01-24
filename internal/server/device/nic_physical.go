@@ -85,6 +85,24 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 		//  managed: no
 		//  shortdesc: The Maximum Transmit Unit (MTU) of the new interface
 		"mtu",
+
+		// gendoc:generate(entity=devices, group=nic_physical, key=attached)
+		//
+		// ---
+		//  type: bool
+		//  default: `true`
+		//  required: no
+		//  shortdesc: Whether the NIC is plugged in or not
+		"attached",
+
+		// gendoc:generate(entity=devices, group=nic_physical, key=connected)
+		//
+		// ---
+		//  type: bool
+		//  default: `true`
+		//  required: no
+		//  shortdesc: Whether the NIC is connected to the host network (VM only)
+		"connected",
 	}
 
 	if instConf.Type() == instancetype.Container || instConf.Type() == instancetype.Any {
@@ -94,7 +112,14 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 		//  type: integer
 		//  managed: no
 		//  shortdesc: The VLAN ID to attach to
-		optionalFields = append(optionalFields, "hwaddr", "vlan")
+
+		// gendoc:generate(entity=devices, group=nic_physical, key=vlan.tagged)
+		//
+		// ---
+		//  type: integer
+		//  managed: no
+		//  shortdesc: Comma-delimited list of VLAN IDs or VLAN ranges to join for tagged traffic
+		optionalFields = append(optionalFields, "hwaddr", "vlan", "vlan.tagged")
 	}
 
 	// gendoc:generate(entity=devices, group=nic_physical, key=network)
@@ -106,7 +131,7 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 	if d.config["network"] != "" {
 		requiredFields = append(requiredFields, "network")
 
-		bannedKeys := []string{"nictype", "parent", "mtu", "vlan", "gvrp"}
+		bannedKeys := []string{"nictype", "parent", "mtu", "vlan", "vlan.tagged", "gvrp"}
 		for _, bannedKey := range bannedKeys {
 			if d.config[bannedKey] != "" {
 				return fmt.Errorf("Cannot use %q property in conjunction with %q property", bannedKey, "network")
@@ -147,7 +172,7 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 		//  default: randomly assigned
 		//  managed: no
 		//  shortdesc: The MAC address of the new interface
-		optionalFields = append(optionalFields, "hwaddr", "vlan")
+		optionalFields = append(optionalFields, "hwaddr", "vlan", "vlan.tagged")
 
 		// Copy certain keys verbatim from the network's settings.
 		for _, field := range optionalFields {
@@ -159,6 +184,10 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader) error {
 	} else {
 		// If no network property supplied, then parent property is required.
 		requiredFields = append(requiredFields, "parent")
+	}
+
+	if instConf.Type() != instancetype.VM && d.config["connected"] != "" {
+		return errors.New("The \"connected\" option is only supported on virtual machines for physical NICs")
 	}
 
 	err := d.config.Validate(nicValidationRules(requiredFields, optionalFields, instConf))
@@ -189,6 +218,11 @@ func (d *nicPhysical) validateEnvironment() error {
 
 // Start is run when the device is added to a running instance or instance is starting up.
 func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
+	// Ignore detached NICs.
+	if !util.IsTrueOrEmpty(d.config["attached"]) {
+		return nil, nil
+	}
+
 	err := d.validateEnvironment()
 	if err != nil {
 		return nil, err
@@ -204,7 +238,7 @@ func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
 		bridgedConfig["network"] = ""
 
 		// Instantiate the new device.
-		bridged, err := load(d.inst, d.state, d.inst.Project().Name, d.inst.Name(), bridgedConfig, d.volatileGet, d.volatileSet)
+		bridged, err := load(d.inst, d.state, d.inst.Project().Name, d.name, bridgedConfig, d.volatileGet, d.volatileSet)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to initialize bridged device: %w", err)
 		}
@@ -325,6 +359,7 @@ func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
 		{Key: "name", Value: d.config["name"]},
 		{Key: "flags", Value: "up"},
 		{Key: "link", Value: saveData["host_name"]},
+		{Key: "connected", Value: d.config["connected"]},
 	}
 
 	if d.inst.Type() == instancetype.VM {
@@ -415,7 +450,7 @@ func (d *nicPhysical) Stop() (*deviceConfig.RunConfig, error) {
 		bridgedConfig["network"] = ""
 
 		// Instantiate the new device.
-		bridged, err := load(d.inst, d.state, d.inst.Project().Name, d.inst.Name(), bridgedConfig, d.volatileGet, d.volatileSet)
+		bridged, err := load(d.inst, d.state, d.inst.Project().Name, d.name, bridgedConfig, d.volatileGet, d.volatileSet)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to initialize bridged device: %w", err)
 		}
@@ -436,7 +471,7 @@ func (d *nicPhysical) Stop() (*deviceConfig.RunConfig, error) {
 			DeviceName:     fmt.Sprintf("%s-%s-%s", d.name, v["last_state.usb.bus"], v["last_state.usb.device"]),
 			HostDevicePath: fmt.Sprintf("/dev/bus/usb/%s/%s", v["last_state.usb.bus"], v["last_state.usb.device"]),
 		})
-	} else {
+	} else if util.IsTrueOrEmpty(d.config["attached"]) {
 		// Handle all other NICs.
 		runConf.NetworkInterface = []deviceConfig.RunConfigItem{
 			{Key: "link", Value: v["host_name"]},
@@ -528,4 +563,24 @@ func IsPhysicalNICWithBridge(s *state.State, deviceProjectName string, d deviceC
 	}
 
 	return false
+}
+
+// UpdatableFields returns a list of fields that can be updated without triggering a device remove & add.
+func (d *nicPhysical) UpdatableFields(oldDevice Type) []string {
+	// Check old and new device types match.
+	_, match := oldDevice.(*nicPhysical)
+	if !match {
+		return []string{}
+	}
+
+	return []string{"connected"}
+}
+
+// Update applies configuration changes to a started device.
+func (d *nicPhysical) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
+	if isRunning {
+		return d.setNICLink()
+	}
+
+	return nil
 }

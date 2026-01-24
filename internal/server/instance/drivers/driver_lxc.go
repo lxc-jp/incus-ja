@@ -60,6 +60,7 @@ import (
 	"github.com/lxc/incus/v6/internal/server/instance"
 	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
 	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
+	"github.com/lxc/incus/v6/internal/server/ip"
 	"github.com/lxc/incus/v6/internal/server/lifecycle"
 	"github.com/lxc/incus/v6/internal/server/locking"
 	"github.com/lxc/incus/v6/internal/server/metrics"
@@ -947,19 +948,19 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 	}
 
 	// Call the onstart hook on start.
-	err = lxcSetConfigItem(cc, "lxc.hook.pre-start", fmt.Sprintf("/proc/%d/exe callhook %s %s %s start", os.Getpid(), internalUtil.VarPath(""), strconv.Quote(d.Project().Name), strconv.Quote(d.Name())))
+	err = lxcSetConfigItem(cc, "lxc.hook.pre-start", fmt.Sprintf("/proc/%d/exe callhook %s %s %s start", os.Getpid(), internalUtil.VarPath(""), util.SingleQuote(d.Project().Name), util.SingleQuote(d.Name())))
 	if err != nil {
 		return nil, err
 	}
 
 	// Call the onstopns hook on stop but before namespaces are unmounted.
-	err = lxcSetConfigItem(cc, "lxc.hook.stop", fmt.Sprintf("%s callhook %s %s %s stopns", d.state.OS.ExecPath, internalUtil.VarPath(""), strconv.Quote(d.Project().Name), strconv.Quote(d.Name())))
+	err = lxcSetConfigItem(cc, "lxc.hook.stop", fmt.Sprintf("%s callhook %s %s %s stopns", d.state.OS.ExecPath, internalUtil.VarPath(""), util.SingleQuote(d.Project().Name), util.SingleQuote(d.Name())))
 	if err != nil {
 		return nil, err
 	}
 
 	// Call the onstop hook on stop.
-	err = lxcSetConfigItem(cc, "lxc.hook.post-stop", fmt.Sprintf("%s callhook %s %s %s stop", d.state.OS.ExecPath, internalUtil.VarPath(""), strconv.Quote(d.Project().Name), strconv.Quote(d.Name())))
+	err = lxcSetConfigItem(cc, "lxc.hook.post-stop", fmt.Sprintf("%s callhook %s %s %s stop", d.state.OS.ExecPath, internalUtil.VarPath(""), util.SingleQuote(d.Project().Name), util.SingleQuote(d.Name())))
 	if err != nil {
 		return nil, err
 	}
@@ -1493,7 +1494,7 @@ func (d *lxc) deviceStart(dev device.Device, instanceRunning bool) (*deviceConfi
 
 			// Attach network interface if requested.
 			if len(runConf.NetworkInterface) > 0 {
-				err = d.deviceAttachNIC(configCopy, runConf.NetworkInterface)
+				err = d.deviceAttachNIC(dev.Name(), configCopy, runConf.NetworkInterface)
 				if err != nil {
 					return nil, err
 				}
@@ -1570,16 +1571,18 @@ func (d *lxc) deviceAddCgroupRules(cgroups []deviceConfig.RunConfigItem) error {
 }
 
 // deviceAttachNIC live attaches a NIC device to a container.
-func (d *lxc) deviceAttachNIC(configCopy map[string]string, netIF []deviceConfig.RunConfigItem) error {
-	devName := ""
+func (d *lxc) deviceAttachNIC(devName string, configCopy map[string]string, netIF []deviceConfig.RunConfigItem) error {
+	ctDevName := ""
+	connected := true
 	for _, dev := range netIF {
 		if dev.Key == "link" {
-			devName = dev.Value
-			break
+			ctDevName = dev.Value
+		} else if dev.Key == "connected" {
+			connected = util.IsTrueOrEmpty(dev.Value)
 		}
 	}
 
-	if devName == "" {
+	if ctDevName == "" {
 		return errors.New("Device didn't provide a link property to use")
 	}
 
@@ -1590,12 +1593,12 @@ func (d *lxc) deviceAttachNIC(configCopy map[string]string, netIF []deviceConfig
 	}
 
 	// Add the interface to the container.
-	err = cc.AttachInterface(devName, configCopy["name"])
+	err = cc.AttachInterface(ctDevName, configCopy["name"])
 	if err != nil {
-		return fmt.Errorf("Failed to attach interface: %s to %s: %w", devName, configCopy["name"], err)
+		return fmt.Errorf("Failed to attach interface: %s to %s: %w", ctDevName, configCopy["name"], err)
 	}
 
-	return nil
+	return d.setNICLink(devName, connected, true)
 }
 
 // deviceStop loads a new device and calls its Stop() function.
@@ -1812,6 +1815,25 @@ func (d *lxc) DeviceEventHandler(runConf *deviceConfig.RunConfig) error {
 	// Add cgroup rules if requested.
 	if len(runConf.CGroups) > 0 {
 		err := d.deviceAddCgroupRules(runConf.CGroups)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Handle NIC reconfiguration.
+	var devName string
+	var connected bool
+	for _, dev := range runConf.NetworkInterface {
+		switch dev.Key {
+		case "devName":
+			devName = dev.Value
+		case "connected":
+			connected = util.IsTrueOrEmpty(dev.Value)
+		}
+	}
+
+	if devName != "" {
+		err := d.setNICLink(devName, connected, false)
 		if err != nil {
 			return err
 		}
@@ -2302,6 +2324,15 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			}
 
 			for _, nicItem := range runConf.NetworkInterface {
+				// The connected state is not a LXC configuration key; we defer its handling to a post hook.
+				if nicItem.Key == "connected" {
+					runConf.PostHooks = append(runConf.PostHooks, func() error {
+						return d.setNICLink(dev.Name(), util.IsTrueOrEmpty(nicItem.Value), true)
+					})
+
+					continue
+				}
+
 				err = lxcSetConfigItem(cc, fmt.Sprintf("%s.%d.%s", networkKeyPrefix, nicID, nicItem.Key), nicItem.Value)
 				if err != nil {
 					return "", nil, fmt.Errorf("Failed to setup device network interface %q: %w", dev.Name(), err)
@@ -4813,6 +4844,12 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 			return []string{} // Couldn't create Device, so this cannot be an update.
 		}
 
+		// Detached devices need to be fully recreated on update so that the update logic doesn't
+		// try to access non-existing LXC devices.
+		if !util.IsTrueOrEmpty(oldDevice["attached"]) {
+			return []string{}
+		}
+
 		return newDevType.UpdatableFields(oldDevType)
 	})
 
@@ -5779,7 +5816,14 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	d.logger.Debug("Migration send starting")
 	defer d.logger.Debug("Migration send stopped")
 
+	// Check for an existing operation.
+
 	// Setup a new operation.
+	op := operationlock.Get(d.Project().Name, d.Name())
+	if op != nil && op.ActionMatch(operationlock.ActionMigrate) {
+		return errors.New("The instance is already being migrated")
+	}
+
 	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionMigrate, nil, false, true)
 	if err != nil {
 		return err
@@ -7199,6 +7243,32 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 		containerMeta["privileged"] = "false"
 	}
 
+	// Setup security check.
+	rootfsPath, err := os.OpenFile(d.RootfsPath(), unix.O_PATH, 0)
+	if err != nil {
+		return fmt.Errorf("Failed to open instance rootfs path: %w", err)
+	}
+
+	defer func() { _ = rootfsPath.Close() }()
+
+	checkBeneath := func(targetPath string) error {
+		fd, err := unix.Openat2(int(rootfsPath.Fd()), targetPath, &unix.OpenHow{
+			Flags:   unix.O_PATH | unix.O_CLOEXEC,
+			Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS,
+		})
+		if err != nil {
+			if errors.Is(err, unix.EXDEV) {
+				return errors.New("Template is attempting access to path outside of container")
+			}
+
+			return nil
+		}
+
+		_ = unix.Close(fd)
+
+		return nil
+	}
+
 	// Go through the templates
 	for tplPath, tpl := range metadata.Templates {
 		err = func(tplPath string, tpl *api.ImageMetadataTemplate) error {
@@ -7211,8 +7281,38 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 				return nil
 			}
 
+			// Perform some security checks.
+			relPath := strings.TrimLeft(tplPath, "/")
+
+			err = checkBeneath(relPath)
+			if err != nil {
+				return err
+			}
+
+			if filepath.Base(tpl.Template) != tpl.Template {
+				return errors.New("Template path is attempting to read outside of template directory")
+			}
+
+			tplDirStat, err := os.Lstat(d.TemplatesPath())
+			if err != nil {
+				return fmt.Errorf("Couldn't access template directory: %w", err)
+			}
+
+			if !tplDirStat.IsDir() {
+				return errors.New("Template directory isn't a regular directory")
+			}
+
+			tplFileStat, err := os.Lstat(filepath.Join(d.TemplatesPath(), tpl.Template))
+			if err != nil {
+				return fmt.Errorf("Couldn't access template file: %w", err)
+			}
+
+			if tplFileStat.Mode()&os.ModeSymlink == os.ModeSymlink {
+				return errors.New("Template file is a symlink")
+			}
+
 			// Open the file to template, create if needed
-			fullpath := filepath.Join(d.RootfsPath(), strings.TrimLeft(tplPath, "/"))
+			fullpath := filepath.Join(d.RootfsPath(), relPath)
 			if util.PathExists(fullpath) {
 				if tpl.CreateOnly {
 					return nil
@@ -9394,5 +9494,32 @@ func (d *lxc) CreateQcow2Snapshot(snapName string, backingFilename string) error
 
 // DeleteQcow2Snapshot deletes a qcow2 snapshot for a running instance. Not supported by containers.
 func (d *lxc) DeleteQcow2Snapshot(snapshotIndex int, backingFilename string) error {
+	return nil
+}
+
+// setNICLink sets the link status of the given device.
+func (d *lxc) setNICLink(devName string, connected bool, assumeUp bool) error {
+	// This check is added so that devices that cannot handle link states do not fail to initialize.
+	if connected && assumeUp {
+		return nil
+	}
+
+	link, err := ip.LinkByName(d.localConfig["volatile."+devName+".host_name"])
+	if err != nil {
+		return fmt.Errorf("Failed to find interface %s: %w", devName, err)
+	}
+
+	if connected {
+		err = link.SetUp()
+		if err != nil {
+			return fmt.Errorf("Failed to bring %s up: %w", devName, err)
+		}
+	} else {
+		err = link.SetDown()
+		if err != nil {
+			return fmt.Errorf("Failed to bring %s down: %w", devName, err)
+		}
+	}
+
 	return nil
 }

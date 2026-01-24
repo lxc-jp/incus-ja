@@ -38,12 +38,12 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	"boot.autorestart": validate.Optional(validate.IsBool),
 
 	// gendoc:generate(entity=instance, group=boot, key=boot.autostart)
-	// If set to `false`, restore the last state.
+	// If unset or set to `last-state`, restores the last state.
 	// ---
 	//  type: bool
 	//  liveupdate: no
 	//  shortdesc: Whether to always start the instance when the daemon starts
-	"boot.autostart": validate.Optional(validate.IsBool),
+	"boot.autostart": validate.Optional(validate.Or(validate.IsBool, validate.IsOneOf("last-state"))),
 
 	// gendoc:generate(entity=instance, group=boot, key=boot.autostart.delay)
 	// The number of seconds to wait after the instance started before starting the next one.
@@ -1485,7 +1485,13 @@ func ConfigKeyChecker(key string, instanceType api.InstanceType) (func(value str
 	//  liveupdate: yes
 	//  shortdesc: Free-form environment key/value
 	if strings.HasPrefix(key, "environment.") {
-		return validate.IsAny, nil
+		return func(val string) error {
+			if strings.Contains(val, "\n") {
+				return errors.New("Environment variables cannot contain line breaks")
+			}
+
+			return nil
+		}, nil
 	}
 
 	// gendoc:generate(entity=instance, group=miscellaneous, key=user.*)
