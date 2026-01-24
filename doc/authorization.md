@@ -34,7 +34,7 @@ OpenFGA を認可に使うには、あなた自身で OpenFGA サーバーを設
 Incus は OpenFGA サーバーに接続し、{ref}`openfga-model` を書き込み、以降の全てのリクエストへの認可をこのサーバーに問い合わせます。
 
 Incusでこの認可の方法を有効にするには、[`openfga.*`](server-options-openfga)サーバー設定オプションを設定してください。
-OpenFGAを有効にするには`openfga.api.url`と`openfga.api.token`の両方を設定する必要があります。`openfga.store.id`はオプショナルです。指定しない場合はIncusが新しいストアーを生成します。
+OpenFGAを有効にするためにはすべてのオプションの設定が必要です。しかし、認可モデルを自身で作成する必要はありません。認証されたユーザーだけを許可するような初期設定タプル`server:incus#authenticated@user:*`を含む認可モデルをIncusが生成します。
 
 (openfga-model)=
 ### OpenFGA モデル

@@ -2921,3 +2921,26 @@ MACアドレス割り当てをカスタマイズするために`network.hwaddr_p
 
 `QCOW2`イメージから仮想マシンを稼働するできるようにします。
 現時点ではこれができるのは`lvmcluster`ストレージドライバーに限られます。
+
+## `oidc_allowed_subnets`
+
+カスタムの`incus.allowed_subnets` OIDCクレームをIncusでサポートします。
+
+## `file_delete_force`
+
+`X-Incus-force` HTTPヘッダーを追加します。`true`に設定するとインスタンスやカスタムボリュームのファイルを再帰的に削除できるようになります。
+
+## `nic_sriov_select_ext`
+
+SR-IOVネットワークインターフェースをベンダーID、プロダクトID、あるいはPCIアドレスで選択できるようにします。
+
+## `network_zones_dns_contact`
+
+ネットワークゾーンに`dns.contact`設定キーを追加します。
+
+## `nic_attached_connected`
+
+NICに以下の2つのプロパティーを追加します：
+
+* `attached`, ディスクとUSBデバイスの`attached`キーと同等。
+* `connected`, NICのリンクステートのアップ／ダウンを設定（サポートしている場合）。

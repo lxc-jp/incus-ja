@@ -441,10 +441,26 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 <!-- config group devices-infiniband end -->
 <!-- config group devices-nic_bridged start -->
+```{config:option} attached devices-nic_bridged
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} boot.priority devices-nic_bridged
 :managed: "no"
 :shortdesc: "VMのブート優先度（高いほうが先にブート）"
 :type: "integer"
+
+```
+
+```{config:option} connected devices-nic_bridged
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICがホストネットワークに接続されているかどうか"
+:type: "bool"
 
 ```
 
@@ -666,6 +682,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 <!-- config group devices-nic_bridged end -->
 <!-- config group devices-nic_ipvlan start -->
+```{config:option} attached devices-nic_ipvlan
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} gvrp devices-nic_ipvlan
 :default: "false"
 :shortdesc: "GARP VLAN Registration Protocolを使ってVLANを登録する"
@@ -753,6 +777,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 <!-- config group devices-nic_ipvlan end -->
 <!-- config group devices-nic_macvlan start -->
+```{config:option} attached devices-nic_macvlan
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} boot.priority devices-nic_macvlan
 :managed: "no"
 :shortdesc: "VMのブート優先度（高いほうが先にブート）"
@@ -764,6 +796,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :default: "false"
 :managed: "no"
 :shortdesc: "GARP VLAN Registration Protocolを使ってVLANを登録する"
+:type: "bool"
+
+```
+
+```{config:option} connected devices-nic_macvlan
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICがホストネットワークに接続されているかどうか（VMのみ）"
 :type: "bool"
 
 ```
@@ -839,10 +879,26 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} attached devices-nic_ovn
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} boot.priority devices-nic_ovn
 :managed: "no"
 :shortdesc: "VMのブート優先度（高いほうが先にブート）"
 :type: "integer"
+
+```
+
+```{config:option} connected devices-nic_ovn
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICがホストネットワークに接続されているかどうか（コンテナーでの利用は`acceleration`を`none`に設定する必要あり）"
+:type: "bool"
 
 ```
 
@@ -1033,9 +1089,25 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 <!-- config group devices-nic_ovn end -->
 <!-- config group devices-nic_p2p start -->
+```{config:option} attached devices-nic_p2p
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} boot.priotiry devices-nic_p2p
 :shortdesc: "VMのブート優先度 （高いほうが先にブート）"
 :type: "integer"
+
+```
+
+```{config:option} connected devices-nic_p2p
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICがホストネットワークに接続されているかどうか"
+:type: "bool"
 
 ```
 
@@ -1118,10 +1190,26 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 <!-- config group devices-nic_p2p end -->
 <!-- config group devices-nic_physical start -->
+```{config:option} attached devices-nic_physical
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} boot.priority devices-nic_physical
 :managed: "no"
 :shortdesc: "VMのブート優先度（高いほうが先にブート）"
 :type: "integer"
+
+```
+
+```{config:option} connected devices-nic_physical
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICがホストネットワークに接続されているかどうか（VMのみ）"
+:type: "bool"
 
 ```
 
@@ -1178,8 +1266,31 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} vlan.tagged devices-nic_physical
+:managed: "no"
+:shortdesc: "タグ付きトラフィックに参加するVLAN IDあるいはVLAN範囲のカンマ区切りリスト"
+:type: "integer"
+
+```
+
 <!-- config group devices-nic_physical end -->
 <!-- config group devices-nic_routed start -->
+```{config:option} attached devices-nic_routed
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
+```{config:option} connected devices-nic_routed
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICがホストネットワークに接続されているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} gvrp devices-nic_routed
 :default: "false"
 :shortdesc: "GARP VLAN Registration Protocolを使ってVLANを登録する"
@@ -1368,10 +1479,26 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 <!-- config group devices-nic_routed end -->
 <!-- config group devices-nic_sriov start -->
+```{config:option} attached devices-nic_sriov
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICが差し込まれているかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} boot.priority devices-nic_sriov
 :managed: "no"
 :shortdesc: "VMのブート優先度（高いほうが先にブート）"
 :type: "integer"
+
+```
+
+```{config:option} connected devices-nic_sriov
+:default: "`true`"
+:required: "no"
+:shortdesc: "NICがホストネットワークに接続されているかどうか（VMのみ）"
+:type: "bool"
 
 ```
 
@@ -1413,13 +1540,34 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} pci devices-nic_sriov
+:required: "no"
+:shortdesc: "親のホストデバイスのPCIアドレス"
+:type: "string"
+
+```
+
+```{config:option} productid devices-nic_sriov
+:required: "no"
+:shortdesc: "親のホストデバイスのプロダクトID"
+:type: "string"
+
+```
+
 ```{config:option} security.mac_filtering devices-nic_sriov
 :default: "false"
 :managed: "no"
 :shortdesc: "インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ"
 :type: "bool"
 
+`
+```{config:option} vendorid devices-nic_sriov
+:required: "no"
+:shortdesc: "親のホストデバイスのベンダーID"
+:type: "string"
+
 ```
+``
 
 ```{config:option} vlan devices-nic_sriov
 :managed: "no"
@@ -1755,7 +1903,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :liveupdate: "no"
 :shortdesc: "デーモンの起動時にインスタンスを常に起動するかどうか"
 :type: "bool"
-`false`に設定すると、最後の状態を復元します。
+未設定あるいは`last-state`に設定された場合、最後の状態を復元します。
 ```
 
 ```{config:option} boot.autostart.delay instance-boot
@@ -3995,6 +4143,13 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```
 
+```{config:option} vlan.tagged network_physical-common
+:condition: "Parent must be an existing bridge"
+:shortdesc: "タグ付きトラフィックに参加するVLAN IDあるいはVLAN範囲のカンマ区切りリスト"
+:type: "integer"
+
+```
+
 <!-- config group network_physical-common end -->
 <!-- config group network_physical-dns start -->
 ```{config:option} dns.nameservers network_physical-dns
@@ -4120,6 +4275,13 @@ NVIDIA仮想GPUインスタンスUUID。
 
 <!-- config group network_sriov-common end -->
 <!-- config group network_zone-common start -->
+```{config:option} dns.contact network_zone-common
+:required: "no"
+:shortdesc: "DNSサーバーの管理者の連絡用emailアドレス"
+:type: "string"
+
+```
+
 ```{config:option} dns.nameservers network_zone-common
 :required: "no"
 :shortdesc: "（NS レコード用の）DNS サーバーの FQDN のカンマ区切りリスト"
@@ -5648,6 +5810,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`incus-volume-`"
 :scope: "global"
 :shortdesc: "LINSTORが管理するボリュームの内部名に使われる接頭辞。ストレージプール作成後は変更不可"
+:type: "string"
+
+```
+
+```{config:option} source storage_linstor-common
+:default: "`incus`"
+:scope: "global"
+:shortdesc: "LINSTORストレージプール名。`linstor.resource_group.name`のエイリアス。これとエイリアスのどちらか一方を使うか同じ値を設定してください。"
 :type: "string"
 
 ```
