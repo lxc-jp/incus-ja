@@ -22,6 +22,7 @@ func nicValidationRules(requiredFields []string, optionalFields []string, instCo
 		"network":                              validate.IsAny,
 		"mtu":                                  validate.Optional(validate.IsNetworkMTU),
 		"vlan":                                 validate.IsNetworkVLAN,
+		"vlan.tagged":                          validate.IsAny,
 		"gvrp":                                 validate.Optional(validate.IsBool),
 		"hwaddr":                               validate.IsNetworkMAC,
 		"host_name":                            validate.IsAny,
@@ -56,6 +57,11 @@ func nicValidationRules(requiredFields []string, optionalFields []string, instCo
 		"security.promiscuous":                 validate.Optional(validate.IsBool),
 		"mode":                                 validate.Optional(validate.IsOneOf("bridge", "vepa", "passthru", "private")),
 		"io.bus":                               validate.Optional(func(_ string) error { return nicCheckIsVM(instConf) }, validate.IsOneOf("virtio", "usb")),
+		"vendorid":                             validate.Optional(validate.IsDeviceID),
+		"productid":                            validate.Optional(validate.IsDeviceID),
+		"pci":                                  validate.IsPCIAddress,
+		"attached":                             validate.Optional(validate.IsBool),
+		"connected":                            validate.Optional(validate.IsBool),
 	}
 
 	validators := map[string]func(value string) error{}

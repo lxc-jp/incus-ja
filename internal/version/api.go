@@ -512,6 +512,11 @@ var APIExtensions = []string{
 	"resources_serial",
 	"ovn_nic_limits",
 	"storage_lvmcluster_qcow2",
+	"oidc_allowed_subnets",
+	"file_delete_force",
+	"nic_sriov_select_ext",
+	"network_zones_dns_contact",
+	"nic_attached_connected",
 }
 
 // APIExtensionsCount returns the number of available API extensions.
