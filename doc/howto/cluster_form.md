@@ -57,7 +57,7 @@ Would you like a YAML "incus admin init" preseed to be printed? (yes/no) [defaul
 初期化プロセスが終了したら、最初のクラスタメンバーが起動してネットワーク上で利用可能になるはずです。
 これは [`incus cluster list`](incus_cluster_list.md) で確認できます。
 
-### 依存のサーバーをブートストラップサーバーに変換する
+### 既存のサーバーをブートストラップサーバーに変換する
 
 インスタンスを持つ既存のIncusサーバーを新しいクラスタのブートストラップサーバーに変換したい場合は、少し異なる手順があります。
 
