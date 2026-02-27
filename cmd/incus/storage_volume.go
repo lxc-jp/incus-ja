@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	incus "github.com/lxc/incus/v6/client"
+	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	"github.com/lxc/incus/v6/internal/instance"
 	internalIO "github.com/lxc/incus/v6/internal/io"
@@ -59,7 +60,7 @@ func parseVolume(defaultType string, name string) (string, string) {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolume) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("volume")
+	cmd.Use = cli.U("volume")
 	cmd.Short = i18n.G("Manage storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Manage storage volumes
@@ -171,7 +172,7 @@ type cmdStorageVolumeAttach struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeAttach) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("attach", i18n.G("[<remote>:]<pool> <volume> <instance> [<device name>] [<path>]"))
+	cmd.Use = cli.U("attach", u.Pool.Remote(), u.Volume, u.Instance, u.NewName(u.Device).Optional(u.Path.Optional()))
 	cmd.Short = i18n.G("Attach new custom storage volumes to instances")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Attach new custom storage volumes to instances`))
@@ -264,7 +265,7 @@ type cmdStorageVolumeAttachProfile struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeAttachProfile) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("attach-profile", i18n.G("[<remote:>]<pool> <volume> <profile> [<device name>] [<path>]"))
+	cmd.Use = cli.U("attach-profile", u.Pool.Remote(), u.Volume, u.Profile, u.NewName(u.Device).Optional(u.Path.Optional()))
 	cmd.Short = i18n.G("Attach new custom storage volumes to profiles")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Attach new custom storage volumes to profiles`))
@@ -373,7 +374,7 @@ type cmdStorageVolumeCopy struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeCopy) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("copy", i18n.G("[<remote>:]<pool>/<volume>[/<snapshot>] [<remote>:]<pool>/<volume>"))
+	cmd.Use = cli.U("copy", u.MakePath(u.Pool, u.Volume, u.Snapshot.Optional()).Remote(), u.MakePath(u.Pool, u.NewName(u.Volume)).Remote())
 	cmd.Aliases = []string{"cp"}
 	cmd.Short = i18n.G("Copy custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -594,7 +595,7 @@ type cmdStorageVolumeCreate struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeCreate) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("create", i18n.G("[<remote>:]<pool> <volume> [key=value...]"))
+	cmd.Use = cli.U("create", u.Pool.Remote(), u.NewName(u.Volume), u.KV.List(0))
 	cmd.Aliases = []string{"add"}
 	cmd.Short = i18n.G("Create new custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -712,7 +713,7 @@ type cmdStorageVolumeDelete struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("delete", i18n.G("[<remote>:]<pool> <volume>"))
+	cmd.Use = cli.U("delete", u.Pool.Remote(), u.Volume)
 	cmd.Aliases = []string{"rm", "remove"}
 	cmd.Short = i18n.G("Delete custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -788,7 +789,7 @@ type cmdStorageVolumeDetach struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeDetach) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("detach", i18n.G("[<remote>:]<pool> <volume> <instance> [<device name>]"))
+	cmd.Use = cli.U("detach", u.Pool.Remote(), u.Volume, u.Instance, u.Device.Optional())
 	cmd.Short = i18n.G("Detach custom storage volumes from instances")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Detach custom storage volumes from instances`))
@@ -888,7 +889,7 @@ type cmdStorageVolumeDetachProfile struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeDetachProfile) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("detach-profile", i18n.G("[<remote:>]<pool> <volume> <profile> [<device name>]"))
+	cmd.Use = cli.U("detach-profile", u.Pool.Remote(), u.Volume, u.Profile, u.Device.Optional())
 	cmd.Short = i18n.G("Detach custom storage volumes from profiles")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Detach custom storage volumes from profiles`))
@@ -987,7 +988,7 @@ type cmdStorageVolumeEdit struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeEdit) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("edit", i18n.G("[<remote>:]<pool> [<type>/]<volume>"))
+	cmd.Use = cli.U("edit", u.Pool.Remote(), u.MakePath(u.Type.Optional(), u.Volume))
 	cmd.Short = i18n.G("Edit storage volume configurations as YAML")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Edit storage volume configurations as YAML
@@ -1213,7 +1214,7 @@ type cmdStorageVolumeGet struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeGet) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("get", i18n.G("[<remote>:]<pool> [<type>/]<volume>[/<snapshot>] <key>"))
+	cmd.Use = cli.U("get", u.Pool.Remote(), u.MakePath(u.Type.Optional(), u.Volume, u.Snapshot.Optional()), u.Key)
 	cmd.Short = i18n.G("Get values for storage volume configuration keys")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Get values for storage volume configuration keys
@@ -1351,7 +1352,7 @@ type cmdStorageVolumeInfo struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeInfo) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("info", i18n.G("[<remote>:]<pool> [<type>/]<volume>"))
+	cmd.Use = cli.U("info", u.Pool.Remote(), u.MakePath(u.Type.Optional(), u.Volume))
 	cmd.Short = i18n.G("Show storage volume state information")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Show storage volume state information
@@ -1593,7 +1594,7 @@ type cmdStorageVolumeList struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeList) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("list", i18n.G("[<remote>:]<pool> [<filter>...]"))
+	cmd.Use = cli.U("list", u.Pool.Remote(), u.Filter.List(0))
 	cmd.Aliases = []string{"ls"}
 	cmd.Short = i18n.G("List storage volumes")
 
@@ -1853,7 +1854,7 @@ type cmdStorageVolumeMove struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeMove) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("move", i18n.G("[<remote>:]<pool>/<volume> [<remote>:]<pool>/<volume>"))
+	cmd.Use = cli.U("move", u.MakePath(u.Pool, u.Volume).Remote(), u.MakePath(u.Pool, u.NewName(u.Volume)).Remote())
 	cmd.Aliases = []string{"mv"}
 	cmd.Short = i18n.G("Move custom storage volumes between pools")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -1949,7 +1950,7 @@ type cmdStorageVolumeRename struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeRename) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("rename", i18n.G("[<remote>:]<pool> <old name> <new name>"))
+	cmd.Use = cli.U("rename", u.Pool.Remote(), u.Volume, u.NewName(u.Volume))
 	cmd.Short = i18n.G("Rename custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Rename custom storage volumes`))
@@ -2031,7 +2032,7 @@ type cmdStorageVolumeSet struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSet) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("set", i18n.G("[<remote>:]<pool> [<type>/]<volume> <key>=<value>..."))
+	cmd.Use = cli.U("set", u.Pool.Remote(), u.MakePath(u.Type.Optional(), u.Volume), u.KV.List(1))
 	cmd.Short = i18n.G("Set storage volume configuration keys")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Set storage volume configuration keys
@@ -2194,7 +2195,7 @@ type cmdStorageVolumeShow struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeShow) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("show", i18n.G("[<remote>:]<pool> [<type>/]<volume>"))
+	cmd.Use = cli.U("show", u.Pool.Remote(), u.MakePath(u.Type.Optional(), u.Volume))
 	cmd.Short = i18n.G("Show storage volume configurations")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Show storage volume configurations
@@ -2301,7 +2302,7 @@ type cmdStorageVolumeUnset struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeUnset) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("unset", i18n.G("[<remote>:]<pool> [<type>/]<volume> <key>"))
+	cmd.Use = cli.U("unset", u.Pool.Remote(), u.MakePath(u.Type.Optional(), u.Volume), u.Key)
 	cmd.Short = i18n.G("Unset storage volume configuration keys")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Unset storage volume configuration keys
@@ -2368,7 +2369,7 @@ type cmdStorageVolumeFile struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeFile) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("file")
+	cmd.Use = cli.U("file")
 	cmd.Short = i18n.G("Manage files in custom volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Manage files in custom volumes`))
@@ -2417,7 +2418,7 @@ type cmdStorageVolumeFileCreate struct {
 // Command returns the cobra command for `storage volume file create`.
 func (c *cmdStorageVolumeFileCreate) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("create", i18n.G("[<remote>:]<pool> <volume>/<path> [<symlink target path>]"))
+	cmd.Use = cli.U("create", u.Pool.Remote(), u.MakePath(u.Volume, u.Path), u.SymlinkTargetPath.Optional())
 	cmd.Short = i18n.G("Create files and directories in custom vollume")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Create files and directories in custom volume`))
@@ -2615,7 +2616,7 @@ type cmdStorageVolumeFileDelete struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeFileDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("delete", i18n.G("[<remote>:]<pool> <volume>/<path>"))
+	cmd.Use = cli.U("delete", u.Pool.Remote(), u.MakePath(u.Volume, u.Path))
 	cmd.Aliases = []string{"rm", "remove"}
 	cmd.Short = i18n.G("Delete files in custom volume")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -2695,10 +2696,16 @@ type cmdStorageVolumeFileMount struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeFileMount) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("mount", i18n.G("[<remote>:]<pool> <volume> [<target path>]"))
+	cmd.Use = cli.U("mount", u.Pool.Remote(), u.Volume, u.Target(u.Path).Optional())
 	cmd.Short = i18n.G("Mount files from custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
-		`Mount files from custom storage volumes`))
+		`Mount files from custom storage volumes.
+If no target path is provided, start an SSH SFTP listener instead.`))
+	cmd.Example = cli.FormatSection("", i18n.G(`incus storage volume file mount mypool myvolume localdir
+   To mount the storage volume myvolume from pool mypool onto the local directory localdir.
+
+incus storage volume file mount mypool myvolume
+   To start an SSH SFTP listener for the storage volume myvolume from pool mypool.`))
 
 	cmd.Flags().StringVar(&c.flagListen, "listen", "", i18n.G("Setup SSH SFTP listener on address:port instead of mounting"))
 	cmd.Flags().BoolVar(&c.flagAuthNone, "no-auth", false, i18n.G("Disable authentication when using SSH SFTP listener"))
@@ -2766,8 +2773,6 @@ func (c *cmdStorageVolumeFileMount) Run(cmd *cobra.Command, args []string) error
 	}
 
 	// Look for sshfs command if no SSH SFTP listener mode specified and a target mount path was specified.
-	entity := fmt.Sprintf("%s/%s/%s", resource.name, volType, volName)
-
 	if c.flagListen == "" && targetPath != "" {
 		// Connect to SFTP.
 		sftpConn, err := resource.server.GetStoragePoolVolumeFileSFTPConn(resource.name, volType, volName)
@@ -2777,12 +2782,19 @@ func (c *cmdStorageVolumeFileMount) Run(cmd *cobra.Command, args []string) error
 
 		defer func() { _ = sftpConn.Close() }()
 
+		entity := fmt.Sprintf("%s/%s/%s", resource.name, volType, volName)
 		return sshfsMount(cmd.Context(), sftpConn, entity, "", targetPath)
+	}
+
+	// Check if the pool and the volume exist before starting the SFTP server.
+	_, _, err = resource.server.GetStoragePoolVolume(resource.name, volType, volName)
+	if err != nil {
+		return err
 	}
 
 	return sshSFTPServer(cmd.Context(), func() (net.Conn, error) {
 		return resource.server.GetStoragePoolVolumeFileSFTPConn(resource.name, volType, volName)
-	}, entity, c.flagAuthNone, c.flagAuthUser, c.flagListen)
+	}, c.flagAuthNone, c.flagAuthUser, c.flagListen)
 }
 
 // Edit.
@@ -2795,7 +2807,7 @@ type cmdStorageVolumeFileEdit struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeFileEdit) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("edit", i18n.G("[<remote>:]<pool> <volume>/<path>"))
+	cmd.Use = cli.U("edit", u.Pool.Remote(), u.MakePath(u.Volume, u.Path))
 	cmd.Short = i18n.G("Edit files in storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Edit files in storage volumes`))
@@ -2877,7 +2889,7 @@ type cmdStorageVolumeFilePull struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeFilePull) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("pull", i18n.G("[<remote>:]<pool> <volume>/<path> <target path>"))
+	cmd.Use = cli.U("pull", u.Pool.Remote(), u.MakePath(u.Volume, u.Path), u.Target(u.Path))
 	cmd.Short = i18n.G("Pull files from custom volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Pull files from custom volumes`))
@@ -3096,7 +3108,7 @@ type cmdStorageVolumeFilePush struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeFilePush) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("push", i18n.G("<source path> [<remote>:]<pool> <volume>/<target path>"))
+	cmd.Use = cli.U("push", u.Path, u.Pool.Remote(), u.MakePath(u.Volume, u.Target(u.Path)))
 	cmd.Short = i18n.G("Push files into custom volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Push files into custom volumes`))
@@ -3356,7 +3368,7 @@ type cmdStorageVolumeSnapshot struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSnapshot) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("snapshot")
+	cmd.Use = cli.U("snapshot")
 	cmd.Short = i18n.G("Manage storage volume snapshots")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Manage storage volume snapshots`))
@@ -3408,7 +3420,7 @@ type cmdStorageVolumeSnapshotCreate struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSnapshotCreate) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("create", i18n.G("[<remote>:]<pool> <volume> [<snapshot>]"))
+	cmd.Use = cli.U("create", u.Pool.Remote(), u.Volume, u.NewName(u.Snapshot).Optional())
 	cmd.Aliases = []string{"add"}
 	cmd.Short = i18n.G("Snapshot storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -3566,7 +3578,7 @@ type cmdStorageVolumeSnapshotDelete struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSnapshotDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("delete", i18n.G("[<remote>:]<pool> <volume> <snapshot>"))
+	cmd.Use = cli.U("delete", u.Pool.Remote(), u.Volume, u.Snapshot)
 	cmd.Aliases = []string{"rm", "remove"}
 	cmd.Short = i18n.G("Delete storage volume snapshots")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -3658,7 +3670,7 @@ type cmdStorageVolumeSnapshotList struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSnapshotList) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("list", i18n.G("[<remote>:]<pool> <volume>"))
+	cmd.Use = cli.U("list", u.Pool.Remote(), u.Volume)
 	cmd.Aliases = []string{"ls"}
 	cmd.Short = i18n.G("List storage volume snapshots")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -3828,7 +3840,7 @@ type cmdStorageVolumeSnapshotRename struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSnapshotRename) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("rename", i18n.G("[<remote>:]<pool> <volume> <old snapshot> <new snapshot>"))
+	cmd.Use = cli.U("rename", u.Pool.Remote(), u.Volume, u.Snapshot, u.NewName(u.Snapshot))
 	cmd.Short = i18n.G("Rename storage volume snapshots")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Rename storage volume snapshots`))
@@ -3917,7 +3929,7 @@ type cmdStorageVolumeSnapshotRestore struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSnapshotRestore) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("restore", i18n.G("[<remote>:]<pool> <volume> <snapshot>"))
+	cmd.Use = cli.U("restore", u.Pool.Remote(), u.Volume, u.Snapshot)
 	cmd.Short = i18n.G("Restore storage volume snapshots")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Restore storage volume snapshots`))
@@ -3999,7 +4011,7 @@ type cmdStorageVolumeSnapshotShow struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeSnapshotShow) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("show", i18n.G("[<remote>:]<pool> <volume>/<snapshot>"))
+	cmd.Use = cli.U("show", u.Pool.Remote(), u.MakePath(u.Volume, u.Snapshot))
 	cmd.Short = i18n.G("Show storage volume snapshot configurations")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Show storage volume snapshhot configurations`))
@@ -4088,7 +4100,7 @@ type cmdStorageVolumeExport struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeExport) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("export", i18n.G("[<remote>:]<pool> <volume> [<path>]"))
+	cmd.Use = cli.U("export", u.Pool.Remote(), u.Volume, u.Target(u.File).Optional())
 	cmd.Short = i18n.G("Export custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Export custom storage volumes.`))
@@ -4162,56 +4174,69 @@ func (c *cmdStorageVolumeExport) Run(cmd *cobra.Command, args []string) error {
 		CompressionAlgorithm: c.flagCompressionAlgorithm,
 	}
 
-	op, err := d.CreateStorageVolumeBackup(name, volName, req)
-	if err != nil {
-		return fmt.Errorf(i18n.G("Failed to create storage volume backup: %w"), err)
-	}
+	var getter func(backupReq *incus.BackupFileRequest) error
 
-	// Watch the background operation
-	progress := cli.ProgressRenderer{
-		Format: i18n.G("Backing up storage volume: %s"),
-		Quiet:  c.global.flagQuiet,
-	}
-
-	_, err = op.AddHandler(progress.UpdateOp)
-	if err != nil {
-		progress.Done("")
-		return err
-	}
-
-	// Wait until backup is done
-	err = cli.CancelableWait(op, &progress)
-	if err != nil {
-		progress.Done("")
-		return err
-	}
-
-	progress.Done("")
-
-	err = op.Wait()
-	if err != nil {
-		return err
-	}
-
-	// Get name of backup
-	uStr := op.Get().Resources["backups"][0]
-	u, err := url.Parse(uStr)
-	if err != nil {
-		return fmt.Errorf(i18n.G("Invalid URL %q: %w"), uStr, err)
-	}
-
-	backupName, err := url.PathUnescape(path.Base(u.EscapedPath()))
-	if err != nil {
-		return fmt.Errorf(i18n.G("Invalid backup name segment in path %q: %w"), u.EscapedPath(), err)
-	}
-
-	defer func() {
-		// Delete backup after we're done
-		op, err = d.DeleteStorageVolumeBackup(name, volName, backupName)
-		if err == nil {
-			_ = op.Wait()
+	if d.HasExtension("direct_backup") {
+		getter = func(backupReq *incus.BackupFileRequest) error {
+			return d.CreateStorageVolumeBackupStream(name, volName, req, backupReq)
 		}
-	}()
+	} else {
+		op, err := d.CreateStorageVolumeBackup(name, volName, req)
+		if err != nil {
+			return fmt.Errorf(i18n.G("Failed to create storage volume backup: %w"), err)
+		}
+
+		// Watch the background operation
+		progress := cli.ProgressRenderer{
+			Format: i18n.G("Backing up storage volume: %s"),
+			Quiet:  c.global.flagQuiet,
+		}
+
+		_, err = op.AddHandler(progress.UpdateOp)
+		if err != nil {
+			progress.Done("")
+			return err
+		}
+
+		// Wait until backup is done
+		err = cli.CancelableWait(op, &progress)
+		if err != nil {
+			progress.Done("")
+			return err
+		}
+
+		progress.Done("")
+
+		err = op.Wait()
+		if err != nil {
+			return err
+		}
+
+		// Get name of backup
+		uStr := op.Get().Resources["backups"][0]
+		u, err := url.Parse(uStr)
+		if err != nil {
+			return fmt.Errorf(i18n.G("Invalid URL %q: %w"), uStr, err)
+		}
+
+		backupName, err := url.PathUnescape(path.Base(u.EscapedPath()))
+		if err != nil {
+			return fmt.Errorf(i18n.G("Invalid backup name segment in path %q: %w"), u.EscapedPath(), err)
+		}
+
+		defer func() {
+			// Delete backup after we're done
+			op, err = d.DeleteStorageVolumeBackup(name, volName, backupName)
+			if err == nil {
+				_ = op.Wait()
+			}
+		}()
+
+		getter = func(backupReq *incus.BackupFileRequest) error {
+			_, err := d.GetStorageVolumeBackupFile(name, volName, backupName, backupReq)
+			return err
+		}
+	}
 
 	var targetName string
 	if len(args) > 2 {
@@ -4230,7 +4255,7 @@ func (c *cmdStorageVolumeExport) Run(cmd *cobra.Command, args []string) error {
 	defer func() { _ = target.Close() }()
 
 	// Prepare the download request
-	progress = cli.ProgressRenderer{
+	progress := cli.ProgressRenderer{
 		Format: i18n.G("Exporting the backup: %s"),
 		Quiet:  c.global.flagQuiet,
 	}
@@ -4241,7 +4266,7 @@ func (c *cmdStorageVolumeExport) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Export tarball
-	_, err = d.GetStorageVolumeBackupFile(name, volName, backupName, &backupFileRequest)
+	err = getter(&backupFileRequest)
 	if err != nil {
 		_ = os.Remove(targetName)
 		progress.Done("")
@@ -4264,7 +4289,7 @@ type cmdStorageVolumeImport struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageVolumeImport) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("import", i18n.G("[<remote>:]<pool> <backup file> [<volume name>]"))
+	cmd.Use = cli.U("import", u.Pool.Remote(), u.BackupFile, u.NewName(u.Volume).Optional())
 	cmd.Short = i18n.G("Import custom storage volumes")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Import custom storage volumes.`))

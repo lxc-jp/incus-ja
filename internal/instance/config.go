@@ -56,9 +56,10 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 
 	// gendoc:generate(entity=instance, group=boot, key=boot.autostart.priority)
 	// The instance with the highest value is started first.
+	// Instances without a priority set will be started (with some parallelism) ahead of
+	// instances with a priority set.
 	// ---
 	//  type: integer
-	//  defaultdesc: 0
 	//  liveupdate: no
 	//  shortdesc: What order to start the instances in
 	"boot.autostart.priority": validate.Optional(validate.IsInt64),
@@ -1221,6 +1222,20 @@ var InstanceConfigKeysVM = map[string]func(value string) error{
 	//  shortdesc: QEMU VM definition name (used for migration between versions)
 	"volatile.vm.definition": validate.Optional(validate.IsAny),
 
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.vm.hotplug.memory)
+	//
+	// ---
+	//  type: string
+	//  shortdesc: Memory setup of the VM as needed for state restoration
+	"volatile.vm.hotplug.memory": validate.Optional(validate.IsAny),
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.vm.needs_reset)
+	//
+	// ---
+	//  type: bool
+	//  shortdesc: Indicates that the VM needs a full reset on next reboot
+	"volatile.vm.needs_reset": validate.Optional(validate.IsBool),
+
 	// gendoc:generate(entity=instance, group=volatile, key=volatile.vm.rtc_adjustment)
 	// Real Time Clock adjustment time to allow virtual machines to run on a different base than the host.
 	// ---
@@ -1468,6 +1483,15 @@ func ConfigKeyChecker(key string, instanceType api.InstanceType) (func(value str
 			return validate.IsAny, nil
 		}
 
+		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.trusted)
+		// The original trusted setting used when moving a VF into an instance.
+		// ---
+		//  type: string
+		//  shortdesc: SR-IOV virtual function original trusted setting
+		if strings.HasSuffix(key, ".last_state.vf.trusted") {
+			return validate.IsAny, nil
+		}
+
 		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.vlan)
 		// The original VLAN used when moving a VF into an instance.
 		// ---
@@ -1675,6 +1699,10 @@ func ConfigKeyChecker(key string, instanceType api.InstanceType) (func(value str
 // InstanceIncludeWhenCopying is used to decide whether to include a config item or not when copying an instance.
 // The remoteCopy argument indicates if the copy is remote (i.e between servers) as this affects the keys kept.
 func InstanceIncludeWhenCopying(configKey string, remoteCopy bool) bool {
+	if configKey == "volatile.apply_nvram" {
+		return true // Include volatile.apply_nvram to also reset the NVRAM in copied instances.
+	}
+
 	if configKey == "volatile.base_image" {
 		return true // Include volatile.base_image always as it can help optimize copies.
 	}

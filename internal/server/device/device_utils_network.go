@@ -708,7 +708,7 @@ func networkSRIOVParentVFInfo(vfParent string, vfID int) (ip.VirtFuncInfo, error
 }
 
 // networkSRIOVSetupVF configures a SR-IOV virtual function (VF) on the parent (PF) and stores original properties
-// of the PF and VF devices into voltatile for restoration on detach.
+// of the PF and VF devices into volatile for restoration on detach.
 // The useSpoofCheck argument controls whether to use the spoof check feature for the VF on the parent device.
 // If this is false then "security.mac_filtering" must not be enabled.
 // Returns VF PCI device info and IOMMU group number for VMs.
@@ -730,6 +730,11 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 	volatile["last_state.vf.id"] = fmt.Sprintf("%d", vfID)
 	volatile["last_state.vf.vlan"] = fmt.Sprintf("%d", vfInfo.VLAN)
 	volatile["last_state.vf.spoofcheck"] = fmt.Sprintf("%t", vfInfo.SpoofCheck)
+
+	// Only persist trust state if it's supported by the NIC.
+	if vfInfo.Trusted != ^uint32(0) {
+		volatile["last_state.vf.trusted"] = fmt.Sprintf("%d", vfInfo.Trusted)
+	}
 
 	// Record the host interface we represents the VF device which we will move into instance.
 	volatile["host_name"] = vfDevice
@@ -761,6 +766,20 @@ func networkSRIOVSetupVF(d deviceCommon, vfParent string, vfDevice string, vfID 
 		err := link.SetVfVlan(volatile["last_state.vf.id"], d.config["vlan"])
 		if err != nil {
 			return vfPCIDev, 0, fmt.Errorf("Failed setting VLAN for VF %q: %w", volatile["last_state.vf.id"], err)
+		}
+	}
+
+	// Setup VF trust setting if specified
+	if d.config["security.trusted"] != "" {
+		if vfInfo.Trusted == ^uint32(0) {
+			return vfPCIDev, 0, fmt.Errorf("Failed setting trusted for vf %q: The driver reported missing support for this feature", volatile["last_state.vf.id"])
+		}
+
+		link := &ip.Link{Name: vfParent}
+		toSet := util.IsTrue(d.config["security.trusted"])
+		err = link.SetVfTrusted(volatile["last_state.vf.id"], toSet)
+		if err != nil {
+			return vfPCIDev, 0, fmt.Errorf("Failed setting trusted to %t for VF %q: %w", toSet, volatile["last_state.vf.id"], err)
 		}
 	}
 
@@ -924,6 +943,16 @@ func networkSRIOVRestoreVF(d deviceCommon, useSpoofCheck bool, volatile map[stri
 		}
 	}
 
+	// Reset VF trusted if specified.
+	if volatile["last_state.vf.trusted"] != "" {
+		mode := util.IsTrue(volatile["last_state.vf.trusted"])
+		link := &ip.Link{Name: parent}
+		err := link.SetVfTrusted(volatile["last_state.vf.id"], mode)
+		if err != nil && d.config["security.trusted"] != "" {
+			return err
+		}
+	}
+
 	// Bind VF device onto the host so that the settings will take effect.
 	err = networkPCIBindWaitInterface(vfPCIDev, volatile["host_name"])
 	if err != nil {
@@ -988,8 +1017,18 @@ func networkSRIOVSetupContainerVFNIC(hostName string, macPattern string, config 
 			return fmt.Errorf("Failed parsing MAC address %q: %w", config["hwaddr"], err)
 		}
 
+		// Retry a few times as some vendors take a little while to initialize.
 		link := &ip.Link{Name: hostName}
-		err = link.SetAddress(hwaddr)
+
+		for range 10 {
+			err = link.SetAddress(hwaddr)
+			if err == nil {
+				break
+			}
+
+			time.Sleep(500 * time.Millisecond)
+		}
+
 		if err != nil {
 			return fmt.Errorf("Failed setting MAC address %q on %q: %w", config["hwaddr"], hostName, err)
 		}

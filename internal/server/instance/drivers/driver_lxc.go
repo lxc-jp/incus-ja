@@ -2965,7 +2965,8 @@ func (d *lxc) Start(stateful bool) error {
 		"forkstart",
 		name,
 		d.state.OS.LxcPath,
-		configPath)
+		configPath,
+		d.LogPath())
 	if err != nil && !d.IsRunning() {
 		// Attempt to extract the LXC errors
 		lxcLog := ""
@@ -4069,7 +4070,7 @@ func (d *lxc) Snapshot(name string, expiry time.Time, stateful bool) error {
 }
 
 // Restore restores a snapshot.
-func (d *lxc) Restore(sourceContainer instance.Instance, stateful bool) error {
+func (d *lxc) Restore(sourceContainer instance.Instance, stateful bool, diskOnly bool) error {
 	var ctxMap logger.Ctx
 
 	op, err := operationlock.Create(d.Project().Name, d.Name(), d.op, operationlock.ActionRestore, false, false)
@@ -4186,17 +4187,34 @@ func (d *lxc) Restore(sourceContainer instance.Instance, stateful bool) error {
 		return err
 	}
 
-	// Restore the configuration.
-	args := db.InstanceArgs{
-		Architecture: sourceContainer.Architecture(),
-		Config:       sourceContainer.LocalConfig(),
-		Description:  sourceContainer.Description(),
-		Devices:      sourceContainer.LocalDevices(),
-		Ephemeral:    sourceContainer.IsEphemeral(),
-		Profiles:     sourceContainer.Profiles(),
-		Project:      sourceContainer.Project().Name,
-		Type:         sourceContainer.Type(),
-		Snapshot:     sourceContainer.IsSnapshot(),
+	args := db.InstanceArgs{}
+	if !diskOnly {
+		// Restore the configuration.
+		args = db.InstanceArgs{
+			Architecture: sourceContainer.Architecture(),
+			Config:       sourceContainer.LocalConfig(),
+			Description:  sourceContainer.Description(),
+			Devices:      sourceContainer.LocalDevices(),
+			Ephemeral:    sourceContainer.IsEphemeral(),
+			Profiles:     sourceContainer.Profiles(),
+			Project:      sourceContainer.Project().Name,
+			Type:         sourceContainer.Type(),
+			Snapshot:     sourceContainer.IsSnapshot(),
+		}
+	} else {
+		args = db.InstanceArgs{
+			Architecture: d.Architecture(),
+			Config:       d.LocalConfig(),
+			Description:  d.Description(),
+			Devices:      d.LocalDevices(),
+			Ephemeral:    d.IsEphemeral(),
+			Profiles:     d.Profiles(),
+			Project:      d.Project().Name,
+			Type:         d.Type(),
+			Snapshot:     d.IsSnapshot(),
+		}
+
+		args.Config["volatile.uuid.generation"] = sourceContainer.LocalConfig()["volatile.uuid.generation"]
 	}
 
 	// Don't pass as user-requested as there's no way to fix a bad config.
@@ -9192,6 +9210,16 @@ func (d *lxc) Metrics(hostInterfaces []net.Interface) (*metrics.MetricSet, error
 		out.AddSamples(metrics.ProcsTotal, metrics.Sample{Value: float64(pids)})
 	}
 
+	// Set the timestamps
+	startedAt, err := d.processStartedAt(d.InitPID())
+	if err != nil {
+		d.logger.Warn("Failed to get instance startup time", logger.Ctx{"err": err})
+	} else {
+		out.AddSamples(metrics.BootTimeSeconds, metrics.Sample{Value: float64(startedAt.Unix())})
+	}
+
+	out.AddSamples(metrics.TimeSeconds, metrics.Sample{Value: float64(time.Now().Unix())})
+
 	return out, nil
 }
 
@@ -9279,6 +9307,11 @@ func (d *lxc) getFSStats() (*metrics.MetricSet, error) {
 				realDev = dev["source"]
 			}
 		} else {
+			// Skip special disks.
+			if device.IsSpecialDisk(dev["source"]) {
+				continue
+			}
+
 			source := dev["source"]
 
 			statfs, err = linux.StatVFS(source)
@@ -9495,6 +9528,11 @@ func (d *lxc) CreateQcow2Snapshot(snapName string, backingFilename string) error
 // DeleteQcow2Snapshot deletes a qcow2 snapshot for a running instance. Not supported by containers.
 func (d *lxc) DeleteQcow2Snapshot(snapshotIndex int, backingFilename string) error {
 	return nil
+}
+
+// ExportQcow2Block exports a qcow2 block device. Not supported by containers.
+func (d *lxc) ExportQcow2Block(diskIndex int) (func(), string, error) {
+	return nil, "", nil
 }
 
 // setNICLink sets the link status of the given device.

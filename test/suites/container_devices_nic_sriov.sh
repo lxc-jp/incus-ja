@@ -10,6 +10,8 @@ test_container_devices_nic_sriov() {
     ensure_import_testimage
     ensure_has_localhost_remote "${INCUS_ADDR}"
 
+    IF_UP_TIMEOUT=15
+
     parent=${INCUS_NIC_SRIOV_PARENT:-""}
 
     if [ "$parent" = "" ]; then
@@ -42,6 +44,13 @@ test_container_devices_nic_sriov() {
     vfID=$(incus config get "${ctName}" volatile.eth0.last_state.vf.id)
     if ip link show "${parent}" | grep "vf ${vfID}" | grep "spoof checking on"; then
         echo "spoof checking is still enabled"
+        false
+    fi
+
+    # Check trusted has been disabled (the default if NIC supports it).
+    vfID=$(incus config get "${ctName}" volatile.eth0.last_state.vf.id)
+    if ip link show "${parent}" | grep "vf ${vfID}" | grep "trust on"; then
+        echo "trusted is still enabled"
         false
     fi
 
@@ -124,6 +133,48 @@ test_container_devices_nic_sriov() {
 
     incus stop -f "${ctName}"
 
+    # Remove 2nd device whilst stopped.
+    incus config device remove "${ctName}" eth1
+
+    incus start "${ctName}"
+
+    incus config device set "${ctName}" eth0 security.trusted true
+
+    # Check trusted property has been enabled
+    vfID=$(incus config get "${ctName}" volatile.eth0.last_state.vf.id)
+    if ! ip link show "${parent}" | grep "vf ${vfID}" | grep "trust on"; then
+        echo "trusted is still disabled"
+        false
+    fi
+
+    incus stop -f "${ctName}"
+
+    # Disable trusted and try fresh boot.
+    incus config device set "${ctName}" eth0 security.trusted false
+    incus start "${ctName}"
+
+    # Check trusted has been disabled (the default).
+    vfID=$(incus config get "${ctName}" volatile.eth0.last_state.vf.id)
+    if ! ip link show "${parent}" | grep "vf ${vfID}" | grep "trust off"; then
+        echo "trusted is still enabled"
+        false
+    fi
+
+    # Hot plug fresh device.
+    incus config device add "${ctName}" eth1 nic \
+        nictype=sriov \
+        parent="${parent}" \
+        security.trusted=true
+
+    # Check trusted has been enabled.
+    vfID=$(incus config get "${ctName}" volatile.eth1.last_state.vf.id)
+    if ! ip link show "${parent}" | grep "vf ${vfID}" | grep "trust on"; then
+        echo "trusted is still disabled"
+        false
+    fi
+
+    incus stop -f "${ctName}"
+
     # Test setting MAC offline.
     incus config device set "${ctName}" eth1 hwaddr "${ctMAC2}"
     incus start "${ctName}"
@@ -155,14 +206,40 @@ test_container_devices_nic_sriov() {
     fi
 
     # Test attached key.
-    incus config device add "${ctName}" eth0 nic network="${ctName}" name=eth0
+    incus config device remove "${ctName}" eth0
+    incus config device add "${ctName}" eth0 nic network="${ctName}net" name=eth0
     incus exec "${ctName}" ip link set eth0 up
-    [ "$(incus file pull "${ctName}/sys/class/net/eth0/operstate" -)" = "up" ]
+
+    # Interfaces don't immediately become operationally up
+    for attempt in $(seq "${IF_UP_TIMEOUT}"); do
+        if [ "$(incus file pull "${ctName}/sys/class/net/eth0/operstate" -)" = "up" ]; then
+            break
+        fi
+        if [ "${attempt}" -eq "${IF_UP_TIMEOUT}" ]; then
+            echo "eth0 in instance did not enter operstate up in time"
+            false
+        fi
+        sleep 1
+    done
+
     incus config device set "${ctName}" eth0 attached=false
     ! incus file pull "${ctName}/sys/class/net/eth0/operstate" - || false
+
     incus config device set "${ctName}" eth0 attached=true
     incus exec "${ctName}" ip link set eth0 up
-    [ "$(incus file pull "${ctName}/sys/class/net/eth0/operstate" -)" = "up" ]
+
+    # Interfaces don't immediately become operationally up
+    for attempt in $(seq "${IF_UP_TIMEOUT}"); do
+        if [ "$(incus file pull "${ctName}/sys/class/net/eth0/operstate" -)" = "up" ]; then
+            break
+        fi
+        if [ "${attempt}" -eq "${IF_UP_TIMEOUT}" ]; then
+            echo "eth0 in instance did not enter operstate up in time"
+            false
+        fi
+        sleep 1
+    done
+
     incus config device remove "${ctName}" eth0
 
     incus network delete "${ctName}net"

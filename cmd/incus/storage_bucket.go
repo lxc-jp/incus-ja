@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	incus "github.com/lxc/incus/v6/client"
+	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	"github.com/lxc/incus/v6/shared/api"
 	cli "github.com/lxc/incus/v6/shared/cmd"
@@ -32,7 +33,7 @@ type cmdStorageBucket struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucket) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("bucket")
+	cmd.Use = cli.U("bucket")
 	cmd.Short = i18n.G("Manage storage buckets")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Manage storage buckets.`))
 
@@ -97,7 +98,7 @@ type cmdStorageBucketCreate struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketCreate) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("create", i18n.G("[<remote>:]<pool> <bucket> [key=value...]"))
+	cmd.Use = cli.U("create", u.Pool.Remote(), u.NewName(u.Bucket), u.KV.List(0))
 	cmd.Aliases = []string{"add"}
 	cmd.Short = i18n.G("Create new custom storage buckets")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Create new custom storage buckets`))
@@ -210,7 +211,7 @@ type cmdStorageBucketDelete struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("delete", i18n.G("[<remote>:]<pool> <bucket>"))
+	cmd.Use = cli.U("delete", u.Pool.Remote(), u.Bucket)
 	cmd.Aliases = []string{"rm", "remove"}
 	cmd.Short = i18n.G("Delete storage buckets")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Delete storage buckets`))
@@ -274,7 +275,7 @@ type cmdStorageBucketEdit struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketEdit) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("edit", i18n.G("[<remote>:]<pool> <bucket>"))
+	cmd.Use = cli.U("edit", u.Pool.Remote(), u.Bucket)
 	cmd.Short = i18n.G("Edit storage bucket configurations as YAML")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Edit storage bucket configurations as YAML`))
 	cmd.Example = cli.FormatSection("", i18n.G(`incus storage bucket edit [<remote>:]<pool> <bucket> < bucket.yaml
@@ -409,7 +410,7 @@ type cmdStorageBucketGet struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketGet) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("get", i18n.G("[<remote>:]<pool> <bucket> <key>"))
+	cmd.Use = cli.U("get", u.Pool.Remote(), u.Bucket, u.Key)
 	cmd.Short = i18n.G("Get values for storage bucket configuration keys")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Get values for storage bucket configuration keys`))
 
@@ -493,7 +494,7 @@ type storageBucketColumn struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketList) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("list", i18n.G("[<remote>:]<pool>"))
+	cmd.Use = cli.U("list", u.Pool.Remote())
 	cmd.Aliases = []string{"ls"}
 	cmd.Short = i18n.G("List storage buckets")
 
@@ -669,7 +670,7 @@ type cmdStorageBucketSet struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketSet) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("set", i18n.G("[<remote>:]<pool> <bucket> <key>=<value>..."))
+	cmd.Use = cli.U("set", u.Pool.Remote(), u.Bucket, u.KV.List(1))
 	cmd.Short = i18n.G("Set storage bucket configuration keys")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Set storage bucket configuration keys
@@ -787,7 +788,7 @@ type cmdStorageBucketShow struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketShow) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("show", i18n.G("[<remote>:]<pool> <bucket>"))
+	cmd.Use = cli.U("show", u.Pool.Remote(), u.Bucket)
 	cmd.Short = i18n.G("Show storage bucket configurations")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Show storage bucket configurations`))
 	cmd.Example = cli.FormatSection("", i18n.G(
@@ -858,7 +859,7 @@ type cmdStorageBucketUnset struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketUnset) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("unset", i18n.G("[<remote>:]<pool> <bucket> <key>"))
+	cmd.Use = cli.U("unset", u.Pool.Remote(), u.Bucket, u.Key)
 	cmd.Short = i18n.G("Unset storage bucket configuration keys")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Unset storage bucket configuration keys`))
 
@@ -894,7 +895,7 @@ type cmdStorageBucketKey struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketKey) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("key")
+	cmd.Use = cli.U("key")
 	cmd.Short = i18n.G("Manage storage bucket keys")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Manage storage bucket keys.`))
 
@@ -940,7 +941,7 @@ type storageBucketKeyListColumns struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketKeyList) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("list", i18n.G("[<remote>:]<pool> <bucket>"))
+	cmd.Use = cli.U("list", u.Pool.Remote(), u.Bucket)
 	cmd.Aliases = []string{"ls"}
 	cmd.Short = i18n.G("List storage bucket keys")
 
@@ -1093,7 +1094,7 @@ type cmdStorageBucketKeyCreate struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketKeyCreate) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("create", i18n.G("[<remote>:]<pool> <bucket> <key>"))
+	cmd.Use = cli.U("create", u.Pool.Remote(), u.Bucket, u.NewName(u.Key))
 	cmd.Aliases = []string{"add"}
 	cmd.Short = i18n.G("Create key for a storage bucket")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G("Create key for a storage bucket"))
@@ -1207,7 +1208,7 @@ type cmdStorageBucketKeyDelete struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketKeyDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("delete", i18n.G("[<remote>:]<pool> <bucket> <key>"))
+	cmd.Use = cli.U("delete", u.Pool.Remote(), u.Bucket, u.Key)
 	cmd.Aliases = []string{"rm", "remove"}
 	cmd.Short = i18n.G("Delete key from a storage bucket")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G("Delete key from a storage bucket"))
@@ -1274,7 +1275,7 @@ type cmdStorageBucketKeyEdit struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketKeyEdit) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("edit", i18n.G("[<remote>:]<pool> <bucket> <key>"))
+	cmd.Use = cli.U("edit", u.Pool.Remote(), u.Bucket, u.Key)
 	cmd.Short = i18n.G("Edit storage bucket key as YAML")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Edit storage bucket key as YAML`))
 	cmd.Example = cli.FormatSection("", i18n.G(`incus storage bucket edit [<remote>:]<pool> <bucket> <key> < key.yaml
@@ -1411,7 +1412,7 @@ type cmdStorageBucketKeyShow struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdStorageBucketKeyShow) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("show", i18n.G("[<remote>:]<pool> <bucket> <key>"))
+	cmd.Use = cli.U("show", u.Pool.Remote(), u.Bucket, u.Key)
 	cmd.Short = i18n.G("Show storage bucket key configurations")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Show storage bucket key configurations`))
 	cmd.Example = cli.FormatSection("", i18n.G(
@@ -1484,7 +1485,7 @@ type cmdStorageBucketExport struct {
 // Command generates the command definition.
 func (c *cmdStorageBucketExport) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("export", i18n.G("[<remote>:]<pool> <bucket> [<path>]"))
+	cmd.Use = cli.U("export", u.Pool.Remote(), u.Bucket, u.Target(u.File).Optional())
 	cmd.Short = i18n.G("Export storage bucket")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Export storage buckets as tarball.`))
@@ -1537,56 +1538,69 @@ func (c *cmdStorageBucketExport) Run(cmd *cobra.Command, args []string) error {
 		CompressionAlgorithm: c.flagCompressionAlgorithm,
 	}
 
-	op, err := s.CreateStoragePoolBucketBackup(pool.name, bucketName, req)
-	if err != nil {
-		return fmt.Errorf(i18n.G("Failed to create backup: %v"), err)
-	}
+	var getter func(backupReq *incus.BackupFileRequest) error
 
-	// Watch the background operation
-	progress := cli.ProgressRenderer{
-		Format: i18n.G("Backing up storage bucket: %s"),
-		Quiet:  c.global.flagQuiet,
-	}
-
-	_, err = op.AddHandler(progress.UpdateOp)
-	if err != nil {
-		progress.Done("")
-		return err
-	}
-
-	// Wait until backup is done
-	err = cli.CancelableWait(op, &progress)
-	if err != nil {
-		progress.Done("")
-		return err
-	}
-
-	progress.Done("")
-
-	err = op.Wait()
-	if err != nil {
-		return err
-	}
-
-	// Get name of backup
-	utStr := op.Get().Resources["backups"][0]
-	u, err := url.Parse(utStr)
-	if err != nil {
-		return fmt.Errorf(i18n.G("Invalid URL %q: %w"), utStr, err)
-	}
-
-	backupName, err := url.PathUnescape(path.Base(u.EscapedPath()))
-	if err != nil {
-		return fmt.Errorf(i18n.G("Invalid backup name segment in path %q: %w"), u.EscapedPath(), err)
-	}
-
-	defer func() {
-		// Delete backup after we're done
-		op, err := s.DeleteStoragePoolBucketBackup(pool.name, bucketName, backupName)
-		if err == nil {
-			_ = op.Wait()
+	if s.HasExtension("direct_backup") {
+		getter = func(backupReq *incus.BackupFileRequest) error {
+			return s.CreateStoragePoolBucketBackupStream(pool.name, bucketName, req, backupReq)
 		}
-	}()
+	} else {
+		op, err := s.CreateStoragePoolBucketBackup(pool.name, bucketName, req)
+		if err != nil {
+			return fmt.Errorf(i18n.G("Failed to create backup: %v"), err)
+		}
+
+		// Watch the background operation
+		progress := cli.ProgressRenderer{
+			Format: i18n.G("Backing up storage bucket: %s"),
+			Quiet:  c.global.flagQuiet,
+		}
+
+		_, err = op.AddHandler(progress.UpdateOp)
+		if err != nil {
+			progress.Done("")
+			return err
+		}
+
+		// Wait until backup is done
+		err = cli.CancelableWait(op, &progress)
+		if err != nil {
+			progress.Done("")
+			return err
+		}
+
+		progress.Done("")
+
+		err = op.Wait()
+		if err != nil {
+			return err
+		}
+
+		// Get name of backup
+		utStr := op.Get().Resources["backups"][0]
+		u, err := url.Parse(utStr)
+		if err != nil {
+			return fmt.Errorf(i18n.G("Invalid URL %q: %w"), utStr, err)
+		}
+
+		backupName, err := url.PathUnescape(path.Base(u.EscapedPath()))
+		if err != nil {
+			return fmt.Errorf(i18n.G("Invalid backup name segment in path %q: %w"), u.EscapedPath(), err)
+		}
+
+		defer func() {
+			// Delete backup after we're done
+			op, err := s.DeleteStoragePoolBucketBackup(pool.name, bucketName, backupName)
+			if err == nil {
+				_ = op.Wait()
+			}
+		}()
+
+		getter = func(backupReq *incus.BackupFileRequest) error {
+			_, err := s.GetStoragePoolBucketBackupFile(pool.name, bucketName, backupName, backupReq)
+			return err
+		}
+	}
 
 	var targetName string
 	if len(args) > 2 {
@@ -1603,7 +1617,7 @@ func (c *cmdStorageBucketExport) Run(cmd *cobra.Command, args []string) error {
 	defer func() { _ = target.Close() }()
 
 	// Prepare the download request
-	progress = cli.ProgressRenderer{
+	progress := cli.ProgressRenderer{
 		Format: i18n.G("Exporting backup of storage bucket: %s"),
 		Quiet:  c.global.flagForceLocal,
 	}
@@ -1614,7 +1628,7 @@ func (c *cmdStorageBucketExport) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Export tarball
-	_, err = s.GetStoragePoolBucketBackupFile(pool.name, bucketName, backupName, &backupFileRequest)
+	err = getter(&backupFileRequest)
 	if err != nil {
 		_ = os.Remove(targetName)
 		progress.Done("")
@@ -1635,7 +1649,7 @@ type cmdStorageBucketImport struct {
 // Command generates the command definition.
 func (c *cmdStorageBucketImport) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("import", i18n.G("[<remote>:]<pool> <backup file> [<bucket>]"))
+	cmd.Use = cli.U("import", u.Pool.Remote(), u.BackupFile, u.Bucket.Optional())
 	cmd.Short = i18n.G("Import storage bucket")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Import backups of storage buckets.`))

@@ -332,14 +332,14 @@ func (d *lvm) FillVolumeConfig(vol Volume) error {
 		}
 	}
 
-	if d.clustered && vol.IsVMBlock() {
+	if d.clustered && (vol.IsVMBlock() || vol.IsCustomBlock()) {
 		// Set default block type to qcow2.
 		if vol.config["block.type"] == "" {
 			vol.config["block.type"] = BlockVolumeTypeQcow2
 		}
 
 		// If on qcow2, the block filesystem is btrfs.
-		if vol.config["block.type"] == BlockVolumeTypeQcow2 {
+		if vol.config["block.type"] == BlockVolumeTypeQcow2 && vol.IsVMBlock() {
 			vol.config["block.filesystem"] = "btrfs"
 		}
 	}
@@ -407,6 +407,15 @@ func (d *lvm) commonVolumeRules() map[string]func(value string) error {
 		//  default: same as `volume.block.type`
 		//  shortdesc: Type of the block volume
 		rules["block.type"] = validate.Optional(validate.IsOneOf(BlockVolumeTypeRaw, BlockVolumeTypeQcow2))
+
+		// gendoc:generate(entity=storage_volume_lvm, group=common, key=lvmcluster.remove_snapshots)
+		//
+		// ---
+		//  type: bool
+		//  condition: -
+		//  default: same as `volume.lvmcluster.remove_snapshots` or `false`
+		//  shortdesc: Remove snapshots as needed
+		rules["lvmcluster.remove_snapshots"] = validate.Optional(validate.IsBool)
 	}
 
 	return rules
@@ -1086,10 +1095,20 @@ func (d *lvm) RenameVolume(vol Volume, newVolName string, op *operations.Operati
 			snapVolPath := d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, snapVolName)
 			newSnapVolName := GetSnapshotVolumeName(newVolName, snapName)
 			newSnapVolPath := d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, newSnapVolName)
+
+			snapVol, err := vol.NewSnapshot(snapName)
+			if err != nil {
+				return err
+			}
+
+			releaseSnap, _ := d.acquireExclusive(snapVol)
+
 			err = d.renameLogicalVolume(snapVolPath, newSnapVolPath)
 			if err != nil {
 				return err
 			}
+
+			releaseSnap()
 
 			reverter.Add(func() { _ = d.renameLogicalVolume(newSnapVolPath, snapVolPath) })
 		}
@@ -1823,9 +1842,12 @@ func (d *lvm) RenameVolumeSnapshot(snapVol Volume, newSnapshotName string, op *o
 
 	oldPath := snapVol.MountPath()
 	newPath := GetVolumeMountPath(d.name, snapVol.volType, newSnapVolName)
-	err = os.Rename(oldPath, newPath)
-	if err != nil {
-		return fmt.Errorf("Error renaming snapshot mount path from %q to %q: %w", oldPath, newPath, err)
+
+	if util.PathExists(oldPath) {
+		err = os.Rename(oldPath, newPath)
+		if err != nil {
+			return fmt.Errorf("Error renaming snapshot mount path from %q to %q: %w", oldPath, newPath, err)
+		}
 	}
 
 	return nil
