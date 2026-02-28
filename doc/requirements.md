@@ -3,47 +3,47 @@
 (requirements-go)=
 ## Go
 
-Incus は Go 1.23 以上を必要とし、Go 言語のコンパイラのみでテストされています。
+Incus は Go 1.25 以上を必要とし、Go 言語のコンパイラのみでテストされています。
 
 ビルドには最低 2GB の RAM を推奨します。
 
 ## 必要なカーネルバージョン
 
-サポートされる最小のカーネルバージョンは 5.15 です。
+サポートされる最小のカーネルバージョンは 6.12 です。
 
 Incus には以下の機能をサポートするカーネルが必要です。
 
-* Namespaces （`pid`、`net`、`uts`、`ipc`と`mount`）
+* Control Groups （`blkio`、`cpuset`、`devices`、`freezer`、`memory`、`pids`）
+* Namespaces （`cgroup`、`ipc`、`pid`、`mount`、`net`、`user`、`uts`）
 * Seccomp
 * Native Linux AIO
   （[`io_setup(2)`](https://man7.org/linux/man-pages/man2/io_setup.2.html)など）
 
 以下のオプションの機能はさらなるカーネルオプションを必要とします。
 
-* Namespaces （`user`と`cgroup`）
 * AppArmor
-* Control Groups （`blkio`、`cpuset`、`devices`、`memory`、`pids`）
 * CRIU (正確な詳細は CRIU のアップストリームを参照のこと)
+* SELinux
 
 さらに使用している Incus のバージョンで必要とされるほかのカーネルの機能も必要です。
 
 ## LXC
 
-Incus は以下のビルドオプションでビルドされた LXC 5.0.0 以上を必要とします。
+Incus は以下のビルドオプションでビルドされた LXC 6.0.0 以上を必要とします。
 
 * `apparmor` （もし Incus の AppArmor サポートを使用するのであれば）
 * `seccomp`
+* `selinux` （もし Incus の SELinux サポートを使用するのであれば）
 
 コンテナ内のリソース消費を適切にレポートするために、LXCFSのインストールを強く推奨します。
 
 ## OCI
 
-OCIコンテナを動かすには、Incusは現状では`skopeo`に依存しています。
-`skopeo`はユーザーの`PATH`に存在する必要があります。
+OCIコンテナを動かすには、レジストリとのやり取りのためにIncusは現状では`skopeo`に依存しています。
 
 ## QEMU
 
-仮想マシンを利用するには QEMU 6.0 以降が必要です。
+仮想マシンを利用するには QEMU 8.2 以降が必要です。
 
 `virtiofsd`を使用する場合、`virtiofsd`の[Rustでのリライト](https://gitlab.com/virtio-fs/virtiofsd)のみサポートされます。
 

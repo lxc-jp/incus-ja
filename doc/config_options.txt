@@ -897,7 +897,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```{config:option} connected devices-nic_ovn
 :default: "`true`"
 :required: "no"
-:shortdesc: "NICがホストネットワークに接続されているかどうか（コンテナーでの利用は`acceleration`を`none`に設定する必要あり）"
+:shortdesc: "NICがホストネットワークに接続されているかどうか（`acceleration`を`none`に設定する必要あり）"
 :type: "bool"
 
 ```
@@ -1494,14 +1494,6 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
-```{config:option} connected devices-nic_sriov
-:default: "`true`"
-:required: "no"
-:shortdesc: "NICがホストネットワークに接続されているかどうか（VMのみ）"
-:type: "bool"
-
-```
-
 ```{config:option} hwaddr devices-nic_sriov
 :default: "ランダムに割り当て"
 :managed: "no"
@@ -1560,14 +1552,22 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :shortdesc: "インスタンスが他のインスタンスのMACアドレスになりすますのを防ぐ"
 :type: "bool"
 
-`
+```
+
+```{config:option} security.trusted devices-nic_sriov
+:default: "親デバイスでサポートされていればfalse"
+:managed: "no"
+:shortdesc: "セキュリティーを低減させるかもしれないようなNICの設定をインスタンスに許可するか"
+:type: "bool"
+
+```
+
 ```{config:option} vendorid devices-nic_sriov
 :required: "no"
 :shortdesc: "親のホストデバイスのベンダーID"
 :type: "string"
 
 ```
-``
 
 ```{config:option} vlan devices-nic_sriov
 :managed: "no"
@@ -1764,6 +1764,12 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} pci devices-unix-hotplug
+:shortdesc: "モニターのUSBコントローラーのPCIアドレス"
+:type: "string"
+
+```
+
 ```{config:option} productid devices-unix-hotplug
 :shortdesc: "Unixデバイスの製品ID"
 :type: "string"
@@ -1915,11 +1921,11 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} boot.autostart.priority instance-boot
-:defaultdesc: "0"
 :liveupdate: "no"
 :shortdesc: "インスタンスをどの順序で起動するか"
 :type: "integer"
 一番大きな値のインスタンスが最初に起動されます。
+優先度が設定されていないインスタンスは優先度が設定されているインスタンスよりも先に（いくつかの並列度で）起動されます。
 ```
 
 ```{config:option} boot.host_shutdown_action instance-boot
@@ -2932,6 +2938,12 @@ VF（仮想ファンクション）をインスタンスに移動する際に使
 VF（仮想ファンクション）をインスタンスに移動する際に使用された元のspoolチェック設定。
 ```
 
+```{config:option} volatile.<name>.last_state.vf.trusted instance-volatile
+:shortdesc: "SR-IOV仮想ファンクションの元の信頼された設定"
+:type: "string"
+VF（仮想ファンクション）をインスタンスに移動する際に使用された元の信頼された設定。
+```
+
 ```{config:option} volatile.<name>.last_state.vf.vlan instance-volatile
 :shortdesc: "SR-IOV仮想ファンクションの元のVLAN"
 :type: "string"
@@ -3064,6 +3076,18 @@ NVIDIA仮想GPUインスタンスUUID。
 ```{config:option} volatile.vm.definition instance-volatile
 :shortdesc: "QEMU VM定義名（バージョン間のマイグレーションに使われます）"
 :type: "string"
+
+```
+
+```{config:option} volatile.vm.hotplug.memory instance-volatile
+:shortdesc: "状態の復元に必要なVMのメモリーセットアップ"
+:type: "string"
+
+```
+
+```{config:option} volatile.vm.needs_reset instance-volatile
+:shortdesc: "次回の再起動時にVMが完全なリセットが必要かどうか"
+:type: "bool"
 
 ```
 
@@ -4588,6 +4612,13 @@ Possible values are `allow` or `block`.
 このオプションはインスタンスの{config:option}`instance-raw:raw.idmap`設定内で許可されるホストのUIDの範囲を指定します。
 ```
 
+```{config:option} restricted.images.servers project-restricted
+:shortdesc: "このプロジェクトで許可されるイメージサーバー（HTTPホスト）"
+:type: "string"
+このプロジェクトでの利用を許可するイメージサーバーのドメインのカンマ区切りリスト。
+このオプションが設定されない場合、すべてのイメージサーバーにアクセスできます。
+```
+
 ```{config:option} restricted.networks.access project-restricted
 :shortdesc: "このプロジェクト内でどのネットワーク名が使用できるか"
 :type: "string"
@@ -5363,6 +5394,13 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 このオプションをローカルのLINSTORサテライトノードの名前に設定します。Incusのサーバー名とは異なる必要があります。
 ```
 
+```{config:option} storage.logs_volume server-miscellaneous
+:scope: "local"
+:shortdesc: "インスタンスのログディレクトリーを保管するのに使うボリューム"
+:type: "string"
+`POOL/VOLUME`の形式でボリュームを指定します。
+```
+
 <!-- config group server-miscellaneous end -->
 <!-- config group server-network start -->
 ```{config:option} network.hwaddr_pattern server-network
@@ -5888,9 +5926,9 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```
 
 ```{config:option} size storage_lvm-common
-:default: "自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB）"
+:default: "`lvm`では自動（空きディスクスペースの 20%, >= 5 GiB and <= 30 GiB）"
 :scope: "local"
-:shortdesc: "ループベースのプールを作成する際のストレージプールのサイズ (バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大)。`lvmcluster`では使用不可。"
+:shortdesc: "ストレージプールのサイズ (バイト単位、接尾辞のサポートあり、増やすとストレージプールのサイズを拡大)。`lvmcluster`では作成時は指定できませんが、更新はできます。"
 :type: "string"
 
 ```
@@ -6562,6 +6600,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.lvm.stripes.size`と同じ"
 :shortdesc: "使用するストライプのサイズ（最低4096バイトで512バイトの倍数を指定）"
 :type: "string"
+
+```
+
+```{config:option} lvmcluster.remove_snapshots storage_volume_lvm-common
+:condition: "-"
+:default: "`volume.lvmcluster.remove_snapshots`と同じか`false`"
+:shortdesc: "スナップショットを必要に応じて削除"
+:type: "bool"
 
 ```
 
