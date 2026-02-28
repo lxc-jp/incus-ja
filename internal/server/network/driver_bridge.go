@@ -1219,8 +1219,24 @@ func (n *bridge) setup(oldConfig map[string]string) error {
 					return fmt.Errorf("Failed to get link info for external interface %q", entry)
 				}
 
-				if linkInfo.Kind != "vlan" || linkInfo.Parent != ifParent || linkInfo.VlanID != vlanID || (linkInfo.Master != "" && linkInfo.Master != n.name) {
-					return fmt.Errorf("External interface %q already in use", entry)
+				if n.config["bridge.driver"] != "openvswitch" {
+					if linkInfo.Kind != "vlan" || linkInfo.Parent != ifParent || linkInfo.VlanID != vlanID || (linkInfo.Master != "" && linkInfo.Master != n.name) {
+						return fmt.Errorf("External interface %q already in use", entry)
+					}
+				} else {
+					vswitch, err := n.state.OVS()
+					if err != nil {
+						return err
+					}
+
+					ports, err := vswitch.GetBridgePorts(context.TODO(), n.name)
+					if err != nil {
+						return err
+					}
+
+					if linkInfo.Kind != "vlan" || linkInfo.Parent != ifParent || linkInfo.VlanID != vlanID || (linkInfo.Master != "" && !slices.Contains(ports, entry)) {
+						return fmt.Errorf("External interface %q already in use", entry)
+					}
 				}
 			}
 
@@ -2212,6 +2228,13 @@ func (n *bridge) Update(newNetwork api.NetworkPut, targetNode string, clientType
 	}
 
 	reverter.Success()
+
+	// Notify dependent networks (those using this network as their uplink) of the changes.
+	// Do this after the network has been successfully updated so that a failure to notify a dependent network
+	// doesn't prevent the network itself from being updated.
+	if clientType == request.ClientTypeNormal && len(changedKeys) > 0 {
+		n.notifyDependentNetworks(changedKeys)
+	}
 
 	return nil
 }

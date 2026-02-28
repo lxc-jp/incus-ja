@@ -517,6 +517,16 @@ var APIExtensions = []string{
 	"nic_sriov_select_ext",
 	"network_zones_dns_contact",
 	"nic_attached_connected",
+	"nic_sriov_security_trusted",
+	"direct_backup",
+	"instance_snapshot_disk_only_restore",
+	"unix_hotplug_pci",
+	"cluster_evacuating_restoring",
+	"projects_restricted_image_servers",
+	"storage_lvmcluster_size",
+	"authorization_scriptlet_cert",
+	"lvmcluster_remove_snapshots",
+	"daemon_storage_logs",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

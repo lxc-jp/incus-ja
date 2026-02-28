@@ -2944,3 +2944,48 @@ NICに以下の2つのプロパティーを追加します：
 
 * `attached`, ディスクとUSBデバイスの`attached`キーと同等。
 * `connected`, NICのリンクステートのアップ／ダウンを設定（サポートしている場合）。
+
+## `nic_sriov_security_trusted`
+
+SR-IOV NICに以下のプロパティーを追加します：
+
+* 親のNICがサポートしていれば、`security.trusted`は仮想ファンクションに`trusted`フラグを設定できるようにします。
+
+## `direct_backup`
+
+対応するPOST APIエンドポイントで`Accept`ヘッダーを`application/octet-stream`に設定した際に、インスタンス、カスタムストレージボリューム、ストレージバケットをディスクバッファリングなしにバックアップできるようにします。こうすると、POSTエンドポイントはデータベース内にバックアップエントリーを作成せずにデータストリームを返します。
+
+## `instance_snapshot_disk_only_restore`
+
+スナップショットされたインスタンスのディスクを復元だけできるようにします。
+
+## `unix_hotplug_pci`
+
+`unix-hotplug`デバイスに`pci`設定キーを追加し、USBコントローラーのPCIアドレスに基づくフィルタリングをできるようにします。
+
+## `cluster_evacuating_restoring`
+
+クラスターメンバー状態に`Evacuating`と`Restoring`を追加します。
+
+## `projects_restricted_image_servers`
+
+`restricted.images.servers`プロジェクト設定オプションを追加します。
+サーバーがイメージをダウンロードする際に使えるイメージサーバーのドメインのカンマ区切りリストを指定できるようにします。
+
+## `storage_lvmcluster_size`
+
+`lvmcluster`ストレージプールを更新する際に`size`パラメーターを指定できるようにします。
+
+## `authorization_scriptlet_cert`
+
+認可スクリプトレットの`details`引数に`Chain`と`Certificate`の2つのフィールドを追加し、認可するクライアントについてより詳細な情報を与えられるようにします。
+
+## `lvmcluster_remove_snapshots`
+
+デフォルト値が`false`のBooleanです。`true`に設定すると、他のスナップショットを復元しようとする際に、必要なスナップショットを削除するようにIncusに指示します。
+
+これは`lvmcluster`では最新のスナップショットのみが復元可能なため必要となります。
+
+## `daemon_storage_logs`
+
+既存の`storage.backups_volume`と`storage.images_volume`に加えて`storage.logs_volume`を追加します。

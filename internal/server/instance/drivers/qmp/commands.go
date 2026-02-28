@@ -232,6 +232,35 @@ func (m *Monitor) MachineDefinition() (string, error) {
 	return strings.TrimSuffix(resp.Return, "-machine"), nil
 }
 
+// MemoryConfiguration returns the current QEMU machine memory configuration (current, max, slots).
+func (m *Monitor) MemoryConfiguration() (int64, int64, int64, error) {
+	// Prepare the request.
+	var req struct {
+		Path     string `json:"path"`
+		Property string `json:"property"`
+	}
+
+	req.Path = "/machine"
+	req.Property = "memory"
+
+	// Prepare the response.
+	var resp struct {
+		Return struct {
+			Size    int64 `json:"size"`
+			Slots   int64 `json:"slots"`
+			MaxSize int64 `json:"max-size"`
+		} `json:"return"`
+	}
+
+	// Query the machine.
+	err := m.Run("qom-get", req, &resp)
+	if err != nil {
+		return -1, -1, -1, err
+	}
+
+	return resp.Return.Size, resp.Return.MaxSize, resp.Return.Slots, nil
+}
+
 // SendFile adds a new file descriptor to the QMP fd table associated to name.
 func (m *Monitor) SendFile(name string, file *os.File) error {
 	// Check if disconnected.
@@ -456,30 +485,35 @@ func (m *Monitor) QueryMigrate() (*MigrationStatus, error) {
 // MigrateWait waits until migration job reaches the specified status.
 // Returns nil if the migraton job reaches the specified status or an error if the migration job is in the failed
 // status.
-func (m *Monitor) MigrateWait(state string) error {
+func (m *Monitor) MigrateWait(ctx context.Context, state string) error {
 	// Wait until it completes or fails.
 	for {
-		// Prepare the response.
-		var resp struct {
-			Return struct {
-				Status string `json:"status"`
-			} `json:"return"`
-		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Prepare the response.
+			var resp struct {
+				Return struct {
+					Status string `json:"status"`
+				} `json:"return"`
+			}
 
-		err := m.Run("query-migrate", nil, &resp)
-		if err != nil {
-			return err
-		}
+			err := m.Run("query-migrate", nil, &resp)
+			if err != nil {
+				return err
+			}
 
-		if resp.Return.Status == "failed" {
-			return errors.New("Migrate call failed")
-		}
+			if resp.Return.Status == "failed" {
+				return errors.New("Migrate call failed")
+			}
 
-		if resp.Return.Status == state {
-			return nil
-		}
+			if resp.Return.Status == state {
+				return nil
+			}
 
-		time.Sleep(1 * time.Second)
+			time.Sleep(1 * time.Second)
+		}
 	}
 }
 
@@ -899,9 +933,12 @@ func (m *Monitor) AddNIC(netDev map[string]any, device map[string]any, connected
 		return errors.New("NIC device must have an id")
 	}
 
-	err = m.SetNICLink(id, connected)
-	if err != nil {
-		return fmt.Errorf("Failed setting NIC device link status: %w", err)
+	// Set link down if asked to.
+	if !connected {
+		err = m.SetNICLink(id, connected)
+		if err != nil {
+			return fmt.Errorf("Failed setting NIC device link status: %w", err)
+		}
 	}
 
 	reverter.Success()
@@ -1106,6 +1143,30 @@ func (m *Monitor) NBDServerStart() (net.Conn, error) {
 	return conn, nil
 }
 
+// NBDUnixServerStart starts an internal NBD server listening on the specified Unix socket.
+func (m *Monitor) NBDUnixServerStart(path string) error {
+	var args struct {
+		Addr struct {
+			Data struct {
+				Str string `json:"str"`
+			} `json:"data"`
+			Type string `json:"type"`
+		} `json:"addr"`
+		MaxConnections int `json:"max-connections"`
+	}
+
+	args.Addr.Type = "fd"
+	args.Addr.Data.Str = path
+	args.MaxConnections = 1
+
+	err := m.Run("nbd-server-start", args, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // NBDServerStop stops the internal NBD server.
 func (m *Monitor) NBDServerStop() error {
 	err := m.Run("nbd-server-stop", nil, nil)
@@ -1117,7 +1178,7 @@ func (m *Monitor) NBDServerStop() error {
 }
 
 // NBDBlockExportAdd exports a writable device via the NBD server.
-func (m *Monitor) NBDBlockExportAdd(deviceNodeName string) error {
+func (m *Monitor) NBDBlockExportAdd(deviceNodeName string, writable bool) error {
 	var args struct {
 		ID       string `json:"id"`
 		Type     string `json:"type"`
@@ -1128,7 +1189,7 @@ func (m *Monitor) NBDBlockExportAdd(deviceNodeName string) error {
 	args.ID = deviceNodeName
 	args.Type = "nbd"
 	args.NodeName = deviceNodeName
-	args.Writable = true
+	args.Writable = writable
 
 	err := m.Run("block-export-add", args, nil)
 	if err != nil {
@@ -1246,8 +1307,8 @@ func (m *Monitor) BlockCommit(deviceNodeName string, top string, base string) er
 	var args struct {
 		Device string `json:"device"`
 		JobID  string `json:"job-id"`
-		Top    string `json:"top-node"`
-		Base   string `json:"base-node"`
+		Top    string `json:"top-node,omitempty"`
+		Base   string `json:"base-node,omitempty"`
 	}
 
 	args.Device = deviceNodeName

@@ -102,6 +102,15 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader) error {
 		//  shortdesc: Prevent the instance from spoofing another instance's MAC address
 		"security.mac_filtering",
 
+		// gendoc:generate(entity=devices, group=nic_sriov, key=security.trusted)
+		//
+		// ---
+		//  type: bool
+		//  default: false, if supported by parent device
+		//  managed: no
+		//  shortdesc: Allows the instance to configure the NIC in ways that may negatively impact security.
+		"security.trusted",
+
 		// gendoc:generate(entity=devices, group=nic_sriov, key=boot.priority)
 		//
 		// ---
@@ -142,15 +151,6 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader) error {
 		//  required: no
 		//  shortdesc: Whether the NIC is plugged in or not
 		"attached",
-
-		// gendoc:generate(entity=devices, group=nic_sriov, key=connected)
-		//
-		// ---
-		//  type: bool
-		//  default: `true`
-		//  required: no
-		//  shortdesc: Whether the NIC is connected to the host network (VM only)
-		"connected",
 	}
 
 	// Check that if network property is set that conflicting keys are not present.
@@ -196,10 +196,6 @@ func (d *nicSRIOV) validateConfig(instConf instance.ConfigReader) error {
 	} else if d.isParentRequired() {
 		// If no network property supplied, then parent property is required.
 		requiredFields = append(requiredFields, "parent")
-	}
-
-	if instConf.Type() != instancetype.VM && d.config["connected"] != "" {
-		return errors.New("The \"connected\" option is only supported on virtual machines for SR-IOV NICs")
 	}
 
 	err := d.config.Validate(nicValidationRules(requiredFields, optionalFields, instConf))
@@ -337,7 +333,6 @@ func (d *nicSRIOV) Start() (*deviceConfig.RunConfig, error) {
 		{Key: "flags", Value: "up"},
 		{Key: "link", Value: saveData["host_name"]},
 		{Key: "hwaddr", Value: d.config["hwaddr"]},
-		{Key: "connected", Value: d.config["connected"]},
 	}
 
 	if d.inst.Type() == instancetype.VM {
@@ -381,6 +376,7 @@ func (d *nicSRIOV) postStop() error {
 			"last_state.vf.hwaddr":     "",
 			"last_state.vf.vlan":       "",
 			"last_state.vf.spoofcheck": "",
+			"last_state.vf.trusted":    "",
 			"last_state.pci.driver":    "",
 		})
 	}()
@@ -534,24 +530,4 @@ func nicSelected(device deviceConfig.Device, nic api.ResourcesNetworkCard) bool 
 	}
 
 	return false
-}
-
-// UpdatableFields returns a list of fields that can be updated without triggering a device remove & add.
-func (d *nicSRIOV) UpdatableFields(oldDevice Type) []string {
-	// Check old and new device types match.
-	_, match := oldDevice.(*nicSRIOV)
-	if !match {
-		return []string{}
-	}
-
-	return []string{"connected"}
-}
-
-// Update applies configuration changes to a started device.
-func (d *nicSRIOV) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
-	if isRunning {
-		return d.setNICLink()
-	}
-
-	return nil
 }

@@ -1,27 +1,34 @@
 package main
 
 import (
+	"archive/tar"
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
 	incus "github.com/lxc/incus/v6/client"
+	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	internalFilter "github.com/lxc/incus/v6/internal/filter"
 	"github.com/lxc/incus/v6/internal/i18n"
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/archive"
+	"github.com/lxc/incus/v6/shared/ask"
 	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v6/shared/osarch"
 	"github.com/lxc/incus/v6/shared/subprocess"
 	"github.com/lxc/incus/v6/shared/termios"
 	"github.com/lxc/incus/v6/shared/util"
@@ -39,7 +46,7 @@ type cmdImage struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImage) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("image")
+	cmd.Use = cli.U("image")
 	cmd.Short = i18n.G("Manage images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Manage images
@@ -73,6 +80,10 @@ hash or alias name (if one is set).`))
 	// Edit
 	imageEditCmd := cmdImageEdit{global: c.global, image: c}
 	cmd.AddCommand(imageEditCmd.Command())
+
+	// Generate metadata
+	imageGenerateMetadataCmd := cmdImageGenerateMetadata{global: c.global, image: c}
+	cmd.AddCommand(imageGenerateMetadataCmd.Command())
 
 	// Export
 	imageExportCmd := cmdImageExport{global: c.global, image: c}
@@ -147,7 +158,7 @@ type cmdImageCopy struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageCopy) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("copy", i18n.G("[<remote>:]<image> <remote>:"))
+	cmd.Use = cli.U("copy", u.Image.Remote(), u.Colon(u.Remote))
 	cmd.Aliases = []string{"cp"}
 	cmd.Short = i18n.G("Copy images between servers")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -309,7 +320,7 @@ type cmdImageDelete struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageDelete) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("delete", i18n.G("[<remote>:]<image> [[<remote>:]<image>...]"))
+	cmd.Use = cli.U("delete", u.Image.Remote().List(1))
 	cmd.Aliases = []string{"rm", "remove"}
 	cmd.Short = i18n.G("Delete images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -367,7 +378,7 @@ type cmdImageEdit struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageEdit) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("edit", i18n.G("[<remote>:]<image>"))
+	cmd.Use = cli.U("edit", u.Image.Remote())
 	cmd.Short = i18n.G("Edit image properties")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Edit image properties`))
@@ -504,7 +515,7 @@ type cmdImageExport struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageExport) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("export", i18n.G("[<remote>:]<image> [<target>]"))
+	cmd.Use = cli.U("export", u.Image.Remote(), u.Target(u.File).Optional())
 	cmd.Short = i18n.G("Export and download images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Export and download images
@@ -675,7 +686,7 @@ type cmdImageImport struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageImport) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("import", i18n.G("<tarball>|<directory>|<URL> [<rootfs tarball>] [<remote>:] [key=value...]"))
+	cmd.Use = cli.U("import", u.Either(u.Tarball, u.Directory, u.URL), u.Placeholder(i18n.G("rootfs tarball")).Optional(), u.RemoteColonOpt, u.KV.List(0))
 	cmd.Short = i18n.G("Import images into the image store")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Import image into the image store
@@ -938,7 +949,7 @@ type cmdImageInfo struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageInfo) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("info", i18n.G("[<remote>:]<image>"))
+	cmd.Use = cli.U("info", u.Image.Remote())
 	cmd.Short = i18n.G("Show useful information about images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Show useful information about images`))
@@ -1082,7 +1093,7 @@ type cmdImageList struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageList) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("list", i18n.G("[<remote>:] [<filter>...]"))
+	cmd.Use = cli.U("list", u.RemoteColonOpt, u.Filter.List(0))
 	cmd.Aliases = []string{"ls"}
 	cmd.Short = i18n.G("List images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
@@ -1439,7 +1450,7 @@ type cmdImageRefresh struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageRefresh) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("refresh", i18n.G("[<remote>:]<image> [[<remote>:]<image>...]"))
+	cmd.Use = cli.U("refresh", u.Image.Remote().List(1))
 	cmd.Short = i18n.G("Refresh images")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Refresh images`))
@@ -1525,7 +1536,7 @@ type cmdImageShow struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageShow) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("show", i18n.G("[<remote>:]<image>"))
+	cmd.Use = cli.U("show", u.Image.Remote())
 	cmd.Short = i18n.G("Show image properties")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Show image properties`))
@@ -1594,7 +1605,7 @@ type cmdImageGetProp struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageGetProp) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("get-property", i18n.G("[<remote>:]<image> <key>"))
+	cmd.Use = cli.U("get-property", u.Image.Remote(), u.Key)
 	cmd.Short = i18n.G("Get image properties")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Get image properties`))
@@ -1661,7 +1672,7 @@ type cmdImageSetProp struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageSetProp) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("set-property", i18n.G("[<remote>:]<image> <key> <value>"))
+	cmd.Use = cli.U("set-property", u.Image.Remote(), u.Key, u.Value)
 	cmd.Short = i18n.G("Set image properties")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Set image properties`))
@@ -1727,7 +1738,7 @@ type cmdImageUnsetProp struct {
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdImageUnsetProp) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.Usage("unset-property", i18n.G("[<remote>:]<image> <key>"))
+	cmd.Use = cli.U("unset-property", u.Image.Remote(), u.Key)
 	cmd.Short = i18n.G("Unset image properties")
 	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
 		`Unset image properties`))
@@ -1798,4 +1809,172 @@ func prepareImageServerFilters(filters []string, i any) []string {
 	}
 
 	return formatedFilters
+}
+
+type cmdImageGenerateMetadata struct {
+	global *cmdGlobal
+	image  *cmdImage
+}
+
+// Command generates the command definition.
+func (c *cmdImageGenerateMetadata) Command() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Use = i18n.G("generate-metadata <path>")
+	cmd.Short = i18n.G("Generate a metadata tarball")
+	cmd.Long = cli.FormatSection(i18n.G("Description"),
+		i18n.G(`Generate a metadata tarball
+
+This command produces an incus.tar.xz tarball for use during import with an existing QCOW2 or squashfs disk image.
+
+This command will prompt for all of the metadata tarball fields:
+ - Operating system name
+ - Release
+ - Variant
+ - Architecture
+ - Description
+`))
+	cmd.RunE = c.Run
+
+	return cmd
+}
+
+// Run runs the actual command logic.
+func (c *cmdImageGenerateMetadata) Run(cmd *cobra.Command, args []string) error {
+	// Quick checks.
+	exit, err := cli.CheckArgs(cmd, args, 1, 1)
+	if exit {
+		return err
+	}
+
+	// Setup asker.
+	asker := ask.NewAsker(bufio.NewReader(os.Stdin))
+
+	// Create the tarball.
+	metaFile, err := os.Create(args[0])
+	if err != nil {
+		return err
+	}
+
+	defer metaFile.Close()
+
+	// Generate the metadata.
+	timestamp := time.Now().UTC()
+	metadata := api.ImageMetadata{
+		Properties:   map[string]string{},
+		CreationDate: timestamp.Unix(),
+	}
+
+	// Question - os
+	metaOS, err := asker.AskString("Operating system name: ", "", nil)
+	if err != nil {
+		return err
+	}
+
+	metadata.Properties["os"] = metaOS
+
+	// Question - release
+	metaRelease, err := asker.AskString("Release name: ", "", nil)
+	if err != nil {
+		return err
+	}
+
+	metadata.Properties["release"] = metaRelease
+
+	// Question - variant
+	metaVariant, err := asker.AskString("Variant name [default=\"default\"]: ", "default", nil)
+	if err != nil {
+		return err
+	}
+
+	metadata.Properties["variant"] = metaVariant
+
+	// Question - architecture
+	var incusArch string
+	metaArchitecture, err := asker.AskString("Architecture name: ", "", func(value string) error {
+		id, err := osarch.ArchitectureID(value)
+		if err != nil {
+			return err
+		}
+
+		incusArch, err = osarch.ArchitectureName(id)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	metadata.Properties["architecture"] = metaArchitecture
+	metadata.Architecture = incusArch
+
+	// Question - description
+	defaultDescription := fmt.Sprintf("%s %s (%s) (%s) (%s)", metaOS, metaRelease, metaVariant, metaArchitecture, timestamp.Format("200601021504"))
+	metaDescription, err := asker.AskString(fmt.Sprintf("Description [default=\"%s\"]: ", defaultDescription), defaultDescription, nil)
+	if err != nil {
+		return err
+	}
+
+	metadata.Properties["description"] = metaDescription
+
+	// Generate YAML.
+	body, err := yaml.Marshal(&metadata)
+	if err != nil {
+		return err
+	}
+
+	// Prepare the tarball.
+	tarPipeReader, tarPipeWriter := io.Pipe()
+	tarWriter := tar.NewWriter(tarPipeWriter)
+
+	// Compress the tarball.
+	chDone := make(chan error)
+	go func() {
+		cmd := exec.Command("xz", "-9", "-c")
+		cmd.Stdin = tarPipeReader
+		cmd.Stdout = metaFile
+
+		err := cmd.Run()
+		chDone <- err
+	}()
+
+	// Add metadata.yaml.
+	hdr := &tar.Header{
+		Name:    "metadata.yaml",
+		Size:    int64(len(body)),
+		Mode:    0o644,
+		Uname:   "root",
+		Gname:   "root",
+		ModTime: time.Now(),
+	}
+
+	err = tarWriter.WriteHeader(hdr)
+	if err != nil {
+		return err
+	}
+
+	_, err = tarWriter.Write(body)
+	if err != nil {
+		return err
+	}
+
+	// Close the tarball.
+	err = tarWriter.Close()
+	if err != nil {
+		return err
+	}
+
+	err = tarPipeWriter.Close()
+	if err != nil {
+		return err
+	}
+
+	err = <-chDone
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -179,6 +179,10 @@ Incusはエージェントを主にマウント名`config`でリモートの`9p`
 
     incus config device add INSTANCE-NAME agent disk source=agent:config
 
+```{note}
+毎回の起動時にエージェントを更新し、Incusとやりとりするのに必要な機密情報を取得するためにアクセスされるため、エージェントのCD-ROMドライブはVMに接続したままにしておく必要があります。
+```
+
 #### Linux上
 
 エージェントをLinuxシステムに`9p`でインストールするには、仮想マシンにアクセスし、以下のコマンドを実行する必要があります:

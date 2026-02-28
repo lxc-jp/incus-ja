@@ -1009,7 +1009,7 @@
 							"default": "`true`",
 							"longdesc": "",
 							"required": "no",
-							"shortdesc": "Whether the NIC is connected to the host network (container support requires setting `acceleration` to `none`)",
+							"shortdesc": "Whether the NIC is connected to the host network (requires `acceleration` set to `none`)",
 							"type": "bool"
 						}
 					},
@@ -1693,15 +1693,6 @@
 						}
 					},
 					{
-						"connected": {
-							"default": "`true`",
-							"longdesc": "",
-							"required": "no",
-							"shortdesc": "Whether the NIC is connected to the host network (VM only)",
-							"type": "bool"
-						}
-					},
-					{
 						"hwaddr": {
 							"default": "randomly assigned",
 							"longdesc": "",
@@ -1766,6 +1757,15 @@
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "Prevent the instance from spoofing another instance's MAC address",
+							"type": "bool"
+						}
+					},
+					{
+						"security.trusted": {
+							"default": "false, if supported by parent device",
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Allows the instance to configure the NIC in ways that may negatively impact security.",
 							"type": "bool"
 						}
 					},
@@ -2007,6 +2007,13 @@
 						}
 					},
 					{
+						"pci": {
+							"longdesc": "",
+							"shortdesc": "The PCI address of a USB controller to monitor",
+							"type": "string"
+						}
+					},
+					{
 						"productid": {
 							"longdesc": "",
 							"shortdesc": "The product ID of the USB device",
@@ -2190,9 +2197,8 @@
 					},
 					{
 						"boot.autostart.priority": {
-							"defaultdesc": "0",
 							"liveupdate": "no",
-							"longdesc": "The instance with the highest value is started first.",
+							"longdesc": "The instance with the highest value is started first.\nInstances without a priority set will be started (with some parallelism) ahead of\ninstances with a priority set.",
 							"shortdesc": "What order to start the instances in",
 							"type": "integer"
 						}
@@ -3288,6 +3294,13 @@
 						}
 					},
 					{
+						"volatile.\u003cname\u003e.last_state.vf.trusted": {
+							"longdesc": "The original trusted setting used when moving a VF into an instance.",
+							"shortdesc": "SR-IOV virtual function original trusted setting",
+							"type": "string"
+						}
+					},
+					{
 						"volatile.\u003cname\u003e.last_state.vf.vlan": {
 							"longdesc": "The original VLAN used when moving a VF into an instance.",
 							"shortdesc": "SR-IOV virtual function original VLAN",
@@ -3440,6 +3453,20 @@
 							"longdesc": "",
 							"shortdesc": "QEMU VM definition name (used for migration between versions)",
 							"type": "string"
+						}
+					},
+					{
+						"volatile.vm.hotplug.memory": {
+							"longdesc": "",
+							"shortdesc": "Memory setup of the VM as needed for state restoration",
+							"type": "string"
+						}
+					},
+					{
+						"volatile.vm.needs_reset": {
+							"longdesc": "",
+							"shortdesc": "Indicates that the VM needs a full reset on next reboot",
+							"type": "bool"
 						}
 					},
 					{
@@ -5207,6 +5234,13 @@
 						}
 					},
 					{
+						"restricted.images.servers": {
+							"longdesc": "Specify a comma-delimited list of image servers domains that are allowed for use in this project.\nIf this option is not set, all image servers are accessible.",
+							"shortdesc": "Which image servers (HTTP host) are allowed for us in this project",
+							"type": "string"
+						}
+					},
+					{
 						"restricted.networks.access": {
 							"longdesc": "Specify a comma-delimited list of network names that are allowed for use in this project.\nIf this option is not set, all networks are accessible.\n\nNote that this setting depends on the {config:option}`project-restricted:restricted.devices.nic` setting.",
 							"shortdesc": "Which network names are allowed for use in this project",
@@ -6070,6 +6104,14 @@
 							"shortdesc": "LINSTOR satellite node name override",
 							"type": "string"
 						}
+					},
+					{
+						"storage.logs_volume": {
+							"longdesc": "Specify the volume using the syntax `POOL/VOLUME`.",
+							"scope": "local",
+							"shortdesc": "Volume to use to store instance log directories",
+							"type": "string"
+						}
 					}
 				]
 			},
@@ -6708,10 +6750,10 @@
 					},
 					{
 						"size": {
-							"default": "auto (20% of free disk space, \u003e= 5 GiB and \u003c= 30 GiB)",
+							"default": "auto (20% of free disk space, \u003e= 5 GiB and \u003c= 30 GiB) for `lvm`.",
 							"longdesc": "",
 							"scope": "local",
-							"shortdesc": "Size of the storage pool when creating loop-based pools (in bytes, suffixes supported, can be increased to grow storage pool). Not usable with `lvmcluster`.",
+							"shortdesc": "Storage pool size (in bytes, suffixes supported, can be increased to grow storage pool). `lvmcluster` pools: cannot set at creation, but can be updated.",
 							"type": "string"
 						}
 					},
@@ -7493,6 +7535,15 @@
 							"longdesc": "",
 							"shortdesc": "Size of stripes to use (at least 4096 bytes and multiple of 512 bytes)",
 							"type": "string"
+						}
+					},
+					{
+						"lvmcluster.remove_snapshots": {
+							"condition": "-",
+							"default": "same as `volume.lvmcluster.remove_snapshots` or `false`",
+							"longdesc": "",
+							"shortdesc": "Remove snapshots as needed",
+							"type": "bool"
 						}
 					},
 					{

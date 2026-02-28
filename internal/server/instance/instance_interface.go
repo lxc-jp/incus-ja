@@ -92,7 +92,7 @@ type Instance interface {
 	IsPrivileged() bool
 
 	// Snapshots & migration & backups.
-	Restore(source Instance, stateful bool) error
+	Restore(source Instance, stateful bool, diskOnly bool) error
 	Snapshot(name string, expiry time.Time, stateful bool) error
 	Snapshots() ([]Instance, error)
 	Backups() ([]backup.InstanceBackup, error)
@@ -100,6 +100,7 @@ type Instance interface {
 	CanLiveMigrate() bool
 	CreateQcow2Snapshot(snapshotName string, backingFilename string) error
 	DeleteQcow2Snapshot(snapshotIndex int, backingFilename string) error
+	ExportQcow2Block(blockIndex int) (func(), string, error)
 
 	// Config handling.
 	Rename(newName string, applyTemplateTrigger bool) error

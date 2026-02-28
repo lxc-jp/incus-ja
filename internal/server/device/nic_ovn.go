@@ -333,7 +333,7 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader) error {
 		//  type: bool
 		//  default: `true`
 		//  required: no
-		//  shortdesc: Whether the NIC is connected to the host network (container support requires setting `acceleration` to `none`)
+		//  shortdesc: Whether the NIC is connected to the host network (requires `acceleration` set to `none`)
 		"connected",
 	}
 
@@ -593,9 +593,9 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader) error {
 		}
 	}
 
-	// The connected option can only be handled properly on containers if acceleration is set to none.
-	if d.config["connected"] != "" && !d.canSetLink(instConf) {
-		return errors.New("The \"connected\" option requires setting acceleration=none on containers for OVN NICs")
+	// The connected option can only be handled properly if acceleration is set to none.
+	if d.config["connected"] != "" && !d.canSetLink() {
+		return errors.New("The \"connected\" option requires setting acceleration=none for OVN NICs")
 	}
 
 	return nil
@@ -1015,7 +1015,7 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 			{Key: "link", Value: peerName},
 		}
 
-		if d.canSetLink(nil) {
+		if d.canSetLink() {
 			runConf.NetworkInterface = append(runConf.NetworkInterface, deviceConfig.RunConfigItem{Key: "connected", Value: d.config["connected"]})
 		}
 
@@ -1173,7 +1173,7 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		return err
 	}
 
-	if isRunning && d.canSetLink(nil) {
+	if isRunning && d.canSetLink() {
 		return d.setNICLink()
 	}
 
@@ -1456,40 +1456,45 @@ func (d *nicOVN) State() (*api.InstanceStateNetwork, error) {
 		}
 	}
 
-	// Get MTU of host interface that connects to OVN integration bridge if exists.
-	iface, err := net.InterfaceByName(d.config["host_name"])
-	if err != nil {
-		d.logger.Warn("Failed getting host interface state for MTU", logger.Ctx{"host_name": d.config["host_name"], "err": err})
-	}
-
-	mtu := -1
-	if iface != nil {
-		mtu = iface.MTU
-	}
-
-	// Retrieve the host counters, as we report the values from the instance's point of view,
-	// those counters need to be reversed below.
-	hostCounters, err := resources.GetNetworkCounters(d.config["host_name"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed getting network interface counters: %w", err)
-	}
-
-	network := api.InstanceStateNetwork{
+	n := api.InstanceStateNetwork{
 		Addresses: addresses,
-		Counters: api.InstanceStateNetworkCounters{
+		Hwaddr:    d.config["hwaddr"],
+		State:     "up",
+		Type:      "broadcast",
+	}
+
+	// When not on a nested NIC, fetch some details from the host.
+	if d.config["nested"] == "" {
+		// Get MTU of host interface that connects to OVN integration bridge if exists.
+		iface, err := net.InterfaceByName(d.config["host_name"])
+		if err != nil {
+			d.logger.Warn("Failed getting host interface state for MTU", logger.Ctx{"host_name": d.config["host_name"], "err": err})
+		}
+
+		mtu := -1
+		if iface != nil {
+			mtu = iface.MTU
+		}
+
+		// Retrieve the host counters, as we report the values from the instance's point of view,
+		// those counters need to be reversed below.
+		hostCounters, err := resources.GetNetworkCounters(d.config["host_name"])
+		if err != nil {
+			return nil, fmt.Errorf("Failed getting network interface counters: %w", err)
+		}
+
+		n.Counters = api.InstanceStateNetworkCounters{
 			BytesReceived:   hostCounters.BytesSent,
 			BytesSent:       hostCounters.BytesReceived,
 			PacketsReceived: hostCounters.PacketsSent,
 			PacketsSent:     hostCounters.PacketsReceived,
-		},
-		Hwaddr:   d.config["hwaddr"],
-		HostName: d.config["host_name"],
-		Mtu:      mtu,
-		State:    "up",
-		Type:     "broadcast",
+		}
+
+		n.HostName = d.config["host_name"]
+		n.Mtu = mtu
 	}
 
-	return &network, nil
+	return &n, nil
 }
 
 // Register sets up anything needed on startup.
@@ -1571,13 +1576,6 @@ func (d *nicOVN) setupHostNIC(hostName string, ovnPortName ovn.OVNSwitchPort) (r
 }
 
 // canSetLink determines whether the device supports setting a link state.
-func (d *nicOVN) canSetLink(instConf instance.ConfigReader) bool {
-	var instType instancetype.Type
-	if instConf != nil {
-		instType = instConf.Type()
-	} else {
-		instType = d.inst.Type()
-	}
-
-	return instType == instancetype.VM || slices.Contains([]string{"", "none"}, d.config["acceleration"])
+func (d *nicOVN) canSetLink() bool {
+	return slices.Contains([]string{"", "none"}, d.config["acceleration"])
 }

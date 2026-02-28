@@ -1225,8 +1225,13 @@ func CalculateVolumeSnapshotSize(projectName string, pool Pool, contentType driv
 		fullSnapVolName = project.Instance(projectName, snapVolumeName)
 	}
 
-	snapVol := pool.GetVolume(volumeType, contentType, fullSnapVolName, nil)
-	err := snapVol.MountTask(func(mountPath string, op *operations.Operation) error {
+	dbSnapVol, err := VolumeDBGet(pool, projectName, snapVolumeName, volumeType)
+	if err != nil {
+		return 0, err
+	}
+
+	snapVol := pool.GetVolume(volumeType, contentType, fullSnapVolName, dbSnapVol.Config)
+	err = snapVol.MountTask(func(mountPath string, op *operations.Operation) error {
 		poolBackend, ok := pool.(*backend)
 		if !ok {
 			return errors.New("Pool is not a backend")
@@ -1267,4 +1272,33 @@ func VolumeSnapshotsToMigrationSnapshots(snapshots []*api.StorageVolumeSnapshot,
 	}
 
 	return migrationSnapshots, nil
+}
+
+// ProjectVolume returns a project scoped volume identifier.
+// It applies the appropriate '<project>_' prefix based on the volume type.
+func ProjectVolume(projectName string, volName string, volType drivers.VolumeType) string {
+	if volType == drivers.VolumeTypeContainer || volType == drivers.VolumeTypeVM {
+		return project.Instance(projectName, volName)
+	}
+
+	return project.StorageVolume(projectName, volName)
+}
+
+// DisallowedStorageConfigForCreation returns a list of keys that cannot be specified
+// during pool creation.
+func DisallowedStorageConfigForCreation(driverName string) []string {
+	if driverName == "lvmcluster" {
+		return []string{"size"}
+	}
+
+	return []string{}
+}
+
+// ClusterWideStorageConfig returns a list of keys that are cluster wide.
+func ClusterWideStorageConfig(driverName string) []string {
+	if driverName == "lvmcluster" {
+		return []string{"size"}
+	}
+
+	return []string{}
 }

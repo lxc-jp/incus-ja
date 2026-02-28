@@ -1389,10 +1389,65 @@ definitions:
         x-go-package: github.com/lxc/incus/v6/shared/api
     InitPreseed:
         properties:
-            Server:
-                $ref: '#/definitions/InitLocalPreseed'
+            certificates:
+                description: Certificates to add
+                example: PEM encoded certificate
+                items:
+                    $ref: '#/definitions/CertificatesPost'
+                type: array
+                x-go-name: Certificates
             cluster:
                 $ref: '#/definitions/InitClusterPreseed'
+            cluster_groups:
+                description: |-
+                    Cluster groups to add
+
+                    API extension: init_preseed_cluster_groups.
+                items:
+                    $ref: '#/definitions/ClusterGroupsPost'
+                type: array
+                x-go-name: ClusterGroups
+            config:
+                description: Server configuration map (refer to doc/server.md)
+                example:
+                    core.https_address: :8443
+                type: object
+                x-go-name: Config
+            networks:
+                description: Networks by project to add
+                example: Network on the "default" project
+                items:
+                    $ref: '#/definitions/InitNetworksProjectPost'
+                type: array
+                x-go-name: Networks
+            profiles:
+                description: Profiles to add
+                example: '"default" profile with a root disk device'
+                items:
+                    $ref: '#/definitions/InitProfileProjectPost'
+                type: array
+                x-go-name: Profiles
+            projects:
+                description: Projects to add
+                example: '"default" project'
+                items:
+                    $ref: '#/definitions/ProjectsPost'
+                type: array
+                x-go-name: Projects
+            storage_pools:
+                description: Storage Pools to add
+                example: local dir storage pool
+                items:
+                    $ref: '#/definitions/StoragePoolsPost'
+                type: array
+                x-go-name: StoragePools
+            storage_volumes:
+                description: Storage Volumes to add
+                example: local dir storage volume
+                items:
+                    $ref: '#/definitions/InitStorageVolumesProjectPost'
+                type: array
+                x-go-name: StorageVolumes
         title: InitPreseed represents initialization configuration that can be supplied to `init`.
         type: object
         x-go-package: github.com/lxc/incus/v6/shared/api
@@ -1515,6 +1570,11 @@ definitions:
                         type: disk
                 type: object
                 x-go-name: Devices
+            disk_only:
+                description: Whether only the instances disk should be restored
+                example: false
+                type: boolean
+                x-go-name: DiskOnly
             ephemeral:
                 description: Whether the instance is ephemeral (deleted on shutdown)
                 example: false
@@ -1794,6 +1854,11 @@ definitions:
                         type: disk
                 type: object
                 x-go-name: Devices
+            disk_only:
+                description: Whether only the instances disk should be restored
+                example: false
+                type: boolean
+                x-go-name: DiskOnly
             ephemeral:
                 description: Whether the instance is ephemeral (deleted on shutdown)
                 example: false
@@ -1989,6 +2054,11 @@ definitions:
                         type: disk
                 type: object
                 x-go-name: Devices
+            disk_only:
+                description: Whether only the instances disk should be restored
+                example: false
+                type: boolean
+                x-go-name: DiskOnly
             ephemeral:
                 description: Whether the instance is ephemeral (deleted on shutdown)
                 example: false
@@ -2604,6 +2674,11 @@ definitions:
                         type: disk
                 type: object
                 x-go-name: Devices
+            disk_only:
+                description: Whether only the instances disk should be restored
+                example: false
+                type: boolean
+                x-go-name: DiskOnly
             ephemeral:
                 description: Whether the instance is ephemeral (deleted on shutdown)
                 example: false
@@ -9485,7 +9560,11 @@ paths:
         post:
             consumes:
                 - application/json
-            description: Creates a new backup.
+            description: |-
+                Creates a new backup.
+
+                If the `Accept` header is set to `application/octet-stream`, this directly streams the backup
+                tarball to the client without any intermediate operation.
             operationId: instance_backups_post
             parameters:
                 - description: Project name
@@ -9500,6 +9579,7 @@ paths:
                     $ref: '#/definitions/InstanceBackupsPost'
             produces:
                 - application/json
+                - application/octet-stream
             responses:
                 "202":
                     $ref: '#/responses/Operation'
@@ -15350,7 +15430,11 @@ paths:
         post:
             consumes:
                 - application/json
-            description: Creates a new storage bucket backup.
+            description: |-
+                Creates a new storage bucket backup.
+
+                If the `Accept` header is set to `application/octet-stream`, this directly streams the backup
+                tarball to the client without any intermediate operation.
             operationId: storage_pool_buckets_backups_post
             parameters:
                 - description: Project name
@@ -15371,6 +15455,7 @@ paths:
                     $ref: '#/definitions/StorageBucketBackupsPost'
             produces:
                 - application/json
+                - application/octet-stream
             responses:
                 "202":
                     $ref: '#/responses/Operation'
@@ -16317,7 +16402,11 @@ paths:
         post:
             consumes:
                 - application/json
-            description: Creates a new storage volume backup.
+            description: |-
+                Creates a new storage volume backup.
+
+                If the `Accept` header is set to `application/octet-stream`, this directly streams the backup
+                tarball to the client without any intermediate operation.
             operationId: storage_pool_volumes_type_backups_post
             parameters:
                 - description: Project name
@@ -16338,6 +16427,7 @@ paths:
                     $ref: '#/definitions/StorageVolumeBackupsPost'
             produces:
                 - application/json
+                - application/octet-stream
             responses:
                 "202":
                     $ref: '#/responses/Operation'
