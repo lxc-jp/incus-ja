@@ -118,7 +118,7 @@ func (o *Verifier) Auth(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				Value:    tokens.AccessToken,
 				Path:     "/",
 				Secure:   true,
-				HttpOnly: false,
+				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
 			}
 
@@ -131,7 +131,7 @@ func (o *Verifier) Auth(ctx context.Context, w http.ResponseWriter, r *http.Requ
 					Value:    tokens.RefreshToken,
 					Path:     "/",
 					Secure:   true,
-					HttpOnly: false,
+					HttpOnly: true,
 					SameSite: http.SameSiteStrictMode,
 				}
 
@@ -192,7 +192,7 @@ func (o *Verifier) Logout(w http.ResponseWriter, r *http.Request) {
 		Name:     "oidc_access",
 		Path:     "/",
 		Secure:   true,
-		HttpOnly: false,
+		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Unix(0, 0),
 	}
@@ -204,7 +204,7 @@ func (o *Verifier) Logout(w http.ResponseWriter, r *http.Request) {
 		Name:     "oidc_id",
 		Path:     "/",
 		Secure:   true,
-		HttpOnly: false,
+		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Unix(0, 0),
 	}
@@ -216,7 +216,7 @@ func (o *Verifier) Logout(w http.ResponseWriter, r *http.Request) {
 		Name:     "oidc_refresh",
 		Path:     "/",
 		Secure:   true,
-		HttpOnly: false,
+		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Unix(0, 0),
 	}
@@ -240,7 +240,7 @@ func (o *Verifier) Callback(w http.ResponseWriter, r *http.Request) {
 			Value:    tokens.AccessToken,
 			Path:     "/",
 			Secure:   true,
-			HttpOnly: false,
+			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
 		}
 
@@ -253,7 +253,7 @@ func (o *Verifier) Callback(w http.ResponseWriter, r *http.Request) {
 				Value:    tokens.RefreshToken,
 				Path:     "/",
 				Secure:   true,
-				HttpOnly: false,
+				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
 			}
 
@@ -267,7 +267,7 @@ func (o *Verifier) Callback(w http.ResponseWriter, r *http.Request) {
 				Value:    tokens.IDToken,
 				Path:     "/",
 				Secure:   true,
-				HttpOnly: false,
+				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
 			}
 
@@ -305,40 +305,62 @@ func (o *Verifier) VerifyAccessToken(ctx context.Context, r *http.Request, token
 	}
 
 	// Check if we have a subnet restriction.
-	claim := claims.Claims["incus.allowed_subnets"]
-	subnets, ok := claim.([]any)
-	if claim != nil && ok && len(subnets) > 0 {
-		requestor := request.CreateRequestor(r)
-
-		found := false
-		for _, subnet := range subnets {
-			subnetStr, ok := subnet.(string)
-			if !ok {
-				continue
-			}
-
-			subnetCIDR, err := netip.ParsePrefix(subnetStr)
-			if err != nil {
-				return nil, fmt.Errorf("Bad subnet in incus.allowed_subnets claim %q: %w", subnet, err)
-			}
-
-			clientIP, err := netip.ParseAddr(requestor.Address)
-			if err != nil {
-				return nil, fmt.Errorf("Bad client address %q: %w", requestor.Address, err)
-			}
-
-			if subnetCIDR.Contains(clientIP) {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return nil, errors.New("Client isn't allowed to connect from its current network")
-		}
+	err = o.validateSubnet(r, claims.Claims["incus.allowed_subnets"])
+	if err != nil {
+		return nil, err
 	}
 
 	return claims, nil
+}
+
+func (o *Verifier) validateSubnet(r *http.Request, claim any) error {
+	// If the claim is missing, allow access.
+	if claim == nil {
+		return nil
+	}
+
+	subnets, ok := claim.([]any)
+	if !ok {
+		// Invalid claim type.
+		return errors.New("Bad type for incus.allowed_subnets OIDC claim")
+	}
+
+	if len(subnets) == 0 {
+		// User isn't allowed from any subnet.
+		return errors.New("Client isn't allowed to connect from its current network")
+	}
+
+	// Check if the requestor is allowed access.
+	requestor := request.CreateRequestor(r)
+
+	found := false
+	for _, subnet := range subnets {
+		subnetStr, ok := subnet.(string)
+		if !ok {
+			continue
+		}
+
+		subnetCIDR, err := netip.ParsePrefix(subnetStr)
+		if err != nil {
+			return fmt.Errorf("Bad subnet in incus.allowed_subnets claim %q: %w", subnet, err)
+		}
+
+		clientIP, err := netip.ParseAddr(requestor.Address)
+		if err != nil {
+			return fmt.Errorf("Bad client address %q: %w", requestor.Address, err)
+		}
+
+		if subnetCIDR.Contains(clientIP) {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return errors.New("Client isn't allowed to connect from its current network")
+	}
+
+	return nil
 }
 
 // WriteHeaders writes the OIDC configuration as HTTP headers so the client can initatiate the device code flow.

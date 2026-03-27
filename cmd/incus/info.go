@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	incus "github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/cmd/incus/color"
 	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	"github.com/lxc/incus/v6/internal/instance"
@@ -25,17 +26,19 @@ type cmdInfo struct {
 	global *cmdGlobal
 
 	flagShowAccess bool
-	flagShowLog    bool
+	flagShowLog    string
 	flagResources  bool
 	flagTarget     string
 }
 
+var cmdInfoUsage = u.Usage{u.Instance.Optional().Remote()}
+
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdInfo) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.U("info", u.Instance.Optional().Remote())
+	cmd.Use = cli.U("info", cmdInfoUsage...)
 	cmd.Short = i18n.G("Show instance or server information")
-	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Show instance or server information`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus info [<remote>:]<instance> [--show-log]
@@ -46,7 +49,8 @@ incus info [<remote>:] [--resources]
 
 	cmd.RunE = c.Run
 	cmd.Flags().BoolVar(&c.flagShowAccess, "show-access", false, i18n.G("Show the instance's access list"))
-	cmd.Flags().BoolVar(&c.flagShowLog, "show-log", false, i18n.G("Show the instance's recent log entries"))
+	cmd.Flags().StringVar(&c.flagShowLog, "show-log", "", i18n.G("Show the instance's recent log entries")+"``")
+	cmd.Flags().Lookup("show-log").NoOptDefVal = "default"
 	cmd.Flags().BoolVar(&c.flagResources, "resources", false, i18n.G("Show the resources available to the server"))
 	cmd.Flags().StringVar(&c.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
 
@@ -63,39 +67,21 @@ incus info [<remote>:] [--resources]
 
 // Run runs the actual command logic.
 func (c *cmdInfo) Run(cmd *cobra.Command, args []string) error {
-	conf := c.global.conf
-
-	// Quick checks.
-	exit, err := c.global.checkArgs(cmd, args, 0, 1)
-	if exit {
-		return err
-	}
-
-	var remote string
-	var cName string
-	if len(args) == 1 {
-		remote, cName, err = conf.ParseRemote(args[0])
-		if err != nil {
-			return err
-		}
-	} else {
-		remote, cName, err = conf.ParseRemote("")
-		if err != nil {
-			return err
-		}
-	}
-
-	d, err := conf.GetInstanceServer(remote)
+	parsed, err := cmdInfoUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
 	}
 
-	if cName == "" {
+	d := parsed[0].RemoteServer
+	hasInstance := !parsed[0].RemoteObject.Skipped
+	instanceName := parsed[0].RemoteObject.String
+
+	if !hasInstance {
 		return c.remoteInfo(d)
 	}
 
 	if c.flagShowAccess {
-		access, err := d.GetInstanceAccess(cName)
+		access, err := d.GetInstanceAccess(instanceName)
 		if err != nil {
 			return err
 		}
@@ -110,7 +96,7 @@ func (c *cmdInfo) Run(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	return c.instanceInfo(d, cName, c.flagShowLog)
+	return c.instanceInfo(d, instanceName, c.flagShowLog)
 }
 
 func (c *cmdInfo) renderGPU(gpu api.ResourcesGPUCard, prefix string, initial bool) {
@@ -646,7 +632,7 @@ func (c *cmdInfo) remoteInfo(d incus.InstanceServer) error {
 	return nil
 }
 
-func (c *cmdInfo) instanceInfo(d incus.InstanceServer, name string, showLog bool) error {
+func (c *cmdInfo) instanceInfo(d incus.InstanceServer, name string, showLog string) error {
 	// Quick checks.
 	if c.flagTarget != "" {
 		return errors.New(i18n.G("--target cannot be used with instances"))
@@ -914,23 +900,25 @@ func (c *cmdInfo) instanceInfo(d incus.InstanceServer, name string, showLog bool
 		_ = cli.RenderTable(os.Stdout, cli.TableFormatTable, backupHeader, backupData, inst.Backups)
 	}
 
-	if showLog {
+	if showLog != "" {
 		var log io.Reader
-		switch inst.Type {
-		case "container":
-			log, err = d.GetInstanceLogfile(name, "lxc.log")
-			if err != nil {
-				return err
-			}
 
-		case "virtual-machine":
-			log, err = d.GetInstanceLogfile(name, "qemu.log")
-			if err != nil {
-				return err
-			}
+		if showLog == "default" {
+			switch inst.Type {
+			case "container":
+				showLog = "lxc.log"
 
-		default:
-			return fmt.Errorf(i18n.G("Unsupported instance type: %s"), inst.Type)
+			case "virtual-machine":
+				showLog = "qemu.log"
+
+			default:
+				return fmt.Errorf(i18n.G("Unsupported instance type: %s"), inst.Type)
+			}
+		}
+
+		log, err = d.GetInstanceLogfile(name, showLog)
+		if err != nil {
+			return err
 		}
 
 		stuff, err := io.ReadAll(log)
@@ -938,7 +926,7 @@ func (c *cmdInfo) instanceInfo(d incus.InstanceServer, name string, showLog bool
 			return err
 		}
 
-		fmt.Printf("\n"+i18n.G("Log:")+"\n\n%s\n", string(stuff))
+		fmt.Printf("\n"+i18n.G("Log (%s):")+"\n\n%s\n", showLog, strings.TrimSpace(string(stuff)))
 	}
 
 	return nil

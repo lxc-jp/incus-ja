@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	incus "github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/cmd/incus/color"
 	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	cli "github.com/lxc/incus/v6/shared/cmd"
@@ -36,12 +37,14 @@ type cmdTop struct {
 	flagRefresh     int
 }
 
+var cmdTopUsage = u.Usage{u.RemoteColonOpt}
+
 // Command is a method of the cmdTop structure that returns a new cobra Command for displaying resource usage per instance.
 func (c *cmdTop) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.U("top", u.RemoteColonOpt)
+	cmd.Use = cli.U("top", cmdTopUsage...)
 	cmd.Short = i18n.G("Display resource usage info per instance")
-	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Displays CPU usage, memory usage, and disk usage per instance
 
 Default column layout: numD
@@ -138,31 +141,16 @@ func (c *cmdTop) diskUsageColumnData(dd displayData) string {
 // This function implements the `top` command. It queries the metrics API at (/1.0/metrics) and renders a list of
 // instances with their CPU, memory and disk usage columns.
 func (c *cmdTop) Run(cmd *cobra.Command, args []string) error {
-	conf := c.global.conf
-
-	exit, err := c.global.checkArgs(cmd, args, 0, 1)
-	if exit {
+	parsed, err := cmdTopUsage.Parse(c.global.conf, cmd, args)
+	if err != nil {
 		return err
 	}
+
+	d := parsed[0].RemoteServer
 
 	// Add project column if --all-projects flag specified and no -c was passed.
 	if c.flagAllProjects && c.flagColumns == defaultTopColumns {
 		c.flagColumns = defaultTopColumnsAllProjects
-	}
-
-	remoteInput := ""
-	if len(args) > 0 {
-		remoteInput = args[0]
-	}
-
-	remote, _, err := conf.ParseRemote(remoteInput)
-	if err != nil {
-		return err
-	}
-
-	d, err := conf.GetInstanceServer(remote)
-	if err != nil {
-		return err
 	}
 
 	// Validate flags.

@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 
 	incus "github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/cmd/incus/color"
+	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/internal/version"
@@ -22,6 +24,7 @@ import (
 	config "github.com/lxc/incus/v6/shared/cliconfig"
 	cli "github.com/lxc/incus/v6/shared/cmd"
 	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v6/shared/termios"
 	"github.com/lxc/incus/v6/shared/util"
 )
 
@@ -44,32 +47,61 @@ type cmdGlobal struct {
 	flagSubCmds    bool
 }
 
-func usageTemplateSubCmds() string {
-	return `Usage:{{if .Runnable}}
+var commandFooter = i18n.G(`Use "{{.CommandPath}} [<command>] --help" for more information about a command.`)
+
+func usageTemplate() string {
+	return color.UsagePrefix + `{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
   {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
-Aliases:
+
+` + color.AliasesPrefix + `
   {{.NameAndAliases}}{{end}}{{if .HasExample}}
 
-Examples:
-  {{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+` + color.ExamplesPrefix + `
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
 
-Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+` + color.AvailableCommandsPrefix + `{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+` + color.FlagsPrefix + `
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+` + color.GlobalFlagsPrefix + `
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+` + color.AdditionalHelpTopicsPrefix + `{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+` + commandFooter + `{{end}}
+`
+}
+
+func usageTemplateSubCmds() string {
+	return color.UsagePrefix + `{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+` + color.AliasesPrefix + `
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+` + color.ExamplesPrefix + `
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+
+` + color.AvailableCommandsPrefix + `{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
   {{rpad .Name .NamePadding }}  {{.Short}}{{if .HasSubCommands}}{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
     {{rpad .Name .NamePadding }}  {{.Short}}{{if .HasSubCommands}}{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
       {{rpad .Name .NamePadding }}  {{.Short}}{{if .HasSubCommands}}{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
         {{rpad .Name .NamePadding }}  {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{end}}{{end}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
-Flags:
+` + color.FlagsPrefix + `
 {{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
-Global Flags:
-  {{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+` + color.GlobalFlagsPrefix + `
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
 
-Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+` + color.AdditionalHelpTopicsPrefix + `{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
 
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+` + commandFooter + `{{end}}
 `
 }
 
@@ -95,11 +127,20 @@ func aliases() []string {
 }
 
 func createApp() (*cobra.Command, *cmdGlobal, error) {
-	// Setup the parser
+	// Load config.
+	conf, err := config.LoadConfig("")
+	if err != nil {
+		return nil, nil, fmt.Errorf(i18n.G("Failed to load configuration: %s"), err)
+	}
+
+	// Initialize colors.
+	color.Init(conf.Defaults.NoColor)
+
+	// Setup the parser.
 	app := &cobra.Command{}
 	app.Use = "incus"
 	app.Short = i18n.G("Command line client for Incus")
-	app.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
+	app.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Command line client for Incus
 
 All of Incus's features can be driven through the various commands below.
@@ -112,14 +153,7 @@ Custom commands can be defined through aliases, use "incus alias" to control tho
 	app.ValidArgs = aliases()
 
 	// Global struct.
-	globalCmd := cmdGlobal{cmd: app, asker: ask.NewAsker(bufio.NewReader(os.Stdin))}
-
-	conf, err := config.LoadConfig("")
-	if err != nil {
-		return nil, nil, fmt.Errorf(i18n.G("Failed to load configuration: %s"), err)
-	}
-
-	globalCmd.conf = conf
+	globalCmd := cmdGlobal{cmd: app, asker: ask.NewAsker(bufio.NewReader(os.Stdin)), conf: conf}
 
 	// Global flags.
 	app.PersistentFlags().BoolVar(&globalCmd.flagVersion, "version", false, i18n.G("Print version number"))
@@ -130,6 +164,7 @@ Custom commands can be defined through aliases, use "incus alias" to control tho
 	app.PersistentFlags().BoolVarP(&globalCmd.flagLogVerbose, "verbose", "v", false, i18n.G("Show all information messages"))
 	app.PersistentFlags().BoolVarP(&globalCmd.flagQuiet, "quiet", "q", false, i18n.G("Don't show progress information"))
 	app.PersistentFlags().BoolVar(&globalCmd.flagSubCmds, "sub-commands", false, i18n.G("Use with help or --help to view sub-commands"))
+	app.PersistentFlags().BoolVar(&u.ExplainOnly, "explain", false, i18n.G("If the command is valid, explain its parsed arguments instead of running it"))
 
 	// Wrappers
 	app.PersistentPreRunE = globalCmd.PreRun
@@ -323,7 +358,7 @@ Custom commands can be defined through aliases, use "incus alias" to control tho
 func main() {
 	app, globalCmd, err := createApp()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s: %v\n", color.ErrorPrefix, err)
 		os.Exit(1)
 	}
 
@@ -343,19 +378,27 @@ func main() {
 
 		if globalCmd.flagSubCmds {
 			app.SetUsageTemplate(usageTemplateSubCmds())
+		} else {
+			app.SetUsageTemplate(usageTemplate())
 		}
 	}
 
 	// Process aliases
 	err = execIfAliases(app)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s: %v\n", color.ErrorPrefix, err)
 		os.Exit(1)
 	}
 
 	// Run the main command and handle errors
 	err = app.Execute()
 	if err != nil {
+		// Handle --explain.
+		if errors.Is(err, u.ErrExplainOnly) {
+			fmt.Println(err.Error())
+			os.Exit(0)
+		}
+
 		// Handle non-Linux systems
 		if errors.Is(err, config.ErrNotLinux) {
 			fmt.Fprintf(os.Stderr, "%s", i18n.G(`This client hasn't been configured to use a remote server yet.
@@ -370,7 +413,7 @@ If you already added a remote server, make it the default with "incus remote swi
 			fmt.Fprintf(os.Stderr, i18n.G("Error while executing alias expansion: %s\n"), shellquote.Join(os.Args...))
 		}
 
-		fmt.Fprintf(os.Stderr, i18n.G("Error: %v\n"), err)
+		fmt.Fprintf(os.Stderr, "%s %v\n", color.ErrorPrefix, err)
 
 		// If custom exit status not set, use default error status.
 		if globalCmd.ret == 0 {
@@ -434,8 +477,10 @@ func (c *cmdGlobal) PreRun(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Setup password helper
-	c.conf.PromptPassword = func(filename string) (string, error) {
-		return c.asker.AskPasswordOnce(fmt.Sprintf(i18n.G("Password for %s: "), filename)), nil
+	if termios.IsTerminal(getStdinFd()) {
+		c.conf.PromptPassword = func(filename string) (string, error) {
+			return c.asker.AskPasswordOnce(fmt.Sprintf(i18n.G("Password for %s: "), filename)), nil
+		}
 	}
 
 	// If the user is running a command that may attempt to connect to the local daemon

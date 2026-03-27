@@ -26,7 +26,6 @@ import (
 func daemonStorageVolumesUnmount(s *state.State) error {
 	var storageBackups string
 	var storageImages string
-	var storageLogs string
 
 	err := s.DB.Node.Transaction(context.Background(), func(ctx context.Context, tx *db.NodeTx) error {
 		nodeConfig, err := node.ConfigLoad(ctx, tx)
@@ -36,7 +35,6 @@ func daemonStorageVolumesUnmount(s *state.State) error {
 
 		storageBackups = nodeConfig.StorageBackupsVolume()
 		storageImages = nodeConfig.StorageImagesVolume()
-		storageLogs = nodeConfig.StorageLogsVolume()
 
 		return nil
 	})
@@ -76,14 +74,6 @@ func daemonStorageVolumesUnmount(s *state.State) error {
 		err := unmount("images", storageImages)
 		if err != nil {
 			return fmt.Errorf("Failed to unmount images storage: %w", err)
-		}
-	}
-
-	if storageLogs != "" {
-		err := unmount("logs", storageLogs)
-		if err != nil {
-			// With the logs volume, we may be dealing with log files that are in use by Incus or dnsmasq, those will need a daemon restart.
-			logger.Warn("Unable to unmount logs storage, daemon restart required")
 		}
 	}
 
@@ -282,9 +272,9 @@ func daemonStorageMove(s *state.State, storageType string, target string) error 
 	var destPath string
 
 	isLogs := storageType == "logs"
-	if isLogs && target == "" {
-		// We keep the default location if the storage logs volume is not set.
-		destPath = internalUtil.LogPath()
+	if isLogs && target == "" && os.Getenv("INCUS_DIR") == "" {
+		// We keep the system-wide location when dealing with logs without a custom daemon path.
+		destPath = "/var/log/incus"
 	} else {
 		destPath = internalUtil.VarPath(storageType)
 	}
@@ -486,15 +476,15 @@ func daemonStorageMove(s *state.State, storageType string, target string) error 
 	}
 
 	// Rename the existing storage.
-	if util.PathExists(internalUtil.VarPath(storageType)) {
+	if isLogs && os.Getenv("INCUS_DIR") == "" {
+		sourcePath = "/var/log/incus"
+	} else if util.PathExists(internalUtil.VarPath(storageType)) {
 		sourcePath = internalUtil.VarPath(storageType) + ".temp"
 
 		err = os.Rename(internalUtil.VarPath(storageType), sourcePath)
 		if err != nil {
 			return fmt.Errorf("Failed to rename existing storage %q: %w", internalUtil.VarPath(storageType), err)
 		}
-	} else if isLogs {
-		sourcePath = internalUtil.LogPath()
 	}
 
 	// Create the new symlink.
@@ -517,7 +507,7 @@ func daemonStorageMove(s *state.State, storageType string, target string) error 
 	}
 
 	// Remove the old data.
-	if sourcePath != internalUtil.LogPath() {
+	if sourcePath != "/var/log/incus" {
 		err = os.RemoveAll(sourcePath)
 		if err != nil {
 			return fmt.Errorf("Failed to cleanup old directory %q: %w", sourcePath, err)

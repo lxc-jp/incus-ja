@@ -240,7 +240,7 @@ func (d *disk) sourceIsLocalPath(source string) bool {
 }
 
 // validateConfig checks the supplied config for correctness.
-func (d *disk) validateConfig(instConf instance.ConfigReader) error {
+func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation bool) error {
 	if !instanceSupported(instConf.Type(), instancetype.Container, instancetype.VM) {
 		return ErrUnsupportedDevType
 	}
@@ -457,6 +457,15 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		//  shortdesc: Only for VMs: Whether the disk is attached or ejected
 		"attached": validate.Optional(validate.IsBool),
 
+		// gendoc:generate(entity=devices, group=disk, key=dependent)
+		//
+		// ---
+		//  type: bool
+		//  default: `false`
+		//  required: no
+		//  shortdesc: Specifies if the disk is instance dependent
+		"dependent": validate.Optional(validate.IsBool),
+
 		// gendoc:generate(entity=devices, group=disk, key=wwn)
 		//
 		// ---
@@ -572,7 +581,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 		var dbVolume *db.StorageVolume
 		var storageProjectName string
 
-		if d.inst != nil && !d.inst.IsSnapshot() && d.config["source"] != "" && d.config["path"] != "/" && (d.isRequired(d.config) || d.isAvailable()) {
+		if !partialValidation && d.inst != nil && !d.inst.IsSnapshot() && d.config["source"] != "" && d.config["path"] != "/" && (d.isRequired(d.config) || d.isAvailable()) {
 			d.pool, err = storagePools.LoadByName(d.state, d.config["pool"])
 			if err != nil {
 				return fmt.Errorf("Failed to get storage pool %q: %w", d.config["pool"], err)
@@ -602,29 +611,30 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 				return err
 			}
 
+			// Check that the dependent disk is attached to exactly one instance.
+			if util.IsTrue(dbVolume.Config["dependent"]) {
+				count, err := d.getAttachedInstanceCount(storageProjectName, dbVolume)
+				if err != nil {
+					return err
+				}
+
+				if count > 0 {
+					return errors.New("Cannot add dependent custom storage block volume to more than one instance")
+				}
+			}
+
 			// Check that only shared custom storage block volume are added to profiles, or multiple instances.
 			if util.IsFalseOrEmpty(dbVolume.Config["security.shared"]) && contentType == db.StoragePoolVolumeContentTypeBlock {
 				if instConf.Type() == instancetype.Any {
 					return errors.New("Cannot add un-shared custom storage block volume to profile")
 				}
 
-				var usedBy []string
-
-				err = storagePools.VolumeUsedByInstanceDevices(d.state, d.pool.Name(), storageProjectName, &dbVolume.StorageVolume, true, func(inst db.InstanceArgs, project api.Project, usedByDevices []string) error {
-					// Don't count the current instance.
-					if d.inst != nil && d.inst.Project().Name == inst.Project && d.inst.Name() == inst.Name {
-						return nil
-					}
-
-					usedBy = append(usedBy, inst.Name)
-
-					return nil
-				})
+				count, err := d.getAttachedInstanceCount(storageProjectName, dbVolume)
 				if err != nil {
 					return err
 				}
 
-				if len(usedBy) > 0 {
+				if count > 0 {
 					return errors.New("Cannot add un-shared custom storage block volume to more than one instance")
 				}
 			}
@@ -645,7 +655,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 			}
 
 			// Custom volume validation.
-			if d.config["source"] != "" && d.config["path"] != "/" && (d.isRequired(d.config) || d.isAvailable()) {
+			if !partialValidation && d.config["source"] != "" && d.config["path"] != "/" && (d.isRequired(d.config) || d.isAvailable()) {
 				if storageProjectName == "" {
 					// Derive the effective storage project name from the instance config's project.
 					storageProjectName, err = project.StorageVolumeProject(d.state.DB.Cluster, instConf.Project().Name, db.StoragePoolVolumeTypeCustom)
@@ -718,6 +728,13 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 				} else if d.config["path"] == "" {
 					return errors.New("Custom filesystem volumes require a path to be defined")
 				}
+
+				if util.IsTrue(d.config["dependent"]) {
+					err = storageDrivers.ValidateDependentConfigKey(dbVolume.Config)
+					if err != nil {
+						return err
+					}
+				}
 			}
 
 			// Extract initial configuration from the profile and validate them against appropriate
@@ -777,7 +794,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader) error {
 			return errors.New("Virtiofs mounts aren't supported with migration.stateful=true")
 		}
 
-		if d.config["path"] != "/" && d.pool != nil && !d.pool.Driver().Info().Remote {
+		if d.config["path"] != "/" && d.pool != nil && !d.pool.Driver().Info().Remote && util.IsFalseOrEmpty(d.config["dependent"]) {
 			return errors.New("Only additional disks coming from a shared storage pool are supported with migration.stateful=true")
 		}
 	}
@@ -862,7 +879,7 @@ func (d *disk) UpdatableFields(oldDevice Type) []string {
 		return []string{}
 	}
 
-	return []string{"limits.max", "limits.read", "limits.write", "size", "size.state"}
+	return []string{"limits.max", "limits.read", "limits.write", "size", "size.state", "dependent"}
 }
 
 // Register calls mount for the disk volume (which should already be mounted) to reinitialize the reference counter
@@ -1793,6 +1810,11 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 					return err
 				}
 			}
+		}
+	} else if d.config["pool"] != "" && d.config["source"] != "" {
+		err := d.updateDependentConfig()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -3118,6 +3140,94 @@ func (d *disk) Remove() error {
 		err = os.Remove(isoPath)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("Failed removing %s file: %w", diskSourceCloudInit, err)
+		}
+	}
+
+	return nil
+}
+
+// getAttachedInstanceCount returns the number of instances
+// to which this disk is currently attached.
+func (d *disk) getAttachedInstanceCount(projectName string, volume *db.StorageVolume) (int, error) {
+	count := 0
+
+	err := storagePools.VolumeUsedByInstanceDevices(d.state, d.pool.Name(), projectName, &volume.StorageVolume, true, func(inst db.InstanceArgs, project api.Project, usedByDevices []string) error {
+		// Don't count the current instance.
+		if d.inst != nil && d.inst.Project().Name == inst.Project && d.inst.Name() == inst.Name {
+			return nil
+		}
+
+		count += 1
+
+		return nil
+	})
+	if err != nil {
+		return -1, err
+	}
+
+	return count, nil
+}
+
+// updateDependentConfig applies changes to dependent configuration settings.
+func (d *disk) updateDependentConfig() error {
+	// Parse the volume name and path.
+	volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
+
+	storageProjectName, err := project.StorageVolumeProject(d.state.DB.Cluster, d.inst.Project().Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	var dbVolume *db.StorageVolume
+	err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		dbVolume, err = tx.GetStoragePoolVolume(ctx, d.pool.ID(), storageProjectName, db.StoragePoolVolumeTypeCustom, volName, true)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to fetch local storage volume record: %w", err)
+	}
+
+	if dbVolume.Type == db.StoragePoolVolumeTypeNameCustom {
+		if util.IsTrue(d.config["dependent"]) {
+			var volSnapshots []db.StorageVolumeArgs
+			err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				volSnapshots, err = tx.GetLocalStoragePoolVolumeSnapshotsWithType(ctx, storageProjectName, volName, db.StoragePoolVolumeTypeCustom, d.pool.ID())
+				return err
+			})
+			if err != nil {
+				return fmt.Errorf("Failed loading custom volume: %w", err)
+			}
+
+			if len(volSnapshots) > 0 {
+				return fmt.Errorf("Cannot attach volume with snapshots as dependent")
+			}
+
+			var snapshots []cluster.Instance
+			err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				snapshots, err = tx.GetInstanceSnapshotsWithName(ctx, d.inst.Project().Name, d.inst.Name())
+				return err
+			})
+			if err != nil {
+				return err
+			}
+
+			for _, snap := range snapshots {
+				_, snapName, _ := api.GetParentAndSnapshotName(snap.Name)
+				err = d.pool.CreateCustomVolumeSnapshot(storageProjectName, volName, snapName, snap.ExpiryDate.Time, nil)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		poolVolumePut := dbVolume.Writable()
+		poolVolumePut.Config["dependent"] = d.config["dependent"]
+
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			return tx.UpdateStoragePoolVolume(ctx, storageProjectName, volName, db.StoragePoolVolumeTypeCustom, d.pool.ID(), poolVolumePut.Description, poolVolumePut.Config)
+		})
+		if err != nil {
+			return err
 		}
 	}
 
