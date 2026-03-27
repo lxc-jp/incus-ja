@@ -2230,7 +2230,6 @@ OpenID Connect（OIDC）認証のサポートを追加します。
 
 `GET /1.0/metadata/configuration` API エンドポイントを追加し、生成されたメタデータ設定を JSON 形式で取得できるようにします。
 JSON の構造は ```"configs" > `ENTITY` > `ENTITY_SECTION` > "keys" > [<CONFIG_OPTION_0>, <CONFIG_OPTION_1>, ...]``` という形式です。
-どの設定オプションが含まれるかは {doc}`configuration options </config-options>` の一覧を参照してください。
 
 ## `syslog_socket`
 
@@ -2989,3 +2988,24 @@ SR-IOV NICに以下のプロパティーを追加します：
 ## `daemon_storage_logs`
 
 既存の`storage.backups_volume`と`storage.images_volume`に加えて`storage.logs_volume`を追加します。
+
+## `instances_debug_repair`
+
+低レベルの修復アクションをトリガーするAPI `POST /1.0/instances/NAME/debug/repair`を追加します。
+
+## `network_io_bus_ovn`
+
+ほとんどのNICデバイスで使える`io.bus`プロパティーをアクセラレーションなしのOVN NICに移植します。
+
+## `dependent`
+
+ディスクデバイスとカスタムボリュームに`dependent`設定キーを追加します。
+`dependent`とマークされたボリュームはアタッチ先のインスタンスの`lifecycle`に連動します。
+インスタンスに対するスナップショットの操作は依存するボリュームに自動的に伝搬します。
+インスタンスのスナップショットを作成すると依存するボリュームの対応するスナップショットが作成され、インスタンスのスナップショットを削除すると依存するボリュームのスナップショットも削除されます。
+依存するボリュームのスナップショットを直接作成したり削除することはできません。
+インスタンスのエクスポートとインポートは依存するボリュームも含みます。
+
+## `metrics_project_resources`
+
+`/1.0/metrics`のエンドポイントにプロジェクトレベルのメトリクスを追加します。これはリソースのカウント、設定された制限値、プロジェクト毎の現在の使用量を含みます。
