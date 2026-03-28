@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	incus "github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/cmd/incus/color"
 	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	"github.com/lxc/incus/v6/shared/api"
@@ -31,12 +32,15 @@ type cmdRemoteProxy struct {
 	flagTimeout int
 }
 
+// Not the most beautiful way to encode it, but this command is an outlier in that regard.
+var cmdRemoteProxyUsage = u.Usage{u.Either(u.Remote, u.Colon(u.Remote)), u.Target(u.Placeholder(i18n.G("socket file")))}
+
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdRemoteProxy) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.U("proxy", u.Colon(u.Remote), u.Target(u.Placeholder(i18n.G("socket file"))))
+	cmd.Use = cli.U("proxy", cmdRemoteProxyUsage...)
 	cmd.Short = i18n.G("Run a local API proxy")
-	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Run a local API proxy for the remote`))
 
 	cmd.RunE = c.Run
@@ -48,19 +52,18 @@ func (c *cmdRemoteProxy) Command() *cobra.Command {
 
 // Run runs the actual command logic.
 func (c *cmdRemoteProxy) Run(cmd *cobra.Command, args []string) error {
-	// Quick checks.
-	exit, err := c.global.checkArgs(cmd, args, 2, 2)
-	if exit {
+	parsed, err := cmdRemoteProxyUsage.Parse(c.global.conf, cmd, args)
+	if err != nil {
 		return err
 	}
 
+	remoteName := parsed[0].String
+	path := parsed[1].String
+
 	// Detect remote name.
-	remoteName := args[0]
 	if !strings.HasSuffix(remoteName, ":") {
 		remoteName = remoteName + ":"
 	}
-
-	path := args[1]
 
 	remote := c.global.conf.Remotes[strings.TrimSuffix(remoteName, ":")]
 	remote.KeepAlive = 0
@@ -211,6 +214,7 @@ func (t remoteProxyTransport) RoundTrip(r *http.Request) (*http.Response, error)
 type remoteProxyHandler struct {
 	s         incus.InstanceServer
 	transport http.RoundTripper
+	url       string
 
 	mu           *sync.RWMutex
 	connections  *uint64
@@ -235,6 +239,12 @@ func (h remoteProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	*h.connections++
 	h.mu.Unlock()
 
+	// Don't allow cross-origin requests.
+	origin := r.Header.Get("Origin")
+	if origin != "" && origin != h.url {
+		return
+	}
+
 	// Basic auth.
 	if h.token != "" {
 		// Parse query URL.
@@ -245,6 +255,8 @@ func (h remoteProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		token := values.Get("auth_token")
 		if token != "" {
+			// If a token was passed through the URL, persist it as a cookie.
+
 			tokenCookie := http.Cookie{
 				Name:     "auth_token",
 				Value:    token,
@@ -256,11 +268,21 @@ func (h remoteProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			http.SetCookie(w, &tokenCookie)
 		} else {
+			// If not, attempt to pull it from the cookie.
 			cookie, err := r.Cookie("auth_token")
-			if err != nil || cookie.Value != h.token {
+			if err != nil {
+				// Fail authentication if no cookie can be found.
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
+
+			token = cookie.Value
+		}
+
+		// Check the user token against the expected value.
+		if token != h.token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
 	}
 

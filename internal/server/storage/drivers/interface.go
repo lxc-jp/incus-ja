@@ -75,6 +75,9 @@ type Driver interface {
 	GetVolumeDiskPath(vol Volume) (string, error)
 	ListVolumes() ([]Volume, error)
 
+	// ActivateTask is a low-level access function to get to the underlying storage.
+	ActivateTask(vol Volume, task func(devPath string, op *operations.Operation) error, op *operations.Operation) error
+
 	// MountVolume mounts a storage volume (if not mounted) and increments reference counter.
 	MountVolume(vol Volume, op *operations.Operation) error
 
@@ -112,6 +115,6 @@ type Driver interface {
 	CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, volTargetArgs migration.VolumeTargetArgs, preFiller *VolumeFiller, op *operations.Operation) error
 
 	// Backup.
-	BackupVolume(vol Volume, writer instancewriter.InstanceWriter, optimized bool, snapshots []string, op *operations.Operation) error
-	CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData io.ReadSeeker, op *operations.Operation) (VolumePostHook, revert.Hook, error)
+	BackupVolume(vol Volume, writer instancewriter.InstanceWriter, basePrefix string, optimized bool, snapshots []string, op *operations.Operation) error
+	CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData io.ReadSeeker, basePrefix string, op *operations.Operation) (VolumePostHook, revert.Hook, error)
 }

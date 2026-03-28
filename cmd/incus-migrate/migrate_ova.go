@@ -16,7 +16,6 @@ import (
 	"github.com/lxc/incus/v6/shared/api"
 	"github.com/lxc/incus/v6/shared/archive"
 	"github.com/lxc/incus/v6/shared/ask"
-	"github.com/lxc/incus/v6/shared/util"
 )
 
 // VHResourceType defines what kind of resource this is (e.g., CPU, memory).
@@ -112,7 +111,8 @@ func NewOVAMigration(ctx context.Context, server incus.InstanceServer, asker ask
 
 // gatherInfo collects information from the user about the instance to be created.
 func (m *OVAMigration) gatherInfo() error {
-	err := m.askOVAPath()
+	var err error
+	m.ovaPath, err = m.askPath("Please provide the path or URL to a .ova file: ")
 	if err != nil {
 		return err
 	}
@@ -261,29 +261,6 @@ func (m *OVAMigration) renderObject() error {
 	return m.instance.renderObject()
 }
 
-// askOVAPath prompts the user to provide the path to the .ova file.
-func (m *OVAMigration) askOVAPath() error {
-	var err error
-
-	m.ovaPath, err = m.asker.AskString("Provide .ova file path: ", "", func(s string) error {
-		if !util.PathExists(s) {
-			return errors.New("Path does not exist")
-		}
-
-		_, err := os.Stat(s)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // unpackOVA extracts the contents of the OVA file.
 func (m *OVAMigration) unpackOVA(outPath string) error {
 	file, err := os.Open(m.ovaPath)
@@ -295,6 +272,13 @@ func (m *OVAMigration) unpackOVA(outPath string) error {
 
 	tarReader := tar.NewReader(file)
 
+	outPathRoot, err := os.OpenRoot(outPath)
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = outPathRoot.Close() }()
+
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -305,7 +289,7 @@ func (m *OVAMigration) unpackOVA(outPath string) error {
 			return err
 		}
 
-		outFile, err := os.Create(filepath.Join(outPath, header.Name))
+		outFile, err := outPathRoot.Create(header.Name)
 		if err != nil {
 			return fmt.Errorf("Error creating file: %v", err)
 		}

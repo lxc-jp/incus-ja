@@ -27,7 +27,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/checkpoint-restore/go-criu/v6/crit"
+	"github.com/checkpoint-restore/go-criu/v8/crit"
 	"github.com/flosch/pongo2/v6"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -73,7 +73,6 @@ import (
 	"github.com/lxc/incus/v6/internal/server/state"
 	storagePools "github.com/lxc/incus/v6/internal/server/storage"
 	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
-	"github.com/lxc/incus/v6/internal/server/template"
 	localUtil "github.com/lxc/incus/v6/internal/server/util"
 	internalUtil "github.com/lxc/incus/v6/internal/util"
 	"github.com/lxc/incus/v6/internal/version"
@@ -171,7 +170,7 @@ func lxcStatusCode(state liblxc.State) api.StatusCode {
 
 // lxcCreate creates the DB storage records and sets up instance devices.
 // Returns a revert fail function that can be used to undo this function if a subsequent step fails.
-func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project, op *operations.Operation) (instance.Instance, revert.Hook, error) {
+func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project, partialDeviceValidation bool, op *operations.Operation) (instance.Instance, revert.Hook, error) {
 	reverter := revert.New()
 	defer reverter.Fail()
 
@@ -307,7 +306,7 @@ func lxcCreate(s *state.State, args db.InstanceArgs, p api.Project, op *operatio
 
 	if !d.IsSnapshot() {
 		// Add devices to container.
-		cleanup, err := d.devicesAdd(d, false)
+		cleanup, err := d.devicesAdd(d, false, partialDeviceValidation)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2170,7 +2169,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	// Load devices in sorted order, this ensures that device mounts are added in path order.
 	// Loading all devices first means that validation of all devices occurs before starting any of them.
 	for _, entry := range sortedDevices {
-		dev, err := d.deviceLoad(d, entry.Name, entry.Config)
+		dev, err := d.deviceLoad(d, entry.Name, entry.Config, false)
 		if err != nil {
 			if errors.Is(err, device.ErrUnsupportedDevType) {
 				continue // Skip unsupported device (allows for mixed instance type profiles).
@@ -2435,7 +2434,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 		initCmd = strings.ReplaceAll(initCmd, "\\(", "(")
 		initCmd = strings.ReplaceAll(initCmd, "\\)", ")")
 
-		if len(entrypoint) > 0 && slices.Contains([]string{"/init", "/sbin/init", "/s6-init"}, entrypoint[0]) {
+		if len(entrypoint) > 0 && slices.Contains([]string{"/init", "/sbin/init", "/s6-init", "/usr/bin/init"}, entrypoint[0]) {
 			// For regular init systems, call them directly as PID1.
 			err = lxcSetConfigItem(cc, "lxc.init.cmd", initCmd)
 			if err != nil {
@@ -3324,6 +3323,9 @@ func (d *lxc) Shutdown(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
+
+		// Wait 3s for init to be running enough to get the next signal handle.
+		time.Sleep(3 * time.Second)
 	}
 
 	ctxMap := logger.Ctx{
@@ -3632,7 +3634,7 @@ func (d *lxc) cleanupDevices(instanceRunning bool, stopHookNetnsPath string) {
 			continue
 		}
 
-		dev, err := d.deviceLoad(d, entry.Name, entry.Config)
+		dev, err := d.deviceLoad(d, entry.Name, entry.Config, false)
 		if err != nil {
 			if errors.Is(err, device.ErrUnsupportedDevType) {
 				continue // Skip unsupported device (allows for mixed instance type profiles).
@@ -4879,6 +4881,10 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 					continue
 				}
 
+				if strings.HasPrefix(newDev["source"], "tmpfs:") || strings.HasPrefix(newDev["source"], "tmpfs-overlay:") {
+					continue
+				}
+
 				oldDev, ok := removeDevices[devName]
 				if !ok {
 					return errors.New("New device with initial configuration cannot be added once the instance is created")
@@ -5688,6 +5694,34 @@ func (d *lxc) Export(metaWriter io.Writer, rootfsWriter io.Writer, properties ma
 		return nil, err
 	}
 
+	// If present, add config.json (OCI) to the tarball.
+	fnam = filepath.Join(d.Path(), "config.json")
+	if util.PathExists(fnam) {
+		fi, err := os.Lstat(fnam)
+		if err != nil {
+			_ = metaTarWriter.Close()
+			if rootfsTarWriter != nil {
+				_ = rootfsTarWriter.Close()
+			}
+
+			d.logger.Error("Failed exporting instance", ctxMap)
+			return nil, err
+		}
+
+		tmpOffset := len(filepath.Dir(fnam)) + 1
+		err = metaTarWriter.WriteFile(fnam[tmpOffset:], fnam, fi, false)
+		if err != nil {
+			_ = metaTarWriter.Close()
+			if rootfsTarWriter != nil {
+				_ = rootfsTarWriter.Close()
+			}
+
+			d.logger.Debug("Error writing to tarfile", logger.Ctx{"err": err})
+			d.logger.Error("Failed exporting instance", ctxMap)
+			return nil, err
+		}
+	}
+
 	// Include all the rootfs files.
 	fnam = d.RootfsPath()
 	if rootfsWriter == nil {
@@ -5847,6 +5881,11 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		return err
 	}
 
+	// If not running, stop any forkfile instance.
+	if !d.IsRunning() {
+		d.stopForkfile(false)
+	}
+
 	// Wait for essential migration connections before negotiation.
 	connectionsCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
@@ -5932,12 +5971,21 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		}
 	}
 
-	srcConfig, err := pool.GenerateInstanceBackupConfig(d, args.Snapshots, d.op)
+	srcConfig, err := pool.GenerateInstanceBackupConfig(d, args.Snapshots, true, d.op)
 	if err != nil {
 		err := fmt.Errorf("Failed generating instance migration config: %w", err)
 		op.Done(err)
 		return err
 	}
+
+	dependentVolumesOffer, err := storagePools.GenerateDependentVolumesOffer(d.state, srcConfig, d.Project().Name, args.Snapshots)
+	if err != nil {
+		err := fmt.Errorf("Failed generating instance depending volumes offer: %w", err)
+		op.Done(err)
+		return err
+	}
+
+	offerHeader.DependentVolumes = dependentVolumesOffer
 
 	// If we are copying snapshots, retrieve a list of snapshots from source volume.
 	if args.Snapshots {
@@ -5979,6 +6027,19 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		return err
 	}
 
+	volumesWithTypes, err := storagePools.DependentVolumesMatchMigrationType(d.state, respHeader.DependentVolumes, args.Snapshots)
+	if err != nil {
+		err := fmt.Errorf("Failed to negotiate migration types for dependent volumes: %w", err)
+		op.Done(err)
+		return err
+	}
+
+	d.logger.Debug("Generate dependent volumes args")
+	dependentVolumes := []localMigration.DependentVolumeArgs{}
+	for _, volWithType := range volumesWithTypes {
+		dependentVolumes = append(dependentVolumes, localMigration.ProtobufToDependentVolume(volWithType.Volume, volWithType.VolumeTypes[0]))
+	}
+
 	volSourceArgs := &localMigration.VolumeSourceArgs{
 		IndexHeaderVersion: respHeader.GetIndexHeaderVersion(), // Enable index header frame if supported.
 		Name:               d.Name(),
@@ -5991,6 +6052,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		Info:               &localMigration.Info{Config: srcConfig},
 		ClusterMove:        clusterMove,
 		StorageMove:        storageMove,
+		DependentVolumes:   dependentVolumes,
 	}
 
 	// Only send the snapshots that the target requests when refreshing.
@@ -6554,6 +6616,17 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 	// Add CRIU info to response.
 	respHeader.Criu = criuType
 
+	volumesWithTypes, err := storagePools.DependentVolumesMatchMigrationType(d.state, offerHeader.DependentVolumes, args.Snapshots)
+	if err != nil {
+		return fmt.Errorf("Failed to negotiate migration types for dependent volumes: %w", err)
+	}
+
+	dependentVolumes := []localMigration.DependentVolumeArgs{}
+	for _, volWithType := range volumesWithTypes {
+		respHeader.DependentVolumes = append(respHeader.DependentVolumes, volWithType.Volume)
+		dependentVolumes = append(dependentVolumes, localMigration.ProtobufToDependentVolume(volWithType.Volume, volWithType.VolumeTypes[0]))
+	}
+
 	if args.Refresh {
 		// Get the remote snapshots on the source.
 		sourceSnapshots := offerHeader.GetSnapshots()
@@ -6756,6 +6829,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 			VolumeOnly:            !args.Snapshots,
 			ClusterMoveSourceName: args.ClusterMoveSourceName,
 			StoragePool:           args.StoragePool,
+			DependentVolumes:      dependentVolumes,
 		}
 
 		// At this point we have already figured out the parent container's root
@@ -6798,7 +6872,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 					}
 
 					// Create the snapshot instance.
-					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, d.op, true, false)
+					_, snapInstOp, cleanup, err := instance.CreateInternal(d.state, *snapArgs, d.op, true, false, false)
 					if err != nil {
 						return fmt.Errorf("Failed creating instance snapshot record %q: %w", snapArgs.Name, err)
 					}
@@ -7414,14 +7488,6 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 				return fmt.Errorf("Failed to read template file: %w", err)
 			}
 
-			// Restrict filesystem access to within the container's rootfs
-			tplSet := pongo2.NewSet(fmt.Sprintf("%s-%s", d.name, tpl.Template), template.ChrootLoader{Path: d.RootfsPath()})
-
-			tplRender, err := tplSet.FromString("{% autoescape off %}" + string(tplString) + "{% endautoescape %}")
-			if err != nil {
-				return fmt.Errorf("Failed to render template: %w", err)
-			}
-
 			configGet := func(confKey, confDefault *pongo2.Value) *pongo2.Value {
 				val, ok := d.expandedConfig[confKey.String()]
 				if !ok {
@@ -7431,8 +7497,7 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 				return pongo2.AsValue(strings.TrimRight(val, "\r\n"))
 			}
 
-			// Render the template
-			err = tplRender.ExecuteWriter(pongo2.Context{
+			err = internalUtil.RenderTemplateFile(w, string(tplString), pongo2.Context{
 				"trigger":    trigger,
 				"path":       tplPath,
 				"container":  containerMeta,
@@ -7441,9 +7506,9 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 				"devices":    d.expandedDevices,
 				"properties": tpl.Properties,
 				"config_get": configGet,
-			}, w)
+			})
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to render template: %w", err)
 			}
 
 			return w.Close()
@@ -9419,7 +9484,7 @@ func (d *common) forkfileRunningLockName() string {
 
 // ReloadDevice triggers an empty Update call to the underlying device.
 func (d *lxc) ReloadDevice(devName string) error {
-	dev, err := d.deviceLoad(d, devName, d.expandedDevices[devName])
+	dev, err := d.deviceLoad(d, devName, d.expandedDevices[devName], false)
 	if err != nil {
 		return err
 	}
@@ -9490,16 +9555,22 @@ func (d *lxc) setupCredentials(update bool) error {
 		}
 	}
 
+	credsRoot, err := os.OpenRoot(credentialsDir)
+	if err != nil {
+		return fmt.Errorf("Failed to open the credentials directory: %w", err)
+	}
+
+	defer func() { _ = credsRoot.Close() }()
+
 	for k, v := range credentials {
-		credentialPath := filepath.Join(credentialsDir, k)
-		err := os.WriteFile(credentialPath, v, 0o400)
+		err := credsRoot.WriteFile(k, v, 0o400)
 		if err != nil {
 			return fmt.Errorf("Failed to write credential %q: %w", k, err)
 		}
 
-		err = os.Chown(credentialPath, int(rootUID), int(rootGID))
+		err = credsRoot.Chown(k, int(rootUID), int(rootGID))
 		if err != nil {
-			return fmt.Errorf("Failed setting permissions for file %q: %w", credentialPath, err)
+			return fmt.Errorf("Failed setting permissions for file %q: %w", k, err)
 		}
 
 		delete(oldCredentials, k)
@@ -9521,12 +9592,12 @@ func (d *lxc) GuestOS() string {
 }
 
 // CreateQcow2Snapshot creates a qcow2 snapshot for a running instance. Not supported by containers.
-func (d *lxc) CreateQcow2Snapshot(snapName string, backingFilename string) error {
+func (d *lxc) CreateQcow2Snapshot(devPath string, devName string, snapName string, backingFilename string) error {
 	return nil
 }
 
 // DeleteQcow2Snapshot deletes a qcow2 snapshot for a running instance. Not supported by containers.
-func (d *lxc) DeleteQcow2Snapshot(snapshotIndex int, backingFilename string) error {
+func (d *lxc) DeleteQcow2Snapshot(devName string, snapshotIndex int, backingFilename string) error {
 	return nil
 }
 

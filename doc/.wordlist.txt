@@ -93,6 +93,7 @@ ETag
 failover
 formatters
 FQDNs
+FreeBSD
 frontend
 Furo
 gapped
@@ -233,6 +234,7 @@ Pongo
 POSIX
 PPA
 pre
+preselects
 preseed
 proxied
 proxying

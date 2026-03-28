@@ -159,8 +159,8 @@ func (d *lvm) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Oper
 }
 
 // CreateVolumeFromBackup restores a backup tarball onto the storage device.
-func (d *lvm) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData io.ReadSeeker, op *operations.Operation) (VolumePostHook, revert.Hook, error) {
-	return genericVFSBackupUnpack(d, d.state.OS, vol, srcBackup.Snapshots, srcData, op)
+func (d *lvm) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData io.ReadSeeker, basePrefix string, op *operations.Operation) (VolumePostHook, revert.Hook, error) {
+	return genericVFSBackupUnpack(d, d.state.OS, vol, srcBackup.Snapshots, srcData, basePrefix, op)
 }
 
 // CreateVolumeFromCopy provides same-pool volume copying functionality.
@@ -543,6 +543,10 @@ func (d *lvm) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 		return errors.New("lvm.stripes.size cannot be used with thin pool volumes")
 	}
 
+	if vol.config["block.type"] == BlockVolumeTypeQcow2 && util.IsTrue(vol.config["security.shared"]) {
+		return errors.New("QCOW2 volume type is incompatible with the 'security.shared' option.")
+	}
+
 	return nil
 }
 
@@ -571,7 +575,7 @@ func (d *lvm) UpdateVolume(vol Volume, changedConfig map[string]string) error {
 		return errors.New("block.type cannot be changed after creation")
 	}
 
-	return nil
+	return d.updateVolume(vol, changedConfig)
 }
 
 // GetVolumeUsage returns the disk space used by the volume (this is not currently supported).
@@ -936,6 +940,48 @@ func (d *lvm) ListVolumes() ([]Volume, error) {
 	return volList, nil
 }
 
+// ActivateTask allows running a function while the volume is active (but not mounted).
+func (d *lvm) ActivateTask(vol Volume, task func(devPath string, op *operations.Operation) error, op *operations.Operation) error {
+	// Prevent concurrent mounting actions.
+	unlock, err := vol.MountLock()
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	// Setup a reverter.
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	// Activate the volume.
+	activated, err := d.activateVolume(vol)
+	if err != nil {
+		return err
+	}
+
+	if !activated {
+		return errors.New("Volume is already active, can't run exclusive activation task")
+	}
+
+	// Get the device path.
+	volDevPath, err := d.lvmDevPath(d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, vol.name))
+	if err != nil {
+		return err
+	}
+
+	// Run the task.
+	taskErr := task(volDevPath, op)
+
+	// Deactivate the volume.
+	_, err = d.deactivateVolume(vol)
+	if err != nil {
+		return err
+	}
+
+	return taskErr
+}
+
 // MountVolume mounts a volume and increments ref counter. Please call UnmountVolume() when done with the volume.
 func (d *lvm) MountVolume(vol Volume, op *operations.Operation) error {
 	unlock, err := vol.MountLock()
@@ -1178,7 +1224,7 @@ func (d *lvm) MigrateVolume(vol Volume, conn io.ReadWriteCloser, volSrcArgs *mig
 			}
 
 			if volDevPath != "" {
-				if vol.Type() == VolumeTypeVM || vol.ContentType() == ContentTypeBlock {
+				if vol.Type() == VolumeTypeVM || vol.ContentType() == ContentTypeBlock || vol.ContentType() == ContentTypeISO {
 					_, err := subprocess.RunCommand("lvchange", "--activate", "sy", "--ignoreactivationskip", volPath)
 					if err != nil {
 						return err
@@ -1218,8 +1264,8 @@ func (d *lvm) MigrateVolume(vol Volume, conn io.ReadWriteCloser, volSrcArgs *mig
 
 // BackupVolume copies a volume (and optionally its snapshots) to a specified target path.
 // This driver does not support optimized backups.
-func (d *lvm) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, _ bool, snapshots []string, op *operations.Operation) error {
-	return genericVFSBackupVolume(d, vol, writer, snapshots, op)
+func (d *lvm) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, basePrefix string, _ bool, snapshots []string, op *operations.Operation) error {
+	return genericVFSBackupVolume(d, vol, writer, basePrefix, snapshots, op)
 }
 
 // CreateVolumeSnapshot creates a snapshot of a volume.

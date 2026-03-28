@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 
 	incus "github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/cmd/incus/color"
+	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	cli "github.com/lxc/incus/v6/shared/cmd"
 	"github.com/lxc/incus/v6/shared/logger"
@@ -20,12 +22,14 @@ type cmdAdminWaitready struct {
 	flagTimeout int
 }
 
+var cmdAdminWaitreadyUsage = u.Usage{}
+
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdAdminWaitready) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.U("waitready")
+	cmd.Use = cli.U("waitready", cmdAdminWaitreadyUsage...)
 	cmd.Short = i18n.G("Wait for the daemon to be ready to process requests")
-	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(`Wait for the daemon to be ready to process requests
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Wait for the daemon to be ready to process requests
 
   This command will block until the daemon is reachable over its REST API and
   is done with early start tasks like re-starting previously started
@@ -37,7 +41,12 @@ func (c *cmdAdminWaitready) Command() *cobra.Command {
 }
 
 // Run runs the actual command logic.
-func (c *cmdAdminWaitready) Run(_ *cobra.Command, _ []string) error {
+func (c *cmdAdminWaitready) Run(cmd *cobra.Command, args []string) error {
+	_, err := cmdAdminWaitreadyUsage.Parse(c.global.conf, cmd, args)
+	if err != nil {
+		return err
+	}
+
 	finger := make(chan error, 1)
 	var errLast error
 	go func() {

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"slices"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/lxc/incus/v6/internal/migration"
 	backupConfig "github.com/lxc/incus/v6/internal/server/backup/config"
 	"github.com/lxc/incus/v6/internal/server/operations"
@@ -45,6 +47,16 @@ type Type struct {
 	Features []string                  // Feature hints for selected FSType transport mode.
 }
 
+// DependentVolumeArgs represents the arguments needed to set up a dependent volume migration.
+type DependentVolumeArgs struct {
+	Name          string
+	Pool          string
+	ContentType   string
+	MigrationType Type
+	Snapshots     []*migration.Snapshot
+	VolumeSize    int64
+}
+
 // VolumeSourceArgs represents the arguments needed to setup a volume migration source.
 type VolumeSourceArgs struct {
 	IndexHeaderVersion uint32
@@ -62,6 +74,7 @@ type VolumeSourceArgs struct {
 	VolumeOnly         bool
 	ClusterMove        bool
 	StorageMove        bool
+	DependentVolumes   []DependentVolumeArgs
 }
 
 // VolumeTargetArgs represents the arguments needed to setup a volume migration sink.
@@ -81,6 +94,7 @@ type VolumeTargetArgs struct {
 	VolumeOnly            bool
 	ClusterMoveSourceName string
 	StoragePool           string
+	DependentVolumes      []DependentVolumeArgs
 }
 
 // TypesToHeader converts one or more Types to a MigrationHeader. It uses the first type argument
@@ -107,11 +121,12 @@ func TypesToHeader(types ...Type) *migration.MigrationHeader {
 		}
 
 		for _, feature := range preferredType.Features {
-			if feature == "compress" {
+			switch feature {
+			case "compress":
 				features.Compress = &hasFeature
-			} else if feature == migration.ZFSFeatureMigrationHeader {
+			case migration.ZFSFeatureMigrationHeader:
 				features.MigrationHeader = &hasFeature
-			} else if feature == migration.ZFSFeatureZvolFilesystems {
+			case migration.ZFSFeatureZvolFilesystems:
 				features.HeaderZvols = &hasFeature
 			}
 		}
@@ -127,11 +142,12 @@ func TypesToHeader(types ...Type) *migration.MigrationHeader {
 		}
 
 		for _, feature := range preferredType.Features {
-			if feature == migration.BTRFSFeatureMigrationHeader {
+			switch feature {
+			case migration.BTRFSFeatureMigrationHeader:
 				features.MigrationHeader = &hasFeature
-			} else if feature == migration.BTRFSFeatureSubvolumes {
+			case migration.BTRFSFeatureSubvolumes:
 				features.HeaderSubvolumes = &hasFeature
-			} else if feature == migration.BTRFSFeatureSubvolumeUUIDs {
+			case migration.BTRFSFeatureSubvolumeUUIDs:
 				features.HeaderSubvolumeUuids = &hasFeature
 			}
 		}
@@ -153,13 +169,14 @@ func TypesToHeader(types ...Type) *migration.MigrationHeader {
 		}
 
 		for _, feature := range t.Features {
-			if feature == "xattrs" {
+			switch feature {
+			case "xattrs":
 				features.Xattrs = &hasFeature
-			} else if feature == "delete" {
+			case "delete":
 				features.Delete = &hasFeature
-			} else if feature == "compress" {
+			case "compress":
 				features.Compress = &hasFeature
-			} else if feature == "bidirectional" {
+			case "bidirectional":
 				features.Bidirectional = &hasFeature
 			}
 		}
@@ -193,11 +210,12 @@ func MatchTypes(offer *migration.MigrationHeader, fallbackType migration.Migrati
 
 			// We got a match, now extract the relevant offered features.
 			var offeredFeatures []string
-			if offerFSType == migration.MigrationFSType_ZFS {
+			switch offerFSType {
+			case migration.MigrationFSType_ZFS:
 				offeredFeatures = offer.GetZfsFeaturesSlice()
-			} else if offerFSType == migration.MigrationFSType_BTRFS {
+			case migration.MigrationFSType_BTRFS:
 				offeredFeatures = offer.GetBtrfsFeaturesSlice()
-			} else if offerFSType == migration.MigrationFSType_RSYNC {
+			case migration.MigrationFSType_RSYNC:
 				offeredFeatures = offer.GetRsyncFeaturesSlice()
 			}
 
@@ -245,6 +263,65 @@ func MatchTypes(offer *migration.MigrationHeader, fallbackType migration.Migrati
 	}
 
 	return matchedTypes, nil
+}
+
+// DependentVolumeFromHeader creates a DependentVolume from a MigrationHeader.
+func DependentVolumeFromHeader(header *migration.MigrationHeader, volName string, poolName string, contentType string, volSize int64) *migration.DependentVolume {
+	fs := header.GetFs()
+	return &migration.DependentVolume{
+		Fs:            &fs,
+		BtrfsFeatures: header.GetBtrfsFeatures(),
+		RsyncFeatures: header.GetRsyncFeatures(),
+		ZfsFeatures:   header.GetZfsFeatures(),
+		Name:          &volName,
+		Pool:          &poolName,
+		ContentType:   &contentType,
+		VolumeSize:    &volSize,
+	}
+}
+
+// HeaderFromDependentVolume creates a MigrationHeader from a DependentVolume.
+func HeaderFromDependentVolume(volume *migration.DependentVolume) *migration.MigrationHeader {
+	return &migration.MigrationHeader{
+		Fs:            volume.Fs,
+		BtrfsFeatures: volume.GetBtrfsFeatures(),
+		RsyncFeatures: volume.GetRsyncFeatures(),
+		ZfsFeatures:   volume.GetZfsFeatures(),
+	}
+}
+
+// ProtobufToDependentVolume converts a migration.DependentVolume into DependentVolumeArgs.
+func ProtobufToDependentVolume(volume *migration.DependentVolume, migrationType Type) DependentVolumeArgs {
+	return DependentVolumeArgs{
+		Name:          *volume.Name,
+		Pool:          *volume.Pool,
+		ContentType:   *volume.ContentType,
+		MigrationType: migrationType,
+		Snapshots:     volume.Snapshots,
+		VolumeSize:    *volume.VolumeSize,
+	}
+}
+
+// VolumeSnapshotToProtobuf converts an api.StorageVolumeSnapshot into a migration.Snapshot.
+func VolumeSnapshotToProtobuf(vol *api.StorageVolumeSnapshot) *migration.Snapshot {
+	config := []*migration.Config{}
+	for k, v := range vol.Config {
+		kCopy := string(k)
+		vCopy := string(v)
+		config = append(config, &migration.Config{Key: &kCopy, Value: &vCopy})
+	}
+
+	return &migration.Snapshot{
+		Name:         &vol.Name,
+		LocalConfig:  config,
+		Profiles:     []string{},
+		Ephemeral:    proto.Bool(false),
+		LocalDevices: []*migration.Device{},
+		Architecture: proto.Int32(0),
+		Stateful:     proto.Bool(false),
+		CreationDate: proto.Int64(vol.CreatedAt.UnixNano()),
+		ExpiryDate:   proto.Int64(vol.CreatedAt.UnixNano()),
+	}
 }
 
 func progressWrapperRender(op *operations.Operation, key string, description string, progressInt int64, speedInt int64) {

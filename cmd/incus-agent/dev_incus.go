@@ -22,7 +22,10 @@ import (
 // /dev/incus Unix socket endpoint created inside VMs.
 func devIncusServer(d *Daemon) *http.Server {
 	return &http.Server{
-		Handler: devIncusAPI(d),
+		Handler:           devIncusAPI(d),
+		IdleTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 3 * time.Second,
+		ReadTimeout:       3 * time.Second,
 	}
 }
 
@@ -216,7 +219,7 @@ var DevIncusDevicesGet = devIncusHandler{"/1.0/devices", func(d *Daemon, w http.
 }}
 
 var handlers = []devIncusHandler{
-	{"/", func(d *Daemon, w http.ResponseWriter, r *http.Request) *devIncusResponse {
+	{"/{$}", func(d *Daemon, w http.ResponseWriter, r *http.Request) *devIncusResponse {
 		return okResponse([]string{"/1.0"}, "json")
 	}},
 	DevIncusAPIGet,

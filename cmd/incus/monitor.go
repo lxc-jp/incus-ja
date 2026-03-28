@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	incus "github.com/lxc/incus/v6/client"
+	"github.com/lxc/incus/v6/cmd/incus/color"
 	u "github.com/lxc/incus/v6/cmd/incus/usage"
 	"github.com/lxc/incus/v6/internal/i18n"
 	"github.com/lxc/incus/v6/shared/api"
@@ -28,12 +29,14 @@ type cmdMonitor struct {
 	flagFormat      string
 }
 
+var cmdMonitorUsage = u.Usage{u.RemoteColonOpt}
+
 // Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
 func (c *cmdMonitor) Command() *cobra.Command {
 	cmd := &cobra.Command{}
-	cmd.Use = cli.U("monitor", u.RemoteColonOpt)
+	cmd.Use = cli.U("monitor", cmdMonitorUsage...)
 	cmd.Short = i18n.G("Monitor a local or remote server")
-	cmd.Long = cli.FormatSection(i18n.G("Description"), i18n.G(
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Monitor a local or remote server
 
 By default the monitor will listen to all message types.`))
@@ -60,16 +63,12 @@ incus monitor --type=lifecycle
 
 // Run runs the actual command logic.
 func (c *cmdMonitor) Run(cmd *cobra.Command, args []string) error {
-	conf := c.global.conf
-
-	var err error
-	var remote string
-
-	// Quick checks.
-	exit, err := c.global.checkArgs(cmd, args, 0, 1)
-	if exit {
+	parsed, err := cmdMonitorUsage.Parse(c.global.conf, cmd, args)
+	if err != nil {
 		return err
 	}
+
+	d := parsed[0].RemoteServer
 
 	if !slices.Contains([]string{"json", "pretty", "yaml"}, c.flagFormat) {
 		return fmt.Errorf(i18n.G("Invalid format: %s"), c.flagFormat)
@@ -82,24 +81,6 @@ func (c *cmdMonitor) Run(cmd *cobra.Command, args []string) error {
 
 	if c.flagFormat != "pretty" && c.flagLogLevel != "" {
 		return errors.New(i18n.G("Log level filtering can only be used with pretty formatting"))
-	}
-
-	// Connect to the event source.
-	if len(args) == 0 {
-		remote, _, err = conf.ParseRemote("")
-		if err != nil {
-			return err
-		}
-	} else {
-		remote, _, err = conf.ParseRemote(args[0])
-		if err != nil {
-			return err
-		}
-	}
-
-	d, err := conf.GetInstanceServer(remote)
-	if err != nil {
-		return err
 	}
 
 	var listener *incus.EventListener

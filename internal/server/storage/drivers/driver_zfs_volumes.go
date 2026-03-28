@@ -362,10 +362,10 @@ func (d *zfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Oper
 }
 
 // CreateVolumeFromBackup re-creates a volume from its exported state.
-func (d *zfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData io.ReadSeeker, op *operations.Operation) (VolumePostHook, revert.Hook, error) {
+func (d *zfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData io.ReadSeeker, basePrefix string, op *operations.Operation) (VolumePostHook, revert.Hook, error) {
 	// Handle the non-optimized tarballs through the generic unpacker.
 	if !*srcBackup.OptimizedStorage {
-		return genericVFSBackupUnpack(d, d.state.OS, vol, srcBackup.Snapshots, srcData, op)
+		return genericVFSBackupUnpack(d, d.state.OS, vol, srcBackup.Snapshots, srcData, basePrefix, op)
 	}
 
 	volExists, err := d.HasVolume(vol)
@@ -1807,7 +1807,7 @@ func (d *zfs) UpdateVolume(vol Volume, changedConfig map[string]string) error {
 		}
 	}
 
-	return nil
+	return d.updateVolume(vol, changedConfig)
 }
 
 // CacheVolumeSnapshots fetches snapshot usage properties for all snapshots on the volume.
@@ -2728,7 +2728,7 @@ func (d *zfs) MigrateVolume(vol Volume, conn io.ReadWriteCloser, volSrcArgs *loc
 	if volSrcArgs.MigrationType.FSType == migration.MigrationFSType_RSYNC || volSrcArgs.MigrationType.FSType == migration.MigrationFSType_BLOCK_AND_RSYNC {
 		// If volume is filesystem type, create a fast snapshot to ensure migration is consistent.
 		// TODO add support for temporary snapshots of block volumes here.
-		if vol.contentType == ContentTypeFS && !vol.IsSnapshot() {
+		if vol.contentType == ContentTypeFS && !vol.IsSnapshot() && linux.IsMountPoint(vol.MountPath()) {
 			snapshotPath, cleanup, err := d.readonlySnapshot(vol)
 			if err != nil {
 				return err
@@ -2987,7 +2987,7 @@ func (d *zfs) readonlySnapshot(vol Volume) (string, revert.Hook, error) {
 }
 
 // BackupVolume creates an exported version of a volume.
-func (d *zfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, optimized bool, snapshots []string, op *operations.Operation) error {
+func (d *zfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, basePrefix string, optimized bool, snapshots []string, op *operations.Operation) error {
 	// Handle the non-optimized tarballs through the generic packer.
 	if !optimized {
 		// Because the generic backup method will not take a consistent backup if files are being modified
@@ -3006,7 +3006,7 @@ func (d *zfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, opt
 			vol.mountCustomPath = snapshotPath
 		}
 
-		return genericVFSBackupVolume(d, vol, writer, snapshots, op)
+		return genericVFSBackupVolume(d, vol, writer, basePrefix, snapshots, op)
 	}
 
 	// Optimized backup.
@@ -3022,7 +3022,7 @@ func (d *zfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, opt
 	// Backup VM config volumes first.
 	if vol.IsVMBlock() {
 		fsVol := vol.NewVMBlockFilesystemVolume()
-		err := d.BackupVolume(fsVol, writer, optimized, snapshots, op)
+		err := d.BackupVolume(fsVol, writer, basePrefix, optimized, snapshots, op)
 		if err != nil {
 			return err
 		}
@@ -3368,9 +3368,7 @@ func (d *zfs) mountVolumeSnapshot(snapVol Volume, snapshotDataset string, mountP
 					return nil, err
 				}
 
-				defer func() {
-					_ = d.setDatasetProperties(dataset, "volmode=none")
-				}()
+				reverter.Add(func() { _ = d.setDatasetProperties(dataset, "volmode=none") })
 
 				// Wait half a second to give udev a chance to kick in.
 				time.Sleep(500 * time.Millisecond)

@@ -10,5 +10,4 @@ Incus のデバッグ <debugging>
 environment
 syscall-interception
 User Namespace の設定 <userns-idmap>
-設定オプション一覧 </config-options>
 ```
