@@ -3,7 +3,7 @@ package color
 import (
 	"github.com/fatih/color"
 
-	"github.com/lxc/incus/v6/internal/i18n"
+	"github.com/lxc/incus/v7/internal/i18n"
 )
 
 func commandHeader(header string) string {
@@ -13,6 +13,7 @@ func commandHeader(header string) string {
 // A few prefixes used throughout the Incus client.
 var (
 	ErrorPrefix                string
+	WarningPrefix              string
 	DescriptionPrefix          string
 	RawUsagePrefix             string
 	UsagePrefix                string
@@ -31,6 +32,7 @@ func Init(disable bool) {
 	}
 
 	ErrorPrefix = color.New(color.FgRed, color.Bold).Sprint(i18n.G("Error:"))
+	WarningPrefix = color.New(color.FgYellow, color.Bold).Sprint(i18n.G("Warning:"))
 	DescriptionPrefix = commandHeader(i18n.G("Description:"))
 	RawUsagePrefix = i18n.G("Usage:")
 	UsagePrefix = commandHeader(RawUsagePrefix)

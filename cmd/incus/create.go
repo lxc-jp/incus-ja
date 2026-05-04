@@ -11,16 +11,16 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	config "github.com/lxc/incus/v6/shared/cliconfig"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/termios"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	config "github.com/lxc/incus/v7/shared/cliconfig"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/termios"
 )
 
 type cmdCreate struct {
@@ -43,13 +43,13 @@ type cmdCreate struct {
 
 var cmdCreateUsage = u.Usage{u.Either(u.Flag("empty"), u.RemoteImage), u.NewName(u.Instance).Optional().Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdCreate) Command() *cobra.Command {
+func (c *cmdCreate) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("create", cmdCreateUsage...)
 	cmd.Short = i18n.G("Create instances from images")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Create instances from images`))
 	cmd.Example = cli.FormatSection("", i18n.G(`incus create images:debian/12 u1
+    Create the instance u1
 
 incus create images:debian/12 u1 < config.yaml
     Create the instance with configuration from config.yaml
@@ -58,20 +58,20 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
     Create and start a virtual machine, overriding the disk size and bus`))
 
 	cmd.Aliases = []string{"init"}
-	cmd.RunE = c.Run
-	cmd.Flags().StringArrayVarP(&c.flagConfig, "config", "c", nil, i18n.G("Config key/value to apply to the new instance")+"``")
-	cmd.Flags().StringArrayVarP(&c.flagProfile, "profile", "p", nil, i18n.G("Profile to apply to the new instance")+"``")
-	cmd.Flags().StringArrayVarP(&c.flagDevice, "device", "d", nil, i18n.G("New key/value to apply to a specific device")+"``")
-	cmd.Flags().BoolVarP(&c.flagEphemeral, "ephemeral", "e", false, i18n.G("Ephemeral instance"))
-	cmd.Flags().StringVar(&c.flagEnvironmentFile, "environment-file", "", i18n.G("Include environment variables from file")+"``")
-	cmd.Flags().StringVarP(&c.flagNetwork, "network", "n", "", i18n.G("Network name")+"``")
-	cmd.Flags().StringVarP(&c.flagStorage, "storage", "s", "", i18n.G("Storage pool name")+"``")
-	cmd.Flags().StringVarP(&c.flagType, "type", "t", "", i18n.G("Instance type")+"``")
-	cmd.Flags().StringVar(&c.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
-	cmd.Flags().BoolVar(&c.flagNoProfiles, "no-profiles", false, i18n.G("Create the instance with no profiles applied"))
-	cmd.Flags().BoolVar(&c.flagEmpty, "empty", false, i18n.G("Create an empty instance"))
-	cmd.Flags().BoolVar(&c.flagVM, "vm", false, i18n.G("Create a virtual machine"))
-	cmd.Flags().StringVar(&c.flagDescription, "description", "", i18n.G("Instance description")+"``")
+	cmd.RunE = c.run
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagConfig, "config|c", i18n.G("Config key/value to apply to the new instance"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the new instance"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagDevice, "device|d", i18n.G("New key/value to apply to a specific device"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagEphemeral, "ephemeral|e", i18n.G("Ephemeral instance"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagEnvironmentFile, "environment-file", "", "", i18n.G("Include environment variables from file"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagNetwork, "network|n", "", "", i18n.G("Network name"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagStorage, "storage|s", "", "", i18n.G("Storage pool name"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagType, "type|t", "", "", i18n.G("Instance type"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagTarget, "target", "", "", i18n.G("Cluster member name"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagNoProfiles, "no-profiles", i18n.G("Create the instance with no profiles applied"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagEmpty, "empty", i18n.G("Create an empty instance"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagVM, "vm", i18n.G("Create a virtual machine"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagDescription, "description", "", "", i18n.G("Instance description"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
@@ -84,8 +84,7 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdCreate) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdCreate) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdCreateUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -105,13 +104,13 @@ func (c *cmdCreate) create(conf *config.Config, parsed []*u.Parsed, launch bool)
 	// If stdin isn't a terminal, read text from it
 	var stdinData api.InstancePut
 	if !termios.IsTerminal(getStdinFd()) {
-		contents, err := io.ReadAll(os.Stdin)
+		loader, err := yaml.NewLoader(os.Stdin)
 		if err != nil {
 			return nil, err
 		}
 
-		err = yaml.Unmarshal(contents, &stdinData)
-		if err != nil {
+		err = loader.Load(&stdinData)
+		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 	}

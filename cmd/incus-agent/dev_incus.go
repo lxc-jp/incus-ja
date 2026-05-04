@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/server/daemon"
-	"github.com/lxc/incus/v6/internal/server/device/config"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	api "github.com/lxc/incus/v6/shared/api/guest"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/server/daemon"
+	"github.com/lxc/incus/v7/internal/server/device/config"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	api "github.com/lxc/incus/v7/shared/api/guest"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // DevIncusServer creates an http.Server capable of handling requests against the

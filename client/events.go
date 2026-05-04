@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // The EventListener struct is used to interact with an Incus event stream.

@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // This is a modified version of https://github.com/grafana/loki/blob/v1.6.1/pkg/promtail/client/.

@@ -10,14 +10,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdExport struct {
@@ -27,12 +27,12 @@ type cmdExport struct {
 	flagRootOnly             bool
 	flagOptimizedStorage     bool
 	flagCompressionAlgorithm string
+	flagForce                bool
 }
 
 var cmdExportUsage = u.Usage{u.Instance.Remote(), u.Target(u.File).Optional()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdExport) Command() *cobra.Command {
+func (c *cmdExport) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("export", cmdExportUsage...)
 	cmd.Short = i18n.G("Export instance backups")
@@ -45,20 +45,17 @@ func (c *cmdExport) Command() *cobra.Command {
 incus export u1 -
 	Download a backup tarball with it written to the standard output.`))
 
-	cmd.RunE = c.Run
-	cmd.Flags().BoolVar(&c.flagInstanceOnly, "instance-only", false,
-		i18n.G("Whether or not to only backup the instance (without snapshots)"))
-	cmd.Flags().BoolVar(&c.flagRootOnly, "root-only", false,
-		i18n.G("Whether or not to only backup the instance (without dependent volumes)"))
-	cmd.Flags().BoolVar(&c.flagOptimizedStorage, "optimized-storage", false,
-		i18n.G("Use storage driver optimized format (can only be restored on a similar pool)"))
-	cmd.Flags().StringVar(&c.flagCompressionAlgorithm, "compression", "", i18n.G("Compression algorithm to use (none for uncompressed)")+"``")
+	cmd.RunE = c.run
+	cli.AddBoolFlag(cmd.Flags(), &c.flagInstanceOnly, "instance-only", i18n.G("Whether or not to only backup the instance (without snapshots)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagRootOnly, "root-only", i18n.G("Whether or not to only backup the instance (without dependent volumes)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagOptimizedStorage, "optimized-storage", i18n.G("Use storage driver optimized format (can only be restored on a similar pool)"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagCompressionAlgorithm, "compression", "", "", i18n.G("Compression algorithm to use (none for uncompressed)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagForce, "force|f", i18n.G("Force overwriting existing backup file"))
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdExport) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdExportUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -67,16 +64,14 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 	d := parsed[0].RemoteServer
 	instanceName := parsed[0].RemoteObject.String
 	hasTarget := !parsed[1].Skipped
-	targetName := parsed[1].Get(instanceName + ".backup")
+	targetName := parsed[1].Get("." + instanceName + ".backup")
 
-	// Check if the target path already exists.
-	if util.PathExists(targetName) {
-		return fmt.Errorf(i18n.G("Target path %q already exists"), targetName)
-	}
-
-	// If outputting to stdout, quiesce the output.
-	if targetName == "-" {
+	if isStdout(targetName) {
+		// If outputting to stdout, quiesce the output.
 		c.global.flagQuiet = true
+	} else if hasTarget && !c.flagForce && util.PathExists(targetName) {
+		// Check if the target path already exists.
+		return fmt.Errorf(i18n.G("Target path %q already exists"), targetName)
 	}
 
 	instanceOnly := c.flagInstanceOnly
@@ -97,13 +92,13 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 			return d.CreateInstanceBackupStream(instanceName, req, backupReq)
 		}
 	} else {
-		// Send the request
+		// Send the request.
 		op, err := d.CreateInstanceBackup(instanceName, req)
 		if err != nil {
 			return fmt.Errorf(i18n.G("Create instance backup: %w"), err)
 		}
 
-		// Watch the background operation
+		// Watch the background operation.
 		progress := cli.ProgressRenderer{
 			Format: i18n.G("Backing up instance: %s"),
 			Quiet:  c.global.flagQuiet,
@@ -115,7 +110,7 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		// Wait until backup is done
+		// Wait until backup is done.
 		err = cli.CancelableWait(op, &progress)
 		if err != nil {
 			progress.Done("")
@@ -129,7 +124,7 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		// Get name of backup
+		// Get name of backup.
 		uStr := op.Get().Resources["backups"][0]
 		uri, err := url.Parse(uStr)
 		if err != nil {
@@ -142,7 +137,7 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 		}
 
 		defer func() {
-			// Delete backup after we're done
+			// Delete backup after we're done.
 			op, err = d.DeleteInstanceBackup(instanceName, backupName)
 			if err == nil {
 				_ = op.Wait()
@@ -156,7 +151,7 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	var target *os.File
-	if targetName == "-" {
+	if isStdout(targetName) {
 		target = os.Stdout
 	} else {
 		target, err = os.Create(targetName)
@@ -167,7 +162,7 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 		defer func() { _ = target.Close() }()
 	}
 
-	// Prepare the download request
+	// Prepare the download request.
 	progress := cli.ProgressRenderer{
 		Format: i18n.G("Exporting the backup: %s"),
 		Quiet:  c.global.flagQuiet,
@@ -178,7 +173,7 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 		ProgressHandler: progress.UpdateProgress,
 	}
 
-	// Export tarball
+	// Export tarball.
 	err = getter(&backupFileRequest)
 	if err != nil {
 		_ = os.Remove(targetName)
@@ -186,7 +181,7 @@ func (c *cmdExport) Run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(i18n.G("Fetch instance backup file: %w"), err)
 	}
 
-	// Detect backup file type and rename file accordingly
+	// Detect backup file type and rename file accordingly.
 	if !hasTarget {
 		_, err := target.Seek(0, io.SeekStart)
 		if err != nil {

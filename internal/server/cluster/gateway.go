@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,16 +19,16 @@ import (
 	dqlite "github.com/cowsql/go-cowsql"
 	client "github.com/cowsql/go-cowsql/client"
 
-	"github.com/lxc/incus/v6/internal/server/certificate"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/tcp"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/certificate"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/tcp"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // NewGateway creates a new Gateway for managing access to the dqlite cluster.
@@ -191,7 +190,7 @@ func (g *Gateway) HandlerFuncs(heartbeatHandler HeartbeatHandler, trustedCerts f
 			if version > dqliteVersion {
 				g.lock.Lock()
 				if !g.upgradeTriggered {
-					err = triggerUpdate()
+					err = triggerUpdate(g.state())
 					if err == nil {
 						g.upgradeTriggered = true
 					}
@@ -1082,7 +1081,7 @@ func dqliteNetworkDial(ctx context.Context, name string, addr string, g *Gateway
 		g.lock.Lock()
 		defer g.lock.Unlock()
 		if !g.upgradeTriggered {
-			err = triggerUpdate()
+			err = triggerUpdate(g.state())
 			if err == nil {
 				g.upgradeTriggered = true
 			}
@@ -1165,12 +1164,12 @@ func dqliteProxy(name string, stopCh chan struct{}, remote net.Conn, local net.C
 	// Start copying data back and forth until either the client or the
 	// server get closed or hit an error.
 	go func() {
-		_, err := io.Copy(local, remote)
+		_, err := util.SafeCopy(local, remote)
 		remoteToLocal <- err
 	}()
 
 	go func() {
-		_, err := io.Copy(remote, local)
+		_, err := util.SafeCopy(remote, local)
 		localToRemote <- err
 	}()
 

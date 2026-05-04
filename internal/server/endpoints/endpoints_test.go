@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/lxc/incus/v6/internal/server/endpoints"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/api"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/tls/tlstest"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/endpoints"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/api"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/tls/tlstest"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Return a new unstarted Endpoints instance, a Config with stub rest/devIncus

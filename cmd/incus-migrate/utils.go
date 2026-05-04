@@ -7,7 +7,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,15 +15,16 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/ports"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/ws"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/migration"
+	"github.com/lxc/incus/v7/internal/ports"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/ws"
 )
 
 // MigrationType represents the type of the migration.
@@ -84,7 +84,7 @@ func transferRootfs(ctx context.Context, op incus.Operation, rootfs string, rsyn
 
 	if migrationType == MigrationTypeVM || migrationType == MigrationTypeVolumeBlock {
 		sourcePath := filepath.Join(rootfs, "root.img")
-		size, err := BlockDiskSizeBytes(sourcePath)
+		size, err := blockDiskSizeBytes(sourcePath)
 		if err != nil {
 			return abort(err)
 		}
@@ -136,15 +136,9 @@ func transferRootfs(ctx context.Context, op incus.Operation, rootfs string, rsyn
 			_ = f.Close()
 		}()
 
-		for {
-			_, err = io.CopyN(conn, f, 4*1024*1024)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-
-				return abort(err)
-			}
+		_, err = util.SafeCopy(conn, f)
+		if err != nil {
+			return abort(err)
 		}
 
 		err = conn.Close()
@@ -350,8 +344,8 @@ func parseURL(URL string) (string, error) {
 	return uri.String(), nil
 }
 
-// BlockDiskSizeBytes returns the size of a block disk (path can be either block device or raw file).
-func BlockDiskSizeBytes(blockDiskPath string) (int64, error) {
+// blockDiskSizeBytes returns the size of a block disk (path can be either block device or raw file).
+func blockDiskSizeBytes(blockDiskPath string) (int64, error) {
 	if linux.IsBlockdevPath(blockDiskPath) {
 		// Attempt to open the device path.
 		f, err := os.Open(blockDiskPath)

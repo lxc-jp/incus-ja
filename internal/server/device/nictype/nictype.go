@@ -6,11 +6,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lxc/incus/v6/internal/server/db"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/server/db"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // NICType resolves the NIC Type for the supplied NIC device config.

@@ -15,29 +15,29 @@ import (
 
 	"github.com/mdlayher/netx/eui64"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	pcidev "github.com/lxc/incus/v6/internal/server/device/pci"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq/dhcpalloc"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/network/acl"
-	addressset "github.com/lxc/incus/v6/internal/server/network/address-set"
-	"github.com/lxc/incus/v6/internal/server/network/ovn"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/resources"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	pcidev "github.com/lxc/incus/v7/internal/server/device/pci"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq/dhcpalloc"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/network/acl"
+	addressset "github.com/lxc/incus/v7/internal/server/network/address-set"
+	"github.com/lxc/incus/v7/internal/server/network/ovn"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/resources"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // ovnNet defines an interface for accessing instance specific functions on OVN network.
@@ -1378,7 +1378,7 @@ func (d *nicOVN) postStop() error {
 }
 
 // Remove is run when the device is removed from the instance or the instance is deleted.
-func (d *nicOVN) Remove() error {
+func (d *nicOVN) Remove(cleanupDependencies bool) error {
 	// Check for port groups that will become unused (and need deleting) as this NIC is deleted.
 	securityACLs := util.SplitNTrimSpace(d.config["security.acls"], ",", -1, true)
 	if len(securityACLs) > 0 {

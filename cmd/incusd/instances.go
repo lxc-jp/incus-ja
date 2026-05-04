@@ -16,19 +16,19 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/warningtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/internal/server/warnings"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/warningtype"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/internal/server/warnings"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 var instancesCmd = APIEndpoint{
@@ -36,7 +36,7 @@ var instancesCmd = APIEndpoint{
 	Path: "instances",
 
 	Get:  APIEndpointAction{Handler: instancesGet, AccessHandler: allowAuthenticated},
-	Post: APIEndpointAction{Handler: instancesPost, AccessHandler: allowPermission(auth.ObjectTypeProject, auth.EntitlementCanCreateInstances)},
+	Post: APIEndpointAction{Handler: instancesPost, AccessHandler: allowPermission(auth.ObjectTypeProject, auth.EntitlementCanCreateInstances), LargeRequest: true},
 	Put:  APIEndpointAction{Handler: instancesPut, AccessHandler: allowAuthenticated},
 }
 
@@ -79,7 +79,7 @@ var instanceFileCmd = APIEndpoint{
 
 	Get:    APIEndpointAction{Handler: instanceFileHandler, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanAccessFiles, "name")},
 	Head:   APIEndpointAction{Handler: instanceFileHandler, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanAccessFiles, "name")},
-	Post:   APIEndpointAction{Handler: instanceFileHandler, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanAccessFiles, "name")},
+	Post:   APIEndpointAction{Handler: instanceFileHandler, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanAccessFiles, "name"), LargeRequest: true},
 	Delete: APIEndpointAction{Handler: instanceFileHandler, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanAccessFiles, "name")},
 }
 
@@ -158,6 +158,13 @@ var instanceBackupExportCmd = APIEndpoint{
 	Path: "instances/{name}/backups/{backupName}/export",
 
 	Get: APIEndpointAction{Handler: instanceBackupExportGet, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanManageBackups, "name")},
+}
+
+var instanceBitmapsCmd = APIEndpoint{
+	Name: "instanceBitmaps",
+	Path: "instances/{name}/bitmaps",
+
+	Post: APIEndpointAction{Handler: instanceBitmapsPost, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanEdit, "name")},
 }
 
 var instanceAccessCmd = APIEndpoint{
@@ -466,27 +473,63 @@ func instancesShutdown(instances []instance.Instance) {
 					timeoutSeconds, _ = strconv.Atoi(value)
 				}
 
-				action := inst.ExpandedConfig()["boot.host_shutdown_action"]
-				if action == "stateful-stop" {
-					err := inst.Stop(true)
-					if err != nil {
-						logger.Warn("Failed statefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+				// Shutdown the instance.
+				func() {
+					// Save and restore the ephemeral bit (if DB is available).
+					if inst.ID() > 0 {
+						ephemeral := inst.IsEphemeral()
+						if ephemeral {
+							// Unset ephemeral flag if present.
+							args := db.InstanceArgs{
+								Architecture: inst.Architecture(),
+								Config:       inst.LocalConfig(),
+								Description:  inst.Description(),
+								Devices:      inst.LocalDevices(),
+								Ephemeral:    false,
+								Profiles:     inst.Profiles(),
+								Project:      inst.Project().Name,
+								Type:         inst.Type(),
+								Snapshot:     inst.IsSnapshot(),
+							}
+
+							err := inst.Update(args, false)
+							if err == nil {
+								// On function return, set the flag back on.
+								defer func() {
+									args.Ephemeral = ephemeral
+									_ = inst.Update(args, false)
+								}()
+							}
+						}
 					}
-				} else if action == "force-stop" {
-					err := inst.Stop(false)
-					if err != nil {
-						logger.Warn("Failed forcefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
-					}
-				} else {
-					err := inst.Shutdown(time.Second * time.Duration(timeoutSeconds))
-					if err != nil {
-						logger.Warn("Failed shutting down instance, forcefully stopping", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
-						err = inst.Stop(false)
+
+					// Perform the shutdown action.
+					action := inst.ExpandedConfig()["boot.host_shutdown_action"]
+
+					switch action {
+					case "stateful-stop":
+						err := inst.Stop(true)
+						if err != nil {
+							logger.Warn("Failed statefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+						}
+
+					case "force-stop":
+						err := inst.Stop(false)
 						if err != nil {
 							logger.Warn("Failed forcefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
 						}
+
+					default:
+						err := inst.Shutdown(time.Second * time.Duration(timeoutSeconds))
+						if err != nil {
+							logger.Warn("Failed shutting down instance, forcefully stopping", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+							err = inst.Stop(false)
+							if err != nil {
+								logger.Warn("Failed forcefully stopping instance", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+							}
+						}
 					}
-				}
+				}()
 
 				if inst.ID() > 0 {
 					// If DB was available then the instance shutdown process will have set

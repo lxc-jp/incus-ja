@@ -5,15 +5,14 @@ package main
 import (
 	"fmt"
 
-	yaml "gopkg.in/yaml.v2"
+	yaml "go.yaml.in/yaml/v4"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
-// RunDump runs the actual command logic.
-func (c *cmdAdminInit) RunDump(d incus.InstanceServer) error {
+func (c *cmdAdminInit) runDump(d incus.InstanceServer) error {
 	currentServer, _, err := d.GetServer()
 	if err != nil {
 		return fmt.Errorf(i18n.G("Failed to retrieve current server configuration: %w"), err)
@@ -89,7 +88,7 @@ func (c *cmdAdminInit) RunDump(d incus.InstanceServer) error {
 		config.Projects = append(config.Projects, projectsPost)
 	}
 
-	out, err := yaml.Marshal(config)
+	out, err := yaml.Dump(config, yaml.V2)
 	if err != nil {
 		return fmt.Errorf(i18n.G("Failed to retrieve current server configuration: %w"), err)
 	}

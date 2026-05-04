@@ -2,20 +2,6 @@ test_container_devices_nic_bridged_filtering() {
     ensure_import_testimage
     ensure_has_localhost_remote "${INCUS_ADDR}"
 
-    firewallDriver=$(incus info | awk -F ":" '/firewall:/{gsub(/ /, "", $0); print $2}')
-
-    if [ "$firewallDriver" != "xtables" ] && [ "$firewallDriver" != "nftables" ]; then
-        echo "Unrecognised firewall driver: ${firewallDriver}"
-        false
-    fi
-
-    if [ "$firewallDriver" = "xtables" ]; then
-        if readlink -f "$(command -v ebtables)" | grep -q nft; then
-            echo "==> SKIP: ebtables must be legacy version (try update-alternatives --set ebtables /usr/sbin/ebtables-legacy)"
-            return
-        fi
-    fi
-
     # Record how many nics we started with.
     startNicCount=$(find /sys/class/net | wc -l)
 
@@ -29,7 +15,7 @@ test_container_devices_nic_bridged_filtering() {
     incus network set "${brName}" ipv4.nat true
 
     # Routing is required for container to container traffic as filtering requires br_netfilter module.
-    # This then causes bridged traffic to go through the FORWARD chain in iptables.
+    # This then causes bridged traffic to go through the FORWARD chain in netfilter.
     incus network set "${brName}" ipv4.routing true
     incus network set "${brName}" ipv6.routing true
 
@@ -67,33 +53,26 @@ test_container_devices_nic_bridged_filtering() {
 
     # Check MAC filter is present in firewall.
     ctAHost=$(incus config get "${ctPrefix}A" volatile.eth0.host_name)
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "-s ! ${ctAMAC} -i ${ctAHost} -j DROP"; then
-            echo "MAC filter not applied as part of mac_filtering in ebtables"
+    macHex=$(echo "${ctAMAC}" | sed "s/://g")
+    macDec=$(printf "%d" 0x"${macHex}")
+    macHex=$(printf "0x%x" "${macDec}")
+
+    for table in "in" "fwd"; do
+        rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
+
+        if ! echo "${rules}" | grep -e "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
+            echo "MAC filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        macHex=$(echo "${ctAMAC}" | sed "s/://g")
-        macDec=$(printf "%d" 0x"${macHex}")
-        macHex=$(printf "0x%x" "${macDec}")
-
-        for table in "in" "fwd"; do
-            rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
-
-            if ! echo "${rules}" | grep -e "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
-                echo "MAC filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep -e "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
-                echo "MAC ARP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
-                echo "MAC NDP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+        if ! echo "${rules}" | grep -e "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
+            echo "MAC ARP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
+            false
+        fi
+        if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
+            echo "MAC NDP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
+            false
+        fi
+    done
 
     # Setup fake MAC inside container.
     incus exec "${ctPrefix}A" -- ip link set dev eth0 address 00:11:22:33:44:56 up
@@ -119,19 +98,12 @@ test_container_devices_nic_bridged_filtering() {
 
     # Stop CT A and check filters are cleaned up.
     incus stop -f "${ctPrefix}A"
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ebtables --concurrent -L --Lmac2 --Lx | grep -e "-s ! ${ctAMAC} -i ${ctAHost} -j DROP"; then
-            echo "MAC filter still applied as part of mac_filtering in ebtables"
+    for table in "in" "fwd"; do
+        if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
+            echo "MAC filter still applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        for table in "in" "fwd"; do
-            if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
-                echo "MAC filter still applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Add a fake IPv4 and check connectivity
     incus start "${ctPrefix}A"
@@ -149,43 +121,24 @@ test_container_devices_nic_bridged_filtering() {
 
     # Check MAC and IPv4 filter is present in firewall.
     ctAHost=$(incus config get "${ctPrefix}A" volatile.eth0.host_name)
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "-s ! ${ctAMAC} -i ${ctAHost} -j DROP"; then
-            echo "MAC filter not applied as part of ipv4_filtering in ebtables"
+    for table in "in" "fwd"; do
+        if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
+            echo "MAC filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "192.0.2.2"; then
-            echo "IPv4 filter not applied as part of ipv4_filtering in ebtables"
+        if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
+            echo "MAC ARP filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "198.51.100.0/24"; then
-            echo "IPv4 filter for ipv4.routes not applied as part of ipv4_filtering in ebtables"
+        if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ip saddr != { 192.0.2.2, 198.51.100.0/24, 203.0.113.0/24 } drop"; then
+            echo "IPv4 filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "203.0.113.0/24"; then
-            echo "IPv4 filter for ipv4.routes.external not applied as part of ipv4_filtering in ebtables"
+        if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" arp saddr ip != { 192.0.2.2, 198.51.100.0/24, 203.0.113.0/24 } drop"; then
+            echo "IPv4 ARP filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        for table in "in" "fwd"; do
-            if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
-                echo "MAC filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
-                echo "MAC ARP filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ip saddr != { 192.0.2.2, 198.51.100.0/24, 203.0.113.0/24 } drop"; then
-                echo "IPv4 filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" arp saddr ip != { 192.0.2.2, 198.51.100.0/24, 203.0.113.0/24 } drop"; then
-                echo "IPv4 ARP filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Check DHCPv4 allocation still works.
     incus exec "${ctPrefix}A" -- ip link set dev eth0 address "${ctAMAC}" up
@@ -213,10 +166,11 @@ test_container_devices_nic_bridged_filtering() {
         false
     fi
 
-    # Add a fake IP within ipv4.routes range (198.51.100.0/24)
+    # Add an additional IP within ipv4.routes range (198.51.100.0/24) alongside the
+    # configured ipv4.address so the host can still ARP-resolve the NIC's next-hop.
     incus exec "${ctPrefix}A" -- ip a flush dev eth0
+    incus exec "${ctPrefix}A" -- ip a add 192.0.2.2/24 dev eth0
     incus exec "${ctPrefix}A" -- ip a add 198.51.100.1/32 dev eth0
-    incus exec "${ctPrefix}A" -- ip r add 192.0.2.0/24 dev eth0
     incus exec "${ctPrefix}B" -- ip r add 198.51.100.0/24 dev eth0
 
     # Check that ping is still working (i.e the filter did not apply to the ipv4.routes subnet).
@@ -231,10 +185,11 @@ test_container_devices_nic_bridged_filtering() {
         false
     fi
 
-    # Add a fake IP within ipv4.routes.external range (203.0.113.0/24)
+    # Add an additional IP within ipv4.routes.external range (203.0.113.0/24) alongside
+    # the configured ipv4.address so the host can still ARP-resolve the NIC's next-hop.
     incus exec "${ctPrefix}A" -- ip a flush dev eth0
+    incus exec "${ctPrefix}A" -- ip a add 192.0.2.2/24 dev eth0
     incus exec "${ctPrefix}A" -- ip a add 203.0.113.1/32 dev eth0
-    incus exec "${ctPrefix}A" -- ip r add 192.0.2.0/24 dev eth0
     incus exec "${ctPrefix}B" -- ip r add 203.0.113.0/24 dev eth0
 
     # Check that ping is still working (i.e the filter did not apply to the ipv4.routes.external subnet).
@@ -251,19 +206,12 @@ test_container_devices_nic_bridged_filtering() {
 
     # Stop CT A and check filters are cleaned up in firewall.
     incus stop -f "${ctPrefix}A"
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ebtables --concurrent -L --Lmac2 --Lx | grep -e "${ctAHost}"; then
-            echo "IPv4 filter still applied as part of ipv4_filtering in ebtables"
+    for table in "in" "fwd"; do
+        if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
+            echo "IPv4 filter still applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        for table in "in" "fwd"; do
-            if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
-                echo "IPv4 filter still applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Remove static IP and check IP filter works with previous DHCP lease.
     rm "${INCUS_DIR}/networks/${brName}/dnsmasq.hosts/${ctPrefix}A.eth0"
@@ -334,87 +282,43 @@ test_container_devices_nic_bridged_filtering() {
     # Check MAC filter is present in firewall.
     ctAHost=$(incus config get "${ctPrefix}A" volatile.eth0.host_name)
     macHex=$(echo "${ctAMAC}" | sed "s/://g")
+    macDec=$(printf "%d" 0x"${macHex}")
+    macHex=$(printf "0x%x" "${macDec}")
+    ipv6Hex="0x20010db8000100000000000000000002"
+    ipv6Dec="42540766411283801782723599580828532738"
+    ipv6RoutesHex="0x20010db800020000"
+    ipv6RoutesDec="2306139568115679232"
+    ipv6RoutesExternalHex="0x20010db800030000"
+    ipv6RoutesExternalDec="2306139568115744768"
 
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "-s ! ${ctAMAC} -i ${ctAHost} -j DROP"; then
-            echo "MAC filter not applied as part of ipv6_filtering in ebtables"
+    rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
+
+    for table in "in" "fwd"; do
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
+            echo "MAC filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check NDP MAC filter is present in ip6tables.
-        if ! ip6tables -S -w -t filter | grep -e "${macHex}"; then
-            echo "MAC NDP filter not applied as part of ipv6_filtering in ip6tables"
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
+            echo "MAC ARP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check NDP IPv6 filter is present in ip6tables.
-        if ! ip6tables -S -w -t filter | grep -e "20010db8000100000000000000000002"; then
-            echo "IPv6 NDP filter not applied as part of ipv6_filtering in ip6tables"
+        if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
+            echo "MAC NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check NDP IPv6 filter for ipv6.routes is present in ip6tables.
-        if ! ip6tables -S -w -t filter | grep -e "20010db800020000"; then
-            echo "IPv6 NDP filter for ipv6.routes not applied as part of ipv6_filtering in ip6tables"
+        if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,384,128 != (${ipv6Hex}|${ipv6Dec}) @nh,384,64 != (${ipv6RoutesHex}|${ipv6RoutesDec}) @nh,384,64 != (${ipv6RoutesExternalHex}|${ipv6RoutesExternalDec}) drop"; then
+            echo "IPv6 NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check NDP IPv6 filter for ipv6.routes.external is present in ip6tables.
-        if ! ip6tables -S -w -t filter | grep -e "20010db800030000"; then
-            echo "IPv6 NDP filter for ipv6.routes.external not applied as part of ipv6_filtering in ip6tables"
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ip6 saddr != { 2001:db8:1::2, 2001:db8:2::/64, 2001:db8:3::/64 } drop"; then
+            echo "IPv6 filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check IPv6 filter is present in ebtables.
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "2001:db8:1::2"; then
-            echo "IPv6 filter not applied as part of ipv6_filtering in ebtables"
+        if ! echo "${rules}" | grep -e "iifname \"${ctAHost}\" icmpv6 type 134 drop"; then
+            echo "IPv6 RA filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check IPv6 RA filter is present in ebtables.
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "-i ${ctAHost} --ip6-proto ipv6-icmp --ip6-icmp-type router-advertisement -j DROP"; then
-            echo "IPv6 RA filter not applied as part of ipv6_filtering in ebtables"
-            false
-        fi
-    else
-        macDec=$(printf "%d" 0x"${macHex}")
-        macHex=$(printf "0x%x" "${macDec}")
-        ipv6Hex="0x20010db8000100000000000000000002"
-        ipv6Dec="42540766411283801782723599580828532738"
-        ipv6RoutesHex="0x20010db800020000"
-        ipv6RoutesDec="2306139568115679232"
-        ipv6RoutesExternalHex="0x20010db800030000"
-        ipv6RoutesExternalDec="2306139568115744768"
-
-        rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
-
-        for table in "in" "fwd"; do
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
-                echo "MAC filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
-                echo "MAC ARP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
-                echo "MAC NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,384,128 != (${ipv6Hex}|${ipv6Dec}) @nh,384,64 != (${ipv6RoutesHex}|${ipv6RoutesDec}) @nh,384,64 != (${ipv6RoutesExternalHex}|${ipv6RoutesExternalDec}) drop"; then
-                echo "IPv6 NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ip6 saddr != { 2001:db8:1::2, 2001:db8:2::/64, 2001:db8:3::/64 } drop"; then
-                echo "IPv6 filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep -e "iifname \"${ctAHost}\" icmpv6 type 134 drop"; then
-                echo "IPv6 RA filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Check DHCPv6 allocation still works (if udhcpc6 is in busybox image).
     incus exec "${ctPrefix}A" -- ip link set dev eth0 address "${ctAMAC}" up
@@ -453,10 +357,11 @@ test_container_devices_nic_bridged_filtering() {
         false
     fi
 
-    # Add a fake IP within ipv6.routes range (2001:db8:2::/64)
+    # Add an additional IP within ipv6.routes range (2001:db8:2::/64) alongside the
+    # configured ipv6.address so the host can still NDP-resolve the NIC's next-hop.
     incus exec "${ctPrefix}A" -- ip -6 a flush dev eth0
+    incus exec "${ctPrefix}A" -- ip -6 a add 2001:db8:1::2/64 dev eth0
     incus exec "${ctPrefix}A" -- ip -6 a add 2001:db8:2::1/128 dev eth0
-    incus exec "${ctPrefix}A" -- ip -6 r add 2001:db8:1::/64 dev eth0
     incus exec "${ctPrefix}B" -- ip -6 r add 2001:db8:2::/64 dev eth0
     wait_for_dad "${ctPrefix}A" eth0
 
@@ -472,8 +377,10 @@ test_container_devices_nic_bridged_filtering() {
         false
     fi
 
-    # Add a fake IP within ipv6.routes.external range (2001:db8:0:0:2::/96)
+    # Add an additional IP within ipv6.routes.external range (2001:db8:3::/64) alongside
+    # the configured ipv6.address so the host can still NDP-resolve the NIC's next-hop.
     incus exec "${ctPrefix}A" -- ip -6 a flush dev eth0
+    incus exec "${ctPrefix}A" -- ip -6 a add 2001:db8:1::2/64 dev eth0
     incus exec "${ctPrefix}A" -- ip -6 a add 2001:db8:3::1/128 dev eth0
     incus exec "${ctPrefix}B" -- ip -6 r add 2001:db8:3::/64 dev eth0
     wait_for_dad "${ctPrefix}A" eth0
@@ -492,19 +399,12 @@ test_container_devices_nic_bridged_filtering() {
 
     # Stop CT A and check filters are cleaned up.
     incus stop -f "${ctPrefix}A"
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ebtables --concurrent -L --Lmac2 --Lx | grep -e "${ctAHost}"; then
-            echo "IPv6 filter still applied as part of ipv6_filtering in ebtables"
+    for table in "in" "fwd"; do
+        if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
+            echo "IPv6 filter still applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        for table in "in" "fwd"; do
-            if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
-                echo "IPv6 filter still applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Check volatile cleanup on stop.
     if incus config show "${ctPrefix}A" | grep volatile.eth0 | grep -v volatile.eth0.hwaddr; then
@@ -560,20 +460,11 @@ test_container_devices_nic_bridged_filtering() {
     ctAHost=$(incus config get "${ctPrefix}A" volatile.eth0.host_name)
 
     # When IPv{n} addresses are "none", every packet should be dropped.
-    if [ "$firewallDriver" = "xtables" ]; then
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A INPUT -p ARP -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A FORWARD -p ARP -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A INPUT -p IPv4 -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A FORWARD -p IPv4 -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A INPUT -p IPv6 -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A FORWARD -p IPv6 -i ${ctAHost} -j DROP"
-    else
-        for table in "in" "fwd"; do
-            nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0806 drop" # ARP
-            nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0800 drop" # IPv4
-            nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x86dd drop" # IPv6
-        done
-    fi
+    for table in "in" "fwd"; do
+        nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0806 drop" # ARP
+        nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0800 drop" # IPv4
+        nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x86dd drop" # IPv6
+    done
 
     incus delete -f "${ctPrefix}A"
 
@@ -597,73 +488,39 @@ test_container_devices_nic_bridged_filtering() {
         security.ipv6_filtering=true
     incus start "${ctPrefix}A"
 
-    # Check MAC filter is present in ebtables.
+    # Check MAC filter is present in firewall.
     ctAHost=$(incus config get "${ctPrefix}A" volatile.eth0.host_name)
     ctAMAC=$(incus config get "${ctPrefix}A" volatile.eth0.hwaddr)
     macHex=$(echo "${ctAMAC}" | sed "s/://g")
+    macDec=$(printf "%d" 0x"${macHex}")
+    macHex=$(printf "0x%x" "${macDec}")
+    ipv6Hex="0x20010db8000000000000000000000002"
+    ipv6Dec="42540766411282592856903984951653826562"
 
-    if [ "$firewallDriver" = "xtables" ]; then
-        # Check MAC filter is present in ebtables.
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "-s ! ${ctAMAC} -i ${ctAHost} -j DROP"; then
-            echo "MAC filter not applied as part of ipv4_filtering in ebtables"
+    rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
+
+    for table in "in" "fwd"; do
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
+            echo "MAC filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check MAC NDP filter is present in ip6tables.
-        if ! ip6tables -S -w -t filter | grep -e "${macHex}"; then
-            echo "MAC NDP ip6tables filter not applied as part of ipv6_filtering in ip6tables"
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
+            echo "MAC ARP filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check IPv4 filter is present in ebtables.
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "192.0.2.2"; then
-            echo "IPv4 filter not applied as part of ipv4_filtering in ebtables"
+        if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
+            echo "MAC NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check IPv6 filter is present in ebtables.
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "2001:db8::2"; then
-            echo "IPv6 filter not applied as part of ipv6_filtering in ebtables"
+        if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,384,128 != (${ipv6Hex}|${ipv6Dec}) drop"; then
+            echo "IPv6 NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-
-        # Check IPv6 filter is present in ip6tables.
-        if ! ip6tables -S -w -t filter | grep -e "20010db8000000000000000000000002"; then
-            echo "IPv6 filter not applied as part of ipv6_filtering in ip6tables"
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ip6 saddr != 2001:db8::2 drop"; then
+            echo "IPv6 filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        macHex=$(echo "${ctAMAC}" | sed "s/://g")
-        macDec=$(printf "%d" 0x"${macHex}")
-        macHex=$(printf "0x%x" "${macDec}")
-        ipv6Hex="0x20010db8000000000000000000000002"
-        ipv6Dec="42540766411282592856903984951653826562"
-
-        rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
-
-        for table in "in" "fwd"; do
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
-                echo "MAC filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
-                echo "MAC ARP filter not applied as part of ipv4_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
-                echo "MAC NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,384,128 != (${ipv6Hex}|${ipv6Dec}) drop"; then
-                echo "IPv6 NDP filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ip6 saddr != 2001:db8::2 drop"; then
-                echo "IPv6 filter not applied as part of ipv6_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Check that you cannot remove static IPs with filtering enabled and DHCP disabled.
     if incus config device unset "${ctPrefix}A" eth0 ipv4.address; then
@@ -676,19 +533,12 @@ test_container_devices_nic_bridged_filtering() {
 
     # Delete container and check filters are cleaned up.
     incus delete -f "${ctPrefix}A"
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ebtables --concurrent -L --Lmac2 --Lx | grep -e "${ctAHost}"; then
-            echo "ebtables filter still applied after delete"
+    for table in "in" "fwd"; do
+        if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
+            echo "nftables filter still applied after delete (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        for table in "in" "fwd"; do
-            if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
-                echo "nftables filter still applied after delete (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Test MAC filtering on unmanaged bridge.
     ip link add "${brName}2" type bridge
@@ -709,50 +559,36 @@ test_container_devices_nic_bridged_filtering() {
     ctAHost=$(incus config get "${ctPrefix}A" volatile.eth0.host_name)
     ctAMAC=$(incus config get "${ctPrefix}A" volatile.eth0.hwaddr)
 
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ! ebtables --concurrent -L --Lmac2 --Lx | grep -e "-s ! ${ctAMAC} -i ${ctAHost} -j DROP"; then
-            echo "MAC ebtables filter not applied as part of mac_filtering in ebtables"
+    macHex=$(echo "${ctAMAC}" | sed "s/://g")
+    macDec=$(printf "%d" 0x"${macHex}")
+    macHex=$(printf "0x%x" "${macDec}")
+
+    rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
+
+    for table in "in" "fwd"; do
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
+            echo "MAC filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        macHex=$(echo "${ctAMAC}" | sed "s/://g")
-        macDec=$(printf "%d" 0x"${macHex}")
-        macHex=$(printf "0x%x" "${macDec}")
+        if ! echo "${rules}" | grep "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
+            echo "MAC ARP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
+            false
+        fi
 
-        rules=$(nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0")
-
-        for table in "in" "fwd"; do
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" ether saddr != ${ctAMAC} drop"; then
-                echo "MAC filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-            if ! echo "${rules}" | grep "iifname \"${ctAHost}\" arp saddr ether != ${ctAMAC} drop"; then
-                echo "MAC ARP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-
-            if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
-                echo "MAC NDP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+        if ! echo "${rules}" | grep -P "iifname \"${ctAHost}\" icmpv6 type 136 @nh,528,48 != (${macHex}|${macDec}) drop"; then
+            echo "MAC NDP filter not applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
+            false
+        fi
+    done
 
     # Stop container and check filters are cleaned up.
     incus stop -f "${ctPrefix}A"
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ebtables --concurrent -L --Lmac2 --Lx | grep -e "${ctAHost}"; then
-            echo "MAC filter still applied as part of mac_filtering in ebtables"
+    for table in "in" "fwd"; do
+        if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
+            echo "MAC filter still applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        for table in "in" "fwd"; do
-            if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
-                echo "MAC filter still applied as part of mac_filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Check manual IPs cannot be specified on an unmanaged bridged without using IP filtering.
     ! incus config device set "${ctPrefix}A" eth0 ipv4.address=192.0.2.2 || false
@@ -810,36 +646,20 @@ test_container_devices_nic_bridged_filtering() {
     incus start "${ctPrefix}A"
     ctAHost=$(incus config get "${ctPrefix}A" volatile.eth0.host_name)
 
-    if [ "$firewallDriver" = "xtables" ]; then
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A INPUT -p ARP -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A FORWARD -p ARP -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A INPUT -p IPv4 -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A FORWARD -p IPv4 -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A INPUT -p IPv6 -i ${ctAHost} -j DROP"
-        ebtables --concurrent -L --Lmac2 --Lx | grep -e "-A FORWARD -p IPv6 -i ${ctAHost} -j DROP"
-    else
-        for table in "in" "fwd"; do
-            nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0806 drop" # ARP
-            nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0800 drop" # IPv4
-            nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x86dd drop" # IPv6
-        done
-    fi
+    for table in "in" "fwd"; do
+        nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0806 drop" # ARP
+        nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x0800 drop" # IPv4
+        nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "iifname \"${ctAHost}\" ether type 0x86dd drop" # IPv6
+    done
 
     # Delete container and check filters are cleaned up.
     incus delete -f "${ctPrefix}A"
-    if [ "$firewallDriver" = "xtables" ]; then
-        if ebtables --concurrent -L --Lmac2 --Lx | grep -e "${ctAHost}"; then
-            echo "Filters still applied as part of IP filter in ebtables"
+    for table in "in" "fwd"; do
+        if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
+            echo "Filters still applied as part of IP filtering in nftables (${table}.${ctPrefix}A.eth0)"
             false
         fi
-    else
-        for table in "in" "fwd"; do
-            if nft -nn list chain bridge incus "${table}.${ctPrefix}A.eth0" | grep -e "${ctAHost}"; then
-                echo "Filters still applied as part of IP filtering in nftables (${table}.${ctPrefix}A.eth0)"
-                false
-            fi
-        done
-    fi
+    done
 
     # Cleanup.
     incus profile delete "${ctPrefix}"

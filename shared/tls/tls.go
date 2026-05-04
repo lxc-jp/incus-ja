@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // connectErrorPrefix used as prefix to error returned from RFC3493Dialer.

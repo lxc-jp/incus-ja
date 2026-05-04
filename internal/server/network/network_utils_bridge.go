@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // BridgeVLANFilteringStatus returns whether VLAN filtering is enabled on a bridge interface.

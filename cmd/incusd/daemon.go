@@ -26,61 +26,60 @@ import (
 	liblxc "github.com/lxc/go-lxc"
 	"golang.org/x/sys/unix"
 
-	internalIO "github.com/lxc/incus/v6/internal/io"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/rsync"
-	"github.com/lxc/incus/v6/internal/server/apparmor"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/auth/oidc"
-	"github.com/lxc/incus/v6/internal/server/bgp"
-	"github.com/lxc/incus/v6/internal/server/certificate"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	clusterConfig "github.com/lxc/incus/v6/internal/server/cluster/config"
-	"github.com/lxc/incus/v6/internal/server/daemon"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/query"
-	"github.com/lxc/incus/v6/internal/server/db/warningtype"
-	"github.com/lxc/incus/v6/internal/server/dns"
-	"github.com/lxc/incus/v6/internal/server/endpoints"
-	"github.com/lxc/incus/v6/internal/server/events"
-	"github.com/lxc/incus/v6/internal/server/firewall"
-	"github.com/lxc/incus/v6/internal/server/fsmonitor"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	instanceDrivers "github.com/lxc/incus/v6/internal/server/instance/drivers"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/logging"
-	"github.com/lxc/incus/v6/internal/server/network/ovn"
-	"github.com/lxc/incus/v6/internal/server/network/ovs"
-	networkZone "github.com/lxc/incus/v6/internal/server/network/zone"
-	"github.com/lxc/incus/v6/internal/server/node"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	scriptletLoad "github.com/lxc/incus/v6/internal/server/scriptlet/load"
-	"github.com/lxc/incus/v6/internal/server/seccomp"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
-	"github.com/lxc/incus/v6/internal/server/storage/linstor"
-	"github.com/lxc/incus/v6/internal/server/storage/s3/miniod"
-	"github.com/lxc/incus/v6/internal/server/sys"
-	"github.com/lxc/incus/v6/internal/server/syslog"
-	"github.com/lxc/incus/v6/internal/server/task"
-	"github.com/lxc/incus/v6/internal/server/ucred"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/internal/server/warnings"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	"github.com/lxc/incus/v6/shared/cancel"
-	"github.com/lxc/incus/v6/shared/idmap"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/proxy"
-	"github.com/lxc/incus/v6/shared/revert"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
+	internalIO "github.com/lxc/incus/v7/internal/io"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/rsync"
+	"github.com/lxc/incus/v7/internal/server/apparmor"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/auth/oidc"
+	"github.com/lxc/incus/v7/internal/server/bgp"
+	"github.com/lxc/incus/v7/internal/server/certificate"
+	"github.com/lxc/incus/v7/internal/server/cgroup"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	clusterConfig "github.com/lxc/incus/v7/internal/server/cluster/config"
+	"github.com/lxc/incus/v7/internal/server/daemon"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/query"
+	"github.com/lxc/incus/v7/internal/server/db/warningtype"
+	"github.com/lxc/incus/v7/internal/server/dns"
+	"github.com/lxc/incus/v7/internal/server/endpoints"
+	"github.com/lxc/incus/v7/internal/server/events"
+	"github.com/lxc/incus/v7/internal/server/firewall"
+	"github.com/lxc/incus/v7/internal/server/fsmonitor"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	instanceDrivers "github.com/lxc/incus/v7/internal/server/instance/drivers"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/logging"
+	"github.com/lxc/incus/v7/internal/server/network/ovn"
+	"github.com/lxc/incus/v7/internal/server/network/ovs"
+	networkZone "github.com/lxc/incus/v7/internal/server/network/zone"
+	"github.com/lxc/incus/v7/internal/server/node"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	scriptletLoad "github.com/lxc/incus/v7/internal/server/scriptlet/load"
+	"github.com/lxc/incus/v7/internal/server/seccomp"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	storageDrivers "github.com/lxc/incus/v7/internal/server/storage/drivers"
+	"github.com/lxc/incus/v7/internal/server/storage/linstor"
+	"github.com/lxc/incus/v7/internal/server/sys"
+	"github.com/lxc/incus/v7/internal/server/syslog"
+	"github.com/lxc/incus/v7/internal/server/task"
+	"github.com/lxc/incus/v7/internal/server/ucred"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/internal/server/warnings"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	"github.com/lxc/incus/v7/shared/cancel"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/proxy"
+	"github.com/lxc/incus/v7/shared/revert"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // A Daemon can respond to requests from a shared client.
@@ -251,6 +250,7 @@ type APIEndpointAction struct {
 	Handler        func(d *Daemon, r *http.Request) response.Response
 	AccessHandler  func(d *Daemon, r *http.Request) response.Response
 	AllowUntrusted bool
+	LargeRequest   bool // Whether the endpoint may be getting requests larger than 1MiB.
 }
 
 // allowAuthenticated is an AccessHandler which allows only authenticated requests. This should be used in conjunction
@@ -728,7 +728,7 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 			newBody := &bytes.Buffer{}
 			captured := &bytes.Buffer{}
 			multiW := io.MultiWriter(newBody, captured)
-			_, err := io.Copy(multiW, r.Body)
+			_, err := util.SafeCopy(multiW, r.Body)
 			if err != nil {
 				_ = response.InternalError(err).Render(w)
 				return
@@ -765,7 +765,7 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 		}
 
 		if errors.Is(d.shutdownCtx.Err(), context.Canceled) && !allowedDuringShutdown() {
-			_ = response.Unavailable(errors.New("Shutting down")).Render(w)
+			_ = response.Unavailable(errors.New("Incus is shutting down")).Render(w)
 			return
 		}
 
@@ -796,6 +796,11 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 				if resp != response.EmptySyncResponse {
 					return resp
 				}
+			}
+
+			// Limit request body size unless the endpoint requires a large body.
+			if !action.LargeRequest {
+				r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 			}
 
 			return action.Handler(d, r)
@@ -976,152 +981,14 @@ func (d *Daemon) init() error {
 
 	// Detect LXC features
 	d.os.LXCFeatures = map[string]bool{}
-	lxcExtensions := []string{
-		"mount_injection_file",
-		"seccomp_notify",
-		"network_ipvlan",
-		"network_l2proxy",
-		"network_gateway_device_route",
-		"network_phys_macvlan_mtu",
-		"network_veth_router",
-		"cgroup2",
-		"pidfd",
-		"seccomp_allow_deny_syntax",
-		"devpts_fd",
-		"seccomp_proxy_send_notify_fd",
-		"idmapped_mounts_v2",
-		"core_scheduling",
-	}
+	lxcExtensions := []string{}
 
 	for _, extension := range lxcExtensions {
 		d.os.LXCFeatures[extension] = liblxc.HasAPIExtension(extension)
 	}
 
-	// Look for kernel features
-	logger.Infof("Kernel features:")
-
-	d.os.CloseRange = canUseCloseRange()
-	if d.os.CloseRange {
-		logger.Info(" - closing multiple file descriptors efficiently: yes")
-	} else {
-		logger.Info(" - closing multiple file descriptors efficiently: no")
-	}
-
-	d.os.NetnsGetifaddrs = canUseNetnsGetifaddrs()
-	if d.os.NetnsGetifaddrs {
-		logger.Info(" - netnsid-based network retrieval: yes")
-	} else {
-		logger.Info(" - netnsid-based network retrieval: no")
-	}
-
-	if canUsePidFds() && d.os.LXCFeatures["pidfd"] {
-		d.os.PidFds = true
-		d.os.PidFdsThread = canUseThreadPidFds()
-	}
-
-	if d.os.PidFds {
-		logger.Info(" - pidfds: yes")
-	} else {
-		logger.Info(" - pidfds: no")
-	}
-
-	if d.os.PidFdsThread {
-		logger.Info(" - pidfds for threads: yes")
-	} else {
-		logger.Info(" - pidfds for threads: no")
-	}
-
-	if canUseCoreScheduling() {
-		d.os.CoreScheduling = true
-		logger.Info(" - core scheduling: yes")
-
-		if d.os.LXCFeatures["core_scheduling"] {
-			d.os.ContainerCoreScheduling = true
-		}
-	} else {
-		logger.Info(" - core scheduling: no")
-	}
-
-	d.os.UeventInjection = canUseUeventInjection()
-	if d.os.UeventInjection {
-		logger.Info(" - uevent injection: yes")
-	} else {
-		logger.Info(" - uevent injection: no")
-	}
-
-	d.os.SeccompListener = canUseSeccompListener()
-	if d.os.SeccompListener {
-		logger.Info(" - seccomp listener: yes")
-	} else {
-		logger.Info(" - seccomp listener: no")
-	}
-
-	d.os.SeccompListenerContinue = canUseSeccompListenerContinue()
-	if d.os.SeccompListenerContinue {
-		logger.Info(" - seccomp listener continue syscalls: yes")
-	} else {
-		logger.Info(" - seccomp listener continue syscalls: no")
-	}
-
-	if canUseSeccompListenerAddfd() && d.os.LXCFeatures["seccomp_proxy_send_notify_fd"] {
-		d.os.SeccompListenerAddfd = true
-		logger.Info(" - seccomp listener add file descriptors: yes")
-	} else {
-		logger.Info(" - seccomp listener add file descriptors: no")
-	}
-
-	d.os.PidFdSetns = canUsePidFdSetns()
-	if d.os.PidFdSetns {
-		logger.Info(" - attach to namespaces via pidfds: yes")
-	} else {
-		logger.Info(" - attach to namespaces via pidfds: no")
-	}
-
-	if d.os.LXCFeatures["devpts_fd"] && canUseNativeTerminals() {
-		d.os.NativeTerminals = true
-		logger.Info(" - safe native terminal allocation: yes")
-	} else {
-		logger.Info(" - safe native terminal allocation: no")
-	}
-
-	d.os.UnprivBinfmt = canUseBinfmt()
-	if d.os.UnprivBinfmt {
-		logger.Info(" - unprivileged binfmt_misc: yes")
-	} else {
-		logger.Info(" - unprivileged binfmt_misc: no")
-	}
-
-	/*
-	 * During daemon startup we're the only thread that touches VFS3Fscaps
-	 * so we don't need to bother with atomic.StoreInt32() when touching
-	 * VFS3Fscaps.
-	 */
-	d.os.VFS3Fscaps = idmap.SupportsVFS3FSCaps("")
-	if d.os.VFS3Fscaps {
-		idmap.VFS3FSCaps = idmap.VFS3FSCapsSupported
-		logger.Infof(" - unprivileged file capabilities: yes")
-	} else {
-		idmap.VFS3FSCaps = idmap.VFS3FSCapsUnsupported
-		logger.Infof(" - unprivileged file capabilities: no")
-	}
-
-	dbWarnings = append(dbWarnings, d.os.CGInfo.Warnings()...)
-
-	logger.Infof(" - cgroup layout: %s", d.os.CGInfo.Mode())
-
-	for _, w := range dbWarnings {
-		logger.Warnf(" - %s, %s", warningtype.TypeNames[warningtype.Type(w.TypeCode)], w.LastMessage)
-	}
-
-	// Detect idmapped mounts support.
-	if util.IsTrue(os.Getenv("INCUS_IDMAPPED_MOUNTS_DISABLE")) {
-		logger.Info(" - idmapped mounts kernel support: disabled")
-	} else if kernelSupportsIdmappedMounts() {
-		d.os.IdmappedMounts = true
-		logger.Info(" - idmapped mounts kernel support: yes")
-	} else {
-		logger.Info(" - idmapped mounts kernel support: no")
-	}
+	// Get cgroup warnings.
+	dbWarnings = append(dbWarnings, cgroup.Warnings()...)
 
 	// Detect and cached available instance types from operational drivers.
 	drivers := instanceDrivers.DriverStatuses()
@@ -1141,7 +1008,7 @@ func (d *Daemon) init() error {
 		// of the tmpfs on systems that have running instances. It can go away
 		// after a little while.
 		if !linux.IsMountPoint(devIncusPath) && !linux.IsMountPoint(devicesPath) {
-			err = unix.Mount("tmpfs", devicesPath, "tmpfs", 0, "size=50M,mode=0711")
+			err = unix.Mount("tmpfs", devicesPath, "tmpfs", 0, "size=250M,mode=0711")
 			if err != nil {
 				logger.Warn("Failed to set up devices tmpfs", logger.Ctx{"err": err})
 			}
@@ -1160,6 +1027,11 @@ func (d *Daemon) init() error {
 				logger.Warn("Failed to set up guestapi tmpfs", logger.Ctx{"err": err})
 			}
 		}
+	}
+
+	// Show all persistent warnings.
+	for _, w := range dbWarnings {
+		logger.Warnf(" - %s, %s", warningtype.TypeNames[warningtype.Type(w.TypeCode)], w.LastMessage)
 	}
 
 	/* Initialize the database */
@@ -1625,17 +1497,15 @@ func (d *Daemon) init() error {
 		devicesRegister(instances)
 
 		// Setup seccomp handler
-		if d.os.SeccompListener {
-			seccompServer, err := seccomp.NewSeccompServer(d.State(), internalUtil.RunPath("seccomp.socket"), func(pid int32, state *state.State) (seccomp.Instance, error) {
-				return findContainerForPid(pid, state)
-			})
-			if err != nil {
-				return err
-			}
-
-			d.seccomp = seccompServer
-			logger.Info("Started seccomp handler", logger.Ctx{"path": internalUtil.RunPath("seccomp.socket")})
+		seccompServer, err := seccomp.NewSeccompServer(d.State(), internalUtil.RunPath("seccomp.socket"), func(pid int32, state *state.State) (seccomp.Instance, error) {
+			return findContainerForPid(pid, state)
+		})
+		if err != nil {
+			return err
 		}
+
+		d.seccomp = seccompServer
+		logger.Info("Started seccomp handler", logger.Ctx{"path": internalUtil.RunPath("seccomp.socket")})
 
 		// Read the trusted certificates
 		updateCertificateCache(d)
@@ -1793,9 +1663,6 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 
 	s := d.State()
 
-	// Stop any running minio processes cleanly before unmount storage pools.
-	miniod.StopAll()
-
 	var err error
 	var instances []instance.Instance
 	var instancesLoaded bool // If this is left as false this indicates an error loading instances.
@@ -1850,10 +1717,24 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 
 		// Full shutdown requested.
 		if sig == unix.SIGPWR {
-			instancesShutdown(instances)
+			// Check if we should evacuate the cluster member instead of just shutting down.
+			evacuated := false
+			if d.serverClustered && s.GlobalConfig.ShutdownAction() == "evacuate" && !s.DB.Cluster.LocalNodeIsEvacuated() {
+				logger.Info("Evacuating cluster member")
+				err := evacuateShutdown(ctx, s, d.serverName)
+				if err != nil {
+					logger.Error("Failed to evacuate cluster member, falling back to regular shutdown", logger.Ctx{"err": err})
+				} else {
+					evacuated = true
+				}
+			}
 
-			logger.Info("Stopping networks")
-			networkShutdown(s)
+			if !evacuated {
+				instancesShutdown(instances)
+
+				logger.Info("Stopping networks")
+				networkShutdown(s)
+			}
 
 			// Unmount storage pools after instances stopped.
 			logger.Info("Stopping storage pools")

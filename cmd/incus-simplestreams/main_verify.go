@@ -5,22 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 
 	"github.com/spf13/cobra"
 
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/simplestreams"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/simplestreams"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdVerify struct {
 	global *cmdGlobal
 }
 
-// Command generates the command definition.
-func (c *cmdVerify) Command() *cobra.Command {
+func (c *cmdVerify) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "verify"
 	cmd.Short = "Verify the integrity of the server"
@@ -31,13 +30,12 @@ This command will analyze the image index and for every image and file
 in the index, will validate that the files on disk exist and are of the
 correct size and content.
 `)
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdVerify) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdVerify) run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
 	exit, err := cli.CheckArgs(cmd, args, 0, 0)
 	if exit {
@@ -93,7 +91,7 @@ func (c *cmdVerify) Run(cmd *cobra.Command, args []string) error {
 				}
 
 				hash256 := sha256.New()
-				_, err = io.Copy(hash256, dataFile)
+				_, err = util.SafeCopy(hash256, dataFile)
 				if err != nil {
 					return err
 				}

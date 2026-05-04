@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/internal/server/storage/drivers"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/internal/server/storage/drivers"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // PoolIDTemporary is used to indicate a temporary pool instance that is not in the database.

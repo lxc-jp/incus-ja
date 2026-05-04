@@ -3,7 +3,7 @@ package drivers
 import (
 	"fmt"
 
-	"github.com/lxc/incus/v6/internal/server/instance/drivers/cfg"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers/cfg"
 )
 
 const (

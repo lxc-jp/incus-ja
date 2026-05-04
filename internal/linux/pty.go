@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 // OpenPtyInDevpts creates a new PTS pair, configures them and returns them.

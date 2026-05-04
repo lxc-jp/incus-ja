@@ -3,9 +3,9 @@ package logging
 import (
 	"fmt"
 
-	"github.com/lxc/incus/v6/internal/server/events"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/internal/server/events"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // Controller is responsible for managing a set of loggers.

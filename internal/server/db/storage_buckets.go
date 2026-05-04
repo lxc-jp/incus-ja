@@ -12,9 +12,9 @@ import (
 
 	dqliteDriver "github.com/cowsql/go-cowsql/driver"
 
-	"github.com/lxc/incus/v6/internal/server/db/query"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/server/db/query"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // StorageBucketFilter used for filtering storage buckets with GetStorageBuckets().

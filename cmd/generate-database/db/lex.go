@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lxc/incus/v6/cmd/generate-database/lex"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/cmd/generate-database/lex"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Return the table name for the given database entity.

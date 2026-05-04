@@ -3,17 +3,16 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"slices"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/linux"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 func tlsConfig(uid uint32) (*tls.Config, error) {
@@ -131,6 +130,6 @@ func proxyConnection(conn *net.UnixConn, serverUnixPath string) {
 	}
 
 	// Start proxying.
-	go func() { _, _ = io.Copy(conn, tlsClient) }()
-	_, _ = io.Copy(tlsClient, conn)
+	go func() { _, _ = util.SafeCopy(conn, tlsClient) }()
+	_, _ = util.SafeCopy(tlsClient, conn)
 }

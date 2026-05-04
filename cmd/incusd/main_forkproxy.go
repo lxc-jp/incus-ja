@@ -266,12 +266,12 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/netutils"
-	"github.com/lxc/incus/v6/internal/server/daemon"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/network"
-	_ "github.com/lxc/incus/v6/shared/cgo" // Used by cgo
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/netutils"
+	"github.com/lxc/incus/v7/internal/server/daemon"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/network"
+	_ "github.com/lxc/incus/v7/shared/cgo" // Used by cgo
 )
 
 const forkproxyUDSSockFDNum int = C.FORKPROXY_UDS_SOCK_FD_NUM

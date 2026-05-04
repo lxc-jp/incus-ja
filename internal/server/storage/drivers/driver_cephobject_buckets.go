@@ -12,14 +12,17 @@ import (
 	"path"
 	"time"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/storage/s3util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
 )
 
 // ValidateVolume validates the supplied volume config.
@@ -34,14 +37,14 @@ func (d *cephobject) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	return d.validateVolume(vol, nil, removeUnknownKeys)
 }
 
-// s3Client returns a configured minio S3 client.
-func (d *cephobject) s3Client(creds S3Credentials) (*minio.Client, error) {
+// s3Client returns a configured S3 client.
+func (d *cephobject) s3Client(creds S3Credentials) (*s3.Client, error) {
 	u, err := url.ParseRequestURI(d.config["cephobject.radosgw.endpoint"])
 	if err != nil {
 		return nil, fmt.Errorf("Failed parsing cephobject.radosgw.endpoint: %w", err)
 	}
 
-	var transport http.RoundTripper
+	httpClient := &http.Client{}
 
 	certFilePath := d.config["cephobject.radosgw.endpoint_cert_file"]
 
@@ -60,23 +63,25 @@ func (d *cephobject) s3Client(creds S3Credentials) (*minio.Client, error) {
 		}
 
 		// Trust the cert pool in our client.
-		config := &tls.Config{
-			RootCAs: rootCAs,
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs: rootCAs,
+			},
 		}
-
-		transport = &http.Transport{TLSClientConfig: config}
 	}
 
-	minioClient, err := minio.New(path.Join(u.Host, u.Path), &minio.Options{
-		Creds:     credentials.NewStaticV4(creds.AccessKey, creds.SecretKey, ""),
-		Secure:    u.Scheme == "https",
-		Transport: transport,
-	})
-	if err != nil {
-		return nil, err
+	cfg := aws.Config{
+		Region:      s3util.RegionFromURL(u),
+		Credentials: credentials.NewStaticCredentialsProvider(creds.AccessKey, creds.SecretKey, ""),
+		HTTPClient:  httpClient,
 	}
 
-	return minioClient, nil
+	endpoint := fmt.Sprintf("%s://%s", u.Scheme, path.Join(u.Host, u.Path))
+
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true
+	}), nil
 }
 
 // CreateBucket creates a new bucket.
@@ -105,27 +110,34 @@ func (d *cephobject) CreateBucket(bucket Volume, op *operations.Operation) error
 	reverter := revert.New()
 	defer reverter.Fail()
 
-	minioClient, err := d.s3Client(*adminUserInfo)
+	s3Client, err := d.s3Client(*adminUserInfo)
 	if err != nil {
 		return err
 	}
 
-	bucketExists, err := minioClient.BucketExists(ctx, storageBucketName)
-	if err != nil {
-		return err
-	}
-
-	if bucketExists {
+	_, err = s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(storageBucketName),
+	})
+	if err == nil {
 		return api.StatusErrorf(http.StatusConflict, "A bucket for that name already exists")
 	}
 
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "NotFound" {
+		return err
+	}
+
 	// Create new bucket.
-	err = minioClient.MakeBucket(ctx, storageBucketName, minio.MakeBucketOptions{})
+	_, err = s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(storageBucketName),
+	})
 	if err != nil {
 		return fmt.Errorf("Failed creating bucket: %w", err)
 	}
 
-	reverter.Add(func() { _ = minioClient.RemoveBucket(ctx, storageBucketName) })
+	reverter.Add(func() {
+		_, _ = s3Client.DeleteBucket(ctx, &s3.DeleteBucketInput{Bucket: aws.String(storageBucketName)})
+	})
 
 	// Create bucket user.
 	_, err = d.radosgwadminUserAdd(context.TODO(), storageBucketName, -1)

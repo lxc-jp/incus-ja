@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/lxc/incus/v6/internal/ports"
-	"github.com/lxc/incus/v6/internal/server/config"
-	"github.com/lxc/incus/v6/internal/server/db"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/ports"
+	"github.com/lxc/incus/v7/internal/server/config"
+	"github.com/lxc/incus/v7/internal/server/db"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // Config holds member-local configuration values.

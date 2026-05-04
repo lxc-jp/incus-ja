@@ -10,16 +10,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/migration"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/internal/migration"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	storageDrivers "github.com/lxc/incus/v7/internal/server/storage/drivers"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 func newStorageMigrationSource(volumeOnly bool, pushTarget *api.StorageVolumePostTarget) (*migrationSourceWs, error) {
@@ -180,7 +180,7 @@ func (s *migrationSourceWs) DoStorage(state *state.State, projectName string, po
 
 	// Receive response from target.
 	respHeader := &migration.MigrationHeader{}
-	err = s.recv(respHeader)
+	err = s.recv(respHeader, true)
 	if err != nil {
 		logger.Errorf("Failed to receive storage volume migration header")
 		s.sendControl(err)
@@ -232,7 +232,7 @@ func (s *migrationSourceWs) DoStorage(state *state.State, projectName string, po
 	}
 
 	msg := migration.MigrationControl{}
-	err = s.recv(&msg)
+	err = s.recv(&msg, false)
 	if err != nil {
 		logger.Errorf("Failed to receive storage volume migration control message")
 		return err
@@ -309,7 +309,7 @@ func (c *migrationSink) DoStorage(state *state.State, projectName string, poolNa
 	}
 
 	offerHeader := &migration.MigrationHeader{}
-	err := c.recv(offerHeader)
+	err := c.recv(offerHeader, true)
 	if err != nil {
 		logger.Errorf("Failed to receive storage volume migration header")
 		c.sendControl(err)

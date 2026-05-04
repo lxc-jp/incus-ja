@@ -12,10 +12,11 @@ import (
 	"slices"
 	"strings"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	"github.com/lxc/incus/v6/shared/ask"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	"github.com/lxc/incus/v7/shared/ask"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // VHResourceType defines what kind of resource this is (e.g., CPU, memory).
@@ -94,8 +95,8 @@ type OVAMigration struct {
 	references    map[string]string
 }
 
-// NewOVAMigration returns a new OVAMigration.
-func NewOVAMigration(ctx context.Context, server incus.InstanceServer, asker ask.Asker, flagRsyncArgs string) Migrator {
+// newOVAMigration returns a new OVAMigration.
+func newOVAMigration(ctx context.Context, server incus.InstanceServer, asker ask.Asker, flagRsyncArgs string) Migrator {
 	return &OVAMigration{
 		Migration: &Migration{
 			asker:         asker,
@@ -103,7 +104,7 @@ func NewOVAMigration(ctx context.Context, server incus.InstanceServer, asker ask
 			server:        server,
 			migrationType: MigrationTypeVM,
 		},
-		instance:      NewInstanceMigration(ctx, server, asker, flagRsyncArgs, MigrationTypeVM).(*InstanceMigration),
+		instance:      newInstanceMigration(ctx, server, asker, flagRsyncArgs, MigrationTypeVM).(*InstanceMigration),
 		flagRsyncArgs: flagRsyncArgs,
 		references:    map[string]string{},
 	}
@@ -294,16 +295,10 @@ func (m *OVAMigration) unpackOVA(outPath string) error {
 			return fmt.Errorf("Error creating file: %v", err)
 		}
 
-		for {
-			_, err = io.CopyN(outFile, tarReader, 4*1024*1024)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-
-				outFile.Close()
-				return fmt.Errorf("Error unpacking file: %v", err)
-			}
+		_, err = util.SafeCopy(outFile, tarReader)
+		if err != nil {
+			outFile.Close()
+			return fmt.Errorf("Error unpacking file: %v", err)
 		}
 
 		outFile.Close()
@@ -383,7 +378,7 @@ func (m *OVAMigration) readOVFData(env Envelope) error {
 
 // addDisk adds an additional disk to the VM instance.
 func (m *OVAMigration) addDisk(diskFileName string, index int) error {
-	volMigrator, ok := NewVolumeMigration(m.ctx, m.server, m.asker, m.flagRsyncArgs).(*VolumeMigration)
+	volMigrator, ok := newVolumeMigration(m.ctx, m.server, m.asker, m.flagRsyncArgs).(*VolumeMigration)
 	if !ok {
 		return errors.New("Migrator should be of type VolumeMigration")
 	}

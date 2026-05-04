@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v7/internal/version"
 )
 
 // Numeric type codes identifying different kind of entities.

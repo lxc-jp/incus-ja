@@ -8,16 +8,16 @@ import (
 	"net/http"
 	"slices"
 
-	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/util"
+	clusterRequest "github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 var networkAllocationsCmd = APIEndpoint{

@@ -31,7 +31,7 @@ Write-Host "Drive containing the agent was found: $($targetDrive.DriveLetter)"
 if (!(Test-Path $destFolder)) {
     Write-Host "Creating $destFolder..."
     New-Item -ItemType Directory -Path $destFolder -Force | Out-Null
-    
+
     if (!$?) {
         Write-Host "Could not create $destFolder..."
         ExitSetup
@@ -52,7 +52,7 @@ if (!$?) {
 }
 
 Write-Host "Ejecting CD-ROM..."
-(New-Object -ComObject Shell.Application).Namespace(17).ParseName($targetDrive.DriveLetter).InvokeVerb("Eject")   
+(New-Object -ComObject Shell.Application).Namespace(17).ParseName($targetDrive.DriveLetter).InvokeVerb("Eject")
 
 # Dumb search for firewall rule assuming the name of the rule is "$serviceName".
 if (!(Get-NetFirewallRule -Name "$serviceName" -ErrorAction SilentlyContinue)) {

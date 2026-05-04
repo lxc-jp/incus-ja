@@ -9,15 +9,15 @@ import (
 	"net/url"
 	"time"
 
-	incus "github.com/lxc/incus/v6/client"
-	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	incus "github.com/lxc/incus/v7/client"
+	clusterRequest "github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // Set references.

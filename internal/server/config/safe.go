@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // SafeLoad is a wrapper around Load() that does not error when invalid keys

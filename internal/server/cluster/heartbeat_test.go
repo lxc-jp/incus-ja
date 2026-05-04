@@ -11,15 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	clusterConfig "github.com/lxc/incus/v6/internal/server/cluster/config"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/node"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/osarch"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/tls/tlstest"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	clusterConfig "github.com/lxc/incus/v7/internal/server/cluster/config"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/node"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/osarch"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/tls/tlstest"
 )
 
 // After a heartbeat request is completed, the leader updates the heartbeat

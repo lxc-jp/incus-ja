@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/xattr"
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // The functions below are verbatim copies of the functions found in the internal package.

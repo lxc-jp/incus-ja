@@ -648,6 +648,7 @@ type DependentVolume struct {
 	BtrfsFeatures *BtrfsFeatures         `protobuf:"bytes,7,opt,name=btrfsFeatures" json:"btrfsFeatures,omitempty"`
 	VolumeSize    *int64                 `protobuf:"varint,8,opt,name=volumeSize" json:"volumeSize,omitempty"`
 	Snapshots     []*Snapshot            `protobuf:"bytes,9,rep,name=snapshots" json:"snapshots,omitempty"`
+	DeviceName    *string                `protobuf:"bytes,10,opt,name=deviceName" json:"deviceName,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -743,6 +744,13 @@ func (x *DependentVolume) GetSnapshots() []*Snapshot {
 		return x.Snapshots
 	}
 	return nil
+}
+
+func (x *DependentVolume) GetDeviceName() string {
+	if x != nil && x.DeviceName != nil {
+		return *x.DeviceName
+	}
+	return ""
 }
 
 type MigrationHeader struct {
@@ -1024,7 +1032,7 @@ const file_internal_migration_migrate_proto_rawDesc = "" +
 	"\rbtrfsFeatures\x12)\n" +
 	"\x10migration_header\x18\x01 \x01(\bR\x0fmigrationHeader\x12+\n" +
 	"\x11header_subvolumes\x18\x02 \x01(\bR\x10headerSubvolumes\x124\n" +
-	"\x16header_subvolume_uuids\x18\x03 \x01(\bR\x14headerSubvolumeUuids\"\x94\x03\n" +
+	"\x16header_subvolume_uuids\x18\x03 \x01(\bR\x14headerSubvolumeUuids\"\xb4\x03\n" +
 	"\x0fDependentVolume\x12\x12\n" +
 	"\x04name\x18\x01 \x02(\tR\x04name\x12\x12\n" +
 	"\x04pool\x18\x02 \x02(\tR\x04pool\x12 \n" +
@@ -1036,7 +1044,11 @@ const file_internal_migration_migrate_proto_rawDesc = "" +
 	"\n" +
 	"volumeSize\x18\b \x01(\x03R\n" +
 	"volumeSize\x121\n" +
-	"\tsnapshots\x18\t \x03(\v2\x13.migration.SnapshotR\tsnapshots\"\xf1\x04\n" +
+	"\tsnapshots\x18\t \x03(\v2\x13.migration.SnapshotR\tsnapshots\x12\x1e\n" +
+	"\n" +
+	"deviceName\x18\n" +
+	" \x01(\tR\n" +
+	"deviceName\"\xf1\x04\n" +
 	"\x0fMigrationHeader\x12*\n" +
 	"\x02fs\x18\x01 \x02(\x0e2\x1a.migration.MigrationFSTypeR\x02fs\x12'\n" +
 	"\x04criu\x18\x02 \x01(\x0e2\x13.migration.CRIUTypeR\x04criu\x12*\n" +

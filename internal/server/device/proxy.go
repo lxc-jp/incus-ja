@@ -15,25 +15,25 @@ import (
 
 	liblxc "github.com/lxc/go-lxc"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/apparmor"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/warningtype"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/device/nictype"
-	firewallDrivers "github.com/lxc/incus/v6/internal/server/firewall/drivers"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/warnings"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/apparmor"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/warningtype"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/device/nictype"
+	firewallDrivers "github.com/lxc/incus/v7/internal/server/firewall/drivers"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/warnings"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 type proxy struct {
@@ -461,7 +461,7 @@ func (d *proxy) checkProcStarted(logPath string) (bool, error) {
 
 // Stop is run when the device is removed from the instance.
 func (d *proxy) Stop() (*deviceConfig.RunConfig, error) {
-	// Remove possible iptables entries
+	// Remove possible firewall entries.
 	err := d.state.Firewall.InstanceClearProxyNAT(d.inst.Project().Name, d.inst.Name(), d.name)
 	if err != nil {
 		logger.Errorf("Failed to remove proxy NAT filters: %v", err)
@@ -613,20 +613,20 @@ func (d *proxy) setupProxyProcInfo() (*proxyProcInfo, error) {
 	containerPid := strconv.Itoa(cc.InitPid())
 	daemonPid := strconv.Itoa(os.Getpid())
 
-	containerPidFd := -1
-	daemonPidFd := -1
-	var inheritFd []*os.File
-	if d.state.OS.PidFds {
-		cPidFd, err := cc.InitPidFd()
-		if err == nil {
-			dPidFd, err := linux.PidFdOpen(os.Getpid(), 0)
-			if err == nil {
-				inheritFd = []*os.File{cPidFd, dPidFd}
-				containerPidFd = 3
-				daemonPidFd = 4
-			}
-		}
+	cPidFd, err := cc.InitPidFd()
+	if err != nil {
+		return nil, err
 	}
+
+	dPidFd, err := linux.PidFdOpen(os.Getpid(), 0)
+	if err != nil {
+		_ = cPidFd.Close()
+		return nil, err
+	}
+
+	inheritFd := []*os.File{cPidFd, dPidFd}
+	containerPidFd := 3
+	daemonPidFd := 4
 
 	var listenPid, listenPidFd, connectPid, connectPidFd string
 
@@ -694,7 +694,8 @@ func (d *proxy) killProxyProc(pidPath string) error {
 	return nil
 }
 
-func (d *proxy) Remove() error {
+// Remove cleans up the device when it is removed from an instance.
+func (d *proxy) Remove(cleanupDependencies bool) error {
 	err := warnings.DeleteWarningsByLocalNodeAndProjectAndTypeAndEntity(d.state.DB.Cluster, d.inst.Project().Name, warningtype.ProxyBridgeNetfilterNotEnabled, cluster.TypeInstance, d.inst.ID())
 	if err != nil {
 		logger.Warn("Failed to delete warning", logger.Ctx{"err": err})

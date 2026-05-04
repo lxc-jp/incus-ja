@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/shared/logger"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 type cmdWaitready struct {

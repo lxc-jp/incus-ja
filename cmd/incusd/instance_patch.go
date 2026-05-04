@@ -11,18 +11,18 @@ import (
 
 	"github.com/gorilla/mux"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	projecthelpers "github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/osarch"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	projecthelpers "github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/osarch"
 )
 
 // swagger:operation PATCH /1.0/instances/{name} instances instance_patch
@@ -37,6 +37,11 @@ import (
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name

@@ -11,17 +11,17 @@ import (
 	"strconv"
 	"strings"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/locking"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/locking"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // lvmBlockVolSuffix suffix used for block content type volumes.
@@ -301,11 +301,6 @@ func (d *lvm) logicalVolumeExists(volDevPath string) (bool, error) {
 // If pool lvm.thinpool_metadata_size setting >0 will manually set metadata size for the thinpool, otherwise LVM
 // will pick an appropriate size.
 func (d *lvm) createDefaultThinPool(lvmVersion, thinPoolName string, thinpoolSizeBytes int64) error {
-	isRecent, err := d.lvmVersionIsAtLeast(lvmVersion, "2.02.99")
-	if err != nil {
-		return fmt.Errorf("Error checking LVM version: %w", err)
-	}
-
 	lvmThinPool := fmt.Sprintf("%s/%s", d.config["lvm.vg_name"], thinPoolName)
 
 	args := []string{
@@ -325,10 +320,8 @@ func (d *lvm) createDefaultThinPool(lvmVersion, thinPoolName string, thinpoolSiz
 
 	if thinpoolSizeBytes > 0 {
 		args = append(args, "--size", fmt.Sprintf("%db", thinpoolSizeBytes))
-	} else if isRecent {
-		args = append(args, "--extents", "100%FREE")
 	} else {
-		args = append(args, "--size", "1G")
+		args = append(args, "--extents", "100%FREE")
 	}
 
 	// Because the thin pool is created as an LVM volume, if the volume stripes option is set we need to apply
@@ -350,14 +343,6 @@ func (d *lvm) createDefaultThinPool(lvmVersion, thinPoolName string, thinpoolSiz
 	_, err = subprocess.TryRunCommand("lvcreate", args...)
 	if err != nil {
 		return fmt.Errorf("Error creating LVM thin pool named %q: %w", thinPoolName, err)
-	}
-
-	if !isRecent && thinpoolSizeBytes <= 0 {
-		// Grow it to the maximum VG size (two step process required by old LVM).
-		_, err = subprocess.TryRunCommand("lvextend", "--alloc", "anywhere", "-l", "100%FREE", lvmThinPool)
-		if err != nil {
-			return fmt.Errorf("Error growing LVM thin pool named %q: %w", thinPoolName, err)
-		}
 	}
 
 	return nil
@@ -481,18 +466,11 @@ func (d *lvm) createLogicalVolume(vgName, thinPoolName string, vol Volume, makeT
 		}
 	}
 
-	isRecent, err := d.lvmVersionIsAtLeast(lvmVersion, "2.02.99")
+	// Disable auto activation of the volume.
+	// Must be done after volume create so that zeroing and signature wiping can take place.
+	_, err = subprocess.TryRunCommand("lvchange", "--setactivationskip", "y", volPath)
 	if err != nil {
-		return fmt.Errorf("Error checking LVM version: %w", err)
-	}
-
-	if isRecent {
-		// Disable auto activation of volume on LVM versions that support it.
-		// Must be done after volume create so that zeroing and signature wiping can take place.
-		_, err := subprocess.TryRunCommand("lvchange", "--setactivationskip", "y", volPath)
-		if err != nil {
-			return fmt.Errorf("Failed to set activation skip on LVM logical volume %q: %w", volPath, err)
-		}
+		return fmt.Errorf("Failed to set activation skip on LVM logical volume %q: %w", volPath, err)
 	}
 
 	d.logger.Debug("Logical volume created", logCtx)
@@ -502,18 +480,9 @@ func (d *lvm) createLogicalVolume(vgName, thinPoolName string, vol Volume, makeT
 // createLogicalVolumeSnapshot creates a snapshot of a logical volume.
 func (d *lvm) createLogicalVolumeSnapshot(vgName string, srcVol Volume, snapVol Volume, readonly bool, makeThinLv bool) (string, error) {
 	srcVolPath := d.lvmPath(vgName, srcVol.volType, srcVol.contentType, srcVol.name)
-	isRecent, err := d.lvmVersionIsAtLeast(lvmVersion, "2.02.99")
-	if err != nil {
-		return "", fmt.Errorf("Error checking LVM version: %w", err)
-	}
-
 	snapLvName := d.lvmFullVolumeName(snapVol.volType, snapVol.contentType, snapVol.name)
 	logCtx := logger.Ctx{"vg_name": vgName, "lv_name": snapLvName, "src_dev": srcVolPath, "thin": makeThinLv}
-	args := []string{"-n", snapLvName, "-s", srcVolPath}
-
-	if isRecent {
-		args = append(args, "--setactivationskip", "y")
-	}
+	args := []string{"-n", snapLvName, "-s", srcVolPath, "--setactivationskip", "y"}
 
 	// If the source is not a thin volume the size needs to be specified.
 	// Create snapshot at 100% the size of the origin to allow restoring it to the origin volume without
@@ -544,7 +513,7 @@ func (d *lvm) createLogicalVolumeSnapshot(vgName string, srcVol Volume, snapVol 
 		defer release()
 	}
 
-	_, err = subprocess.TryRunCommand("lvcreate", args...)
+	_, err := subprocess.TryRunCommand("lvcreate", args...)
 	if err != nil {
 		return "", err
 	}
@@ -701,7 +670,7 @@ func (d *lvm) copyThinpoolVolume(vol, srcVol Volume, srcSnapshots []Volume, refr
 	// If copying snapshots is indicated, check the source isn't itself a snapshot.
 	if len(srcSnapshots) > 0 && !srcVol.IsSnapshot() {
 		// Create the parent snapshot directory.
-		err := createParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
+		err := CreateParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
 		if err != nil {
 			return err
 		}

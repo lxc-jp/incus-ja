@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // storagePoolDBCreate creates a storage pool DB entry and returns the created Pool ID.

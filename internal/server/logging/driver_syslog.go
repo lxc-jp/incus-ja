@@ -6,8 +6,8 @@ import (
 	"log/syslog"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 var facilityMap = map[string]syslog.Priority{

@@ -19,16 +19,6 @@ package main
 #include "memory_utils.h"
 #include "process_utils.h"
 
-static void forkdonetinfo(int pidfd, int ns_fd)
-{
-	if (!change_namespaces(pidfd, ns_fd, CLONE_NEWNET)) {
-		fprintf(stderr, "Failed setns to container network namespace: %s\n", strerror(errno));
-		_exit(1);
-	}
-
-	// Jump back to Go for the rest
-}
-
 static int dosetns_file(char *file, char *nstype)
 {
 	__do_close int ns_fd = -EBADF;
@@ -160,8 +150,6 @@ void forknet(void)
 {
 	char *command = NULL;
 	char *cur = NULL;
-	pid_t pid = 0;
-
 
 	// Get the subcommand
 	command = advance_arg(false);
@@ -179,7 +167,7 @@ void forknet(void)
 	// skip "--"
 	advance_arg(true);
 
-	// Get the pid
+	// Get the netns file path.
 	cur = advance_arg(false);
 	if (cur == NULL || (strcmp(cur, "--help") == 0 || strcmp(cur, "--version") == 0 || strcmp(cur, "-h") == 0)) {
 		return;
@@ -191,19 +179,6 @@ void forknet(void)
 		_exit(1);
 	}
 
-	// Call the subcommands
-	if (strcmp(command, "info") == 0) {
-		int ns_fd, pidfd;
-		pid = atoi(cur);
-
-		pidfd = atoi(advance_arg(true));
-		ns_fd = pidfd_nsfd(pidfd, pid);
-		if (ns_fd < 0)
-			_exit(1);
-
-		forkdonetinfo(pidfd, ns_fd);
-	}
-
 	if (strcmp(command, "detach") == 0)
 		forkdonetdetach(cur);
 }
@@ -212,7 +187,6 @@ import "C"
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -232,11 +206,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/netutils"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	_ "github.com/lxc/incus/v6/shared/cgo" // Used by cgo
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	_ "github.com/lxc/incus/v7/shared/cgo" // Used by cgo
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdForknet struct {
@@ -261,13 +234,6 @@ func (c *cmdForknet) command() *cobra.Command {
 `
 	cmd.Hidden = true
 
-	// info
-	cmdInfo := &cobra.Command{}
-	cmdInfo.Use = "info <PID> <PidFd>"
-	cmdInfo.Args = cobra.ExactArgs(2)
-	cmdInfo.RunE = c.runInfo
-	cmd.AddCommand(cmdInfo)
-
 	// detach
 	cmdDetach := &cobra.Command{}
 	cmdDetach.Use = "detach <netns file> <daemon PID> <ifname> <hostname>"
@@ -286,23 +252,6 @@ func (c *cmdForknet) command() *cobra.Command {
 	cmd.Args = cobra.NoArgs
 	cmd.Run = func(cmd *cobra.Command, args []string) { _ = cmd.Usage() }
 	return cmd
-}
-
-func (c *cmdForknet) runInfo(_ *cobra.Command, _ []string) error {
-	hostInterfaces, _ := net.Interfaces()
-	networks, err := netutils.NetnsGetifaddrs(-1, hostInterfaces)
-	if err != nil {
-		return err
-	}
-
-	buf, err := json.Marshal(networks)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%s\n", buf)
-
-	return nil
 }
 
 // RunDHCP spawns the DHCP client(s) and applies address, route and DNS configuration.

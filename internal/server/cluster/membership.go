@@ -15,16 +15,16 @@ import (
 	"github.com/cowsql/go-cowsql/app"
 	"github.com/cowsql/go-cowsql/client"
 
-	"github.com/lxc/incus/v6/internal/server/certificate"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/node"
-	"github.com/lxc/incus/v6/internal/server/state"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/logger"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/certificate"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/node"
+	"github.com/lxc/incus/v7/internal/server/state"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/logger"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // errClusterBusy is returned by dqlite if attempting attempting to join a cluster at the same time as a role-change.

@@ -9,17 +9,17 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdInfo struct {
@@ -33,8 +33,7 @@ type cmdInfo struct {
 
 var cmdInfoUsage = u.Usage{u.Instance.Optional().Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdInfo) Command() *cobra.Command {
+func (c *cmdInfo) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("info", cmdInfoUsage...)
 	cmd.Short = i18n.G("Show instance or server information")
@@ -47,12 +46,11 @@ func (c *cmdInfo) Command() *cobra.Command {
 incus info [<remote>:] [--resources]
     For server information.`))
 
-	cmd.RunE = c.Run
-	cmd.Flags().BoolVar(&c.flagShowAccess, "show-access", false, i18n.G("Show the instance's access list"))
-	cmd.Flags().StringVar(&c.flagShowLog, "show-log", "", i18n.G("Show the instance's recent log entries")+"``")
-	cmd.Flags().Lookup("show-log").NoOptDefVal = "default"
-	cmd.Flags().BoolVar(&c.flagResources, "resources", false, i18n.G("Show the resources available to the server"))
-	cmd.Flags().StringVar(&c.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
+	cmd.RunE = c.run
+	cli.AddBoolFlag(cmd.Flags(), &c.flagShowAccess, "show-access", i18n.G("Show the instance's access list"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagShowLog, "show-log", "", "default", i18n.G("Show the instance's recent log entries"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagResources, "resources", i18n.G("Show the resources available to the server"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -65,8 +63,7 @@ incus info [<remote>:] [--resources]
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdInfo) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdInfo) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdInfoUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -86,7 +83,7 @@ func (c *cmdInfo) Run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		data, err := yaml.Marshal(access)
+		data, err := yaml.Dump(access, yaml.V2)
 		if err != nil {
 			return err
 		}
@@ -428,7 +425,7 @@ func (c *cmdInfo) remoteInfo(d incus.InstanceServer) error {
 		}
 
 		if resources.System.Serial != "" {
-			fmt.Printf("  "+i18n.G("Serial: %v")+"\n", resources.System.Serial)
+			fmt.Printf("  "+i18n.G("Serial number: %v")+"\n", resources.System.Serial)
 		}
 
 		if resources.System.Type != "" {
@@ -622,7 +619,7 @@ func (c *cmdInfo) remoteInfo(d incus.InstanceServer) error {
 		return err
 	}
 
-	data, err := yaml.Marshal(&serverStatus)
+	data, err := yaml.Dump(&serverStatus, yaml.V2)
 	if err != nil {
 		return err
 	}

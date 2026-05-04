@@ -5,7 +5,7 @@ import (
 
 	"github.com/vishvananda/netlink"
 
-	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v7/shared/units"
 )
 
 // Class represents qdisc class object.

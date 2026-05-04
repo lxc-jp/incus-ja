@@ -15,24 +15,24 @@ import (
 	"github.com/kballard/go-shellquote"
 	ociSpecs "github.com/opencontainers/runtime-spec/specs-go"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
-	"github.com/lxc/incus/v6/internal/server/locking"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/internal/server/task"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/util"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/instance/operationlock"
+	"github.com/lxc/incus/v7/internal/server/locking"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/internal/server/task"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Helper functions
@@ -61,7 +61,7 @@ func instanceCreateAsEmpty(s *state.State, args db.InstanceArgs, op *operations.
 		return nil, fmt.Errorf("Failed creating instance: %w", err)
 	}
 
-	reverter.Add(func() { _ = inst.Delete(true) })
+	reverter.Add(func() { _ = inst.Delete(true, true) })
 
 	err = inst.UpdateBackupFile()
 	if err != nil {
@@ -198,7 +198,7 @@ func instanceCreateFromImage(ctx context.Context, s *state.State, img *api.Image
 		return fmt.Errorf("Failed creating instance from image: %w", err)
 	}
 
-	reverter.Add(func() { _ = inst.Delete(true) })
+	reverter.Add(func() { _ = inst.Delete(true, true) })
 
 	// If dealing with an OCI image, parse the configuration.
 	if args.Type == instancetype.Container && inst.LocalConfig()["image.type"] == "oci" {
@@ -405,7 +405,7 @@ func instanceCreateAsCopy(s *state.State, opts instanceCreateAsCopyOpts, op *ope
 
 			// Delete extra snapshots first.
 			for _, deleteTargetSnapIndex := range deleteTargetSnapshotIndexes {
-				err := targetSnaps[deleteTargetSnapIndex].Delete(true)
+				err := targetSnaps[deleteTargetSnapIndex].Delete(true, true)
 				if err != nil {
 					return nil, err
 				}
@@ -506,7 +506,7 @@ func instanceCreateAsCopy(s *state.State, opts instanceCreateAsCopyOpts, op *ope
 			return nil, fmt.Errorf("Create instance from copy: %w", err)
 		}
 
-		reverter.Add(func() { _ = inst.Delete(true) })
+		reverter.Add(func() { _ = inst.Delete(true, true) })
 
 		if opts.applyTemplateTrigger {
 			// Trigger the templates on next start.
@@ -602,7 +602,7 @@ func pruneExpiredInstanceSnapshots(ctx context.Context, snapshots []instance.Ins
 			continue // Deletion of this snapshot is already running, skip.
 		}
 
-		err = snapshot.Delete(true)
+		err = snapshot.Delete(true, true)
 		instSnapshotsPruneRunning.Delete(snapshot.ID())
 		if err != nil {
 			return fmt.Errorf("Failed to delete expired instance snapshot %q in project %q: %w", snapshot.Name(), snapshot.Project().Name, err)

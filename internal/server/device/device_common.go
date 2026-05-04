@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"net"
 
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/logger"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // deviceCommon represents the common struct for all devices.
@@ -93,7 +93,7 @@ func (d *deviceCommon) Update(oldDevices deviceConfig.Devices, isRunning bool) e
 }
 
 // Remove returns nil error as majority of devices don't need to do any host-side cleanup on delete.
-func (d *deviceCommon) Remove() error {
+func (d *deviceCommon) Remove(cleanupDependencies bool) error {
 	return nil
 }
 

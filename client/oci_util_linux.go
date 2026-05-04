@@ -11,7 +11,7 @@ import (
 	"github.com/opencontainers/umoci/oci/casext"
 	"github.com/opencontainers/umoci/oci/layer"
 
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 func init() {

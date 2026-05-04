@@ -81,16 +81,16 @@ test_storage_driver_ceph() {
         incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice /opt
         ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1
-        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c1pool1 c1pool1 testDevice /opt
-        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c1pool1 c1pool1 testDevice2 /opt || false
+        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice /opt
+        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1
 
         incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2
         incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice /opt
         ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2
-        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c2pool2 c2pool2 testDevice /opt
-        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c2pool2 c2pool2 testDevice2 /opt || false
+        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice /opt
+        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2
 
         incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool2" c3pool1
@@ -105,8 +105,8 @@ test_storage_driver_ceph() {
         incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice /opt
         ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2
-        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" custom/c4pool2 c4pool2 testDevice /opt
-        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" custom/c4pool2 c4pool2 testDevice2 /opt || false
+        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice /opt
+        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2
         incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2-renamed
         incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2-renamed c4pool2

@@ -3,8 +3,8 @@ package main
 import (
 	"net/http"
 
-	"github.com/lxc/incus/v6/internal/server/metadata"
-	"github.com/lxc/incus/v6/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/metadata"
+	"github.com/lxc/incus/v7/internal/server/response"
 )
 
 var metadataConfigurationCmd = APIEndpoint{

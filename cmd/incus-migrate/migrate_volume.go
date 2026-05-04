@@ -10,14 +10,14 @@ import (
 	"slices"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	incus "github.com/lxc/incus/v6/client"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/ask"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/revert"
+	incus "github.com/lxc/incus/v7/client"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/ask"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 // VolumeMigration handles the migration logic for an custom volume.
@@ -28,8 +28,8 @@ type VolumeMigration struct {
 	flagRsyncArgs    string
 }
 
-// NewVolumeMigration returns a new VolumeMigration.
-func NewVolumeMigration(ctx context.Context, server incus.InstanceServer, asker ask.Asker, flagRsyncArgs string) Migrator {
+// newVolumeMigration returns a new VolumeMigration.
+func newVolumeMigration(ctx context.Context, server incus.InstanceServer, asker ask.Asker, flagRsyncArgs string) Migrator {
 	return &VolumeMigration{
 		Migration: &Migration{
 			asker:  asker,
@@ -244,7 +244,7 @@ func (m *VolumeMigration) render() string {
 		m.sourceFormat,
 	}
 
-	out, err := yaml.Marshal(&data)
+	out, err := yaml.Dump(&data, yaml.V2)
 	if err != nil {
 		return ""
 	}

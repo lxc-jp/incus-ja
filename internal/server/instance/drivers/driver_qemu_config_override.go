@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/server/instance/drivers/cfg"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers/cfg"
 )
 
 // sectionContent represents the content of a section, without its name.

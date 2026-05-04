@@ -7,8 +7,8 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/query"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/query"
 )
 
 // UpdateInstanceSnapshotConfig inserts/updates/deletes the provided config keys.

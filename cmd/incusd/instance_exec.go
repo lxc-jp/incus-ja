@@ -20,26 +20,26 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/sys/unix"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/drivers"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/cancel"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/tcp"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/ws"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/cancel"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/tcp"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/ws"
 )
 
 const (
@@ -77,6 +77,20 @@ func (s *execWs) metadata() any {
 		"environment": s.req.Environment,
 		"interactive": s.req.Interactive,
 	}
+}
+
+func (s *execWs) cancel(op *operations.Operation) error {
+	s.connsLock.Lock()
+	conn := s.conns[-1]
+	s.connsLock.Unlock()
+
+	if conn == nil {
+		return nil
+	}
+
+	_ = conn.Close()
+
+	return nil
 }
 
 func (s *execWs) connect(op *operations.Operation, r *http.Request, w http.ResponseWriter) error {
@@ -217,7 +231,7 @@ func (s *execWs) do(op *operations.Operation) error {
 
 			devptsFd, _ = c.DevptsFd()
 
-			if devptsFd != nil && s.s.OS.NativeTerminals {
+			if devptsFd != nil {
 				ptys[0], ttys[0], err = linux.OpenPtyInDevpts(int(devptsFd.Fd()), rootUID, rootGID)
 				_ = devptsFd.Close()
 				devptsFd = nil
@@ -531,6 +545,11 @@ func (s *execWs) do(op *operations.Operation) error {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -708,7 +727,7 @@ func instanceExecPost(d *Daemon, r *http.Request) response.Response {
 		resources := map[string][]api.URL{}
 		resources["instances"] = []api.URL{*api.NewURL().Path(version.APIVersion, "instances", ws.instance.Name())}
 
-		op, err := operations.OperationCreate(s, projectName, operations.OperationClassWebsocket, operationtype.CommandExec, resources, ws.metadata(), ws.do, nil, ws.connect, r)
+		op, err := operations.OperationCreate(s, projectName, operations.OperationClassWebsocket, operationtype.CommandExec, resources, ws.metadata(), ws.do, ws.cancel, ws.connect, r)
 		if err != nil {
 			return response.InternalError(err)
 		}

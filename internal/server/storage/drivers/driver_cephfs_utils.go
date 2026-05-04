@@ -3,8 +3,8 @@ package drivers
 import (
 	"fmt"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/shared/subprocess"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/shared/subprocess"
 )
 
 // fsExists checks that the Ceph FS instance indeed exists.

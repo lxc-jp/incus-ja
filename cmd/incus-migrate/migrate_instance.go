@@ -10,16 +10,16 @@ import (
 	"slices"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/ask"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/ask"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // InstanceMigration handles the migration logic for an instance.
@@ -31,8 +31,8 @@ type InstanceMigration struct {
 	volumes       []*VolumeMigration
 }
 
-// NewInstanceMigration returns a new InstanceMigration.
-func NewInstanceMigration(ctx context.Context, server incus.InstanceServer, asker ask.Asker, flafRsyncArgs string, migraionType MigrationType) Migrator {
+// newInstanceMigration returns a new InstanceMigration.
+func newInstanceMigration(ctx context.Context, server incus.InstanceServer, asker ask.Asker, flafRsyncArgs string, migraionType MigrationType) Migrator {
 	return &InstanceMigration{
 		Migration: &Migration{
 			asker:         asker,
@@ -336,7 +336,7 @@ func (m *InstanceMigration) render() string {
 		data.Disks[k] = v
 	}
 
-	out, err := yaml.Marshal(&data)
+	out, err := yaml.Dump(&data, yaml.V2)
 	if err != nil {
 		return ""
 	}
@@ -506,7 +506,7 @@ func (m *InstanceMigration) askNetwork() error {
 }
 
 func (m *InstanceMigration) askDisk() error {
-	volMigrator, ok := NewVolumeMigration(m.ctx, m.server, m.asker, m.flagRsyncArgs).(*VolumeMigration)
+	volMigrator, ok := newVolumeMigration(m.ctx, m.server, m.asker, m.flagRsyncArgs).(*VolumeMigration)
 	if !ok {
 		return errors.New("Migrator should be of type VolumeMigration")
 	}

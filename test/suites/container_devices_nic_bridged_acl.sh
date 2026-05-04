@@ -2,13 +2,6 @@ test_container_devices_nic_bridged_acl() {
     ensure_import_testimage
     ensure_has_localhost_remote "${INCUS_ADDR}"
 
-    firewallDriver=$(incus info | awk -F ":" '/firewall:/{gsub(/ /, "", $0); print $2}')
-
-    if [ "$firewallDriver" != "xtables" ] && [ "$firewallDriver" != "nftables" ]; then
-        echo "Unrecognised firewall driver: ${firewallDriver}"
-        false
-    fi
-
     ctPrefix="nt$$"
     brName="inct$$"
 
@@ -23,53 +16,33 @@ test_container_devices_nic_bridged_acl() {
     incus network set "${brName}" security.acls="${brName}A"
 
     # Check ACL jump rules, and chain with default reject rules created.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -S | grep -c "\-j incus_acl_${brName}" | grep 4
-        iptables -S "incus_acl_${brName}" | grep -c "\-j REJECT" | grep 2
-    else
-        nft -nn list chain inet incus "aclin.${brName}" | grep -c "jump acl.${brName}" | grep 1
-        nft -nn list chain inet incus "aclout.${brName}" | grep -c "jump acl.${brName}" | grep 1
-        nft -nn list chain inet incus "aclfwd.${brName}" | grep -c "jump acl.${brName}" | grep 2
-        nft -nn list chain inet incus "acl.${brName}" | grep -c "reject" | grep 2
-    fi
+    nft -nn list chain inet incus "aclin.${brName}" | grep -c "jump acl.${brName}" | grep 1
+    nft -nn list chain inet incus "aclout.${brName}" | grep -c "jump acl.${brName}" | grep 1
+    nft -nn list chain inet incus "aclfwd.${brName}" | grep -c "jump acl.${brName}" | grep 2
+    nft -nn list chain inet incus "acl.${brName}" | grep -c "reject" | grep 2
 
     # Unset ACLs and check the firewall config is cleaned up.
     incus network unset "${brName}" security.acls
-    if [ "$firewallDriver" = "xtables" ]; then
-        ! iptables -S | grep "\-j incus_acl_${brName}" || false
-        ! iptables -S "incus_acl_${brName}" || false
-    else
-        ! nft -nn list chain inet incus "aclin.${brName}" || false
-        ! nft -nn list chain inet incus "aclout.${brName}" || false
-        ! nft -nn list chain inet incus "aclfwd.${brName}" || false
-        ! nft -nn list chain inet incus "acl.${brName}" || false
-    fi
+    ! nft -nn list chain inet incus "aclin.${brName}" || false
+    ! nft -nn list chain inet incus "aclout.${brName}" || false
+    ! nft -nn list chain inet incus "aclfwd.${brName}" || false
+    ! nft -nn list chain inet incus "acl.${brName}" || false
 
     # Set ACLs, then delete network and check the firewall config is cleaned up.
     incus network set "${brName}" security.acls="${brName}A"
 
     # Check ACL jump rules, and chain with default reject rules created.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -S | grep -c "\-j incus_acl_${brName}" | grep 4
-        iptables -S "incus_acl_${brName}" | grep -c "\-j REJECT" | grep 2
-    else
-        nft -nn list chain inet incus "aclin.${brName}" | grep -c "jump acl.${brName}" | grep 1
-        nft -nn list chain inet incus "aclout.${brName}" | grep -c "jump acl.${brName}" | grep 1
-        nft -nn list chain inet incus "aclfwd.${brName}" | grep -c "jump acl.${brName}" | grep 2
-        nft -nn list chain inet incus "acl.${brName}" | grep -c "reject" | grep 2
-    fi
+    nft -nn list chain inet incus "aclin.${brName}" | grep -c "jump acl.${brName}" | grep 1
+    nft -nn list chain inet incus "aclout.${brName}" | grep -c "jump acl.${brName}" | grep 1
+    nft -nn list chain inet incus "aclfwd.${brName}" | grep -c "jump acl.${brName}" | grep 2
+    nft -nn list chain inet incus "acl.${brName}" | grep -c "reject" | grep 2
 
     # Delete network and check the firewall config is cleaned up.
     incus network delete "${brName}"
-    if [ "$firewallDriver" = "xtables" ]; then
-        ! iptables -S | grep "\-j incus_acl_${brName}" || false
-        ! iptables -S "incus_acl_${brName}" || false
-    else
-        ! nft -nn list chain inet incus "aclin.${brName}" || false
-        ! nft -nn list chain inet incus "aclout.${brName}" || false
-        ! nft -nn list chain inet incus "aclfwd.${brName}" || false
-        ! nft -nn list chain inet incus "acl.${brName}" || false
-    fi
+    ! nft -nn list chain inet incus "aclin.${brName}" || false
+    ! nft -nn list chain inet incus "aclout.${brName}" || false
+    ! nft -nn list chain inet incus "aclfwd.${brName}" || false
+    ! nft -nn list chain inet incus "acl.${brName}" || false
 
     # Create network and specify ACL at create time.
     incus network create "${brName}" \
@@ -85,11 +58,7 @@ test_container_devices_nic_bridged_acl() {
         security.acls.default.egress.action=drop
 
     # Check default reject rules changed to drop.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -S "incus_acl_${brName}" | grep -c "\-j DROP" | grep 2
-    else
-        nft -nn list chain inet incus "acl.${brName}" | grep -c "drop" | grep 2
-    fi
+    nft -nn list chain inet incus "acl.${brName}" | grep -c "drop" | grep 2
 
     # Change default actions to reject.
     incus network set "${brName}" \
@@ -97,11 +66,7 @@ test_container_devices_nic_bridged_acl() {
         security.acls.default.egress.action=reject
 
     # Check default reject rules changed to reject.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -S "incus_acl_${brName}" | grep -c "\-j REJECT" | grep 2
-    else
-        nft -nn list chain inet incus "acl.${brName}" | grep -c "reject" | grep 2
-    fi
+    nft -nn list chain inet incus "acl.${brName}" | grep -c "reject" | grep 2
 
     # Create profile for new containers.
     incus profile copy default "${ctPrefix}"

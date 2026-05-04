@@ -10,8 +10,8 @@ import (
 
 	"github.com/cowsql/go-cowsql/client"
 
-	"github.com/lxc/incus/v6/internal/server/db/query"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/server/db/query"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // RaftNode holds information about a single node in the dqlite raft cluster.

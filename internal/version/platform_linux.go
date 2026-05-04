@@ -5,8 +5,8 @@ package version
 import (
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/shared/osarch"
 )
 
 func getPlatformVersionStrings() []string {

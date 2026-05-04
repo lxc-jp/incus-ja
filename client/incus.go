@@ -16,9 +16,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/tcp"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/tcp"
 )
 
 // ProtocolIncus represents an Incus API server.

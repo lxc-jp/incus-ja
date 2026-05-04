@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 func TestShouldShow(t *testing.T) {

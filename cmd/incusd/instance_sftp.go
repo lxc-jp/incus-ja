@@ -8,12 +8,12 @@ import (
 
 	"github.com/gorilla/mux"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/shared/api"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // swagger:operation GET /1.0/instances/{name}/sftp instances instance_sftp
@@ -26,6 +26,12 @@ import (
 //	produces:
 //	  - application/json
 //	  - application/octet-stream
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	responses:
 //	  "101":
 //	    description: Switching protocols to SFTP

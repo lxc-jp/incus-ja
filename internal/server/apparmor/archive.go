@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/lxc/incus/v6/internal/server/sys"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/internal/server/sys"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 // ArchiveWrapper is used as a RunWrapper in the rsync package.

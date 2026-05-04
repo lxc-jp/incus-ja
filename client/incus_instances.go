@@ -18,13 +18,14 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/sftp"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/cancel"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/tcp"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/ws"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/cancel"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/tcp"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/ws"
 )
 
 // Instance handling functions.
@@ -875,6 +876,7 @@ func (r *ProtocolIncus) CopyInstance(source InstanceServer, instance api.Instanc
 		Live:              req.Source.Live,
 		InstanceOnly:      req.Source.InstanceOnly,
 		AllowInconsistent: req.Source.AllowInconsistent,
+		Devices:           req.Devices,
 	}
 
 	// Push mode migration
@@ -1254,7 +1256,7 @@ func (r *ProtocolIncus) ExecInstance(instanceName string, exec api.InstanceExecP
 		if outputFiles["1"] != "" {
 			reader, _ := r.getInstanceExecOutputLogFile(instanceName, filepath.Base(outputFiles["1"]))
 			if args.Stdout != nil {
-				_, errCopy := io.Copy(args.Stdout, reader)
+				_, errCopy := util.SafeCopy(args.Stdout, reader)
 				// Regardless of errCopy value, we want to delete the file after a copy operation
 				errDelete := r.deleteInstanceExecOutputLogFile(instanceName, filepath.Base(outputFiles["1"]))
 				if errDelete != nil {
@@ -1275,7 +1277,7 @@ func (r *ProtocolIncus) ExecInstance(instanceName string, exec api.InstanceExecP
 		if outputFiles["2"] != "" {
 			reader, _ := r.getInstanceExecOutputLogFile(instanceName, filepath.Base(outputFiles["2"]))
 			if args.Stderr != nil {
-				_, errCopy := io.Copy(args.Stderr, reader)
+				_, errCopy := util.SafeCopy(args.Stderr, reader)
 				errDelete := r.deleteInstanceExecOutputLogFile(instanceName, filepath.Base(outputFiles["1"]))
 				if errDelete != nil {
 					return nil, errDelete
@@ -1715,7 +1717,7 @@ func (r *ProtocolIncus) rawConn(apiURL *url.URL, protocol string) (net.Conn, err
 		return nil, errors.New("Missing or unexpected Upgrade header in response")
 	}
 
-	return conn, err
+	return conn, nil
 }
 
 // GetInstanceFileSFTPConn returns a connection to the instance's SFTP endpoint.
@@ -2995,7 +2997,7 @@ func (r *ProtocolIncus) GetInstanceBackupFile(instanceName string, name string, 
 		}
 	}
 
-	size, err := io.Copy(req.BackupFile, body)
+	size, err := util.SafeCopy(req.BackupFile, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3071,7 +3073,7 @@ func (r *ProtocolIncus) CreateInstanceBackupStream(instanceName string, backup a
 		}
 	}
 
-	_, err = io.Copy(req.BackupFile, body)
+	_, err = util.SafeCopy(req.BackupFile, body)
 	return err
 }
 
@@ -3197,4 +3199,24 @@ func (r *ProtocolIncus) GetInstanceDebugMemory(name string, format string) (io.R
 	}
 
 	return resp.Body, nil
+}
+
+// CreateInstanceBitmap requests that Incus creates a new bitmap for the instance.
+func (r *ProtocolIncus) CreateInstanceBitmap(name string, bitmap api.StorageVolumeBitmapsPost) error {
+	if !r.HasExtension("storage_volume_nbd") {
+		return errors.New("The server is missing the required \"storage_volume_nbd\" API extension")
+	}
+
+	path, _, err := r.instanceTypeToPath(api.InstanceTypeAny)
+	if err != nil {
+		return err
+	}
+
+	// Send the request
+	_, _, err = r.query("POST", fmt.Sprintf("%s/%s/bitmaps", path, url.PathEscape(name)), bitmap, "")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

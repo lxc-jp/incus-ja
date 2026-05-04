@@ -11,19 +11,15 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	cliColor "github.com/lxc/incus/v6/cmd/incus/color"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/cliconfig"
+	incus "github.com/lxc/incus/v7/client"
+	cliColor "github.com/lxc/incus/v7/cmd/incus/color"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/cliconfig"
 )
 
 // ExplainOnly is a global switch putting the parser into explain mode, i.e. showing the user how
 // their arguments are parsed.
 var ExplainOnly = false
-
-func quote(s string) string {
-	return fmt.Sprintf(i18n.G("“%s”"), s)
-}
 
 func formatAlternatives(alternatives []string) string {
 	n := len(alternatives)

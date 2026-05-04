@@ -9,14 +9,14 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdMonitor struct {
@@ -31,8 +31,7 @@ type cmdMonitor struct {
 
 var cmdMonitorUsage = u.Usage{u.RemoteColonOpt}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdMonitor) Command() *cobra.Command {
+func (c *cmdMonitor) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("monitor", cmdMonitorUsage...)
 	cmd.Short = i18n.G("Monitor a local or remote server")
@@ -51,18 +50,17 @@ incus monitor --type=lifecycle
     Only show lifecycle events.`))
 	cmd.Hidden = true
 
-	cmd.RunE = c.Run
-	cmd.Flags().BoolVar(&c.flagPretty, "pretty", false, i18n.G("Pretty rendering (short for --format=pretty)"))
-	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Show events from all projects"))
-	cmd.Flags().StringArrayVar(&c.flagType, "type", nil, i18n.G("Event type to listen for")+"``")
-	cmd.Flags().StringVar(&c.flagLogLevel, "loglevel", "", i18n.G("Minimum level for log messages (only available when using pretty format)")+"``")
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "yaml", i18n.G("Format (json|pretty|yaml)")+"``")
+	cmd.RunE = c.run
+	cli.AddBoolFlag(cmd.Flags(), &c.flagPretty, "pretty", i18n.G("Pretty rendering (short for --format=pretty)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagAllProjects, "all-projects", i18n.G("Show events from all projects"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagType, "type|t", i18n.G("Event type to listen for"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagLogLevel, "loglevel", "", "", i18n.G("Minimum level for log messages (only available when using pretty format)"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", "yaml", "", i18n.G("Format (json|pretty|yaml)"))
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdMonitor) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdMonitor) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdMonitorUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -176,7 +174,7 @@ func (c *cmdMonitor) Run(cmd *cobra.Command, args []string) error {
 		var render []byte
 		switch c.flagFormat {
 		case "yaml":
-			render, err = yaml.Marshal(&rawEvent)
+			render, err = yaml.Dump(&rawEvent, yaml.V2)
 			if err != nil {
 				chError <- err
 				return

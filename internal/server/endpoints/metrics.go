@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/ports"
-	"github.com/lxc/incus/v6/internal/server/endpoints/listeners"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/logger"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/ports"
+	"github.com/lxc/incus/v7/internal/server/endpoints/listeners"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/logger"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 func metricsCreateListener(address string, cert *localtls.CertInfo) (net.Listener, error) {

@@ -6,14 +6,14 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	pcidev "github.com/lxc/incus/v6/internal/server/device/pci"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/shared/resources"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/linux"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	pcidev "github.com/lxc/incus/v7/internal/server/device/pci"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/shared/resources"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // sriovMu is used to lock concurrent GPU allocations.

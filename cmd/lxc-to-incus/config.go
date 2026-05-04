@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 var checkedKeys = []string{

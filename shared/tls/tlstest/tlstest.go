@@ -3,7 +3,7 @@ package tlstest
 import (
 	"testing"
 
-	"github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/shared/tls"
 )
 
 // TestingKeyPair returns CertInfo object initialized with a test keypair. It's

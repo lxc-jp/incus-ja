@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/units"
 )
 
 var (

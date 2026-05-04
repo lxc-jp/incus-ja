@@ -21,47 +21,47 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 
-	"github.com/lxc/incus/v6/internal/filter"
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	internalIO "github.com/lxc/incus/v6/internal/io"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/filter"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	internalIO "github.com/lxc/incus/v7/internal/io"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	storageDrivers "github.com/lxc/incus/v7/internal/server/storage/drivers"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var storagePoolVolumesCmd = APIEndpoint{
 	Path: "storage-pools/{poolName}/volumes",
 
 	Get:  APIEndpointAction{Handler: storagePoolVolumesGet, AccessHandler: allowAuthenticated},
-	Post: APIEndpointAction{Handler: storagePoolVolumesPost, AccessHandler: allowPermission(auth.ObjectTypeProject, auth.EntitlementCanCreateStorageVolumes)},
+	Post: APIEndpointAction{Handler: storagePoolVolumesPost, AccessHandler: allowPermission(auth.ObjectTypeProject, auth.EntitlementCanCreateStorageVolumes), LargeRequest: true},
 }
 
 var storagePoolVolumesTypeCmd = APIEndpoint{
 	Path: "storage-pools/{poolName}/volumes/{type}",
 
 	Get:  APIEndpointAction{Handler: storagePoolVolumesGet, AccessHandler: allowAuthenticated},
-	Post: APIEndpointAction{Handler: storagePoolVolumesPost, AccessHandler: allowPermission(auth.ObjectTypeProject, auth.EntitlementCanCreateStorageVolumes)},
+	Post: APIEndpointAction{Handler: storagePoolVolumesPost, AccessHandler: allowPermission(auth.ObjectTypeProject, auth.EntitlementCanCreateStorageVolumes), LargeRequest: true},
 }
 
 var storagePoolVolumeTypeCmd = APIEndpoint{
@@ -72,6 +72,12 @@ var storagePoolVolumeTypeCmd = APIEndpoint{
 	Patch:  APIEndpointAction{Handler: storagePoolVolumePatch, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanEdit, "poolName", "type", "volumeName", "location")},
 	Post:   APIEndpointAction{Handler: storagePoolVolumePost, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanEdit, "poolName", "type", "volumeName", "location")},
 	Put:    APIEndpointAction{Handler: storagePoolVolumePut, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanEdit, "poolName", "type", "volumeName", "location")},
+}
+
+var storagePoolVolumeTypeNBDCmd = APIEndpoint{
+	Path: "storage-pools/{poolName}/volumes/{type}/{volumeName}/nbd",
+
+	Get: APIEndpointAction{Handler: storagePoolVolumeTypeNBDHandler, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanConnectNBD, "poolName", "type", "volumeName", "location")},
 }
 
 var storagePoolVolumeTypeSFTPCmd = APIEndpoint{
@@ -86,7 +92,7 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 	Delete: APIEndpointAction{Handler: storagePoolVolumeTypeFileHandler, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanAccessFiles, "poolName", "type", "volumeName", "location")},
 	Get:    APIEndpointAction{Handler: storagePoolVolumeTypeFileHandler, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanAccessFiles, "poolName", "type", "volumeName", "location")},
 	Head:   APIEndpointAction{Handler: storagePoolVolumeTypeFileHandler, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanAccessFiles, "poolName", "type", "volumeName", "location")},
-	Post:   APIEndpointAction{Handler: storagePoolVolumeTypeFileHandler, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanAccessFiles, "poolName", "type", "volumeName", "location")},
+	Post:   APIEndpointAction{Handler: storagePoolVolumeTypeFileHandler, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanAccessFiles, "poolName", "type", "volumeName", "location"), LargeRequest: true},
 }
 
 // swagger:operation GET /1.0/storage-pools/{poolName}/volumes storage storage_pool_volumes_get
@@ -99,6 +105,11 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: poolName
+//      description: Storage pool name
+//      type: string
+//      required: true
 //    - in: query
 //      name: project
 //      description: Project name
@@ -160,6 +171,11 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: poolName
+//      description: Storage pool name
+//      type: string
+//      required: true
 //    - in: query
 //      name: project
 //      description: Project name
@@ -214,6 +230,16 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: poolName
+//      description: Storage pool name
+//      type: string
+//      required: true
+//    - in: path
+//      name: type
+//      description: Storage volume type
+//      type: string
+//      required: true
 //    - in: query
 //      name: project
 //      description: Project name
@@ -268,6 +294,16 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -317,6 +353,16 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -678,6 +724,11 @@ func filterVolumes(volumes []*db.StorageVolume, clauses *filter.ClauseSet, allPr
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -719,6 +770,16 @@ func filterVolumes(volumes []*db.StorageVolume, clauses *filter.ClauseSet, allPr
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -868,6 +929,11 @@ func storagePoolVolumesPost(d *Daemon, r *http.Request) response.Response {
 
 	switch req.Source.Type {
 	case "":
+		err = validateCreateConfig(req.Config)
+		if err != nil {
+			return response.SmartError(err)
+		}
+
 		return doVolumeCreateOrCopy(s, r, request.ProjectParam(r), projectName, poolName, &req)
 	case "copy":
 		if dbVolume != nil {
@@ -880,6 +946,16 @@ func storagePoolVolumesPost(d *Daemon, r *http.Request) response.Response {
 	default:
 		return response.BadRequest(fmt.Errorf("Unknown source type %q", req.Source.Type))
 	}
+}
+
+// validateCreateConfig validates the configuration at creation time
+// and rejects keys that are not allowed when creating the storage volume.
+func validateCreateConfig(config map[string]string) error {
+	if util.IsTrue(config["dependent"]) {
+		return errors.New("Config key 'dependent' cannot be set on creation")
+	}
+
+	return nil
 }
 
 func clusterCopyCustomVolumeInternal(s *state.State, r *http.Request, sourceAddress string, projectName string, poolName string, req *api.StorageVolumesPost) response.Response {
@@ -1094,7 +1170,7 @@ func doVolumeMigration(s *state.State, r *http.Request, requestProjectName strin
 
 	var op *operations.Operation
 	if push {
-		op, err = operations.OperationCreate(s, requestProjectName, operations.OperationClassWebsocket, operationtype.VolumeCreate, resources, sink.Metadata(), run, nil, sink.Connect, r)
+		op, err = operations.OperationCreate(s, requestProjectName, operations.OperationClassWebsocket, operationtype.VolumeCreate, resources, sink.Metadata(), run, sink.Cancel, sink.Connect, r)
 		if err != nil {
 			return response.InternalError(err)
 		}
@@ -1126,6 +1202,21 @@ func doVolumeMigration(s *state.State, r *http.Request, requestProjectName strin
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: volumeName
+//	    description: Storage volume name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -1668,7 +1759,7 @@ func storagePoolVolumeTypePostMigration(state *state.State, r *http.Request, req
 	}
 
 	// Pull mode.
-	op, err := operations.OperationCreate(state, requestProjectName, operations.OperationClassWebsocket, operationtype.VolumeMigrate, resources, ws.Metadata(), run, nil, ws.Connect, r)
+	op, err := operations.OperationCreate(state, requestProjectName, operations.OperationClassWebsocket, operationtype.VolumeMigrate, resources, ws.Metadata(), run, ws.Cancel, ws.Connect, r)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -1774,6 +1865,21 @@ func storagePoolVolumeTypePostMove(s *state.State, r *http.Request, poolName str
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: volumeName
+//	    description: Storage volume name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -1820,6 +1926,21 @@ func storagePoolVolumeTypePostMove(s *state.State, r *http.Request, poolName str
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: volumeName
+//	    description: Storage volume name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -2063,6 +2184,21 @@ func getVolumeFull(ctx context.Context, s *state.State, poolName string, vol api
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: volumeName
+//	    description: Storage volume name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -2234,6 +2370,21 @@ func storagePoolVolumePut(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: volumeName
+//	    description: Storage volume name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -2374,6 +2525,21 @@ func storagePoolVolumePatch(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: type
+//	    description: Storage volume type
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: volumeName
+//	    description: Storage volume name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -2531,8 +2697,23 @@ func createStoragePoolVolumeFromISO(s *state.State, r *http.Request, requestProj
 	defer func() { _ = os.Remove(isoFile.Name()) }()
 	reverter.Add(func() { _ = isoFile.Close() })
 
+	// Get disk budget for the project if any.
+	var budget int64
+
+	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+		budget, err = project.GetSpaceBudget(tx, projectName)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return response.InternalError(err)
+	}
+
 	// Stream uploaded ISO data into temporary file.
-	size, err := io.Copy(isoFile, data)
+	size, err := util.SafeCopy(internalIO.NewQuotaWriter(isoFile, budget), data)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -2584,8 +2765,23 @@ func createStoragePoolVolumeFromBackup(s *state.State, r *http.Request, requestP
 	defer func() { _ = os.Remove(backupFile.Name()) }()
 	reverter.Add(func() { _ = backupFile.Close() })
 
+	// Get disk budget for the project if any.
+	var budget int64
+
+	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+		budget, err = project.GetSpaceBudget(tx, projectName)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return response.InternalError(err)
+	}
+
 	// Stream uploaded backup data into temporary file.
-	_, err = io.Copy(backupFile, data)
+	_, err = util.SafeCopy(internalIO.NewQuotaWriter(backupFile, budget), data)
 	if err != nil {
 		return response.InternalError(err)
 	}

@@ -1,8 +1,8 @@
 package lifecycle
 
 import (
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // NetworkAddressSet ia an internal copy of the network address set interface.

@@ -7,12 +7,12 @@ import (
 
 	"go.starlark.net/starlark"
 
-	"github.com/lxc/incus/v6/internal/server/auth/common"
-	scriptletLoad "github.com/lxc/incus/v6/internal/server/scriptlet/load"
-	"github.com/lxc/incus/v6/internal/server/scriptlet/log"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/scriptlet"
+	"github.com/lxc/incus/v7/internal/server/auth/common"
+	scriptletLoad "github.com/lxc/incus/v7/internal/server/scriptlet/load"
+	"github.com/lxc/incus/v7/internal/server/scriptlet/log"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/scriptlet"
 )
 
 // AuthorizationRun runs the authorization scriptlet.

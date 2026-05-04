@@ -1,8 +1,8 @@
 package main
 
 import (
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/shared/api"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 func createContainer(c incus.InstanceServer, fingerprint string, name string, privileged bool) error {

@@ -19,14 +19,15 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
 
-	incus "github.com/lxc/incus/v6/client"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/shared/api"
-	config "github.com/lxc/incus/v6/shared/cliconfig"
-	"github.com/lxc/incus/v6/shared/termios"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	incus "github.com/lxc/incus/v7/client"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/shared/api"
+	config "github.com/lxc/incus/v7/shared/cliconfig"
+	"github.com/lxc/incus/v7/shared/termios"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Date layout to be used throughout the client.
@@ -103,8 +104,8 @@ func parseDeviceOverrides(deviceOverrideArgs []string) (map[string]map[string]st
 	return deviceMap, nil
 }
 
-// IsAliasesSubset returns true if the first array is completely contained in the second array.
-func IsAliasesSubset(a1 []api.ImageAlias, a2 []api.ImageAlias) bool {
+// isAliasesSubset returns true if the first array is completely contained in the second array.
+func isAliasesSubset(a1 []api.ImageAlias, a2 []api.ImageAlias) bool {
 	set := make(map[string]any)
 	for _, alias := range a2 {
 		set[alias.Name] = nil
@@ -120,8 +121,8 @@ func IsAliasesSubset(a1 []api.ImageAlias, a2 []api.ImageAlias) bool {
 	return true
 }
 
-// GetCommonAliases returns the common aliases between a list of aliases and all the existing ones.
-func GetCommonAliases(client incus.InstanceServer, aliases ...api.ImageAlias) ([]api.ImageAliasesEntry, error) {
+// getCommonAliases returns the common aliases between a list of aliases and all the existing ones.
+func getCommonAliases(client incus.InstanceServer, aliases ...api.ImageAlias) ([]api.ImageAliasesEntry, error) {
 	if len(aliases) == 0 {
 		return nil, nil
 	}
@@ -131,7 +132,7 @@ func GetCommonAliases(client incus.InstanceServer, aliases ...api.ImageAlias) ([
 		names[i] = alias.Name
 	}
 
-	// 'GetExistingAliases' which is using 'sort.SearchStrings' requires sorted slice
+	// 'getExistingAliases' which is using 'sort.SearchStrings' requires sorted slice
 	sort.Strings(names)
 
 	resp, err := client.GetImageAliases()
@@ -139,7 +140,7 @@ func GetCommonAliases(client incus.InstanceServer, aliases ...api.ImageAlias) ([
 		return nil, err
 	}
 
-	return GetExistingAliases(names, resp), nil
+	return getExistingAliases(names, resp), nil
 }
 
 // Create the specified image aliases, updating those that already exist.
@@ -161,7 +162,7 @@ func ensureImageAliases(client incus.InstanceServer, aliases []api.ImageAlias, f
 	}
 
 	// Delete existing aliases that match provided ones
-	for _, alias := range GetExistingAliases(names, resp) {
+	for _, alias := range getExistingAliases(names, resp) {
 		err := client.DeleteImageAlias(alias.Name)
 		if err != nil {
 			return fmt.Errorf(i18n.G("Failed to remove alias %s: %w"), alias.Name, err)
@@ -182,8 +183,8 @@ func ensureImageAliases(client incus.InstanceServer, aliases []api.ImageAlias, f
 	return nil
 }
 
-// GetExistingAliases returns the intersection between a list of aliases and all the existing ones.
-func GetExistingAliases(aliases []string, allAliases []api.ImageAliasesEntry) []api.ImageAliasesEntry {
+// getExistingAliases returns the intersection between a list of aliases and all the existing ones.
+func getExistingAliases(aliases []string, allAliases []api.ImageAliasesEntry) []api.ImageAliasesEntry {
 	existing := []api.ImageAliasesEntry{}
 	for _, alias := range allAliases {
 		name := alias.Name
@@ -200,7 +201,7 @@ func GetExistingAliases(aliases []string, allAliases []api.ImageAliasesEntry) []
 // aliases=[a1, a2], image aliases=[a1] - image will be deleted
 // aliases=[a1], image aliases=[a1, a2] - image will be preserved.
 func deleteImagesByAliases(client incus.InstanceServer, aliases []api.ImageAlias) error {
-	existingAliases, err := GetCommonAliases(client, aliases...)
+	existingAliases, err := getCommonAliases(client, aliases...)
 	if err != nil {
 		return fmt.Errorf(i18n.G("Error retrieving aliases: %w"), err)
 	}
@@ -233,7 +234,7 @@ func deleteImagesByAliases(client incus.InstanceServer, aliases []api.ImageAlias
 		// 2. If image with 'foo' and 'bar' aliases already exists and new image is published
 		//    with alias 'foo'. Old image should be kept with alias 'bar'
 		//    and new image will have 'foo' alias.
-		if image != nil && IsAliasesSubset(image.Aliases, aliases) {
+		if image != nil && isAliasesSubset(image.Aliases, aliases) {
 			op, err := client.DeleteImage(alias.Target)
 			if err != nil {
 				return err
@@ -568,13 +569,13 @@ func sshfsMount(ctx context.Context, sftpConn net.Conn, entity string, relPath s
 		case <-ctx.Done():
 		}
 
-		cancel()                                  // Prevents error output when the io.Copy functions finish.
+		cancel()                                  // Prevents error output when the util.SafeCopy functions finish.
 		_ = sshfsCmd.Process.Signal(os.Interrupt) // This will cause sshfs to unmount.
 		_ = stdin.Close()
 	}()
 
 	go func() {
-		_, err := io.Copy(stdin, sftpConn)
+		_, err := util.SafeCopy(stdin, sftpConn)
 		if ctx.Err() == nil {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, i18n.G("I/O copy from instance to sshfs failed: %v")+"\n", err)
@@ -585,7 +586,7 @@ func sshfsMount(ctx context.Context, sftpConn net.Conn, entity string, relPath s
 		cancel() // Ask sshfs to end.
 	}()
 
-	_, err = io.Copy(sftpConn, stdout)
+	_, err = util.SafeCopy(sftpConn, stdout)
 	if err != nil && ctx.Err() == nil {
 		fmt.Fprintf(os.Stderr, i18n.G("I/O copy from sshfs to instance failed: %v")+"\n", err)
 	}
@@ -742,7 +743,7 @@ func sshSFTPServer(ctx context.Context, sftpConn func() (net.Conn, error), authN
 					// Copy SFTP data between client and remote instance.
 					ctx, cancel := context.WithCancel(ctx)
 					go func() {
-						_, err := io.Copy(channel, sftpConn)
+						_, err := util.SafeCopy(channel, sftpConn)
 						if ctx.Err() == nil {
 							if err != nil {
 								fmt.Fprintf(os.Stderr, i18n.G("I/O copy from instance to SSH failed: %v")+"\n", err)
@@ -750,16 +751,16 @@ func sshSFTPServer(ctx context.Context, sftpConn func() (net.Conn, error), authN
 								fmt.Printf(i18n.G("Instance disconnected for client %q")+"\n", nConn.RemoteAddr())
 							}
 						}
-						cancel() // Prevents error output when other io.Copy finishes.
+						cancel() // Prevents error output when other util.SafeCopy finishes.
 						_ = channel.Close()
 					}()
 
-					_, err = io.Copy(sftpConn, channel)
+					_, err = util.SafeCopy(sftpConn, channel)
 					if err != nil && ctx.Err() == nil {
 						fmt.Fprintf(os.Stderr, i18n.G("I/O copy from SSH to instance failed: %v")+"\n", err)
 					}
 
-					cancel() // Prevents error output when other io.Copy finishes.
+					cancel() // Prevents error output when other util.SafeCopy finishes.
 					_ = sftpConn.Close()
 				}()
 			}
@@ -778,5 +779,17 @@ func formatRemote(conf *config.Config, p *u.Parsed) string {
 
 // normalizePath normalizes a path and return whether it looks like a directory.
 func normalizePath(path string) (string, bool) {
-	return filepath.Clean(path), path == "" || strings.HasSuffix(path, "/")
+	// On Windows, the SFTP server expects the file path to start with `/`.
+	path = "/" + path
+	return filepath.Clean(path), strings.HasSuffix(path, "/")
+}
+
+// isStdin returns whether the provided path looks like stdin.
+func isStdin(path string) bool {
+	return slices.Contains([]string{"-", "/dev/stdin", "/dev/fd/0"}, path)
+}
+
+// isStdout returns whether the provided path looks like stdout.
+func isStdout(path string) bool {
+	return slices.Contains([]string{"-", "/dev/stdout", "/dev/fd/1"}, path)
 }

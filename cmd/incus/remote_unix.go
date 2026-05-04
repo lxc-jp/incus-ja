@@ -17,12 +17,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdRemoteProxy struct {
@@ -32,44 +32,40 @@ type cmdRemoteProxy struct {
 	flagTimeout int
 }
 
-// Not the most beautiful way to encode it, but this command is an outlier in that regard.
-var cmdRemoteProxyUsage = u.Usage{u.Either(u.Remote, u.Colon(u.Remote)), u.Target(u.Placeholder(i18n.G("socket file")))}
+var cmdRemoteProxyUsage = u.Usage{u.Colon(u.Remote), u.Target(u.Placeholder(i18n.G("socket file")))}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdRemoteProxy) Command() *cobra.Command {
+func (c *cmdRemoteProxy) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("proxy", cmdRemoteProxyUsage...)
 	cmd.Short = i18n.G("Run a local API proxy")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Run a local API proxy for the remote`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
-	cmd.Flags().IntVar(&c.flagTimeout, "timeout", 0, i18n.G("Proxy timeout (exits when no connections)")+"``")
+	cli.AddIntFlag(cmd.Flags(), &c.flagTimeout, "timeout", 0, i18n.G("Proxy timeout (exits when no connections)"))
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdRemoteProxy) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdRemoteProxy) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdRemoteProxyUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
 	}
 
-	remoteName := parsed[0].String
+	remoteName := strings.TrimSuffix(parsed[0].String, ":")
 	path := parsed[1].String
 
-	// Detect remote name.
-	if !strings.HasSuffix(remoteName, ":") {
-		remoteName = remoteName + ":"
-	}
-
-	remote := c.global.conf.Remotes[strings.TrimSuffix(remoteName, ":")]
+	remote := c.global.conf.Remotes[remoteName]
 	remote.KeepAlive = 0
-	c.global.conf.Remotes[strings.TrimSuffix(remoteName, ":")] = remote
 
-	resources, err := c.global.parseServers(remoteName)
+	// Attempt to read stdin for TLS connection details.
+	_ = json.NewDecoder(os.Stdin).Decode(&remote.TLS)
+
+	c.global.conf.Remotes[remoteName] = remote
+
+	resources, err := c.global.parseServers(parsed[0].String)
 	if err != nil {
 		return err
 	}

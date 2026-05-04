@@ -5,17 +5,16 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	"github.com/lxc/incus/v6/internal/i18n"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	"github.com/lxc/incus/v7/internal/i18n"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdAdmin struct {
 	global *cmdGlobal
 }
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdAdmin) Command() *cobra.Command {
+func (c *cmdAdmin) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("admin")
 	cmd.Short = i18n.G("Manage incus daemon")
@@ -23,31 +22,31 @@ func (c *cmdAdmin) Command() *cobra.Command {
 
 	// cluster
 	adminClusterCmd := cmdAdminCluster{global: c.global}
-	cmd.AddCommand(adminClusterCmd.Command())
+	cmd.AddCommand(adminClusterCmd.command())
 
 	// init
 	adminInitCmd := cmdAdminInit{global: c.global}
-	cmd.AddCommand(adminInitCmd.Command())
+	cmd.AddCommand(adminInitCmd.command())
 
 	// os
 	adminOSCmd := cmdAdminOS{global: c.global}
-	cmd.AddCommand(adminOSCmd.Command())
+	cmd.AddCommand(adminOSCmd.command())
 
 	// recover sub-command
 	adminRecoverCmd := cmdAdminRecover{global: c.global}
-	cmd.AddCommand(adminRecoverCmd.Command())
+	cmd.AddCommand(adminRecoverCmd.command())
 
 	// shutdown sub-command
 	shutdownCmd := cmdAdminShutdown{global: c.global}
-	cmd.AddCommand(shutdownCmd.Command())
+	cmd.AddCommand(shutdownCmd.command())
 
 	// sql sub-command
 	sqlCmd := cmdAdminSQL{global: c.global}
-	cmd.AddCommand(sqlCmd.Command())
+	cmd.AddCommand(sqlCmd.command())
 
 	// waitready sub-command
 	adminWaitreadyCmd := cmdAdminWaitready{global: c.global}
-	cmd.AddCommand(adminWaitreadyCmd.Command())
+	cmd.AddCommand(adminWaitreadyCmd.command())
 
 	return cmd
 }

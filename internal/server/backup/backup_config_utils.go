@@ -6,17 +6,17 @@ import (
 	"os"
 	"path/filepath"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/backup/config"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/backup/config"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/osarch"
 )
 
 // ConfigToInstanceDBArgs converts the instance config in the backup config to DB InstanceArgs.
@@ -90,7 +90,7 @@ func ParseConfigYamlFile(path string) (*config.Config, error) {
 	}
 
 	backupConf := config.Config{}
-	err = yaml.Unmarshal(data, &backupConf)
+	err = yaml.Load(data, &backupConf)
 	if err != nil {
 		return nil, err
 	}
@@ -156,11 +156,11 @@ func UpdateInstanceConfig(c *db.Cluster, b Info, mountPath string) error {
 	// Change the pool in the backup.yaml.
 	backup.Pool = pool
 
-	if updateRootDevicePool(backup.Container.Devices, pool.Name) {
+	if backup.Container != nil && updateRootDevicePool(backup.Container.Devices, pool.Name) {
 		rootDiskDeviceFound = true
 	}
 
-	if updateRootDevicePool(backup.Container.ExpandedDevices, pool.Name) {
+	if backup.Container != nil && updateRootDevicePool(backup.Container.ExpandedDevices, pool.Name) {
 		rootDiskDeviceFound = true
 	}
 
@@ -182,7 +182,7 @@ func UpdateInstanceConfig(c *db.Cluster, b Info, mountPath string) error {
 
 	defer func() { _ = file.Close() }()
 
-	data, err := yaml.Marshal(&backup)
+	data, err := yaml.Dump(&backup, yaml.V2)
 	if err != nil {
 		return err
 	}

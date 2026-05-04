@@ -11,11 +11,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/config"
-	"github.com/lxc/incus/v6/internal/server/db"
-	scriptletLoad "github.com/lxc/incus/v6/internal/server/scriptlet/load"
-	"github.com/lxc/incus/v6/shared/validate"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/config"
+	"github.com/lxc/incus/v7/internal/server/db"
+	scriptletLoad "github.com/lxc/incus/v7/internal/server/scriptlet/load"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // Config holds cluster-wide configuration values.
@@ -171,6 +171,11 @@ func (c *Config) LinstorControllerConnection() string {
 // LinstorSSL returns all three SSL configuration keys needed for a Linstor controller connection.
 func (c *Config) LinstorSSL() (string, string, string) {
 	return c.m.GetString("storage.linstor.ca_cert"), c.m.GetString("storage.linstor.client_cert"), c.m.GetString("storage.linstor.client_key")
+}
+
+// ShutdownAction returns the action to perform when the server is being shut down.
+func (c *Config) ShutdownAction() string {
+	return c.m.GetString("core.shutdown_action")
 }
 
 // ShutdownTimeout returns the number of minutes to wait for running operation to complete
@@ -741,6 +746,16 @@ var ConfigSchema = config.Schema{
 	//  shortdesc: Time after which a remote add token expires
 	"core.remote_token_expiry": {Type: config.String, Validator: validate.Optional(expiryValidator)},
 
+	// gendoc:generate(entity=server, group=core, key=core.shutdown_action)
+	// Specify the action to take when the daemon is being shut down.
+	// Supported values are `shutdown` (stop all instances) and `evacuate` (attempt to evacuate the clustered server).
+	// ---
+	//  type: string
+	//  scope: global
+	//  defaultdesc: `shutdown`
+	//  shortdesc: Action to perform on server shutdown
+	"core.shutdown_action": {Type: config.String, Default: "shutdown", Validator: validate.IsOneOf("shutdown", "evacuate")},
+
 	// gendoc:generate(entity=server, group=core, key=core.shutdown_timeout)
 	// Specify the number of minutes to wait for running operations to complete before the daemon shuts down.
 	// ---
@@ -977,7 +992,7 @@ var ConfigSchema = config.Schema{
 	"oidc.audience": {},
 
 	// gendoc:generate(entity=server, group=oidc, key=oidc.claim)
-	//
+	// Note that the claim must be contained in the access token.
 	// ---
 	//  type: string
 	//  scope: global

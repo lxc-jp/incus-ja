@@ -12,8 +12,8 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/i18n"
-	config "github.com/lxc/incus/v6/shared/cliconfig"
+	"github.com/lxc/incus/v7/internal/i18n"
+	config "github.com/lxc/incus/v7/shared/cliconfig"
 )
 
 var numberedArgRegex = regexp.MustCompile(`@ARG(\d+)@`)

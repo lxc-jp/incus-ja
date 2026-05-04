@@ -97,7 +97,7 @@
 					},
 					{
 						"initial.*": {
-							"longdesc": "",
+							"longdesc": "For root disk devices, this is used to override the storage pool's default volume\nconfiguration when creating the instance's root volume.\n\nFor custom volumes, only `initial.uid`, `initial.gid` and `initial.mode` are\naccepted and they are used when auto-creating sub-directories inside the custom\nvolume (when the `source` includes a sub-path that doesn't exist).\n\n`initial.uid`, `initial.gid` and `initial.mode` are also used to set the ownership\nand mode of the file system when the `source` is `tmpfs:` or `tmpfs-overlay:`.",
 							"required": "no",
 							"shortdesc": "Initial volume configuration for instance root disk devices",
 							"type": "string"
@@ -1382,6 +1382,7 @@
 					},
 					{
 						"gvrp": {
+							"condition": "container",
 							"default": "false",
 							"longdesc": "",
 							"managed": "no",
@@ -1391,6 +1392,7 @@
 					},
 					{
 						"hwaddr": {
+							"condition": "container",
 							"default": "randomly assigned",
 							"longdesc": "",
 							"managed": "no",
@@ -1400,6 +1402,7 @@
 					},
 					{
 						"mtu": {
+							"condition": "container",
 							"default": "MTU of the parent device",
 							"longdesc": "",
 							"managed": "no",
@@ -1434,6 +1437,7 @@
 					},
 					{
 						"vlan": {
+							"condition": "container",
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "The VLAN ID to attach to",
@@ -1442,6 +1446,7 @@
 					},
 					{
 						"vlan.tagged": {
+							"condition": "container",
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "Comma-delimited list of VLAN IDs or VLAN ranges to join for tagged traffic",
@@ -3465,16 +3470,9 @@
 						}
 					},
 					{
-						"volatile.vm.definition": {
+						"volatile.vm.boot_state": {
 							"longdesc": "",
-							"shortdesc": "QEMU VM definition name (used for migration between versions)",
-							"type": "string"
-						}
-					},
-					{
-						"volatile.vm.hotplug.memory": {
-							"longdesc": "",
-							"shortdesc": "Memory setup of the VM as needed for state restoration",
+							"shortdesc": "JSON encoded VM properties used during live migration and other state restoration.",
 							"type": "string"
 						}
 					},
@@ -5311,6 +5309,13 @@
 						}
 					},
 					{
+						"restricted.storage-pools.access": {
+							"longdesc": "Specify a comma-delimited list of storage pool names that are allowed for use in this project.\nIf this option is not set, all storage pools are accessible.",
+							"shortdesc": "Which storage pool names are allowed for use in this project",
+							"type": "string"
+						}
+					},
+					{
 						"restricted.virtual-machines.lowlevel": {
 							"defaultdesc": "`block`",
 							"longdesc": "Possible values are `allow` or `block`.\nWhen set to `allow`, low-level VM options like {config:option}`instance-raw:raw.qemu`, `volatile.*`, etc. can be used.",
@@ -5706,6 +5711,15 @@
 							"longdesc": "",
 							"scope": "global",
 							"shortdesc": "Time after which a remote add token expires",
+							"type": "string"
+						}
+					},
+					{
+						"core.shutdown_action": {
+							"defaultdesc": "`shutdown`",
+							"longdesc": "Specify the action to take when the daemon is being shut down.\nSupported values are `shutdown` (stop all instances) and `evacuate` (attempt to evacuate the clustered server).",
+							"scope": "global",
+							"shortdesc": "Action to perform on server shutdown",
 							"type": "string"
 						}
 					},
@@ -6165,7 +6179,7 @@
 					},
 					{
 						"oidc.claim": {
-							"longdesc": "",
+							"longdesc": "Note that the claim must be contained in the access token.",
 							"scope": "global",
 							"shortdesc": "OpenID Connect claim to use as the username",
 							"type": "string"

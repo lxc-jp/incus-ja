@@ -8,12 +8,12 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/lxc/incus/v6/internal/migration"
-	backupConfig "github.com/lxc/incus/v6/internal/server/backup/config"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v7/internal/migration"
+	backupConfig "github.com/lxc/incus/v7/internal/server/backup/config"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/units"
 )
 
 // Info represents the index frame sent if supported.
@@ -51,6 +51,7 @@ type Type struct {
 type DependentVolumeArgs struct {
 	Name          string
 	Pool          string
+	DeviceName    string
 	ContentType   string
 	MigrationType Type
 	Snapshots     []*migration.Snapshot
@@ -266,7 +267,7 @@ func MatchTypes(offer *migration.MigrationHeader, fallbackType migration.Migrati
 }
 
 // DependentVolumeFromHeader creates a DependentVolume from a MigrationHeader.
-func DependentVolumeFromHeader(header *migration.MigrationHeader, volName string, poolName string, contentType string, volSize int64) *migration.DependentVolume {
+func DependentVolumeFromHeader(header *migration.MigrationHeader, volName string, poolName string, contentType string, volSize int64, deviceName string) *migration.DependentVolume {
 	fs := header.GetFs()
 	return &migration.DependentVolume{
 		Fs:            &fs,
@@ -277,7 +278,17 @@ func DependentVolumeFromHeader(header *migration.MigrationHeader, volName string
 		Pool:          &poolName,
 		ContentType:   &contentType,
 		VolumeSize:    &volSize,
+		DeviceName:    &deviceName,
 	}
+}
+
+// DependentVolumeUpdateHeader updates the migration header for a dependent volume.
+func DependentVolumeUpdateHeader(header *migration.MigrationHeader, volume *migration.DependentVolume) {
+	fs := header.GetFs()
+	volume.Fs = &fs
+	volume.BtrfsFeatures = header.BtrfsFeatures
+	volume.RsyncFeatures = header.RsyncFeatures
+	volume.ZfsFeatures = header.ZfsFeatures
 }
 
 // HeaderFromDependentVolume creates a MigrationHeader from a DependentVolume.
@@ -291,10 +302,23 @@ func HeaderFromDependentVolume(volume *migration.DependentVolume) *migration.Mig
 }
 
 // ProtobufToDependentVolume converts a migration.DependentVolume into DependentVolumeArgs.
-func ProtobufToDependentVolume(volume *migration.DependentVolume, migrationType Type) DependentVolumeArgs {
+func ProtobufToDependentVolume(volume *migration.DependentVolume, migrationType Type, overrides map[string]string) DependentVolumeArgs {
+	volName := *volume.Name
+	poolName := *volume.Pool
+	if overrides != nil {
+		if overrides["pool"] != "" {
+			poolName = overrides["pool"]
+		}
+
+		if overrides["source"] != "" {
+			volName = overrides["source"]
+		}
+	}
+
 	return DependentVolumeArgs{
-		Name:          *volume.Name,
-		Pool:          *volume.Pool,
+		Name:          volName,
+		Pool:          poolName,
+		DeviceName:    *volume.DeviceName,
 		ContentType:   *volume.ContentType,
 		MigrationType: migrationType,
 		Snapshots:     volume.Snapshots,

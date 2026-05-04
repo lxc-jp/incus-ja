@@ -19,11 +19,11 @@ import (
 	"github.com/adhocore/gronx"
 	"github.com/google/uuid"
 	"github.com/kballard/go-shellquote"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // And returns a function that runs one or more validators, all must pass without error.
@@ -586,7 +586,7 @@ func IsAPIName(value string, allowSlashes bool) error {
 	}
 
 	// Check beginning and end.
-	match, err := regexp.MatchString(`^[a-zA-Z0-9]+.*[a-zA-Z0-9]+$`, value)
+	match, err := regexp.MatchString(`^[a-zA-Z0-9]+(.*[a-zA-Z0-9]+)?$`, value)
 	if err != nil {
 		return err
 	}
@@ -881,7 +881,7 @@ func IsCloudInitUserData(value string) error {
 func IsYAML(value string) error {
 	out := struct{}{}
 
-	err := yaml.Unmarshal([]byte(value), &out)
+	err := yaml.Load([]byte(value), &out)
 	if err != nil {
 		return err
 	}

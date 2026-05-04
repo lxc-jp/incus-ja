@@ -8,13 +8,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdCopy struct {
@@ -38,8 +38,7 @@ type cmdCopy struct {
 
 var cmdCopyUsage = u.Usage{u.MakePath(u.Instance, u.Snapshot.Optional()).Remote(), u.NewName(u.Instance).Optional().Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdCopy) Command() *cobra.Command {
+func (c *cmdCopy) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("copy", cmdCopyUsage...)
 	cmd.Aliases = []string{"cp"}
@@ -55,21 +54,21 @@ Transfer modes (--mode):
 The pull transfer mode is the default as it is compatible with all server versions.
 `))
 
-	cmd.RunE = c.Run
-	cmd.Flags().StringArrayVarP(&c.flagConfig, "config", "c", nil, i18n.G("Config key/value to apply to the new instance")+"``")
-	cmd.Flags().StringArrayVarP(&c.flagDevice, "device", "d", nil, i18n.G("New key/value to apply to a specific device")+"``")
-	cmd.Flags().StringArrayVarP(&c.flagProfile, "profile", "p", nil, i18n.G("Profile to apply to the new instance")+"``")
-	cmd.Flags().BoolVarP(&c.flagEphemeral, "ephemeral", "e", false, i18n.G("Ephemeral instance"))
-	cmd.Flags().StringVar(&c.flagMode, "mode", "pull", i18n.G("Transfer mode. One of pull, push or relay")+"``")
-	cmd.Flags().BoolVar(&c.flagInstanceOnly, "instance-only", false, i18n.G("Copy the instance without its snapshots"))
-	cmd.Flags().BoolVar(&c.flagStateless, "stateless", false, i18n.G("Copy a stateful instance stateless"))
-	cmd.Flags().StringVarP(&c.flagStorage, "storage", "s", "", i18n.G("Storage pool name")+"``")
-	cmd.Flags().StringVar(&c.flagTarget, "target", "", i18n.G("Cluster member name")+"``")
-	cmd.Flags().StringVar(&c.flagTargetProject, "target-project", "", i18n.G("Copy to a project different from the source")+"``")
-	cmd.Flags().BoolVar(&c.flagNoProfiles, "no-profiles", false, i18n.G("Create the instance with no profiles applied"))
-	cmd.Flags().BoolVar(&c.flagRefresh, "refresh", false, i18n.G("Perform an incremental copy"))
-	cmd.Flags().BoolVar(&c.flagRefreshExcludeOlder, "refresh-exclude-older", false, i18n.G("During incremental copy, exclude source snapshots earlier than latest target snapshot"))
-	cmd.Flags().BoolVar(&c.flagAllowInconsistent, "allow-inconsistent", false, i18n.G("Ignore copy errors for volatile files"))
+	cmd.RunE = c.run
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagConfig, "config|c", i18n.G("Config key/value to apply to the new instance"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagDevice, "device|d", i18n.G("New key/value to apply to a specific device"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the new instance"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagEphemeral, "ephemeral|e", i18n.G("Ephemeral instance"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagMode, "mode", "pull", "", i18n.G("Transfer mode. One of pull, push or relay"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagInstanceOnly, "instance-only", i18n.G("Copy the instance without its snapshots"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagStateless, "stateless", i18n.G("Copy a stateful instance stateless"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagStorage, "storage|s", "", "", i18n.G("Storage pool name"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagTarget, "target", "", "", i18n.G("Cluster member name"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagTargetProject, "target-project", "", "", i18n.G("Copy to a project different from the source"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagNoProfiles, "no-profiles", i18n.G("Create the instance with no profiles applied"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagRefresh, "refresh", i18n.G("Perform an incremental copy"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagRefreshExcludeOlder, "refresh-exclude-older", i18n.G("During incremental copy, exclude source snapshots earlier than latest target snapshot"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagAllowInconsistent, "allow-inconsistent", i18n.G("Ignore copy errors for volatile files"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -422,8 +421,7 @@ func (c *cmdCopy) copyOrMove(cmd *cobra.Command, src *u.Parsed, dst *u.Parsed, k
 	return nil
 }
 
-// Run runs the actual command logic.
-func (c *cmdCopy) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdCopy) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdCopyUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err

@@ -12,9 +12,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
-	incustls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
+	incustls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // WebhookLogger represents a webhook logger.

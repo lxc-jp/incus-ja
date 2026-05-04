@@ -12,17 +12,17 @@ import (
 	"github.com/pkg/sftp"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/internal/server/cgroup"
-	"github.com/lxc/incus/v6/internal/server/db"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/instance/operationlock"
-	"github.com/lxc/incus/v6/internal/server/metrics"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/idmap"
-	"github.com/lxc/incus/v6/shared/ioprogress"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/cgroup"
+	"github.com/lxc/incus/v7/internal/server/db"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/instance/operationlock"
+	"github.com/lxc/incus/v7/internal/server/metrics"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/idmap"
+	"github.com/lxc/incus/v7/shared/ioprogress"
 )
 
 // HookStart hook used when instance has started.
@@ -91,6 +91,10 @@ type Instance interface {
 	Info() Info
 	IsPrivileged() bool
 
+	// Dependent volumes
+	HasDependentDisk() bool
+	ForEachDependentDiskType(diskAction func(dev deviceConfig.DeviceNamed) error) error
+
 	// Snapshots & migration & backups.
 	Restore(source Instance, stateful bool, diskOnly bool) error
 	Snapshot(name string, expiry time.Time, stateful bool) error
@@ -98,15 +102,17 @@ type Instance interface {
 	Backups() ([]backup.InstanceBackup, error)
 	UpdateBackupFile() error
 	CanLiveMigrate() bool
-	CreateQcow2Snapshot(diskPath string, devName string, snapshotName string, backingFilename string) error
+	CreateQcow2Snapshot(diskPath string, devName string, snapshotName string, backingFilename string, stateful bool) error
 	DeleteQcow2Snapshot(devName string, snapshotIndex int, backingFilename string) error
-	ExportQcow2Block(blockIndex int) (func(), string, error)
+	ExportQcow2Block(diskName string, blockIndex int) (func(), string, error)
+	ConnectNBD(diskName string, diskSize int64, writable bool) (net.Conn, func(), error)
 
 	// Config handling.
 	Rename(newName string, applyTemplateTrigger bool) error
 	Update(newConfig db.InstanceArgs, userRequested bool) error
+	UpdateDevices(devices deviceConfig.Devices) error
 
-	Delete(force bool) error
+	Delete(force bool, cleanupDependencies bool) error
 	Export(meta io.Writer, roofs io.Writer, properties map[string]string, expiration time.Time, tracker *ioprogress.ProgressTracker) (*api.ImageMetadata, error)
 
 	// Live configuration.
@@ -181,6 +187,11 @@ type Instance interface {
 	DeferTemplateApply(trigger TemplateTrigger) error
 
 	Metrics(hostInterfaces []net.Interface) (*metrics.MetricSet, error)
+
+	// Bitmaps.
+	CreateBitmap(deviceNames []string, data api.StorageVolumeBitmapsPost) error
+	DeleteBitmap(deviceName string, bitmapName string) error
+	GetBitmaps(deviceName string) ([]api.StorageVolumeBitmap, error)
 }
 
 // Container interface is for container specific functions.
@@ -231,7 +242,7 @@ type Info struct {
 // MigrateArgs represent arguments for instance migration send and receive.
 type MigrateArgs struct {
 	ControlSend           func(m proto.Message) error
-	ControlReceive        func(m proto.Message) error
+	ControlReceive        func(m proto.Message, handshake bool) error
 	StateConn             func(ctx context.Context) (io.ReadWriteCloser, error)
 	FilesystemConn        func(ctx context.Context) (io.ReadWriteCloser, error)
 	Snapshots             bool
@@ -246,6 +257,7 @@ type MigrateSendArgs struct {
 	MigrateArgs
 
 	AllowInconsistent bool
+	Devices           api.DevicesMap
 }
 
 // MigrateReceiveArgs represent arguments for instance migration receive.

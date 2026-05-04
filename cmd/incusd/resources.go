@@ -6,11 +6,11 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/response"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/resources"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/response"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/resources"
 )
 
 var api10ResourcesCmd = APIEndpoint{
@@ -93,6 +93,11 @@ func api10ResourcesGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Resource name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name

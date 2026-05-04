@@ -5,8 +5,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/lxc/incus/v6/internal/server/util"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/server/util"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // A variation of the standard tls.Listener that supports atomically swapping

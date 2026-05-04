@@ -225,19 +225,24 @@ test_container_devices_disk_subpath() {
     incus create testimage foo-path5
     incus config device add foo-path5 foo disk pool="${POOL}" source=foo/path5 path=/foo
 
+    incus create testimage foo-path6
+    incus config device add foo-path6 foo disk pool="${POOL}" source=foo/path6 path=/foo initial.uid=123 initial.gid=456 initial.mode=0777
+
     # Validation
     incus start foo-path1
     incus start foo-path2
     incus start foo-path3
     ! incus start foo-path4 || false
     incus start foo-path5
+    incus start foo-path6
 
     [ "$(incus file pull foo-path1/foo/hello -)" = "path1" ]
     [ "$(incus file pull foo-path2/foo/hello -)" = "path2" ]
     [ "$(incus file pull foo-path3/foo/hello -)" = "path3" ]
     [ "$(incus file pull foo-path5/foo/hello -)" = "path1" ]
+    [ "$(incus exec foo-path6 -- stat -c \"%u %g %a\" /foo)" = "123 456 777" ]
 
     # Cleanup
-    incus delete -f foo-main foo-path1 foo-path2 foo-path3 foo-path4 foo-path5
+    incus delete -f foo-main foo-path1 foo-path2 foo-path3 foo-path4 foo-path5 foo-path6
     incus storage volume delete "${POOL}" foo
 }

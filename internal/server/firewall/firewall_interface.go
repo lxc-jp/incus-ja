@@ -3,7 +3,7 @@ package firewall
 import (
 	"net"
 
-	"github.com/lxc/incus/v6/internal/server/firewall/drivers"
+	"github.com/lxc/incus/v7/internal/server/firewall/drivers"
 )
 
 // FirewallRules represents a set of firewall rules.

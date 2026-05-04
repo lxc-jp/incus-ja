@@ -42,10 +42,6 @@ test_storage_buckets() {
         # Skip linstor driver, as it does not support storage buckets
         export TEST_UNMET_REQUIREMENT="linstor driver does not support storage buckets"
         return 0
-    elif ! command -v minio; then
-        # Check minio is installed for local storage pool buckets.
-        export TEST_UNMET_REQUIREMENT="minio command not found"
-        return
     fi
 
     poolName=$(incus profile device get default root pool)
@@ -59,7 +55,7 @@ test_storage_buckets() {
         poolName="s3"
         s3Endpoint="${INCUS_CEPH_CEPHOBJECT_RADOSGW}"
     else
-        # Create a loop device for dir pools as MinIO doesn't support running on tmpfs (which the test suite can do).
+        # Create a loop device for dir pools (the test suite may otherwise run on tmpfs).
         if [ "$incus_backend" = "dir" ]; then
             configure_loop_device loop_file_1 loop_device_1
             # shellcheck disable=SC2154
@@ -87,7 +83,7 @@ test_storage_buckets() {
     initCreds=$(incus storage bucket create "${poolName}" "${bucketPrefix}.foo" user.foo=comment --description "Test description")
     initAccessKey=$(echo "${initCreds}" | awk '{ if ($2 == "access" && $3 == "key:") {print $4}}')
     initSecretKey=$(echo "${initCreds}" | awk '{ if ($2 == "secret" && $3 == "key:") {print $4}}')
-    s3cmdrun "${incus_backend}" "${initAccessKey}" "${initSecretKey}" ls | grep -F "${bucketPrefix}.foo"
+    s3cmdrun "${incus_backend}" "${initAccessKey}" "${initSecretKey}" ls "s3://${bucketPrefix}.foo"
 
     incus storage bucket list "${poolName}" | grep -F "${bucketPrefix}.foo"
     incus storage bucket list "${poolName}" | grep -F "Test description"
@@ -111,40 +107,25 @@ test_storage_buckets() {
     incus storage bucket key show "${poolName}" "${bucketPrefix}.foo" admin-key
     incus storage bucket key show "${poolName}" "${bucketPrefix}.foo" ro-key
 
-    # Test listing buckets via S3.
-    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" ls | grep -F "${bucketPrefix}.foo"
-    s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" ls | grep -F "${bucketPrefix}.foo"
-
     # Test making buckets via S3 is blocked.
     ! s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" mb "s3://${bucketPrefix}.foo2" || false
     ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" mb "s3://${bucketPrefix}.foo2" || false
 
     # Test putting a file into a bucket.
     incusTestFile="bucketfile_${bucketPrefix}.txt"
-    head -c 2M /dev/urandom > "${incusTestFile}"
+    head -c 5M /dev/urandom > "${incusTestFile}"
     s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" put "${incusTestFile}" "s3://${bucketPrefix}.foo"
     ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" put "${incusTestFile}" "s3://${bucketPrefix}.foo" || false
 
     # Test listing bucket files via S3.
-    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" ls "s3://${bucketPrefix}.foo" | grep -F "${incusTestFile}"
-    s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" ls "s3://${bucketPrefix}.foo" | grep -F "${incusTestFile}"
+    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" ls "s3://${bucketPrefix}.foo"
+    s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" ls "s3://${bucketPrefix}.foo"
 
     # Test getting a file from a bucket.
     s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" get "s3://${bucketPrefix}.foo/${incusTestFile}" "${incusTestFile}.get"
     rm "${incusTestFile}.get"
     s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" get "s3://${bucketPrefix}.foo/${incusTestFile}" "${incusTestFile}.get"
     rm "${incusTestFile}.get"
-
-    # Test setting bucket policy to allow anonymous access (also tests bucket URL generation).
-    bucketURL=$(incus storage bucket show "${poolName}" "${bucketPrefix}.foo" | awk '{if ($1 == "s3_url:") {print $2}}')
-
-    curl -sI --insecure -o /dev/null -w "%{http_code}" "${bucketURL}/${incusTestFile}" | grep -Fx "403"
-    ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" setpolicy deps/s3_global_read_policy.json "s3://${bucketPrefix}.foo" || false
-    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" setpolicy deps/s3_global_read_policy.json "s3://${bucketPrefix}.foo"
-    curl -sI --insecure -o /dev/null -w "%{http_code}" "${bucketURL}/${incusTestFile}" | grep -Fx "200"
-    ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" delpolicy "s3://${bucketPrefix}.foo" || false
-    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" delpolicy "s3://${bucketPrefix}.foo"
-    curl -sI --insecure o /dev/null -w "%{http_code}" "${bucketURL}/${incusTestFile}" | grep -Fx "403"
 
     # Test deleting a file from a bucket.
     ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" del "s3://${bucketPrefix}.foo/${incusTestFile}" || false
@@ -159,7 +140,7 @@ test_storage_buckets() {
         initSecretKey=$(echo "${initCreds}" | awk '{ if ($2 == "secret" && $3 == "key:") {print $4}}')
         ! s3cmdrun "${incus_backend}" "${initAccessKey}" "${initSecretKey}" put "${incusTestFile}" "s3://${bucketPrefix}.foo2" || false
 
-        # Grow bucket quota (significantly larger in order for MinIO to detect their is sufficient space to continue).
+        # Grow bucket quota.
         incus storage bucket set "${poolName}" "${bucketPrefix}.foo2" size=150MiB
         s3cmdrun "${incus_backend}" "${initAccessKey}" "${initSecretKey}" put "${incusTestFile}" "s3://${bucketPrefix}.foo2"
         s3cmdrun "${incus_backend}" "${initAccessKey}" "${initSecretKey}" del "s3://${bucketPrefix}.foo2/${incusTestFile}"
@@ -171,7 +152,7 @@ test_storage_buckets() {
 
     # Test deleting bucket via s3.
     ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" rb "s3://${bucketPrefix}.foo" || false
-    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" rb "s3://${bucketPrefix}.foo"
+    ! s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" rb "s3://${bucketPrefix}.foo"
 
     # Delete bucket keys.
     incus storage bucket key delete "${poolName}" "${bucketPrefix}.foo" admin-key
@@ -180,8 +161,8 @@ test_storage_buckets() {
     ! incus storage bucket key list "${poolName}" "${bucketPrefix}.foo" | grep -F "ro-key" || false
     ! incus storage bucket key show "${poolName}" "${bucketPrefix}.foo" admin-key || false
     ! incus storage bucket key show "${poolName}" "${bucketPrefix}.foo" ro-key || false
-    ! s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" ls || false
-    ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" ls || false
+    ! s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" ls "s3://${bucketPrefix}.foo" || false
+    ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" ls "s3://${bucketPrefix}.foo" || false
 
     # Delete bucket.
     incus storage bucket delete "${poolName}" "${bucketPrefix}.foo"
@@ -207,8 +188,7 @@ test_storage_bucket_export() {
 
     incus_backend=$(storage_backend "$INCUS_DIR")
 
-    # Skip the test if we are not using a Ceph or Dir backend, because the test requires a storage pool
-    # larger than 1 GiB due to the Minio requirements: https://github.com/minio/minio/issues/6795
+    # Skip the test if we are not using a Ceph or Dir backend.
     if [ ! "$incus_backend" = "ceph" ] && [ ! "$incus_backend" = "dir" ]; then
         return
     fi
@@ -219,10 +199,6 @@ test_storage_bucket_export() {
             export TEST_UNMET_REQUIREMENT="INCUS_CEPH_CEPHOBJECT_RADOSGW not specified"
             return
         fi
-    elif ! command -v minio; then
-        # Check minio is installed for local storage pool buckets.
-        export TEST_UNMET_REQUIREMENT="minio command not found"
-        return
     fi
 
     poolName=$(incus profile device get default root pool)
@@ -236,7 +212,7 @@ test_storage_bucket_export() {
         poolName="s3"
         s3Endpoint="${INCUS_CEPH_CEPHOBJECT_RADOSGW}"
     else
-        # Create a loop device for dir pools as MinIO doesn't support running on tmpfs (which the test suite can do).
+        # Create a loop device for dir pools (the test suite may otherwise run on tmpfs).
         if [ "$incus_backend" = "dir" ]; then
             configure_loop_device loop_file_1 loop_device_1
             # shellcheck disable=SC2154
@@ -259,7 +235,7 @@ test_storage_bucket_export() {
     initCreds=$(incus storage bucket create "${poolName}" "${bucketPrefix}.foo" user.foo=comment)
     initAccessKey=$(echo "${initCreds}" | awk '{ if ($2 == "access" && $3 == "key:") {print $4}}')
     initSecretKey=$(echo "${initCreds}" | awk '{ if ($2 == "secret" && $3 == "key:") {print $4}}')
-    s3cmdrun "${incus_backend}" "${initAccessKey}" "${initSecretKey}" ls | grep -F "${bucketPrefix}.foo"
+    s3cmdrun "${incus_backend}" "${initAccessKey}" "${initSecretKey}" ls "s3://${bucketPrefix}.foo"
 
     # Test putting a file into a bucket.
     incusTestFile="bucketfile_${bucketPrefix}.txt"
@@ -289,6 +265,11 @@ test_storage_bucket_export() {
 
     # Test getting admin key from bucket.
     incus storage bucket key list "${poolName}" "${bucketPrefix}.bar" | grep -F "admin"
+
+    # Export to stdout / import from stdin
+    incus storage bucket export "${poolName}" "${bucketPrefix}.bar" - > "${INCUS_DIR}/testbucket.tar.gz"
+    incus storage bucket delete "${poolName}" "${bucketPrefix}.bar"
+    incus storage bucket import "${poolName}" - "${bucketPrefix}.bar" < "${INCUS_DIR}/testbucket.tar.gz"
 
     # Clean up.
     incus storage bucket delete "${poolName}" "${bucketPrefix}.bar"

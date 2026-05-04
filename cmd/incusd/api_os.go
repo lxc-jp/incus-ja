@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/http/httputil"
 
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/response"
 )
 
 var apiOS = APIEndpoint{

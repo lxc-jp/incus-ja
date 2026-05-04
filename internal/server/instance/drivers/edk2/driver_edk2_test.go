@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lxc/incus/v6/internal/server/util"
+	"github.com/lxc/incus/v7/internal/server/util"
 )
 
 func tSetup(t *testing.T) func() {

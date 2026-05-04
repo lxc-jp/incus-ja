@@ -12,19 +12,19 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // swagger:operation GET /1.0/instances/{name}/metadata instances instance_metadata_get
@@ -37,6 +37,11 @@ import (
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -130,7 +135,7 @@ func instanceMetadataGet(d *Daemon, r *http.Request) response.Response {
 
 	// Parse into the API struct
 	metadata := api.ImageMetadata{}
-	err = yaml.Unmarshal(data, &metadata)
+	err = yaml.Load(data, &metadata)
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -152,6 +157,11 @@ func instanceMetadataGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -233,7 +243,7 @@ func instanceMetadataPatch(d *Daemon, r *http.Request) response.Response {
 		}
 
 		// Parse into the API struct
-		err = yaml.Unmarshal(data, &metadata)
+		err = yaml.Load(data, &metadata)
 		if err != nil {
 			return response.SmartError(err)
 		}
@@ -267,6 +277,11 @@ func instanceMetadataPatch(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -343,7 +358,7 @@ func instanceMetadataPut(d *Daemon, r *http.Request) response.Response {
 
 func doInstanceMetadataUpdate(s *state.State, inst instance.Instance, metadata api.ImageMetadata, r *http.Request) response.Response {
 	// Convert YAML.
-	data, err := yaml.Marshal(metadata)
+	data, err := yaml.Dump(metadata, yaml.V2)
 	if err != nil {
 		return response.BadRequest(err)
 	}
@@ -372,6 +387,11 @@ func doInstanceMetadataUpdate(s *state.State, inst instance.Instance, metadata a
 //	  - application/json
 //	  - application/octet-stream
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -498,7 +518,7 @@ func instanceMetadataTemplatesGet(d *Daemon, r *http.Request) response.Response 
 		return response.SmartError(err)
 	}
 
-	_, err = io.Copy(tempfile, template)
+	_, err = util.SafeCopy(tempfile, template)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -531,6 +551,11 @@ func instanceMetadataTemplatesGet(d *Daemon, r *http.Request) response.Response 
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: path
 //	    description: Template name
@@ -622,7 +647,7 @@ func instanceMetadataTemplatesPost(d *Daemon, r *http.Request) response.Response
 		return response.SmartError(err)
 	}
 
-	_, err = io.Copy(template, r.Body)
+	_, err = util.SafeCopy(template, r.Body)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -647,6 +672,11 @@ func instanceMetadataTemplatesPost(d *Daemon, r *http.Request) response.Response
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: path
 //	    description: Template name

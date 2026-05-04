@@ -174,110 +174,58 @@ container_devices_proxy_tcp() {
     incus config device set nattest eth0 ipv4.address "${v4_addr}"
     incus config device set nattest eth0 ipv6.address "${v6_addr}"
 
-    firewallDriver=$(incus info | awk -F ":" '/firewall:/{gsub(/ /, "", $0); print $2}')
-
     incus start nattest
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.validNAT || false
-        ! nft -nn list chain inet incus out.nattest.validNAT || false
-    fi
+    ! nft -nn list chain inet incus prert.nattest.validNAT || false
+    ! nft -nn list chain inet incus out.nattest.validNAT || false
 
     incus config device add nattest validNAT proxy listen="tcp:127.0.0.1:1234" connect="tcp:${v4_addr}:1234" bind=host
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.validNAT || false
-        ! nft -nn list chain inet incus out.nattest.validNAT || false
-    fi
+    ! nft -nn list chain inet incus prert.nattest.validNAT || false
+    ! nft -nn list chain inet incus out.nattest.validNAT || false
 
     # enable NAT
     incus config device set nattest validNAT nat true
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -w -t nat -S | grep -- "-A PREROUTING -d 127.0.0.1/32 -p tcp -m tcp --dport 1234 -m comment --comment \"generated for Incus container nattest (validNAT)\" -j DNAT --to-destination ${v4_addr}:1234"
-        iptables -w -t nat -S | grep -- "-A OUTPUT -d 127.0.0.1/32 -p tcp -m tcp --dport 1234 -m comment --comment \"generated for Incus container nattest (validNAT)\" -j DNAT --to-destination ${v4_addr}:1234"
-        iptables -w -t nat -S | grep -- "-A POSTROUTING -s ${v4_addr}/32 -d ${v4_addr}/32 -p tcp -m tcp --dport 1234 -m comment --comment \"generated for Incus container nattest (validNAT)\" -j MASQUERADE"
-    else
-        [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234 dnat ip to ${v4_addr}:1234")" -eq 1 ]
-        [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234 dnat ip to ${v4_addr}:1234")" -eq 1 ]
-    fi
+    [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234 dnat ip to ${v4_addr}:1234")" -eq 1 ]
+    [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234 dnat ip to ${v4_addr}:1234")" -eq 1 ]
 
     incus config device remove nattest validNAT
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.validNAT
-        ! nft -nn list chain inet incus out.nattest.validNAT
-    fi
+    ! nft -nn list chain inet incus prert.nattest.validNAT
+    ! nft -nn list chain inet incus out.nattest.validNAT
 
     incus config device add nattest validNAT proxy listen="tcp:127.0.0.1:1234-1235" connect="tcp:${v4_addr}:1234" bind=host nat=true
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 3 ]
-    else
-        [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}:1234")" -eq 1 ]
-        [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}:1234")" -eq 1 ]
-    fi
+    [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}:1234")" -eq 1 ]
+    [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}:1234")" -eq 1 ]
 
     incus config device remove nattest validNAT
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.validNAT || false
-        ! nft -nn list chain inet incus out.nattest.validNAT || false
-    fi
+    ! nft -nn list chain inet incus prert.nattest.validNAT || false
+    ! nft -nn list chain inet incus out.nattest.validNAT || false
 
     incus config device add nattest validNAT proxy listen="tcp:127.0.0.1:1234-1235" connect="tcp:${v4_addr}:1234-1235" bind=host nat=true
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 3 ]
-    else
-        [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}")" -eq 1 ]
-        [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}")" -eq 1 ]
-    fi
+    [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}")" -eq 1 ]
+    [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip daddr 127.0.0.1 tcp dport 1234-1235 dnat ip to ${v4_addr}")" -eq 1 ]
 
     incus config device remove nattest validNAT
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.validNAT || false
-        ! nft -nn list chain inet incus out.nattest.validNAT || false
-    fi
+    ! nft -nn list chain inet incus prert.nattest.validNAT || false
+    ! nft -nn list chain inet incus out.nattest.validNAT || false
 
     # IPv6 test
     incus config device add nattest validNAT proxy listen="tcp:[::1]:1234" connect="tcp:[::]:1234" bind=host nat=true
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(ip6tables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 3 ]
-    else
-        [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip6 daddr ::1 tcp dport 1234 dnat ip6 to \[${v6_addr}\]:1234")" -eq 1 ]
-        [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip6 daddr ::1 tcp dport 1234 dnat ip6 to \[${v6_addr}\]:1234")" -eq 1 ]
-    fi
+    [ "$(nft -nn list chain inet incus prert.nattest.validNAT | grep -c "ip6 daddr ::1 tcp dport 1234 dnat ip6 to \[${v6_addr}\]:1234")" -eq 1 ]
+    [ "$(nft -nn list chain inet incus out.nattest.validNAT | grep -c "ip6 daddr ::1 tcp dport 1234 dnat ip6 to \[${v6_addr}\]:1234")" -eq 1 ]
 
     incus config device unset nattest validNAT nat
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(ip6tables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.validNAT || false
-        ! nft -nn list chain inet incus out.nattest.validNAT || false
-    fi
+    ! nft -nn list chain inet incus prert.nattest.validNAT || false
+    ! nft -nn list chain inet incus out.nattest.validNAT || false
 
     incus config device remove nattest validNAT
 
     # This won't enable NAT
     incus config device add nattest invalidNAT proxy listen="tcp:127.0.0.1:1234" connect="udp:${v4_addr}:1234" bind=host
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (invalidNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.invalidNAT || false
-        ! nft -nn list chain inet incus out.nattest.invalidNAT || false
-    fi
+    ! nft -nn list chain inet incus prert.nattest.invalidNAT || false
+    ! nft -nn list chain inet incus out.nattest.invalidNAT || false
 
     incus delete -f nattest
-    if [ "$firewallDriver" = "xtables" ]; then
-        [ "$(iptables -w -t nat -S | grep -c "generated for Incus container nattest (validNAT)")" -eq 0 ]
-    else
-        ! nft -nn list chain inet incus prert.nattest.validNAT || false
-        ! nft -nn list chain inet incus out.nattest.validNAT || false
-    fi
+    ! nft -nn list chain inet incus prert.nattest.validNAT || false
+    ! nft -nn list chain inet incus out.nattest.validNAT || false
 
     incus network delete inct$$
 }

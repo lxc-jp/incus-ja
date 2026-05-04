@@ -4,14 +4,14 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 // driver is the extended internal interface.
@@ -98,9 +98,7 @@ type Driver interface {
 	// not mounted.
 	UnmountVolumeSnapshot(snapVol Volume, op *operations.Operation) (bool, error)
 
-	// CacheVolumeSnapshots is used to temporarily pre-fetch and cache snapshot information.
-	CacheVolumeSnapshots(vol Volume) error
-
+	CanRestoreVolume(vol Volume, snapshotName string) error
 	CreateVolumeSnapshot(snapVol Volume, op *operations.Operation) error
 	GetQcow2BackingFilePath(vol Volume) (string, error)
 	DeleteVolumeSnapshot(snapVol Volume, op *operations.Operation) error

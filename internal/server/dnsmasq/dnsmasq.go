@@ -11,12 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/project"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/project"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 const staticAllocationDeviceSeparator = "."
@@ -105,17 +104,6 @@ func Kill(name string, reload bool) error {
 	time.Sleep(100 * time.Millisecond) // Give OS time to release sockets.
 
 	return nil
-}
-
-// GetVersion returns the version of dnsmasq.
-func GetVersion() (*version.DottedVersion, error) {
-	output, err := subprocess.RunCommandCLocale("dnsmasq", "--version")
-	if err != nil {
-		return nil, fmt.Errorf("Failed to check dnsmasq version: %w", err)
-	}
-
-	lines := strings.Split(string(output), " ")
-	return version.Parse(lines[2])
 }
 
 // DHCPStaticAllocationPath returns the path to the DHCP static allocation file.

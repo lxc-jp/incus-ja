@@ -5,7 +5,7 @@ package cluster
 import (
 	"context"
 
-	"github.com/lxc/incus/v6/internal/server/certificate"
+	"github.com/lxc/incus/v7/internal/server/certificate"
 )
 
 // CertificateGenerated is an interface of generated methods for Certificate.

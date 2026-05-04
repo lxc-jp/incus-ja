@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 // ChardevChangeInfo contains information required to change the backend of a chardev.
@@ -135,6 +135,35 @@ type MigrationStatus struct {
 	PostcopyVCPUBlocktime          []int64 `json:"postcopy-vcpu-blocktime"`
 	DirtyLimitThrottleTimePerRound int64   `json:"dirty-limit-throttle-time-per-round"`
 	DirtyLimitRingFullTime         int64   `json:"dirty-limit-ring-full-time"`
+}
+
+// BlockExport contains information about the exported block.
+type BlockExport struct {
+	NodeName string `json:"node-name"`
+	Type     string `json:"type"`
+}
+
+// BlockDirtyInfo contains dirty bitmap information.
+type BlockDirtyInfo struct {
+	Name         string `json:"name"`
+	Count        int    `json:"count"`
+	Granularity  int    `json:"granularity"`
+	Recording    bool   `json:"recording"`
+	Busy         bool   `json:"busy"`
+	Persistent   bool   `json:"persistent"`
+	Inconsistent bool   `json:"inconsistent"`
+}
+
+// BlockDeviceInfo contains information about the backing device for a block device.
+type BlockDeviceInfo struct {
+	NodeName     string           `json:"node-name"`
+	DirtyBitmaps []BlockDirtyInfo `json:"dirty-bitmaps"`
+}
+
+// BlockInfo contains information about a virtual block device.
+type BlockInfo struct {
+	Device   string          `json:"device"`
+	Inserted BlockDeviceInfo `json:"inserted"`
 }
 
 // QueryCPUs returns a list of CPUs.
@@ -976,8 +1005,17 @@ func (m *Monitor) SetAction(actions map[string]string) error {
 
 // Reset VM.
 func (m *Monitor) Reset() error {
+	// Announce that we're triggering a reset so the event handler can distinguish
+	// our deliberate system_reset from a guest-initiated reboot. This must be set
+	// before sending the command, since the RESET event is processed asynchronously
+	// and may otherwise arrive after the startup goroutine has already flipped
+	// the initialized flag.
+	m.ExpectReset()
+
 	err := m.Run("system_reset", nil, nil)
 	if err != nil {
+		m.HandleReset()
+
 		return fmt.Errorf("Failed resetting: %w", err)
 	}
 
@@ -1178,12 +1216,16 @@ func (m *Monitor) NBDServerStop() error {
 }
 
 // NBDBlockExportAdd exports a writable device via the NBD server.
-func (m *Monitor) NBDBlockExportAdd(deviceNodeName string, writable bool) error {
+func (m *Monitor) NBDBlockExportAdd(deviceNodeName string, writable bool, bitmapNames []string) error {
 	var args struct {
 		ID       string `json:"id"`
 		Type     string `json:"type"`
 		NodeName string `json:"node-name"`
 		Writable bool   `json:"writable"`
+		Bitmaps  []struct {
+			Node string `json:"node"`
+			Name string `json:"name"`
+		} `json:"bitmaps,omitempty"`
 	}
 
 	args.ID = deviceNodeName
@@ -1191,12 +1233,69 @@ func (m *Monitor) NBDBlockExportAdd(deviceNodeName string, writable bool) error 
 	args.NodeName = deviceNodeName
 	args.Writable = writable
 
+	for _, b := range bitmapNames {
+		args.Bitmaps = append(args.Bitmaps, struct {
+			Node string `json:"node"`
+			Name string `json:"name"`
+		}{
+			Node: deviceNodeName,
+			Name: b,
+		})
+	}
+
 	err := m.Run("block-export-add", args, nil)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// QueryBlock returns a list of all virtual block devices.
+func (m *Monitor) QueryBlock() ([]BlockInfo, error) {
+	var resp struct {
+		Return []BlockInfo `json:"return"`
+	}
+
+	err := m.Run("query-block", nil, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Return, nil
+}
+
+// QueryBlockExports returns exported blocks.
+func (m *Monitor) QueryBlockExports() ([]BlockExport, error) {
+	var resp struct {
+		Return []BlockExport `json:"return"`
+	}
+
+	err := m.Run("query-block-exports", nil, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Return, nil
+}
+
+// QueryNBDBlockExports returns exported blocks of type 'nbd'.
+func (m *Monitor) QueryNBDBlockExports() ([]BlockExport, error) {
+	blocks, err := m.QueryBlockExports()
+	if err != nil {
+		return nil, err
+	}
+
+	result := []BlockExport{}
+	for _, b := range blocks {
+		if b.Type != "nbd" {
+			continue
+		}
+
+		result = append(result, b)
+	}
+
+	return result, nil
 }
 
 // QueryNamedBlockNodes returns block nodes names.
@@ -1398,12 +1497,26 @@ func (m *Monitor) BlockJobComplete(deviceNodeName string) error {
 
 	args.Device = deviceNodeName
 
-	err := m.Run("block-job-complete", args, nil)
+	ch, err := m.CreateEventChannel(args.Device)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	err = m.Run("block-job-complete", args, nil)
+	if err != nil {
+		return err
+	}
+
+	event := <-ch
+
+	switch event.Name {
+	case EventBlockJobCompleted:
+		return nil
+	case EventBlockJobError:
+		return fmt.Errorf("Error during block-job-complete")
+	default:
+		return fmt.Errorf("Not supported event: %q", event.Name)
+	}
 }
 
 // UpdateBlockSize updates the size of a disk.
@@ -1644,4 +1757,63 @@ func (m *Monitor) SetNICLink(id string, connected bool) error {
 	args.Name = id
 	args.Up = connected
 	return m.Run("set_link", args, nil)
+}
+
+// QuerySpice checks whether SPICE support is available in QEMU.
+func (m *Monitor) QuerySpice() error {
+	return m.Run("query-spice", nil, nil)
+}
+
+// Query9pDevice checks whether virtio-9p-pci support is available in QEMU.
+func (m *Monitor) Query9pDevice() error {
+	return m.Run("device-list-properties", map[string]string{"typename": "virtio-9p-pci"}, nil)
+}
+
+// QueryVirtioSoundDevice checks whether virtio-sound-pci support is available in QEMU.
+func (m *Monitor) QueryVirtioSoundDevice() error {
+	return m.Run("device-list-properties", map[string]string{"typename": "virtio-sound-pci"}, nil)
+}
+
+// AddDirtyBitmap creates a dirty bitmap for a block device.
+func (m *Monitor) AddDirtyBitmap(deviceNames []string, bitmapName string, granularity int, persistent bool, disabled bool) error {
+	actions := []TransactionAction{}
+	for _, d := range deviceNames {
+		data := map[string]any{
+			"node":       d,
+			"name":       bitmapName,
+			"persistent": persistent,
+			"disabled":   disabled,
+		}
+
+		if granularity > 0 {
+			data["granularity"] = granularity
+		}
+
+		actions = append(actions, TransactionAction{Type: "block-dirty-bitmap-add", Data: data})
+	}
+
+	err := m.RunTransaction(actions)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RemoveDirtyBitmap removes a dirty bitmap for a block device.
+func (m *Monitor) RemoveDirtyBitmap(deviceName string, bitmapName string) error {
+	var args struct {
+		Node string `json:"node"`
+		Name string `json:"name"`
+	}
+
+	args.Node = deviceName
+	args.Name = bitmapName
+
+	err := m.Run("block-dirty-bitmap-remove", args, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

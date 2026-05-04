@@ -862,11 +862,11 @@ test_clustering_storage() {
         # Attach a custom volume to a container on node1
         INCUS_DIR="${INCUS_ONE_DIR}" incus storage volume create pool1 v1
         INCUS_DIR="${INCUS_ONE_DIR}" incus init --target node1 -s pool1 testimage baz
-        INCUS_DIR="${INCUS_ONE_DIR}" incus storage volume attach pool1 custom/v1 baz testDevice /opt
+        INCUS_DIR="${INCUS_ONE_DIR}" incus storage volume attach pool1 v1 baz testDevice /opt
 
         # Trying to attach a custom volume to a container on another node fails
         INCUS_DIR="${INCUS_TWO_DIR}" incus init --target node2 -s pool1 testimage buz
-        ! INCUS_DIR="${INCUS_TWO_DIR}" incus storage volume attach pool1 custom/v1 buz testDevice /opt || false
+        ! INCUS_DIR="${INCUS_TWO_DIR}" incus storage volume attach pool1 v1 buz testDevice /opt || false
 
         # Create an unrelated volume and rename it on a node which differs from the
         # one running the container (issue #6435).

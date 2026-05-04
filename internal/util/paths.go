@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // CachePath returns the directory that Incus should its cache under. If INCUS_DIR is

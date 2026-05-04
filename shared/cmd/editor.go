@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 // TextEditor spawns the editor with a temporary YAML file for editing configs.

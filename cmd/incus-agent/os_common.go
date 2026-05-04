@@ -17,8 +17,8 @@ import (
 	psUtilNet "github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
 
-	"github.com/lxc/incus/v6/internal/server/metrics"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/server/metrics"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 var (

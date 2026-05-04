@@ -3,7 +3,7 @@ package cmd
 import (
 	"strings"
 
-	"github.com/lxc/incus/v6/cmd/incus/usage"
+	"github.com/lxc/incus/v7/cmd/incus/usage"
 )
 
 // Usage formats the command name and sub-command name.

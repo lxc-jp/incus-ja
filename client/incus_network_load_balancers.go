@@ -1,7 +1,7 @@
 package incus
 
 import (
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // GetNetworkLoadBalancerAddresses returns a list of network load balancer listen addresses.

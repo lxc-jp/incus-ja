@@ -21,27 +21,27 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/mdlayher/netx/eui64"
 
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq/dhcpalloc"
-	firewallDrivers "github.com/lxc/incus/v6/internal/server/firewall/drivers"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/network/acl"
-	addressSet "github.com/lxc/incus/v6/internal/server/network/address-set"
-	"github.com/lxc/incus/v6/internal/server/project"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/resources"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq/dhcpalloc"
+	firewallDrivers "github.com/lxc/incus/v7/internal/server/firewall/drivers"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/network/acl"
+	addressSet "github.com/lxc/incus/v7/internal/server/network/address-set"
+	"github.com/lxc/incus/v7/internal/server/project"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/resources"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 type bridgeNetwork interface {
@@ -342,7 +342,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 			return errors.New("Specified network is not fully created")
 		}
 
-		if n.Type() != "bridge" {
+		if n.Type() != "bridge" && (n.Type() != "physical" || !util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))) {
 			return errors.New("Specified network must be of type bridge")
 		}
 
@@ -811,7 +811,7 @@ func (d *nicBridged) Start() (*deviceConfig.RunConfig, error) {
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes"], ",", -1, true)...)
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv4.routes.external"], ",", -1, true)...)
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes.external"], ",", -1, true)...)
-	err = networkNICRouteAdd(d.config["parent"], routes...)
+	err = networkNICRouteAdd(d.config["parent"], d.config["ipv4.address"], d.config["ipv6.address"], routes...)
 	if err != nil {
 		return nil, err
 	}
@@ -1012,7 +1012,7 @@ func (d *nicBridged) Update(oldDevices deviceConfig.Devices, isRunning bool) err
 		oldRoutes = append(oldRoutes, util.SplitNTrimSpace(oldConfig["ipv6.routes"], ",", -1, true)...)
 		oldRoutes = append(oldRoutes, util.SplitNTrimSpace(oldConfig["ipv4.routes.external"], ",", -1, true)...)
 		oldRoutes = append(oldRoutes, util.SplitNTrimSpace(oldConfig["ipv6.routes.external"], ",", -1, true)...)
-		networkNICRouteDelete(oldConfig["parent"], oldRoutes...)
+		networkNICRouteDelete(oldConfig["parent"], oldConfig["ipv4.address"], oldConfig["ipv6.address"], oldRoutes...)
 
 		// Apply host-side routes to bridge interface.
 		routes := []string{}
@@ -1020,7 +1020,7 @@ func (d *nicBridged) Update(oldDevices deviceConfig.Devices, isRunning bool) err
 		routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes"], ",", -1, true)...)
 		routes = append(routes, util.SplitNTrimSpace(d.config["ipv4.routes.external"], ",", -1, true)...)
 		routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes.external"], ",", -1, true)...)
-		err = networkNICRouteAdd(d.config["parent"], routes...)
+		err = networkNICRouteAdd(d.config["parent"], d.config["ipv4.address"], d.config["ipv6.address"], routes...)
 		if err != nil {
 			return err
 		}
@@ -1147,7 +1147,7 @@ func (d *nicBridged) postStop() error {
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes"], ",", -1, true)...)
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv4.routes.external"], ",", -1, true)...)
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes.external"], ",", -1, true)...)
-	networkNICRouteDelete(bridgeName, routes...)
+	networkNICRouteDelete(bridgeName, d.config["ipv4.address"], d.config["ipv6.address"], routes...)
 
 	if util.IsTrue(d.config["security.mac_filtering"]) || util.IsTrue(d.config["security.ipv4_filtering"]) || util.IsTrue(d.config["security.ipv6_filtering"]) || d.config["security.acls"] != "" {
 		d.removeFilters(d.config)
@@ -1157,7 +1157,7 @@ func (d *nicBridged) postStop() error {
 }
 
 // Remove is run when the device is removed from the instance or the instance is deleted.
-func (d *nicBridged) Remove() error {
+func (d *nicBridged) Remove(cleanupDependencies bool) error {
 	// Handle the case where validation fails but the device still must be removed.
 	bridgeName := d.config["parent"]
 	if bridgeName == "" && d.config["network"] != "" {

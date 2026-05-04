@@ -72,8 +72,8 @@ test_storage_driver_linstor() {
         incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1 c1 testDevice /opt
         ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1 c1 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c1 c1
-        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c1 c1 testDevice /opt
-        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c1 c1 testDevice2 /opt || false
+        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1 c1 testDevice /opt
+        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1 c1 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c1 c1
 
         incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool1" c2

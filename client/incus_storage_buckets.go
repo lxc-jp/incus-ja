@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/cancel"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/cancel"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // GetStoragePoolBucketNames returns a list of storage bucket names.
@@ -496,7 +496,7 @@ func (r *ProtocolIncus) GetStoragePoolBucketBackupFile(pool string, bucketName s
 		}
 	}
 
-	size, err := io.Copy(req.BackupFile, body)
+	size, err := util.SafeCopy(req.BackupFile, body)
 	if err != nil {
 		return nil, err
 	}
@@ -567,7 +567,7 @@ func (r *ProtocolIncus) CreateStoragePoolBucketBackupStream(poolName string, buc
 		}
 	}
 
-	_, err = io.Copy(req.BackupFile, body)
+	_, err = util.SafeCopy(req.BackupFile, body)
 	return err
 }
 

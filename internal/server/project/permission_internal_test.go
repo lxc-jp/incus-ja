@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/lxc/incus/v6/shared/idmap"
+	"github.com/lxc/incus/v7/shared/idmap"
 )
 
 func TestParseHostIDMapRange(t *testing.T) {

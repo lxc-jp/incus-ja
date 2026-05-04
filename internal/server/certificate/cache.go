@@ -5,8 +5,8 @@ import (
 	"encoding/pem"
 	"sync"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // Cache represents an thread-safe in-memory cache of the certificates in the database.

@@ -5,8 +5,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // lxcCmd represents a running command for an LXC container.

@@ -11,10 +11,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/server/certificate"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/logger"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/server/certificate"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/logger"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // Return a TLS configuration suitable for establishing intra-member network connections using the server cert.

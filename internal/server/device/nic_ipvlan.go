@@ -7,15 +7,15 @@ import (
 	"slices"
 	"strings"
 
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/network"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/network"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 const (
@@ -232,11 +232,6 @@ func (d *nicIPVLAN) validateConfig(instConf instance.ConfigReader, partialValida
 func (d *nicIPVLAN) validateEnvironment() error {
 	if d.inst.Type() == instancetype.Container && d.config["name"] == "" {
 		return errors.New("Requires name property to start")
-	}
-
-	extensions := d.state.OS.LXCFeatures
-	if !extensions["network_ipvlan"] || !extensions["network_l2proxy"] || !extensions["network_gateway_device_route"] {
-		return errors.New("Requires liblxc has following API extensions: network_ipvlan, network_l2proxy, network_gateway_device_route")
 	}
 
 	// gendoc:generate(entity=devices, group=nic_ipvlan, key=parent)

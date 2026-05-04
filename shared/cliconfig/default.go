@@ -1,7 +1,7 @@
 package cliconfig
 
 import (
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // LocalRemote is the default local remote (over the unix socket).

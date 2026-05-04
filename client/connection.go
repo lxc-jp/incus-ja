@@ -15,10 +15,10 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/simplestreams"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/simplestreams"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // ConnectionArgs represents a set of common connection properties.
@@ -61,6 +61,9 @@ type ConnectionArgs struct {
 
 	// OpenID Connect tokens
 	OIDCTokens *oidc.Tokens[*oidc.IDTokenClaims]
+
+	// Do not block for OIDC authentication
+	OIDCNonInteractive bool
 
 	// Skip the event listener endpoint
 	SkipGetEvents bool
@@ -351,6 +354,7 @@ func ConnectOCI(uri string, args *ConnectionArgs) (ImageServer, error) {
 		httpCertificate: args.TLSServerCert,
 
 		cache:    map[string]ociInfo{},
+		errors:   map[string]error{},
 		tempPath: args.TempPath,
 	}
 
@@ -410,7 +414,7 @@ func httpsIncus(ctx context.Context, requestURL string, args *ConnectionArgs) (I
 
 	server.http = httpClient
 	if args.AuthType == api.AuthenticationMethodOIDC {
-		server.setupOIDCClient(args.OIDCTokens)
+		server.setupOIDCClient(args.OIDCTokens, args.OIDCNonInteractive)
 	}
 
 	// Test the connection and seed the server information

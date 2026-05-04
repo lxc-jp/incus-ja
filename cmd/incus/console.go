@@ -17,15 +17,15 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/termios"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/termios"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdConsole struct {
@@ -38,8 +38,7 @@ type cmdConsole struct {
 
 var cmdConsoleUsage = u.Usage{u.Instance.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConsole) Command() *cobra.Command {
+func (c *cmdConsole) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("console", cmdConsoleUsage...)
 	cmd.Short = i18n.G("Attach to instance consoles")
@@ -49,10 +48,10 @@ func (c *cmdConsole) Command() *cobra.Command {
 This command allows you to interact with the boot console of an instance
 as well as retrieve past log entries from it.`))
 
-	cmd.RunE = c.Run
-	cmd.Flags().BoolVarP(&c.flagForce, "force", "f", false, i18n.G("Forces a connection to the console, even if there is already an active session"))
-	cmd.Flags().BoolVar(&c.flagShowLog, "show-log", false, i18n.G("Retrieve the instance's console log"))
-	cmd.Flags().StringVarP(&c.flagType, "type", "t", c.global.defaultConsoleType(), i18n.G("Type of connection to establish: 'console' for serial console, 'vga' for SPICE graphical output")+"``")
+	cmd.RunE = c.run
+	cli.AddBoolFlag(cmd.Flags(), &c.flagForce, "force|f", i18n.G("Forces a connection to the console, even if there is already an active session"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagShowLog, "show-log", i18n.G("Retrieve the instance's console log"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagType, "type|t", c.global.defaultConsoleType(), "", i18n.G("Type of connection to establish: 'console' for serial console, 'vga' for SPICE graphical output"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return c.global.cmpInstances(toComplete)
@@ -109,8 +108,7 @@ func (er stdinMirror) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Run runs the actual command logic.
-func (c *cmdConsole) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConsole) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConsoleUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err

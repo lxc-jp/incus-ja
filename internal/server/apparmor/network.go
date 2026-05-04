@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lxc/incus/v6/internal/server/sys"
+	"github.com/lxc/incus/v7/internal/server/sys"
 )
 
 // Internal copy of the network interface.

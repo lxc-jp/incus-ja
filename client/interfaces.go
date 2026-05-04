@@ -9,9 +9,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/sftp"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/cancel"
-	"github.com/lxc/incus/v6/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/cancel"
+	"github.com/lxc/incus/v7/shared/ioprogress"
 )
 
 // The Operation type represents a currently running operation.
@@ -123,6 +123,8 @@ type InstanceServer interface {
 	ExecInstance(instanceName string, exec api.InstanceExecPost, args *InstanceExecArgs) (op Operation, err error)
 	ConsoleInstance(instanceName string, console api.InstanceConsolePost, args *InstanceConsoleArgs) (op Operation, err error)
 	ConsoleInstanceDynamic(instanceName string, console api.InstanceConsolePost, args *InstanceConsoleArgs) (Operation, func(io.ReadWriteCloser) error, error)
+
+	CreateInstanceBitmap(name string, bitmap api.StorageVolumeBitmapsPost) error
 
 	GetInstanceConsoleLog(instanceName string, args *InstanceConsoleLogArgs) (content io.ReadCloser, err error)
 	DeleteInstanceConsoleLog(instanceName string, args *InstanceConsoleLogArgs) (err error)
@@ -400,6 +402,12 @@ type InstanceServer interface {
 	CreateStorageVolumeBackupStream(pool string, volName string, backup api.StorageVolumeBackupsPost, req *BackupFileRequest) (err error)
 	CreateStoragePoolVolumeFromBackup(pool string, args StorageVolumeBackupArgs) (op Operation, err error)
 
+	// Storage volume bitmaps manipulations functions ("storage_volume_nbd" API extension)
+	GetStorageVolumeBitmapNames(pool string, volumeType string, volumeName string) ([]string, error)
+	GetStorageVolumeBitmaps(pool string, volumeType string, volumeName string) ([]api.StorageVolumeBitmap, error)
+	CreateStorageVolumeBitmap(pool string, volumeType string, volumeName string, bitmap api.StorageVolumeBitmapsPost) error
+	DeleteStorageVolumeBitmap(pool string, volumeType string, volumeName string, bitmapName string) error
+
 	// Storage volume ISO import function ("custom_volume_iso" API extension)
 	CreateStoragePoolVolumeFromISO(pool string, args StorageVolumeBackupArgs) (op Operation, err error)
 	CreateStoragePoolVolumeFromMigration(pool string, volume api.StorageVolumesPost) (op Operation, err error)
@@ -408,6 +416,9 @@ type InstanceServer interface {
 	GetStorageVolumeFile(pool string, volumeType string, volumeName string, filePath string) (content io.ReadCloser, resp *InstanceFileResponse, err error)
 	CreateStorageVolumeFile(pool string, volumeType string, volumeName string, filePath string, args InstanceFileArgs) (err error)
 	DeleteStorageVolumeFile(pool string, volumeType string, volumeName string, filePath string) (err error)
+
+	// Storage volume NBD functions ("storage_volume_nbd" API extension)
+	GetStoragePoolVolumeBlockNBDConn(pool string, volType string, volName string, args StorageVolumeNBDPost) (net.Conn, error)
 
 	// Storage volume SFTP functions ("custom_volume_sftp" API extension)
 	GetStoragePoolVolumeFileSFTPConn(pool string, volType string, volName string) (net.Conn, error)
@@ -733,4 +744,11 @@ type StoragePoolBucketBackupArgs struct {
 
 	// Name to import backup as
 	Name string
+}
+
+// The StorageVolumeNBDPost struct is used when connecting to a storage volume over NBD.
+// API extension: storage_volume_nbd.
+type StorageVolumeNBDPost struct {
+	// Writable
+	Writable bool
 }

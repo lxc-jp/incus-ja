@@ -7,18 +7,18 @@ import (
 
 	"go.starlark.net/starlark"
 
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	internalInstance "github.com/lxc/incus/v6/internal/server/instance"
-	scriptletLoad "github.com/lxc/incus/v6/internal/server/scriptlet/load"
-	"github.com/lxc/incus/v6/internal/server/scriptlet/log"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
-	apiScriptlet "github.com/lxc/incus/v6/shared/api/scriptlet"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/resources"
-	"github.com/lxc/incus/v6/shared/scriptlet"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	internalInstance "github.com/lxc/incus/v7/internal/server/instance"
+	scriptletLoad "github.com/lxc/incus/v7/internal/server/scriptlet/load"
+	"github.com/lxc/incus/v7/internal/server/scriptlet/log"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
+	apiScriptlet "github.com/lxc/incus/v7/shared/api/scriptlet"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/resources"
+	"github.com/lxc/incus/v7/shared/scriptlet"
 )
 
 // InstancePlacementRun runs the instance placement scriptlet and returns the chosen cluster member target.

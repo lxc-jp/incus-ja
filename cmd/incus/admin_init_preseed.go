@@ -7,15 +7,14 @@ import (
 	"io"
 	"os"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
-// RunPreseed runs the actual command logic.
-func (c *cmdAdminInit) RunPreseed(p *u.Parsed) (*api.InitPreseed, error) {
+func (c *cmdAdminInit) runPreseed(p *u.Parsed) (*api.InitPreseed, error) {
 	// Read the YAML
 	var bytes []byte
 	var err error
@@ -35,7 +34,7 @@ func (c *cmdAdminInit) RunPreseed(p *u.Parsed) (*api.InitPreseed, error) {
 	// Parse the YAML
 	config := api.InitPreseed{}
 	// Use strict checking to notify about unknown keys.
-	err = yaml.UnmarshalStrict(bytes, &config)
+	err = yaml.Load(bytes, &config, yaml.WithKnownFields())
 	if err != nil {
 		return nil, fmt.Errorf(i18n.G("Failed to parse the preseed: %w"), err)
 	}

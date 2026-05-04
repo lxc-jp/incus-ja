@@ -15,13 +15,13 @@ import (
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/idmap"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/migration"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/idmap"
 )
 
 type migrationFields struct {
@@ -60,7 +60,8 @@ func (c *migrationFields) send(m proto.Message) error {
 		return fmt.Errorf("Control connection not initialized: %w", err)
 	}
 
-	_ = conn.SetWriteDeadline(time.Now().Add(time.Second * 30))
+	_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
 	err = migration.ProtoSend(conn, m)
 	if err != nil {
 		return err
@@ -69,13 +70,36 @@ func (c *migrationFields) send(m proto.Message) error {
 	return nil
 }
 
-func (c *migrationFields) recv(m proto.Message) error {
+func (c *migrationFields) recv(m proto.Message, handshake bool) error {
 	conn, err := c.conns[api.SecretNameControl].WebSocket(context.TODO())
 	if err != nil {
 		return fmt.Errorf("Control connection not initialized: %w", err)
 	}
 
+	// If dealing with the initial handshake, use a short timeout to
+	// prevent lingering create operations on communication failure.
+	//
+	// Later calls are done during migration as migration barrier and
+	// can potentially take multiple hours.
+	if handshake {
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+
+		// Remove the deadline after the request.
+		defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+	}
+
 	return migration.ProtoRecv(conn, m)
+}
+
+func (c *migrationFields) Cancel(op *operations.Operation) error {
+	c.controlLock.Lock()
+	defer c.controlLock.Unlock()
+
+	for _, conn := range c.conns {
+		conn.Close()
+	}
+
+	return nil
 }
 
 func (c *migrationFields) disconnect() {
@@ -123,7 +147,7 @@ func (c *migrationFields) controlChannel() <-chan *localMigration.ControlRespons
 	ch := make(chan *localMigration.ControlResponse)
 	go func() {
 		resp := localMigration.ControlResponse{}
-		err := c.recv(&resp.MigrationControl)
+		err := c.recv(&resp.MigrationControl, false)
 		if err != nil {
 			resp.Err = err
 			ch <- &resp
@@ -141,6 +165,7 @@ type migrationSourceWs struct {
 	migrationFields
 
 	clusterMoveSourceName string
+	devices               api.DevicesMap
 
 	pushCertificate  string
 	pushOperationURL string

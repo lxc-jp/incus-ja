@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	config "github.com/lxc/incus/v6/shared/cliconfig"
+	config "github.com/lxc/incus/v7/shared/cliconfig"
 )
 
 type aliasTestcase struct {

@@ -17,18 +17,18 @@ import (
 	"github.com/mdlayher/ndp"
 	"golang.org/x/sys/unix"
 
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	pcidev "github.com/lxc/incus/v6/internal/server/device/pci"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	pcidev "github.com/lxc/incus/v7/internal/server/device/pci"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // Instances can be started in parallel, so lock the creation of VLANs.
@@ -405,9 +405,26 @@ func networkVethFillFromVolatile(device deviceConfig.Device, volatile map[string
 }
 
 // networkNICRouteAdd applies any static host-side routes configured for an instance NIC.
-func networkNICRouteAdd(routeDev string, routes ...string) error {
+// If viaIPv4 or viaIPv6 are non-empty, they are used as the next-hop gateway for routes of the matching family.
+func networkNICRouteAdd(routeDev string, viaIPv4 string, viaIPv6 string, routes ...string) error {
 	if !network.InterfaceExists(routeDev) {
 		return fmt.Errorf("Route interface missing %q", routeDev)
+	}
+
+	var parsedViaIPv4, parsedViaIPv6 net.IP
+
+	if viaIPv4 != "" && viaIPv4 != "none" {
+		parsedViaIPv4 = net.ParseIP(viaIPv4)
+		if parsedViaIPv4 == nil || parsedViaIPv4.To4() == nil {
+			return fmt.Errorf("Invalid IPv4 next-hop address %q", viaIPv4)
+		}
+	}
+
+	if viaIPv6 != "" && viaIPv6 != "none" {
+		parsedViaIPv6 = net.ParseIP(viaIPv6)
+		if parsedViaIPv6 == nil || parsedViaIPv6.To4() != nil {
+			return fmt.Errorf("Invalid IPv6 next-hop address %q", viaIPv6)
+		}
 	}
 
 	reverter := revert.New()
@@ -421,8 +438,10 @@ func networkNICRouteAdd(routeDev string, routes ...string) error {
 		}
 
 		ipVersion := ip.FamilyV4
+		via := parsedViaIPv4
 		if ipNet.IP.To4() == nil {
 			ipVersion = ip.FamilyV6
+			via = parsedViaIPv6
 		}
 
 		// Add IP route (using boot proto to avoid conflicts with network defined static routes).
@@ -431,6 +450,7 @@ func networkNICRouteAdd(routeDev string, routes ...string) error {
 			Route:   ipNet,
 			Proto:   "boot",
 			Family:  ipVersion,
+			Via:     via,
 		}
 
 		err = r.Add()
@@ -444,6 +464,7 @@ func networkNICRouteAdd(routeDev string, routes ...string) error {
 				Route:   ipNet,
 				Proto:   "boot",
 				Family:  ipVersion,
+				Via:     via,
 			}
 
 			_ = r.Flush()
@@ -456,8 +477,9 @@ func networkNICRouteAdd(routeDev string, routes ...string) error {
 }
 
 // networkNICRouteDelete deletes any static host-side routes configured for an instance NIC.
+// If viaIPv4 or viaIPv6 are non-empty, they are used as the next-hop gateway for routes of the matching family.
 // Logs any errors and continues to next route to remove.
-func networkNICRouteDelete(routeDev string, routes ...string) {
+func networkNICRouteDelete(routeDev string, viaIPv4 string, viaIPv6 string, routes ...string) {
 	if routeDev == "" {
 		logger.Errorf("Failed removing static route, empty route device specified")
 		return
@@ -465,6 +487,24 @@ func networkNICRouteDelete(routeDev string, routes ...string) {
 
 	if !network.InterfaceExists(routeDev) {
 		return // Routes will already be gone if device doesn't exist.
+	}
+
+	var parsedViaIPv4, parsedViaIPv6 net.IP
+
+	if viaIPv4 != "" && viaIPv4 != "none" {
+		parsedViaIPv4 = net.ParseIP(viaIPv4)
+		if parsedViaIPv4 == nil || parsedViaIPv4.To4() == nil {
+			logger.Errorf("Failed to remove static routes from %q: Invalid IPv4 next-hop address %q", routeDev, viaIPv4)
+			return
+		}
+	}
+
+	if viaIPv6 != "" && viaIPv6 != "none" {
+		parsedViaIPv6 = net.ParseIP(viaIPv6)
+		if parsedViaIPv6 == nil || parsedViaIPv6.To4() != nil {
+			logger.Errorf("Failed to remove static routes from %q: Invalid IPv6 next-hop address %q", routeDev, viaIPv6)
+			return
+		}
 	}
 
 	for _, r := range routes {
@@ -476,8 +516,10 @@ func networkNICRouteDelete(routeDev string, routes ...string) {
 		}
 
 		ipVersion := ip.FamilyV4
+		via := parsedViaIPv4
 		if ipNet.IP.To4() == nil {
 			ipVersion = ip.FamilyV6
+			via = parsedViaIPv6
 		}
 
 		// Add IP route (using boot proto to avoid conflicts with network defined static routes).
@@ -486,6 +528,7 @@ func networkNICRouteDelete(routeDev string, routes ...string) {
 			Route:   ipNet,
 			Proto:   "boot",
 			Family:  ipVersion,
+			Via:     via,
 		}
 
 		err = r.Flush()
@@ -595,10 +638,6 @@ func networkSetupHostVethLimits(d *deviceCommon, oldConfig deviceConfig.Device, 
 
 	if oldConfig == nil || oldConfig["limits.priority"] != d.config["limits.priority"] {
 		if networkPriority != 0 {
-			if bridged && d.state.Firewall.String() == "xtables" {
-				return errors.New("Failed to setup instance device network priority. The xtables firewall driver does not support required functionality.")
-			}
-
 			err = d.state.Firewall.InstanceSetupNetPrio(d.inst.Project().Name, d.inst.Name(), veth, uint32(networkPriority))
 			if err != nil {
 				return fmt.Errorf("Failed to setup instance device network priority: %w", err)

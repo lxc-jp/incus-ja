@@ -14,14 +14,15 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/simplestreams"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/simplestreams"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdAdd struct {
@@ -29,10 +30,10 @@ type cmdAdd struct {
 
 	flagAliases        []string
 	flagNoDefaultAlias bool
+	flagProductName    string
 }
 
-// Command generates the command definition.
-func (c *cmdAdd) Command() *cobra.Command {
+func (c *cmdAdd) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "add <metadata tarball> [<data file>]"
 	cmd.Aliases = []string{"import"}
@@ -54,15 +55,18 @@ already on the image server and finally adds it to the index.
 
 Unless "--no-default-alias" is specified, it generates a default "{os}/{release}/{variant}" alias.
 
+Unless "--product-name" is specified, the product name is generated as "{os}:{release}:{variant}:{architecture}".
+
 If one argument is specified, it is assumed to be a unified image,
 with both the metadata and rootfs in a single tarball.
 
 Otherwise, it is a split image (separate files for metadata and rootfs/disk).
 `)
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	cmd.Flags().StringArrayVar(&c.flagAliases, "alias", nil, "Add alias")
 	cmd.Flags().BoolVar(&c.flagNoDefaultAlias, "no-default-alias", false, "Do not add the default alias")
+	cmd.Flags().StringVar(&c.flagProductName, "product-name", "", "Set the product name")
 
 	return cmd
 }
@@ -116,7 +120,7 @@ func (c *cmdAdd) parseImage(metaFile *os.File, dataFile *os.File) (*dataItem, er
 	}
 
 	hash256 := sha256.New()
-	_, err = io.Copy(hash256, dataFile)
+	_, err = util.SafeCopy(hash256, dataFile)
 	if err != nil {
 		return nil, err
 	}
@@ -135,12 +139,12 @@ func (c *cmdAdd) parseImage(metaFile *os.File, dataFile *os.File) (*dataItem, er
 	}
 
 	hash256 = sha256.New()
-	_, err = io.Copy(hash256, metaFile)
+	_, err = util.SafeCopy(hash256, metaFile)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = io.Copy(hash256, dataFile)
+	_, err = util.SafeCopy(hash256, dataFile)
 	if err != nil {
 		return nil, err
 	}
@@ -150,8 +154,7 @@ func (c *cmdAdd) parseImage(metaFile *os.File, dataFile *os.File) (*dataItem, er
 	return &item, nil
 }
 
-// Run runs the actual command logic.
-func (c *cmdAdd) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdAdd) run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
 	exit, err := cli.CheckArgs(cmd, args, 1, 2)
 	if exit {
@@ -189,7 +192,7 @@ func (c *cmdAdd) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	hash256 := sha256.New()
-	_, err = io.Copy(hash256, metaFile)
+	_, err = util.SafeCopy(hash256, metaFile)
 	if err != nil {
 		return err
 	}
@@ -240,7 +243,7 @@ func (c *cmdAdd) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = yaml.Unmarshal(body, &metadata)
+	err = yaml.Load(body, &metadata)
 	if err != nil {
 		return err
 	}
@@ -314,8 +317,14 @@ func (c *cmdAdd) Run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	var productName string
+	if c.flagProductName != "" {
+		productName = c.flagProductName
+	} else {
+		productName = fmt.Sprintf("%s:%s:%s:%s", metadata.Properties["os"], metadata.Properties["release"], metadata.Properties["variant"], metadata.Properties["architecture"])
+	}
+
 	// Check if the product already exists.
-	productName := fmt.Sprintf("%s:%s:%s:%s", metadata.Properties["os"], metadata.Properties["release"], metadata.Properties["variant"], metadata.Properties["architecture"])
 	product, ok := products.Products[productName]
 	if !ok {
 		var aliases []string

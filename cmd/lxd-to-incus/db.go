@@ -9,8 +9,9 @@ import (
 
 	"github.com/pierrec/lz4/v4"
 
-	internalIO "github.com/lxc/incus/v6/internal/io"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
+	internalIO "github.com/lxc/incus/v7/internal/io"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Uncompress the raft snapshot files in the given database directory.
@@ -108,7 +109,7 @@ func lz4Uncompress(zfilename string) error {
 
 	zr.Reset(zfile)
 
-	_, err = io.Copy(file, zr)
+	_, err = util.SafeCopy(file, zr)
 	if err != nil {
 		return fmt.Errorf("Failed to uncompress %q into %q: %w", zfilename, filename, err)
 	}

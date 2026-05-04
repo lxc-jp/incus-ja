@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/lxc/incus/v6/shared/tls/tlstest"
+	"github.com/lxc/incus/v7/shared/tls/tlstest"
 )
 
 // If no socket-based activation is detected, and a network address is set, a

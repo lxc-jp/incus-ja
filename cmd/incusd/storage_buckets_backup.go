@@ -13,24 +13,24 @@ import (
 
 	"github.com/gorilla/mux"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/validate"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var storagePoolBucketBackupsCmd = APIEndpoint{
@@ -64,6 +64,16 @@ var storagePoolBucketBackupsExportCmd = APIEndpoint{
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: poolName
+//      description: Storage pool name
+//      type: string
+//      required: true
+//    - in: path
+//      name: bucketName
+//      description: Storage bucket name
+//      type: string
+//      required: true
 //    - in: query
 //      name: project
 //      description: Project name
@@ -118,6 +128,16 @@ var storagePoolBucketBackupsExportCmd = APIEndpoint{
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: bucketName
+//	    description: Storage bucket name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -250,6 +270,16 @@ func storagePoolBucketBackupsGet(d *Daemon, r *http.Request) response.Response {
 //	  - application/json
 //	  - application/octet-stream
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: bucketName
+//	    description: Storage bucket name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -474,6 +504,21 @@ func storagePoolBucketBackupsPost(d *Daemon, r *http.Request) response.Response 
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: bucketName
+//	    description: Storage bucket name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: backupName
+//	    description: Backup name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -568,6 +613,21 @@ func storagePoolBucketBackupGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: bucketName
+//	    description: Storage bucket name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: backupName
+//	    description: Backup name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -686,6 +746,21 @@ func storagePoolBucketBackupPost(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: bucketName
+//	    description: Storage bucket name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: backupName
+//	    description: Backup name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -782,6 +857,21 @@ func storagePoolBucketBackupDelete(d *Daemon, r *http.Request) response.Response
 //	produces:
 //	  - application/octet-stream
 //	parameters:
+//	  - in: path
+//	    name: poolName
+//	    description: Storage pool name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: bucketName
+//	    description: Storage bucket name
+//	    type: string
+//	    required: true
+//	  - in: path
+//	    name: backupName
+//	    description: Backup name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name

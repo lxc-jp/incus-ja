@@ -13,29 +13,29 @@ import (
 
 	"github.com/gorilla/mux"
 
-	incus "github.com/lxc/incus/v6/client"
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/scriptlet"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	apiScriptlet "github.com/lxc/incus/v6/shared/api/scriptlet"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	clusterRequest "github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/scriptlet"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	apiScriptlet "github.com/lxc/incus/v7/shared/api/scriptlet"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // swagger:operation POST /1.0/instances/{name} instances instance_post
@@ -56,6 +56,11 @@ import (
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -505,7 +510,7 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Cross-server instance migration.
-	ws, err := newMigrationSource(inst, req.Live, req.InstanceOnly, req.AllowInconsistent, "", "", req.Target)
+	ws, err := newMigrationSource(inst, req.Live, req.InstanceOnly, req.AllowInconsistent, "", "", req.Devices, req.Target)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -677,7 +682,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 	}
 
 	// Handle pool and project moves for stopped instances.
-	if (req.Project != "" || req.Pool != "") && !req.Live {
+	if (req.Project != "" || req.Pool != "") && !req.Live && (targetMemberInfo == nil || inst.Location() == targetMemberInfo.Name) {
 		// Get a local client.
 		args := &incus.ConnectionArgs{
 			SkipGetServer: true,
@@ -818,7 +823,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		}
 
 		// Delete the source instance.
-		err = inst.Delete(true)
+		err = inst.Delete(true, false)
 		if err != nil {
 			return err
 		}
@@ -836,15 +841,15 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			}
 		}
 
+		err = cleanupDependentDisks(s, inst, req.Devices, op)
+		if err != nil {
+			return fmt.Errorf("Failed deleting instance dependent volumes on source member: %w", err)
+		}
+
 		// Reload the instance.
 		inst, err = instance.LoadByProjectAndName(s, targetProject, inst.Name())
 		if err != nil {
 			return err
-		}
-
-		err = cleanupDependentDisks(s, inst, op)
-		if err != nil {
-			return fmt.Errorf("Failed deleting instance dependent volumes on source member: %w", err)
 		}
 
 		// Clear the pool and project part of the request.
@@ -888,7 +893,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		}
 
 		// Setup a new migration source.
-		sourceMigration, err := newMigrationSource(inst, req.Live, false, req.AllowInconsistent, inst.Name(), req.Pool, nil)
+		sourceMigration, err := newMigrationSource(inst, req.Live, false, req.AllowInconsistent, inst.Name(), req.Pool, req.Devices, nil)
 		if err != nil {
 			return fmt.Errorf("Failed setting up instance migration on source: %w", err)
 		}
@@ -1069,7 +1074,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			}
 		}
 
-		err = cleanupDependentDisks(s, inst, op)
+		err = cleanupDependentDisks(s, inst, req.Devices, op)
 		if err != nil {
 			return fmt.Errorf("Failed deleting instance dependent volumes on source member: %w", err)
 		}
@@ -1079,26 +1084,32 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 }
 
 // cleanupDependentDisks removes dependent volumes from the source after migration if needed.
-func cleanupDependentDisks(s *state.State, inst instance.Instance, op *operations.Operation) error {
-	for _, dev := range inst.ExpandedDevices() {
-		if dev["type"] != "disk" || util.IsFalseOrEmpty(dev["dependent"]) || dev["path"] == "/" || dev["pool"] == "" {
-			continue
-		}
-
-		diskPool, err := storagePools.LoadByName(s, dev["pool"])
+func cleanupDependentDisks(s *state.State, inst instance.Instance, deviceOverrides api.DevicesMap, op *operations.Operation) error {
+	err := inst.ForEachDependentDiskType(func(dev deviceConfig.DeviceNamed) error {
+		diskPool, err := storagePools.LoadByName(s, dev.Config["pool"])
 		if err != nil {
 			return fmt.Errorf("Failed loading storage pool: %w", err)
 		}
 
-		// Volumes on remote pools cannot be removed.
-		if diskPool.Driver().Info().Remote {
-			continue
+		// If new disk was created than delete source volume.
+		override, ok := deviceOverrides[dev.Name]
+		if ok {
+			if (override["source"] != "" && override["source"] != dev.Config["source"]) || (override["pool"] != "" && override["pool"] != dev.Config["pool"]) {
+				_ = diskPool.DeleteCustomVolume(inst.Project().Name, dev.Config["source"], op)
+			}
 		}
 
-		err = diskPool.DeleteCustomVolume(inst.Project().Name, dev["source"], op)
-		if err != nil {
-			return err
+		// Volumes on remote pools cannot be removed.
+		if diskPool.Driver().Info().Remote {
+			return nil
 		}
+
+		_ = diskPool.DeleteCustomVolume(inst.Project().Name, dev.Config["source"], op)
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

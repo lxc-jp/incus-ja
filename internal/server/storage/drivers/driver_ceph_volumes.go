@@ -16,21 +16,21 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/migration"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // CreateVolume creates an empty volume and can optionally fill it by executing the supplied
@@ -474,7 +474,7 @@ func (d *ceph) CreateVolumeFromCopy(vol Volume, srcVol Volume, copySnapshots boo
 	lastSnap := ""
 
 	if len(snapshots) > 0 {
-		err := createParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
+		err := CreateParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
 		if err != nil {
 			return err
 		}
@@ -579,7 +579,7 @@ func (d *ceph) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, vo
 	// Handle rbd migration.
 	if len(volTargetArgs.Snapshots) > 0 {
 		// Create the parent directory.
-		err := createParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
+		err := CreateParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
 		if err != nil {
 			return err
 		}
@@ -1599,7 +1599,7 @@ func (d *ceph) CreateVolumeSnapshot(snapVol Volume, op *operations.Operation) er
 	}
 
 	// Create the parent directory.
-	err := createParentSnapshotDirIfMissing(d.name, snapVol.volType, parentName)
+	err := CreateParentSnapshotDirIfMissing(d.name, snapVol.volType, parentName)
 	if err != nil {
 		return err
 	}
@@ -1979,4 +1979,36 @@ func (d *ceph) RenameVolumeSnapshot(snapVol Volume, newSnapshotName string, op *
 
 	reverter.Success()
 	return nil
+}
+
+// ActivateTask allows running a function while the volume is active (but not mounted).
+func (d *ceph) ActivateTask(vol Volume, task func(devPath string, op *operations.Operation) error, op *operations.Operation) error {
+	// Prevent concurrent mounting actions.
+	unlock, err := vol.MountLock()
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	// Activate RBD volume if needed.
+	activated, volDevPath, err := d.getRBDMappedDevPath(vol, true)
+	if err != nil {
+		return err
+	}
+
+	if !activated {
+		return errors.New("Volume is already active, can't run exclusive activation task")
+	}
+
+	// Run the task.
+	taskErr := task(volDevPath, op)
+
+	// Deactivate the volume.
+	err = d.rbdUnmapVolume(vol, true)
+	if err != nil {
+		return err
+	}
+
+	return taskErr
 }

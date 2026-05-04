@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // IsLoggingConfig reports whether the config key is for a logging configuration.

@@ -15,8 +15,8 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/lxc/incus/v6/cmd/generate-database/lex"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/cmd/generate-database/lex"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // FiltersFromStmt parses all filtering statement defined for the given entity. It

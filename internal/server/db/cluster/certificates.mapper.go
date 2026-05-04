@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/server/certificate"
+	"github.com/lxc/incus/v7/internal/server/certificate"
 )
 
 var certificateObjects = RegisterStmt(`

@@ -15,20 +15,20 @@ import (
 	"strings"
 	"time"
 
-	yaml "gopkg.in/yaml.v2"
+	yaml "go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/instance/drivers/cfg"
-	"github.com/lxc/incus/v6/internal/server/instance/drivers/qmp"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/state"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/resources"
-	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers/cfg"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers/qmp"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/state"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/resources"
+	"github.com/lxc/incus/v7/shared/units"
 )
 
 // GetClusterCPUFlags returns the list of shared CPU flags across.
@@ -254,7 +254,7 @@ func getNodeResources(s *state.State, name string, address string) (*api.Resourc
 		data, err := os.ReadFile(resourcesPath)
 		if err == nil {
 			var res api.Resources
-			if yaml.Unmarshal(data, &res) == nil {
+			if yaml.Load(data, &res) == nil {
 				return &res, nil
 			}
 		}
@@ -284,7 +284,7 @@ func getNodeResources(s *state.State, name string, address string) (*api.Resourc
 	}
 
 	// Cache the data.
-	data, err := yaml.Marshal(res)
+	data, err := yaml.Dump(res, yaml.V2)
 	if err == nil {
 		_ = os.WriteFile(resourcesPath, data, 0o600)
 	}
@@ -379,8 +379,8 @@ func hashValue(value string, maxLength int) string {
 	return value
 }
 
-// migrationSnapshotName returns a snapshot name derived from the disk name.
-func migrationSnapshotName(diskName string) string {
+// ephemeralSnapshotName returns a snapshot name derived from the disk name.
+func ephemeralSnapshotName(diskName string) string {
 	return fmt.Sprintf("%s_snap", diskName)
 }
 

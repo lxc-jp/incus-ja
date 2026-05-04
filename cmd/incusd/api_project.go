@@ -15,26 +15,26 @@ import (
 
 	"github.com/gorilla/mux"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/filter"
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	projecthelpers "github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/filter"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	projecthelpers "github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var projectsCmd = APIEndpoint{
@@ -448,6 +448,12 @@ func projectCreateDefaultProfile(ctx context.Context, tx *db.ClusterTx, project 
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Project name
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    description: Project
@@ -521,6 +527,11 @@ func projectGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Project name
+//	    type: string
+//	    required: true
 //	  - in: body
 //	    name: project
 //	    description: Project configuration
@@ -607,6 +618,11 @@ func projectPut(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Project name
+//	    type: string
+//	    required: true
 //	  - in: body
 //	    name: project
 //	    description: Project configuration
@@ -825,6 +841,11 @@ func projectChange(ctx context.Context, s *state.State, project *api.Project, re
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Project name
+//	    type: string
+//	    required: true
 //	  - in: body
 //	    name: project
 //	    description: Project rename request
@@ -938,6 +959,11 @@ func projectPost(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Project name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: force
 //	    description: Delete project and related artifacts
@@ -1282,6 +1308,12 @@ func projectDelete(d *Daemon, r *http.Request) response.Response {
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Project name
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    description: Project state
@@ -1815,6 +1847,14 @@ func projectValidateConfig(s *state.State, config map[string]string) error {
 		//  defaultdesc: `block`
 		//  shortdesc: Whether to prevent creating instance or volume snapshots
 		"restricted.snapshots": isEitherAllowOrBlock,
+
+		// gendoc:generate(entity=project, group=restricted, key=restricted.storage-pools.access)
+		// Specify a comma-delimited list of storage pool names that are allowed for use in this project.
+		// If this option is not set, all storage pools are accessible.
+		// ---
+		//  type: string
+		//  shortdesc: Which storage pool names are allowed for use in this project
+		"restricted.storage-pools.access": validate.Optional(validate.IsListOf(validate.IsAny)),
 	}
 
 	// Add the storage pool keys.
@@ -1973,6 +2013,12 @@ func projectValidateRestrictedSubnets(s *state.State, value string) error {
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Project name
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    description: Access

@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // DotPrefixMatch finds the shortest unambiguous identifier for a given namespace.

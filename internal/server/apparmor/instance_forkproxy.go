@@ -9,12 +9,12 @@ import (
 	"slices"
 	"strings"
 
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/sys"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/util"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/sys"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Internal copy of the device interface.

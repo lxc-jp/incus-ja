@@ -12,11 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/rsync"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/ws"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/migration"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/ws"
 )
 
 // Send an rsync stream of a path over a websocket.
@@ -90,13 +89,7 @@ func rsyncSendSetup(ctx context.Context, path string, rsyncArgs string, migratio
 		args = append(args, "--exclude", "*.img")
 	}
 
-	if rsync.AtLeast("3.1.3") {
-		args = append(args, "--filter=-x security.selinux")
-	}
-
-	if rsync.AtLeast("3.1.0") {
-		args = append(args, "--ignore-missing-args")
-	}
+	args = append(args, "--filter=-x security.selinux", "--ignore-missing-args")
 
 	if rsyncArgs != "" {
 		args = append(args, strings.Split(rsyncArgs, " ")...)

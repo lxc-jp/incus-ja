@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/shared/util"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Map is a structured map of config keys to config values.

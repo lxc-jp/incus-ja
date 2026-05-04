@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,14 +18,14 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	"github.com/lxc/incus/v6/shared/ask"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	"github.com/lxc/incus/v7/shared/ask"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Migrator defines the methods required to perform a migration.
@@ -260,18 +259,11 @@ func (m *Migration) askPath(question string) (string, error) {
 
 		fmt.Printf("Downloading %q\n", path)
 
-		for {
-			// Read 4MB at a time.
-			_, err = io.CopyN(f, resp.Body, 4*1024*1024)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
+		_, err = util.SafeCopy(f, resp.Body)
+		if err != nil {
+			_ = os.Remove(f.Name())
 
-				_ = os.Remove(f.Name())
-
-				return "", err
-			}
+			return "", err
 		}
 
 		path = f.Name()
@@ -530,13 +522,13 @@ Please enter the number of your choice: `, 1, 4, "", nil)
 	var migrator Migrator
 	switch creationType {
 	case 1:
-		migrator = NewInstanceMigration(ctx, server, c.global.asker, c.flagRsyncArgs, MigrationTypeContainer)
+		migrator = newInstanceMigration(ctx, server, c.global.asker, c.flagRsyncArgs, MigrationTypeContainer)
 	case 2:
-		migrator = NewInstanceMigration(ctx, server, c.global.asker, c.flagRsyncArgs, MigrationTypeVM)
+		migrator = newInstanceMigration(ctx, server, c.global.asker, c.flagRsyncArgs, MigrationTypeVM)
 	case 3:
-		migrator = NewOVAMigration(ctx, server, c.global.asker, c.flagRsyncArgs)
+		migrator = newOVAMigration(ctx, server, c.global.asker, c.flagRsyncArgs)
 	case 4:
-		migrator = NewVolumeMigration(ctx, server, c.global.asker, c.flagRsyncArgs)
+		migrator = newVolumeMigration(ctx, server, c.global.asker, c.flagRsyncArgs)
 	}
 
 	err = migrator.gatherInfo()

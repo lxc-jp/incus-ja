@@ -10,8 +10,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // CertificateNeedsUpdate returns true if the domain doesn't match the certificate's DNS names

@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,14 +11,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/shared/logger"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/storage/s3util"
+	"github.com/lxc/incus/v7/shared/logger"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // TransferManager represents a transfer manager.
@@ -41,7 +45,7 @@ func (t TransferManager) DownloadAllFiles(bucketName string, tarWriter *instance
 	logger.Debugf("Downloading all files from bucket %s", bucketName)
 	logger.Debugf("Endpoint: %s", t.getEndpoint())
 
-	minioClient, err := t.getMinioClient()
+	s3Client, err := t.getS3Client()
 	if err != nil {
 		return err
 	}
@@ -49,47 +53,56 @@ func (t TransferManager) DownloadAllFiles(bucketName string, tarWriter *instance
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	objectCh := minioClient.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
-		Recursive: true,
+	paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
 	})
 
-	for objectInfo := range objectCh {
-		if objectInfo.Err != nil {
-			logger.Errorf("Failed to get object info: %v", err)
-			return objectInfo.Err
-		}
-
-		object, err := minioClient.GetObject(ctx, bucketName, objectInfo.Key, minio.GetObjectOptions{})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			logger.Errorf("Failed to get object: %v", err)
+			logger.Errorf("Failed to list objects: %v", err)
 			return err
 		}
 
-		// Skip directories because they are part of the key of an actual file
-		if objectInfo.Key[len(objectInfo.Key)-1] == '/' {
-			continue
-		}
+		for _, obj := range page.Contents {
+			key := aws.ToString(obj.Key)
 
-		fi := instancewriter.FileInfo{
-			FileName:    fmt.Sprintf("backup/bucket/%s", objectInfo.Key),
-			FileSize:    objectInfo.Size,
-			FileMode:    0o600,
-			FileModTime: time.Now(),
-		}
+			// Skip directories because they are part of the key of an actual file
+			if strings.HasSuffix(key, "/") {
+				continue
+			}
 
-		logger.Debugf("Writing file %s to tar writer", objectInfo.Key)
-		logger.Debugf("File size: %d", objectInfo.Size)
+			out, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+				Bucket: aws.String(bucketName),
+				Key:    aws.String(key),
+			})
+			if err != nil {
+				logger.Errorf("Failed to get object: %v", err)
+				return err
+			}
 
-		err = tarWriter.WriteFileFromReader(object, &fi)
-		if err != nil {
-			logger.Errorf("Failed to write file to tar writer: %v", err)
-			return err
-		}
+			fi := instancewriter.FileInfo{
+				FileName:    fmt.Sprintf("backup/bucket/%s", key),
+				FileSize:    aws.ToInt64(obj.Size),
+				FileMode:    0o600,
+				FileModTime: time.Now(),
+			}
 
-		err = object.Close()
-		if err != nil {
-			logger.Errorf("Failed to close object: %v", err)
-			return err
+			logger.Debugf("Writing file %s to tar writer", key)
+			logger.Debugf("File size: %d", fi.FileSize)
+
+			err = tarWriter.WriteFileFromReader(out.Body, &fi)
+			if err != nil {
+				logger.Errorf("Failed to write file to tar writer: %v", err)
+				_ = out.Body.Close()
+				return err
+			}
+
+			err = out.Body.Close()
+			if err != nil {
+				logger.Errorf("Failed to close object: %v", err)
+				return err
+			}
 		}
 	}
 
@@ -101,10 +114,12 @@ func (t TransferManager) UploadAllFiles(bucketName string, srcData io.ReadSeeker
 	logger.Debugf("Uploading all files to bucket %s", bucketName)
 	logger.Debugf("Endpoint: %s", t.getEndpoint())
 
-	minioClient, err := t.getMinioClient()
+	s3Client, err := t.getS3Client()
 	if err != nil {
 		return err
 	}
+
+	uploader := transfermanager.New(s3Client)
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
@@ -127,8 +142,13 @@ func (t TransferManager) UploadAllFiles(bucketName string, srcData io.ReadSeeker
 
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
-			break // End of archive.
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// End of archive.
+				break
+			}
+
+			return err
 		}
 
 		// Skip anything that's not in the bucket itself.
@@ -138,7 +158,11 @@ func (t TransferManager) UploadAllFiles(bucketName string, srcData io.ReadSeeker
 
 		fileName := strings.TrimPrefix(hdr.Name, "backup/bucket/")
 
-		_, err = minioClient.PutObject(ctx, bucketName, fileName, tr, -1, minio.PutObjectOptions{})
+		_, err = uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(fileName),
+			Body:   tr,
+		})
 		if err != nil {
 			return err
 		}
@@ -147,24 +171,29 @@ func (t TransferManager) UploadAllFiles(bucketName string, srcData io.ReadSeeker
 	return nil
 }
 
-func (t TransferManager) getMinioClient() (*minio.Client, error) {
-	bucketLookup := minio.BucketLookupPath
-	creds := credentials.NewStaticV4(t.accessKey, t.secretKey, "")
-
+func (t TransferManager) getS3Client() (*s3.Client, error) {
+	httpClient := &http.Client{}
 	if t.isSecureEndpoint() {
-		return minio.New(t.getEndpoint(), &minio.Options{
-			BucketLookup: bucketLookup,
-			Creds:        creds,
-			Secure:       true,
-			Transport:    getTransport(),
-		})
+		httpClient.Transport = getTransport()
 	}
 
-	return minio.New(t.getEndpoint(), &minio.Options{
-		BucketLookup: bucketLookup,
-		Creds:        creds,
-		Secure:       false,
-	})
+	cfg := aws.Config{
+		Region:      s3util.RegionFromURL(t.s3URL),
+		Credentials: credentials.NewStaticCredentialsProvider(t.accessKey, t.secretKey, ""),
+		HTTPClient:  httpClient,
+	}
+
+	scheme := "http"
+	if t.isSecureEndpoint() {
+		scheme = "https"
+	}
+
+	endpoint := fmt.Sprintf("%s://%s", scheme, t.getEndpoint())
+
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true
+	}), nil
 }
 
 func (t TransferManager) getEndpoint() string {

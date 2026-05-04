@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // GetOSRelease returns a map with Linux distribution information.

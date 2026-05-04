@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 var stateCmd = APIEndpoint{

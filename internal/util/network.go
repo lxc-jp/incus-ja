@@ -5,7 +5,7 @@ import (
 	"net"
 	"slices"
 
-	"github.com/lxc/incus/v6/internal/ports"
+	"github.com/lxc/incus/v7/internal/ports"
 )
 
 // CanonicalNetworkAddress parses the given network address and returns a string of the form "host:port",

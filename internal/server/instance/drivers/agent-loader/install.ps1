@@ -19,7 +19,7 @@ Write-Host "Drive containing the agent was found: $($targetDrive.DriveLetter)"
 if (!(Test-Path $destFolder)) {
     Write-Host "Creating $destFolder..."
     New-Item -ItemType Directory -Path $destFolder -Force | Out-Null
-    
+
     if (!$?) {
         Write-Host "Could not create $destFolder..."
         exit 1
