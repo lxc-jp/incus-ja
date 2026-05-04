@@ -8,16 +8,16 @@ msgstr ""
 "Project-Id-Version: incus\n"
 "Report-Msgid-Bugs-To: lxc-devel@lists.linuxcontainers.org\n"
 "POT-Creation-Date: 2026-05-01 14:24+0200\n"
-"PO-Revision-Date: 2026-04-29 08:09+0000\n"
+"PO-Revision-Date: 2026-05-02 04:02+0000\n"
 "Last-Translator: Américo Monteiro <a_monteiro@gmx.com>\n"
-"Language-Team: Portuguese <https://hosted.weblate.org/projects/incus/cli/pt/"
-">\n"
+"Language-Team: Portuguese <https://hosted.weblate.org/projects/incus/cli/pt/>"
+"\n"
 "Language: pt\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n > 1;\n"
-"X-Generator: Weblate 5.17.1-dev\n"
+"X-Generator: Weblate 5.17.1\n"
 
 #: cmd/incus/info.go:437
 msgid "  Chassis:"
@@ -131,12 +131,11 @@ msgstr ""
 "### Qualquer linha começada com '# será ignorada."
 
 #: cmd/incus/cluster.go:875
-#, fuzzy
 msgid ""
 "### This is a YAML representation of the cluster member.\n"
 "### Any line starting with a '# will be ignored."
 msgstr ""
-"### Esta é uma representação yaml do membro de agrupamento.\n"
+"### Esta é uma representação YAML do membro de agrupamento.\n"
 "### Qualquer linha começada com '# é ignorada."
 
 #: cmd/incus/config.go:118
@@ -672,7 +671,7 @@ msgstr "%s não é um diretório"
 #: cmd/incus/usage/usage.go:343
 #, c-format
 msgid "%s the %s syntax is deprecated; %s\n"
-msgstr ""
+msgstr "%s a sintaxe de %s está descontinuada; %s\n"
 
 #: cmd/incus/utils_sftp.go:280
 #, c-format
@@ -770,7 +769,7 @@ msgstr "--refresh só pode ser usado com instâncias"
 
 #: cmd/incus/image.go:217
 msgid "--reuse requires --copy-aliases"
-msgstr ""
+msgstr "--reuse requer --copy-aliases"
 
 #: cmd/incus/move.go:213
 msgid "--target can only be used with clusters"
@@ -1227,8 +1226,8 @@ msgstr "Salvaguardas:"
 #, c-format
 msgid "Bad device override syntax, expecting <device>,<key>=<value>: %s"
 msgstr ""
-"Má sintaxe de sobreposição de dispositivo, esperando <dispositivo>,"
-"<chave>=<valor>: %s"
+"Má sintaxe de sobreposição de dispositivo, esperando <dispositivo>,<chave>"
+"=<valor>: %s"
 
 #: cmd/incus/copy.go:137 cmd/incus/create.go:205 cmd/incus/move.go:250
 #: cmd/incus/network_integration.go:139 cmd/incus/project.go:168
@@ -2331,8 +2330,7 @@ msgstr "Não recebi o nome da nova instância do servidor"
 
 #: cmd/incus/snapshot.go:200
 msgid "Didn't get name of new instance snapshot from the server"
-msgstr ""
-"Não recebi o nome do novo instantâneo de instância a partir do servidor"
+msgstr "Não recebi o nome do novo instantâneo de instância a partir do servidor"
 
 #: cmd/incus/storage_volume.go:3172
 msgid "Didn't get name of new volume snapshot from the server"
@@ -2434,8 +2432,8 @@ msgstr ""
 "quais atributos da instância a exibir quando mostra em tabela ou em formato\n"
 "compactado.\n"
 "\n"
-"Os argumentos de coluna são pré-definidos de caracteres curtos (veja "
-"abaixo).\n"
+"Os argumentos de coluna são pré-definidos de caracteres curtos (veja abaixo)"
+".\n"
 "As vírgulas entre os caracteres curtos consecutivos são opcionais.\n"
 "\n"
 "Coluna de caracteres curtos:\n"
@@ -3152,9 +3150,9 @@ msgid "Failed to add server cert to cluster: %w"
 msgstr "Falhou a adicionar certificado de servidor ao agrupamento: %w"
 
 #: cmd/incus/image.go:283
-#, fuzzy, c-format
+#, c-format
 msgid "Failed to check for existing aliases: %w"
-msgstr "Falhou ao criar alias %s: %w"
+msgstr "Falhou ao verificar por nomes alternativos existentes: %w"
 
 #: cmd/incus/admin_waitready.go:85
 #, c-format
@@ -3555,8 +3553,8 @@ msgstr "Formato (table|compact)"
 msgid ""
 "Format of memory dump (e.g. elf, win-dmp, kdump-zlib, kdump-raw-zlib, ...)"
 msgstr ""
-"Formato de despejo de memória (ex. elf, win-dmp, kdump-zlib, kdump-raw-"
-"zlib, ...)"
+"Formato de despejo de memória (ex. elf, win-dmp, kdump-zlib, kdump-raw-zlib, "
+"...)"
 
 #: cmd/incus/network.go:957
 msgid "Forward delay"
@@ -3952,9 +3950,8 @@ msgid "Id: %v"
 msgstr "Id: %v"
 
 #: cmd/incus/image.go:175
-#, fuzzy
 msgid "If an alias already exists, delete and recreate it"
-msgstr "Se o alias da imagem já existir, apaga e cria um novo"
+msgstr "Se um alias da já existir, apaga e recria-o"
 
 #: cmd/incus/rebuild.go:33
 msgid "If an instance is running, stop it and then rebuild it"
@@ -4712,12 +4709,12 @@ msgstr ""
 "== Colunas ==\n"
 "A opção -c recebe uma lista separada por vírgulas de argumentos que "
 "controlam\n"
-"quais atributos de equilibrador de carga de rede são incluídos ao mostrar "
-"em \n"
+"quais atributos de equilibrador de carga de rede são incluídos ao mostrar em "
+"\n"
 "tabela ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (alargadas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -4765,8 +4762,8 @@ msgstr ""
 "quais atributos de peer de rede são incluídos ao mostrar em tabela ou\n"
 "formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (alargadas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -4896,7 +4893,6 @@ msgid "List available storage pools"
 msgstr "Lista pools de armazenamento disponíveis"
 
 #: cmd/incus/storage.go:638
-#, fuzzy
 msgid ""
 "List available storage pools\n"
 "\n"
@@ -4927,16 +4923,16 @@ msgstr ""
 "== Colunas ==\n"
 "A opção -c recebe uma lista separada por vírgulas de argumentos que "
 "controlam\n"
-"quais atributos de zona de rede são incluídos ao mostrar em formato de "
+"quais atributos de pools de armazenamento são incluídos ao mostrar em "
 "tabela\n"
-"ou csv.\n"
+"ou formato csv.\n"
 "\n"
 "Os argumentos de coluna são ou caracteres curtos predefinidos(veja abaixo),\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
 "\n"
-"Caracteres curtos pre-definidos da coluna:\n"
+"Caracteres curtos pré-definidos da coluna:\n"
 "  n - Nome\n"
 "  D - Driver\n"
 "  d - Descrição\n"
@@ -4984,8 +4980,8 @@ msgstr ""
 "tabela\n"
 "ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (alargadas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -5037,8 +5033,8 @@ msgstr ""
 "quais atributos de alias de imagem são incluídos ao mostrar em tabela\n"
 "ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -5153,8 +5149,8 @@ msgstr ""
 "quais atributos de instantâneos são incluídos ao mostrar em tabela\n"
 "ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -5296,8 +5292,8 @@ msgstr ""
 "tabela\n"
 "ou csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -5327,8 +5323,8 @@ msgstr ""
 "  f - Impressão digital de Imagem Base (curta)\n"
 "  F - Impressão digital de Imagem Base (longa)\n"
 "\n"
-"Colunas personalizadas são definidas com \"[config:|devices:]key[:name]"
-"[:maxWidth]\":\n"
+"Colunas personalizadas são definidas com "
+"\"[config:|devices:]key[:name][:maxWidth]\":\n"
 "  KEY: A cave (estendida) de configuração ou dispositivos a mostrar. Se "
 "[config:|devices:] for omitido então predefine para a chave de "
 "configuração.\n"
@@ -5378,8 +5374,8 @@ msgstr ""
 "quais atributos de alocações de rede são incluídos ao mostrar em tabela\n"
 "ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -5428,8 +5424,8 @@ msgstr ""
 "quais atributos de integrações de rede são incluídos ao mostrar em tabela\n"
 "ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -5553,7 +5549,6 @@ msgid "List storage bucket keys"
 msgstr "Lista de chaves de bucket de armazenamento"
 
 #: cmd/incus/storage_bucket.go:836
-#, fuzzy
 msgid ""
 "List storage bucket keys\n"
 "\n"
@@ -5582,17 +5577,17 @@ msgstr ""
 "== Colunas ==\n"
 "A opção -c recebe uma lista separada por vírgulas de argumentos que "
 "controlam\n"
-"quais atributos de zona de rede são incluídos ao mostrar em formato de "
+"quais atributos de bucket de armazenamento são incluídos ao mostrar em "
 "tabela\n"
-"ou csv.\n"
+"ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
 "\n"
-"Caracteres curtos pre-definidos da coluna:\n"
+"Caracteres curtos pré-definidos da coluna:\n"
 "  n - Nome\n"
 "  d - Descrição\n"
 "  r - Função"
@@ -5602,7 +5597,6 @@ msgid "List storage buckets"
 msgstr "Lista buckets de armazenamento"
 
 #: cmd/incus/storage_bucket.go:441
-#, fuzzy
 msgid ""
 "List storage buckets\n"
 "\n"
@@ -5631,17 +5625,17 @@ msgstr ""
 "== Colunas ==\n"
 "A opção -c recebe uma lista separada por vírgulas de argumentos que "
 "controlam\n"
-"quais atributos de zona de rede são incluídos ao mostrar em formato de "
+"quais atributos de bucket de armazenamento são incluídos ao mostrar em "
 "tabela\n"
-"ou csv.\n"
+"ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
 "\n"
-"Caracteres curtos pre-definidos da coluna:\n"
+"Caracteres curtos pré-definidos da coluna:\n"
 "  e - Nome do projeto\n"
 "  n - Nome\n"
 "  d - Descrição\n"
@@ -5781,8 +5775,8 @@ msgstr ""
 "quais atributos remotos são incluídos ao mostrar em tabela\n"
 "ou formato csv.\n"
 "\n"
-"Os argumentos de coluna são ou caracteres curtos predefinidos (veja "
-"abaixo),\n"
+"Os argumentos de coluna são ou caracteres curtos predefinidos (veja abaixo)"
+",\n"
 "ou chaves de configuração (estendidas).\n"
 "\n"
 "As vírgulas entre caracteres curtos consecutivos são opcionais.\n"
@@ -5917,8 +5911,7 @@ msgstr "Registo (%s):"
 
 #: cmd/incus/monitor.go:81
 msgid "Log level filtering can only be used with pretty formatting"
-msgstr ""
-"Filtragem de nível de relatório só pode ser usada com formatação bonita"
+msgstr "Filtragem de nível de relatório só pode ser usada com formatação bonita"
 
 #: cmd/incus/network.go:981
 msgid "Logical router"
@@ -6798,8 +6791,7 @@ msgstr "Nenhum %s backend de armazenamento disponível"
 #: cmd/incus/config_trust.go:797
 #, c-format
 msgid "No certificate add token for member %s on remote: %s"
-msgstr ""
-"Nenhum testemunho de adição de certificado para membro %s em remoto: %s"
+msgstr "Nenhum testemunho de adição de certificado para membro %s em remoto: %s"
 
 #: cmd/incus/cluster.go:1329
 #, c-format
@@ -8548,8 +8540,7 @@ msgstr "Instantâneo de volumes de armazenamento"
 
 #: cmd/incus/storage_volume.go:1883
 msgid "Snapshots are read-only and can't have their configuration changed"
-msgstr ""
-"Os instantâneos são só leitura e não se pode alterar a sua configuração"
+msgstr "Os instantâneos são só leitura e não se pode alterar a sua configuração"
 
 #: cmd/incus/info.go:808 cmd/incus/storage_volume.go:1333
 msgid "Snapshots:"
@@ -8931,8 +8922,7 @@ msgstr ""
 
 #: cmd/incus/create.go:428
 msgid "The instance you are starting doesn't have any network attached to it."
-msgstr ""
-"A instância que você está a iniciar não tem nenhuma rede anexada a ela."
+msgstr "A instância que você está a iniciar não tem nenhuma rede anexada a ela."
 
 #: cmd/incus/config.go:590
 msgid "The is no config key to set on an instance snapshot."
@@ -9422,8 +9412,7 @@ msgstr "Tipo de saída desconhecido %q"
 
 #: cmd/incus/cluster_group.go:956
 msgid "Unset a cluster group's configuration keys"
-msgstr ""
-"Retira definições das chaves de configuração de um grupo de agrupamento"
+msgstr "Retira definições das chaves de configuração de um grupo de agrupamento"
 
 #: cmd/incus/cluster.go:589
 msgid "Unset a cluster member's configuration keys"
@@ -9818,9 +9807,8 @@ msgid "Wait for the operation to complete"
 msgstr "Aguarde que a operação complete"
 
 #: cmd/incus/color/color.go:35
-#, fuzzy
 msgid "Warning:"
-msgstr "Mostra aviso"
+msgstr "Aviso:"
 
 #: cmd/incus/admin_init_interactive.go:541
 msgid ""
@@ -9852,8 +9840,7 @@ msgstr "Servidor Web a correr em: %s"
 
 #: cmd/incus/cluster.go:1668
 msgid "What IP address or DNS name should be used to reach this server?"
-msgstr ""
-"Que endereço IP ou nome DNS deve ser usado para alcançar este servidor?"
+msgstr "Que endereço IP ou nome DNS deve ser usado para alcançar este servidor?"
 
 #: cmd/incus/admin_init_interactive.go:171
 msgid "What IPv4 address should be used?"
@@ -10246,7 +10233,6 @@ msgstr ""
 "    Irá fazer o servidor escutar em IPv4 e IPv6 porto 8443."
 
 #: cmd/incus/config_template.go:72
-#, fuzzy
 msgid ""
 "incus config template create u1 t1\n"
 "    Create template t1 for instance u1\n"
@@ -10255,12 +10241,12 @@ msgid ""
 "    Create template t1 for instance u1 from config.tpl"
 msgstr ""
 "incus config template create u1 t1\n"
+"\tCria modelo t1 para instância u1\n"
 "\n"
 "incus config template create u1 t1 < config.tpl\n"
 "    Cria modelo t1 para instância u1 a partir de config.tpl"
 
 #: cmd/incus/create.go:51
-#, fuzzy
 msgid ""
 "incus create images:debian/12 u1\n"
 "    Create the instance u1\n"
@@ -10273,6 +10259,7 @@ msgid ""
 "    Create and start a virtual machine, overriding the disk size and bus"
 msgstr ""
 "incus create images:debian/12 u1\n"
+"\tCria a instância u1\n"
 "\n"
 "incus create images:debian/12 u1 < config.yaml\n"
 "    Cria a instância com configuração a partir de config.yaml\n"
@@ -10434,7 +10421,6 @@ msgstr ""
 "    Para informação do servidor."
 
 #: cmd/incus/launch.go:27
-#, fuzzy
 msgid ""
 "incus launch images:debian/12 u1\n"
 "    Create and start a container named u1\n"
@@ -10454,6 +10440,7 @@ msgid ""
 "    Create and start a virtual machine, overriding the disk size and bus"
 msgstr ""
 "incus launch images:debian/12 u1\n"
+"\tCria e arranca contentor nomeado u1\n"
 "\n"
 "incus launch images:debian/12 u1 < config.yaml\n"
 "    Cria e arranca contentor com configuração de config.yaml\n"
@@ -10534,7 +10521,6 @@ msgstr ""
 "    Renomeia uma instância local."
 
 #: cmd/incus/network_acl.go:358
-#, fuzzy
 msgid ""
 "incus network acl create a1\n"
 "    Create network acl a1\n"
@@ -10543,12 +10529,12 @@ msgid ""
 "    Create network acl with configuration from config.yaml"
 msgstr ""
 "incus network acl create a1\n"
+"\tCria acl de rede a1\n"
 "\n"
 "incus network acl create a1 < config.yaml\n"
 "    Cria acl de rede com configuração de config.yaml"
 
 #: cmd/incus/network_address_set.go:233
-#, fuzzy
 msgid ""
 "incus network address-set create as1\n"
 "    Create network address set as1\n"
@@ -10557,6 +10543,7 @@ msgid ""
 "    Create network address set with configuration from config.yaml"
 msgstr ""
 "incus network address-set create as1\n"
+"\tCria conjunto de endereços de rede as1\n"
 "\n"
 "incus network address-set create as1 < config.yaml\n"
 "    Cria conjunto de endereços de rede com configuração de config.yaml"
@@ -10594,7 +10581,6 @@ msgstr ""
 "    Cria um novo encaminhamento de rede para rede n1 a partir de config.yaml"
 
 #: cmd/incus/network_integration.go:90
-#, fuzzy
 msgid ""
 "incus network integration create o1 ovn\n"
 "   Create network integration o1 of type ovn\n"
@@ -10604,6 +10590,7 @@ msgid ""
 "config.yaml"
 msgstr ""
 "incus network integration create o1 ovn\n"
+"\tCria integração de rede o1 do tipo ovn\n"
 "\n"
 "incus network integration create o1 ovn < config.yaml\n"
 "    Cria integração de rede o1 do tipo ovn com configuração de config.yaml"
@@ -10665,7 +10652,6 @@ msgstr ""
 "\tno ficheiro config.yaml"
 
 #: cmd/incus/network_zone.go:374
-#, fuzzy
 msgid ""
 "incus network zone create z1\n"
 "    Create network zone z1\n"
@@ -10674,12 +10660,12 @@ msgid ""
 "    Create network zone z1 with configuration from config.yaml"
 msgstr ""
 "incus network zone create z1\n"
+"\tCria zona de rede z1\n"
 "\n"
 "incus network zone create z1 < config.yaml\n"
 "    Cria zona de rede z1 com configuração de config.yaml"
 
 #: cmd/incus/network_zone.go:1024
-#, fuzzy
 msgid ""
 "incus network zone record create z1 r1\n"
 "    Create record r1 for zone z1\n"
@@ -10688,6 +10674,7 @@ msgid ""
 "    Create record r1 for zone z1 with configuration from config.yaml"
 msgstr ""
 "incus network zone record create z1 r1\n"
+"\tCria registo r1 para zona z1\n"
 "\n"
 "incus network zone record create z1 r1 < config.yaml\n"
 "    Cria registo r1 para zona z1 com configuração de config.yaml"
@@ -10902,7 +10889,6 @@ msgstr ""
 "\"default\"."
 
 #: cmd/incus/storage.go:110
-#, fuzzy
 msgid ""
 "incus storage create s1 dir\n"
 "    Create a storage pool s1\n"
@@ -10912,6 +10898,7 @@ msgid ""
 "\t"
 msgstr ""
 "incus storage create s1 dir\n"
+"\tCria uma pool de armazenamento s1\n"
 "\n"
 "incus storage create s1 dir < config.yaml\n"
 "    Cria uma pool de armazenamento usando o conteúdo de config.yaml.\n"
@@ -11226,7 +11213,7 @@ msgstr "peer"
 
 #: cmd/incus/usage/legacysupport.go:8
 msgid "please switch to the “<key>=<value>” syntax"
-msgstr ""
+msgstr "por favor mude para a sintaxe “<chave>=<valor>”"
 
 #: cmd/incus/config.go:55
 msgid "please use `incus profile`"

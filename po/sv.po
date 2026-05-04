@@ -8,15 +8,15 @@ msgstr ""
 "Project-Id-Version: incus\n"
 "Report-Msgid-Bugs-To: lxc-devel@lists.linuxcontainers.org\n"
 "POT-Creation-Date: 2026-05-01 14:24+0200\n"
-"PO-Revision-Date: 2026-04-21 03:01+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"PO-Revision-Date: 2026-05-03 04:10+0000\n"
+"Last-Translator: Kazantsev Mikhail <kazan417@mail.ru>\n"
 "Language-Team: Swedish <https://hosted.weblate.org/projects/incus/cli/sv/>\n"
 "Language: sv\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.17.1-dev\n"
+"X-Generator: Weblate 5.17.1\n"
 
 #: cmd/incus/info.go:437
 msgid "  Chassis:"
@@ -127,12 +127,11 @@ msgstr ""
 "### Alla rader som börjar med ett '# ignoreras."
 
 #: cmd/incus/cluster.go:875
-#, fuzzy
 msgid ""
 "### This is a YAML representation of the cluster member.\n"
 "### Any line starting with a '# will be ignored."
 msgstr ""
-"### Detta är en yaml-representation av klustermedlemmen.\n"
+"### Detta är en YAML-representation av klustermedlemmen.\n"
 "### Alla rader som börjar med ett '# ignoreras."
 
 #: cmd/incus/config.go:118
@@ -668,7 +667,7 @@ msgstr "%s är inte en katalog"
 #: cmd/incus/usage/usage.go:343
 #, c-format
 msgid "%s the %s syntax is deprecated; %s\n"
-msgstr ""
+msgstr "%s %s syntax är föråldrad; %s\n"
 
 #: cmd/incus/utils_sftp.go:280
 #, c-format
@@ -678,15 +677,15 @@ msgstr "'%s' är inte en filtyp som stöds"
 #: cmd/incus/usage/parse.go:238
 #, c-format
 msgid "(skipped: %s)\n"
-msgstr ""
+msgstr "(hoppad över: %s)\n"
 
 #: cmd/incus/usage/parse.go:240
 msgid "(skipped: no value given)"
-msgstr ""
+msgstr "(hoppades över: inget värde angivet)"
 
 #: cmd/incus/usage/parse.go:35
 msgid ", "
-msgstr ""
+msgstr ", "
 
 #: cmd/incus/info.go:323
 #, c-format
@@ -740,6 +739,7 @@ msgstr "--no-profiles kan inte användas tillsammans med andra argument"
 msgid ""
 "--no-dereference/-P, --follow/-H, and --dereference/-L are mutually exclusive"
 msgstr ""
+"--no-dereference/-P, --follow/-H och --dereference/-L utesluter varandra"
 
 #: cmd/incus/profile.go:227
 msgid "--no-profiles cannot be used together with other arguments"
@@ -755,7 +755,7 @@ msgstr "--project kan inte användas med kommandot query"
 
 #: cmd/incus/utils_copy.go:101 cmd/incus/utils_copy.go:146
 msgid "--recursive/-r is required when pulling directories"
-msgstr ""
+msgstr "--recursive/-r krävs vid hämtning av kataloger"
 
 #: cmd/incus/copy.go:165
 msgid "--refresh can only be used with instances"
@@ -763,7 +763,7 @@ msgstr "--refresh kan endast användas med instanser"
 
 #: cmd/incus/image.go:217
 msgid "--reuse requires --copy-aliases"
-msgstr ""
+msgstr "--reuse kräver --reuse"
 
 #: cmd/incus/move.go:213
 msgid "--target can only be used with clusters"
@@ -788,10 +788,12 @@ msgid ""
 "A target file name must be specified when pushing from stdin; the target is "
 "a directory"
 msgstr ""
+"Ett destinationsfilnamn måste anges vid överföring från stdin; destinationen "
+"är en katalog"
 
 #: cmd/incus/usage/usage.go:808
 msgid "ACL"
-msgstr ""
+msgstr "ACL"
 
 #: cmd/incus/network_allocations.go:81
 msgid "ADDRESS"
@@ -973,14 +975,14 @@ msgstr "Lägg till regler i en ACL"
 
 #: cmd/incus/color/color.go:44
 msgid "Additional Help Topics:"
-msgstr ""
+msgstr "Ytterligare hjälpämnen:"
 
 #: cmd/incus/admin_recover.go:126
 msgid ""
 "Additional storage pool configuration property (KEY=VALUE, empty when done):"
 msgstr ""
-"Ytterligare konfigurationsegenskap för lagringspool (KEY=VALUE, tom när "
-"klar):"
+"Ytterligare konfigurationsegenskap för lagringspool (KEY=VALUE, tom när klar)"
+":"
 
 #: cmd/incus/admin_init.go:56
 msgid "Address to bind to (default: none)"
@@ -1060,7 +1062,7 @@ msgstr "Alternativt certifikatnamn"
 #: cmd/incus/file.go:450 cmd/incus/file.go:681 cmd/incus/storage_volume.go:2591
 #: cmd/incus/storage_volume.go:2789
 msgid "Always follow symbolic links in source path"
-msgstr ""
+msgstr "Följ alltid symboliska länkar i källsökvägen"
 
 #: cmd/incus/file.go:982
 #, c-format
@@ -1164,9 +1166,8 @@ msgid "Automatic (non-interactive) mode"
 msgstr "Automatiskt (icke-interaktivt) läge"
 
 #: cmd/incus/color/color.go:41
-#, fuzzy
 msgid "Available Commands:"
-msgstr "Tillgängliga projekt:"
+msgstr "Tillgängliga kommandon:"
 
 #: cmd/incus/remote.go:173
 msgid "Available projects:"
@@ -1217,8 +1218,8 @@ msgstr "Säkerhetskopior:"
 #, c-format
 msgid "Bad device override syntax, expecting <device>,<key>=<value>: %s"
 msgstr ""
-"Felaktig syntax för enhetsöverskrivning, förväntar sig <enhet>,"
-"<nyckel>=<värde>: %s"
+"Felaktig syntax för enhetsöverskrivning, förväntar sig <enhet>,<nyckel>"
+"=<värde>: %s"
 
 #: cmd/incus/copy.go:137 cmd/incus/create.go:205 cmd/incus/move.go:250
 #: cmd/incus/network_integration.go:139 cmd/incus/project.go:168
@@ -2202,9 +2203,8 @@ msgid "Description"
 msgstr "Beskrivning"
 
 #: cmd/incus/color/color.go:36
-#, fuzzy
 msgid "Description:"
-msgstr "Beskrivning"
+msgstr "Beskrivning:"
 
 #: cmd/incus/info.go:645 cmd/incus/storage_volume.go:1296
 #, c-format
@@ -2322,9 +2322,8 @@ msgid "Didn't get name of new instance snapshot from the server"
 msgstr "Fick inte namnet på den nya instansen från servern"
 
 #: cmd/incus/storage_volume.go:3172
-#, fuzzy
 msgid "Didn't get name of new volume snapshot from the server"
-msgstr "Fick inte namnet på den nya instansen från servern"
+msgstr "Hämtade inte namnet på den nya volym-ögonblicksbilden från servern"
 
 #: cmd/incus/image.go:718
 msgid "Directory import is not available on this platform"
@@ -2569,7 +2568,7 @@ msgstr "Redigera konfigurationer för nätverkslastbalanserare som YAML"
 
 #: cmd/incus/network_peer.go:639 cmd/incus/network_peer.go:640
 msgid "Edit network peer configurations as YAML"
-msgstr "Redigera nätverkspeerkonfigurationer som YAML"
+msgstr "Redigera nätverkspeer konfigurationer som YAML"
 
 #: cmd/incus/network_zone.go:586 cmd/incus/network_zone.go:587
 msgid "Edit network zone configurations as YAML"
@@ -2636,8 +2635,7 @@ msgstr "Redigera förtroendekonfigurationer som YAML"
 #: cmd/incus/top.go:95 cmd/incus/warning.go:236
 #, c-format
 msgid "Empty column entry (redundant, leading or trailing command) in '%s'"
-msgstr ""
-"Tom kolumnpost (överflödig, inledande eller avslutande kommando) i '%s'"
+msgstr "Tom kolumnpost (överflödig, inledande eller avslutande kommando) i '%s'"
 
 #: cmd/incus/cluster.go:772
 msgid "Enable clustering on a single non-clustered server"
@@ -2758,9 +2756,8 @@ msgid "Error while executing alias expansion: %s\n"
 msgstr "Fel vid exekvering av aliasutvidgning: %s\n"
 
 #: cmd/incus/color/color.go:34
-#, fuzzy
 msgid "Error:"
-msgstr "Fel: %v\n"
+msgstr "Fel:"
 
 #: cmd/incus/cluster.go:1456 cmd/incus/cluster.go:1457
 msgid "Evacuate cluster member"
@@ -2777,7 +2774,7 @@ msgstr "Händelsetyp att lyssna efter"
 
 #: cmd/incus/color/color.go:40
 msgid "Examples:"
-msgstr ""
+msgstr "Exempel:"
 
 #: cmd/incus/admin_sql.go:29
 msgid "Execute a SQL query against the local or global database"
@@ -3007,9 +3004,9 @@ msgid "Failed accepting channel client %q: %v"
 msgstr "Misslyckades med att acceptera kanalklient %q: %v"
 
 #: cmd/incus/delete.go:92
-#, c-format
+#, c-format, fuzzy
 msgid "Failed checking instance %s exists: %w"
-msgstr "Misslyckades att kontrollera om instans %s finns: %w\"%s:%s\": %w"
+msgstr "Misslyckades med att kontrollera att instansen %s finns: %w"
 
 #: cmd/incus/utils.go:377
 #, c-format
@@ -3075,7 +3072,7 @@ msgstr "Det gick inte att hämta befintliga lagringspooler: %w"
 #: cmd/incus/network_peer.go:400
 #, c-format
 msgid "Failed getting peer's status: %w"
-msgstr "Misslyckades med att hämta peer-status: %w"
+msgstr "Misslyckades med att hämta nätverkspeern status: %w"
 
 #: cmd/incus/admin_recover.go:248
 #, c-format
@@ -3132,9 +3129,9 @@ msgid "Failed to add server cert to cluster: %w"
 msgstr "Det gick inte att lägga till servercertifikatet till klustret: %w"
 
 #: cmd/incus/image.go:283
-#, fuzzy, c-format
+#, c-format
 msgid "Failed to check for existing aliases: %w"
-msgstr "Det gick inte att skapa alias %s: %w"
+msgstr "Misslyckades med att kontrollera befintliga alias: %w"
 
 #: cmd/incus/admin_waitready.go:85
 #, c-format
@@ -3376,12 +3373,12 @@ msgstr "Fingeravtryck: %s"
 
 #: cmd/incus/color/color.go:42
 msgid "Flags:"
-msgstr ""
+msgstr "flaggor:"
 
 #: cmd/incus/file.go:449 cmd/incus/file.go:680 cmd/incus/storage_volume.go:2590
 #: cmd/incus/storage_volume.go:2788
 msgid "Follow command-line symbolic links in source path"
-msgstr ""
+msgstr "Följ symboliska länkar på kommandoraden i källsökvägen"
 
 #: cmd/incus/cluster.go:1459
 msgid "Force a particular evacuation action"
@@ -3410,7 +3407,7 @@ msgstr "Tvinga evakuering utan användarens bekräftelse"
 #: cmd/incus/export.go:53 cmd/incus/storage_bucket.go:1300
 #: cmd/incus/storage_volume.go:3650
 msgid "Force overwriting existing backup file"
-msgstr ""
+msgstr "Tvinga överskrivning av befintlig säkerhetskopia"
 
 #: cmd/incus/exec.go:65
 msgid "Force pseudo-terminal allocation"
@@ -3763,7 +3760,7 @@ msgstr "Hämta värden för konfigurationsnycklar för nätverkslastbalanserare"
 
 #: cmd/incus/network_peer.go:429 cmd/incus/network_peer.go:430
 msgid "Get values for network peer configuration keys"
-msgstr "Hämta värden för konfigurationsnycklar för nätverkspeer"
+msgstr "Hämta värden för konfigurations nycklar för nätverkspeer"
 
 #: cmd/incus/network_zone.go:303 cmd/incus/network_zone.go:304
 msgid "Get values for network zone configuration keys"
@@ -3815,7 +3812,7 @@ msgstr ""
 
 #: cmd/incus/storage_volume.go:3987
 msgid "Get write access to the disk"
-msgstr ""
+msgstr "Få skrivåtkomst till disken"
 
 #: cmd/incus/storage_volume.go:413
 #, c-format
@@ -3824,7 +3821,7 @@ msgstr "Eftersom målet %q inte matchar källvolymens plats %q"
 
 #: cmd/incus/color/color.go:43
 msgid "Global Flags:"
-msgstr ""
+msgstr "Globala flaggor:"
 
 #: cmd/incus/exec.go:69
 msgid "Group ID to run the command as (default 0)"
@@ -3935,7 +3932,6 @@ msgid "Id: %v"
 msgstr "Id: %v"
 
 #: cmd/incus/image.go:175
-#, fuzzy
 msgid "If an alias already exists, delete and recreate it"
 msgstr "Om bildaliaset redan finns, ta bort det och skapa ett nytt"
 
@@ -4137,9 +4133,9 @@ msgid "Instance published with fingerprint: %s"
 msgstr "Instans publicerad med fingeravtryck: %s"
 
 #: cmd/incus/snapshot.go:209
-#, fuzzy, c-format
+#, c-format
 msgid "Instance snapshot name is: %s"
-msgstr "Instansnamn är: %s"
+msgstr "Namnet på instansens ögonblicksbild är: %s"
 
 #: cmd/incus/create.go:69
 msgid "Instance type"
@@ -4460,7 +4456,6 @@ msgid "List all active cluster member join tokens"
 msgstr "Lista alla aktiva klustermedlemmars anslutningstoken"
 
 #: cmd/incus/cluster.go:1104
-#, fuzzy
 msgid ""
 "List all active cluster member join tokens\n"
 "\n"
@@ -4496,9 +4491,9 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"n - Namn t\n"
-"- Token E -\n"
-"Går ut"
+"  n - Namn\n"
+"  t- Token\n"
+"  E - Går ut"
 
 #: cmd/incus/cluster_group.go:418
 msgid "List all the cluster groups"
@@ -4549,7 +4544,6 @@ msgid "List all the cluster members"
 msgstr "Lista alla klustermedlemmar"
 
 #: cmd/incus/cluster.go:150
-#, fuzzy
 msgid ""
 "List all the cluster members\n"
 "\n"
@@ -4660,7 +4654,6 @@ msgid "List available network load balancers"
 msgstr "Lista tillgängliga nätverkslastbalanserare"
 
 #: cmd/incus/network_load_balancer.go:105
-#, fuzzy
 msgid ""
 "List available network load balancers\n"
 "\n"
@@ -4697,17 +4690,16 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"l - Lyssna på adress d\n"
-"- Beskrivning p -\n"
-"Portar L -\n"
-"Plats för operationen (t.ex. dess klustermedlem)"
+"  l - Lyssna på adress \n"
+"  d - Beskrivning \n"
+"  p - Portar\n"
+"  L - Plats för operationen (t.ex. dess klustermedlem)"
 
 #: cmd/incus/network_peer.go:92
 msgid "List available network peers"
 msgstr "Lista tillgängliga nätverkspeers"
 
 #: cmd/incus/network_peer.go:93
-#, fuzzy
 msgid ""
 "List available network peers\n"
 "\n"
@@ -4745,11 +4737,11 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"n - Namn d\n"
-"- Beskrivning p -\n"
-"Peer t - Typ\n"
-"s - Tillst\n"
-"ånd"
+"  n - Namn\n"
+"  d - Beskrivning\n"
+"  p - Peer\n"
+"  t - Typ\n"
+"  s - Tillst ånd"
 
 #: cmd/incus/network_zone.go:815 cmd/incus/network_zone.go:816
 msgid "List available network zone records"
@@ -4864,7 +4856,6 @@ msgid "List available storage pools"
 msgstr "Lista tillgängliga lagringspooler"
 
 #: cmd/incus/storage.go:638
-#, fuzzy
 msgid ""
 "List available storage pools\n"
 "\n"
@@ -4903,18 +4894,18 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"n - Namn D -\n"
-"Drivrutin d -\n"
-"Beskrivning S - Källa\n"
-"u - används av\n"
-"s - tillstånd"
+"  n - Namn \n"
+"  D - Drivrutin \n"
+"  d - Beskrivning \n"
+"  S - Källa\n"
+"  u - används av\n"
+"  s - tillstånd"
 
 #: cmd/incus/operation.go:123
 msgid "List background operations"
 msgstr "Lista bakgrundsoperationer"
 
 #: cmd/incus/operation.go:124
-#, fuzzy
 msgid ""
 "List background operations\n"
 "\n"
@@ -4953,21 +4944,20 @@ msgstr ""
 "\n"
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
-"Fördefinierade korta kolumntecken: i\n"
-"- ID t -\n"
-"Typ d -\n"
-"Beskrivning s -\n"
-"Status c -\n"
-"Kan avbrytas C -\n"
-"Skapad L - Plats\n"
-"för operationen (t.ex. dess klustermedlem)"
+"Fördefinierade korta kolumntecken:\n"
+"  i - ID\n"
+"  t - Typ\n"
+"  d - Beskrivning\n"
+"  s - Status\n"
+"  c - Kan avbrytas\n"
+"  C - Skapad\n"
+"  L - Plats för operationen (t.ex. dess klustermedlem)"
 
 #: cmd/incus/image_alias.go:186
 msgid "List image aliases"
 msgstr "Lista avbildsalias"
 
 #: cmd/incus/image_alias.go:187
-#, fuzzy
 msgid ""
 "List image aliases\n"
 "\n"
@@ -5005,11 +4995,11 @@ msgstr ""
 "\n"
 "Kommatecken mellan på varandra följande förkortningstecken\n"
 "\n"
-"är valfria. Fördefinierade\n"
-"kolumnförkortningstecken:\n"
-"a - Alias f -\n"
-"Fingeravtryck\n"
-"t - Typ d - Beskrivning"
+"är valfria. Fördefinierade kolumnförkortningstecken:\n"
+"  a - Alias \n"
+"  f - Fingeravtryck\n"
+"  t - Typ\n"
+"  d - Beskrivning"
 
 #: cmd/incus/image.go:1042
 msgid "List images"
@@ -5080,7 +5070,6 @@ msgid "List instance snapshots"
 msgstr "Lista instansöversikter"
 
 #: cmd/incus/snapshot.go:320
-#, fuzzy
 msgid ""
 "List instance snapshots\n"
 "\n"
@@ -5117,10 +5106,10 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"n – Namn T –\n"
-"Taget vid E – Går\n"
-"ut vid s –\n"
-"Tillståndsfull"
+"  n – Namn\n"
+"  T – Taget vid \n"
+"  E – Går ut vid \n"
+"  s – Tillståndsfull"
 
 #: cmd/incus/list.go:55
 msgid "List instances"
@@ -5298,7 +5287,6 @@ msgid "List network allocations in use"
 msgstr "Lista nätverkstilldelningar som används"
 
 #: cmd/incus/network_allocations.go:39
-#, fuzzy
 msgid ""
 "List network allocations in use\n"
 "Default column layout: uatnm\n"
@@ -5334,18 +5322,17 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"u - Används av\n"
-"a - Adress t -\n"
-"Typ n - NAT\n"
-"m - Mac-a\n"
-"dress"
+"  u - Används av\n"
+"  a - Adress\n"
+"  t - Typ\n"
+"  n - NAT\n"
+"  m - Mac-adress"
 
 #: cmd/incus/network_integration.go:389
 msgid "List network integrations"
 msgstr "Lista nätverksintegrationer"
 
 #: cmd/incus/network_integration.go:390
-#, fuzzy
 msgid ""
 "List network integrations\n"
 "\n"
@@ -5383,10 +5370,10 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"n - Namn d\n"
-"- Beskrivning t -\n"
-"Typ u -\n"
-"Används av"
+"\tn - Namn\n"
+"\td - Beskrivning\n"
+"\tt - Typ\n"
+"\tu - Används av"
 
 #: cmd/incus/network.go:1046
 msgid "List networks in all projects"
@@ -5405,7 +5392,6 @@ msgid "List profiles"
 msgstr "Lista profiler"
 
 #: cmd/incus/profile.go:674
-#, fuzzy
 msgid ""
 "List profiles\n"
 "\n"
@@ -5498,7 +5484,6 @@ msgid "List storage bucket keys"
 msgstr "Lista lagringsbucketnycklar"
 
 #: cmd/incus/storage_bucket.go:836
-#, fuzzy
 msgid ""
 "List storage bucket keys\n"
 "\n"
@@ -5535,16 +5520,15 @@ msgstr ""
 "mellan på varandra följande förkortningstecken är valfria.\n"
 "\n"
 "Fördefinierade kolumnförkortningstecken:\n"
-"n - Namn d\n"
-"- Beskrivning r -\n"
-"Roll"
+"n - Namn \n"
+"d - Beskrivning \n"
+"r - Roll"
 
 #: cmd/incus/storage_bucket.go:439
 msgid "List storage buckets"
 msgstr "Lista lagringsbuckets"
 
 #: cmd/incus/storage_bucket.go:441
-#, fuzzy
 msgid ""
 "List storage buckets\n"
 "\n"
@@ -5580,11 +5564,11 @@ msgstr ""
 "\n"
 "Kommatecken mellan på varandra följande förkortningstecken\n"
 "\n"
-"är valfria. Fördefinierade\n"
-"kolumnförkortningstecken:\n"
-"e – Projektnamn\n"
-"n – Namn d – Beskrivning\n"
-"L – Lagringsbehållarens plats (t.ex. dess klustermedlem)"
+"är valfria. Fördefinierade kolumnförkortningstecken:\n"
+"  e – Projektnamn\n"
+"  n – Namn \n"
+"  d – Beskrivning\n"
+"  L – Lagringsbehållarens plats (t.ex. dess klustermedlem)"
 
 #: cmd/incus/storage_volume.go:3280 cmd/incus/storage_volume.go:3281
 msgid "List storage volume snapshots"
@@ -5683,7 +5667,6 @@ msgid "List the available remotes"
 msgstr "Lista tillgängliga fjärrkontroller"
 
 #: cmd/incus/remote.go:945
-#, fuzzy
 msgid ""
 "List the available remotes\n"
 "\n"
@@ -5724,13 +5707,14 @@ msgstr ""
 "\n"
 "följande förkortningstecken är valfria. Fördefinierade\n"
 "\n"
-"kolumnförkortningstecken: n - Namn u -\n"
-"URL p -\n"
-"Protokoll\n"
-"a - Autentiseringstyp\n"
-"P - Publik s -\n"
-"Statisk g -\n"
-"Global"
+"kolumnförkortningstecken: \n"
+"  n - Namn \n"
+"  u - URL\n"
+"  p - Protokoll\n"
+"  a - Autentiseringstyp\n"
+"  P - Publik\n"
+"  s - Statisk\n"
+"  g - Global"
 
 #: cmd/incus/config_trust.go:377
 msgid "List trusted clients"
@@ -5846,7 +5830,7 @@ msgstr "Plats: %s"
 #: cmd/incus/info.go:926
 #, c-format
 msgid "Log (%s):"
-msgstr ""
+msgstr "Logg (%s):"
 
 #: cmd/incus/monitor.go:81
 msgid "Log level filtering can only be used with pretty formatting"
@@ -6399,34 +6383,32 @@ msgid "NAT"
 msgstr "NAT"
 
 #: cmd/incus/storage_volume.go:3982
-#, fuzzy
 msgid "NBD access to a block storage volume"
-msgstr "Ta bort anpassade lagringsvolymer"
+msgstr "NBD-åtkomst till en blocklagringsvolym"
 
 #: cmd/incus/storage_volume.go:3983
-#, fuzzy
 msgid "NBD access to a block storage volume."
-msgstr "Ta bort anpassade lagringsvolymer"
+msgstr "NBD-åtkomst till en blocklagringsvolym."
 
 #: cmd/incus/storage_volume.go:4047
-#, fuzzy, c-format
+#, c-format
 msgid "NBD client connected %q"
-msgstr "SSH-klient ansluten %q"
+msgstr "NBD-klient ansluten %q"
 
 #: cmd/incus/storage_volume.go:4048
-#, fuzzy, c-format
+#, c-format
 msgid "NBD client disconnected %q"
-msgstr "SSH-klienten frånkopplad %q"
+msgstr "NBD-klienten frånkopplad %q"
 
 #: cmd/incus/storage_volume.go:4053
 #, c-format
 msgid "NBD connection failed: %v"
-msgstr ""
+msgstr "NBD-anslutning misslyckades: %v"
 
 #: cmd/incus/storage_volume.go:4037
-#, fuzzy, c-format
+#, c-format
 msgid "NBD listening on %v"
-msgstr "SSH SFTP lyssnar på %v"
+msgstr "NBD lyssnar på %v"
 
 #: cmd/incus/project.go:547
 msgid "NETWORK ZONES"
@@ -6704,7 +6686,7 @@ msgstr "Nätverkszonpost %s raderad"
 #: cmd/incus/file.go:448 cmd/incus/file.go:679 cmd/incus/storage_volume.go:2589
 #: cmd/incus/storage_volume.go:2787
 msgid "Never follow symbolic links in source path"
-msgstr ""
+msgstr "Följ aldrig symboliska länkar i källsökvägen"
 
 #: cmd/incus/publish.go:42
 msgid "New alias to define at target"
@@ -7746,7 +7728,7 @@ msgid "Serial devices:"
 msgstr "Seriella enheter:"
 
 #: cmd/incus/info.go:428
-#, fuzzy, c-format
+#, c-format
 msgid "Serial number: %v"
 msgstr "Serienummer: %v"
 
@@ -8504,7 +8486,7 @@ msgstr "Källa:"
 
 #: cmd/incus/storage_volume.go:3986
 msgid "Specific address to listen on"
-msgstr ""
+msgstr "Specifik adress att lyssna på"
 
 #: cmd/incus/action.go:36 cmd/incus/action.go:37
 msgid "Start instances"
@@ -8869,8 +8851,8 @@ msgstr "Nyckeln %q finns inte på klustermedlemmen %q"
 #, c-format
 msgid "The local image '%q' couldn't be found, trying '%q:%q' instead."
 msgstr ""
-"Den lokala avbildningen '%q' kunde inte hittas, försöker istället med '%q:"
-"%q'."
+"Den lokala avbildningen '%q' kunde inte hittas, försöker istället med "
+"'%q:%q'."
 
 #: cmd/incus/utils.go:463
 #, c-format
@@ -8904,7 +8886,7 @@ msgstr "Egenskapen %q finns inte på instansen %q: %v"
 #: cmd/incus/config.go:431
 #, c-format
 msgid "The property %q does not exist on the instance snapshot %s: %v"
-msgstr "Egenskaperna %q finns inte på instansens ögonblicksbild %s/%s: %v"
+msgstr "Egenskapen %q finns inte på instansens ögonblicksbild %s: %v"
 
 #: cmd/incus/network_load_balancer.go:433
 #, c-format
@@ -8934,7 +8916,7 @@ msgstr "Egenskapen %q finns inte i nätverksintegrationen %q: %v"
 #: cmd/incus/network_peer.go:475
 #, c-format
 msgid "The property %q does not exist on the network peer %q: %v"
-msgstr "Egenskapen %q finns inte på nätverkspartnern %q: %v"
+msgstr "Egenskapen %q finns inte på nätverkspeern %q: %v"
 
 #: cmd/incus/network_zone.go:343
 #, c-format
@@ -9081,6 +9063,8 @@ msgid ""
 "This command was called with --explain; its arguments are valid, but no "
 "further processing is done"
 msgstr ""
+"Detta kommando anropades med --explain; dess argument är giltiga, men ingen "
+"ytterligare bearbetning utförs"
 
 #: cmd/incus/admin_recover.go:61
 msgid "This server currently has the following storage pools:"
@@ -9213,7 +9197,7 @@ msgstr ""
 
 #: cmd/incus/network_peer.go:319
 msgid "Type of peer (local or remote)"
-msgstr "Typ av peer (lokal eller fjärrstyrd)"
+msgstr "Typ av nätverkspeern (lokal eller fjärrstyrd)"
 
 #: cmd/incus/image.go:968 cmd/incus/info.go:287 cmd/incus/info.go:432
 #: cmd/incus/info.go:443 cmd/incus/info.go:661 cmd/incus/network.go:917
@@ -9317,9 +9301,9 @@ msgid "Unknown file type '%s'"
 msgstr "Okänd filtyp '%s'"
 
 #: cmd/incus/usage/usage.go:376
-#, fuzzy, c-format
+#, c-format
 msgid "Unknown flag --%s"
-msgstr "Okänd nyckel: %s"
+msgstr "Okänd flagga --%s"
 
 #: cmd/incus/network_acl.go:892 cmd/incus/network_acl.go:1011
 #, c-format
@@ -9389,7 +9373,7 @@ msgstr "Avmarkera nycklar för nätverkslastbalanserare"
 
 #: cmd/incus/network_peer.go:593
 msgid "Unset network peer configuration keys"
-msgstr "Avmarkera konfigurationsnycklar för nätverkspeer"
+msgstr "Avmarkera konfigurations nycklar för nätverkspeer"
 
 #: cmd/incus/network_peer.go:594
 msgid "Unset network peer keys"
@@ -9545,9 +9529,8 @@ msgid "Upper devices"
 msgstr "Övre enheter"
 
 #: cmd/incus/color/color.go:37
-#, fuzzy
 msgid "Usage:"
-msgstr "Användning: %s"
+msgstr "Användande:"
 
 #: cmd/incus/storage_volume.go:1316
 #, c-format
@@ -9559,6 +9542,8 @@ msgid ""
 "Use \"{{.CommandPath}} [<command>] --help\" for more information about a "
 "command."
 msgstr ""
+"Använd \"{{.CommandPath}} [<kommando>] --help\" för mer information om ett "
+"kommando."
 
 #: cmd/incus/export.go:51
 msgid ""
@@ -9660,9 +9645,9 @@ msgid "Volume description"
 msgstr "Volymbeskrivning"
 
 #: cmd/incus/storage_volume.go:3181
-#, fuzzy, c-format
+#, c-format, fuzzy
 msgid "Volume snapshot name is: %s"
-msgstr "Instansnamn är: %s"
+msgstr "Volymens ögonblicksbildsnamn är: %s"
 
 #: cmd/incus/info.go:293
 #, c-format
@@ -9720,9 +9705,8 @@ msgid "Wait for the operation to complete"
 msgstr "Vänta tills operationen är klar"
 
 #: cmd/incus/color/color.go:35
-#, fuzzy
 msgid "Warning:"
-msgstr "Visa varning"
+msgstr "varning"
 
 #: cmd/incus/admin_init_interactive.go:541
 msgid ""
@@ -9736,8 +9720,8 @@ msgid ""
 "they otherwise would."
 msgstr ""
 "Vi har upptäckt att du kör i en container utan privilegier.\n"
-"Det innebär att om du inte manuellt har konfigurerat din värd på annat "
-"sätt, \n"
+"Det innebär att om du inte manuellt har konfigurerat din värd på annat sätt, "
+"\n"
 "kommer du inte att ha tillräckligt med uid och gid att tilldela dina "
 "containrar.\n"
 "\n"
@@ -9780,7 +9764,7 @@ msgstr "Var ska denna lagringspool lagra sina data?"
 #: cmd/incus/export.go:50
 #, fuzzy
 msgid "Whether or not to only backup the instance (without dependent volumes)"
-msgstr "Om endast instansen ska säkerhetskopieras (utan snapshots)"
+msgstr "Huruvida endast instansen ska säkerhetskopieras (utan beroende volymer)"
 
 #: cmd/incus/export.go:49
 msgid "Whether or not to only backup the instance (without snapshots)"
@@ -9802,8 +9786,7 @@ msgstr ""
 
 #: cmd/incus/snapshot.go:97
 msgid "Whether or not to snapshot the instance's running state"
-msgstr ""
-"Om man ska ta en ögonblicksbild av instansens körningsstatus eller inte"
+msgstr "Om man ska ta en ögonblicksbild av instansens körningsstatus eller inte"
 
 #: cmd/incus/rebuild.go:28
 msgid ""
@@ -9904,19 +9887,16 @@ msgid "Zone description"
 msgstr "Zonbeskrivning"
 
 #: cmd/incus/usage/usage.go:809
-#, fuzzy
 msgid "address"
-msgstr "MAC-adress"
+msgstr "adress"
 
 #: cmd/incus/usage/usage.go:810
-#, fuzzy
 msgid "address set"
-msgstr "Addres: %s"
+msgstr "adressuppsättning"
 
 #: cmd/incus/usage/usage.go:811
-#, fuzzy
 msgid "alias"
-msgstr "<alias>"
+msgstr "alias"
 
 #: cmd/incus/info.go:654
 msgid "application"
@@ -9924,26 +9904,26 @@ msgstr "applikation"
 
 #: cmd/incus/usage/usage.go:812
 msgid "backend"
-msgstr ""
+msgstr "backend"
 
 #: cmd/incus/usage/usage.go:813
-#, fuzzy
 msgid "backup file"
-msgstr "socket-fil"
+msgstr "backup-fil"
 
 #: cmd/incus/usage/usage.go:814
+#, fuzzy
 msgid "bucket"
-msgstr ""
+msgstr "förvaringshink"
 
 #: cmd/incus/usage/parse.go:77
 #, c-format
 msgid "cannot parse this argument; unexpected %s"
-msgstr ""
+msgstr "kan inte analysera detta argument; oväntade %s"
 
 #: cmd/incus/usage/parse.go:80
 #, c-format
 msgid "cannot parse this argument; unexpected %s in %s"
-msgstr ""
+msgstr "kan inte analysera detta argument; oväntade %s i %s"
 
 #: cmd/incus/cluster.go:1338 cmd/incus/config_trust.go:162
 msgid "cert.crt"
@@ -9954,8 +9934,9 @@ msgid "cert.key"
 msgstr "cert.key"
 
 #: cmd/incus/usage/usage.go:815
+#, fuzzy
 msgid "client"
-msgstr ""
+msgstr "klient"
 
 #: cmd/incus/cluster.go:962
 msgid "cluster"
@@ -9966,9 +9947,8 @@ msgid "command"
 msgstr "kommando"
 
 #: cmd/incus/usage/usage.go:816
-#, fuzzy
 msgid "command-line argument"
-msgstr "Hantera kommandoalias"
+msgstr "kommandoradsargument"
 
 #: cmd/incus/wait.go:25
 msgid "condition"
@@ -9983,14 +9963,12 @@ msgid "description"
 msgstr "beskrivning"
 
 #: cmd/incus/usage/usage.go:817
-#, fuzzy
 msgid "device"
-msgstr "PCI-enhet:"
+msgstr "enhet"
 
 #: cmd/incus/usage/usage.go:819
-#, fuzzy
 msgid "directory"
-msgstr "%s är inte en katalog"
+msgstr "katalog"
 
 #: cmd/incus/image.go:955
 msgid "disabled"
@@ -10016,35 +9994,35 @@ msgstr "fel: %v"
 #: cmd/incus/usage/parse.go:95
 #, c-format
 msgid "expected %s"
-msgstr ""
+msgstr "förväntade %s"
 
 #: cmd/incus/usage/usage.go:822
+#, fuzzy
 msgid "expiry"
-msgstr ""
+msgstr "upphörande"
 
 #: cmd/incus/usage/usage.go:823
 #, fuzzy
 msgid "file"
-msgstr "Profiler:"
+msgstr "fil"
 
 #: cmd/incus/usage/usage.go:824
 #, fuzzy
 msgid "filter"
-msgstr "VLAN-filtrering"
+msgstr "filtrera"
 
 #: cmd/incus/usage/usage.go:825
 #, fuzzy
 msgid "fingerprint"
-msgstr "Fingeravtryck: %s"
+msgstr "avtryck"
 
 #: cmd/incus/usage/usage.go:826
 msgid "group"
-msgstr ""
+msgstr "grupp"
 
 #: cmd/incus/usage/usage.go:827
-#, fuzzy
 msgid "image"
-msgstr "Lista avbilder"
+msgstr "avbild"
 
 #: cmd/incus/alias.go:63
 msgid ""
@@ -10093,7 +10071,6 @@ msgstr ""
 "     Återställ \"foo\" till att endast använda klustergruppen \"default\"."
 
 #: cmd/incus/cluster_group.go:174
-#, fuzzy
 msgid ""
 "incus cluster group create g1\n"
 "    Create a cluster group named g1\n"
@@ -10102,6 +10079,7 @@ msgid ""
 "    Create a cluster group named g1 with configuration from config.yaml"
 msgstr ""
 "incus cluster group create g1\n"
+"    Skapa en klustergrupp g1\n"
 "\n"
 "incus cluster group create g1 < config.yaml\n"
 "\tSkapa en klustergrupp med konfiguration från config.yaml"
@@ -10155,7 +10133,6 @@ msgstr ""
 "  Får servern att lyssna på IPv4- och IPv6-port 8443."
 
 #: cmd/incus/config_template.go:72
-#, fuzzy
 msgid ""
 "incus config template create u1 t1\n"
 "    Create template t1 for instance u1\n"
@@ -10164,12 +10141,12 @@ msgid ""
 "    Create template t1 for instance u1 from config.tpl"
 msgstr ""
 "incus config template create u1 t1\n"
+"    Skapa mall t1 för instans u1\n"
 "\n"
 "incus config template create u1 t1 < config.tpl\n"
 "    Skapa mall t1 för instans u1 från config.tpl"
 
 #: cmd/incus/create.go:51
-#, fuzzy
 msgid ""
 "incus create images:debian/12 u1\n"
 "    Create the instance u1\n"
@@ -10182,6 +10159,7 @@ msgid ""
 "    Create and start a virtual machine, overriding the disk size and bus"
 msgstr ""
 "incus create images:debian/12 u1\n"
+"    Skapa instansen u1\n"
 "\n"
 "incus create images:debian/12 u1 < config.yaml\n"
 "    Skapa instansen med konfigurationen från config.yaml\n"
@@ -10344,7 +10322,6 @@ msgstr ""
 "    För serverinformation."
 
 #: cmd/incus/launch.go:27
-#, fuzzy
 msgid ""
 "incus launch images:debian/12 u1\n"
 "    Create and start a container named u1\n"
@@ -10364,19 +10341,20 @@ msgid ""
 "    Create and start a virtual machine, overriding the disk size and bus"
 msgstr ""
 "incus startbilder:debian/12 u1\n"
+"    Skapa och starta en container u1\n"
 "\n"
 "incus startbilder:debian/12 u1 < config.yaml\n"
-"Skapa och starta en container med konfigurationen från config.yaml\n"
+"    Skapa och starta en container med konfigurationen från config.yaml\n"
 "\n"
 "incus launch images:debian/12 u2 -t aws:t2.micro\n"
-"Skapa och starta en container med samma storlek som en AWS t2.micro (1 vCPU, "
-"1 GiB RAM) incus\n"
+"    Skapa och starta en container med samma storlek som en AWS t2.micro (1 "
+"vCPU, 1 GiB RAM) incus\n"
 "\n"
 "launch images:debian/12 v1 --vm -c limits.cpu=4 -c limits.memory=4GiB Skapa\n"
-"och starta en virtuell maskin med 4 vCPU och 4 GiB RAM incus launch\n"
+"    och starta en virtuell maskin med 4 vCPU och 4 GiB RAM incus launch\n"
 "\n"
 "images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme Skapa och\n"
-"starta en virtuell maskin, med överskrivning av diskstorlek och buss"
+"    starta en virtuell maskin, med överskrivning av diskstorlek och buss"
 
 #: cmd/incus/list.go:130
 msgid ""
@@ -10424,6 +10402,7 @@ msgstr ""
 "Visa endast livscykelhändelser."
 
 #: cmd/incus/move.go:51
+#, fuzzy
 msgid ""
 "incus move [<remote>:]<source instance> [<remote>:][<destination instance>] "
 "[--instance-only]\n"
@@ -10433,19 +10412,15 @@ msgid ""
 "incus move <old name> <new name> [--instance-only]\n"
 "    Rename a local instance."
 msgstr ""
-"incus move [<fjärr>:]<source instance> [<fjärr>:][<destination instance>] [--"
-"instance-only]\n"
+"incus move [<fjärr>:]<käll instansen namn> [<fjärr>:][<destinations "
+"instansen namn>] [--instance-only]\n"
 "    Flytta en instans mellan två värdar och byt namn på den om "
 "destinationsnamnet skiljer sig åt.\n"
 "\n"
-"incus move <old name> <new name> [--instance-only]\n"
-"    Byt namn på en lokal instans.\n"
-"\n"
-"incus move <instans>/<old snapshot name> <instans>/<new snapshot name>\n"
+"incus move <instansen gamla namn> <instansen  nytt namn>[--instance-only]\n"
 "    Byt namn på en ögonblicksbild."
 
 #: cmd/incus/network_acl.go:358
-#, fuzzy
 msgid ""
 "incus network acl create a1\n"
 "    Create network acl a1\n"
@@ -10454,12 +10429,12 @@ msgid ""
 "    Create network acl with configuration from config.yaml"
 msgstr ""
 "incus network acl create a1\n"
+"    Skapa nätverks-ACL a1\n"
 "\n"
 "incus network acl create a1 < config.yaml\n"
-"Skapa nätverks-ACL med konfiguration från config.yaml"
+"    Skapa nätverks-ACL a1 med konfiguration från config.yaml"
 
 #: cmd/incus/network_address_set.go:233
-#, fuzzy
 msgid ""
 "incus network address-set create as1\n"
 "    Create network address set as1\n"
@@ -10467,10 +10442,11 @@ msgid ""
 "incus network address-set create as1 < config.yaml\n"
 "    Create network address set with configuration from config.yaml"
 msgstr ""
-"incus nätverksadressuppsättning skapa\n"
+"incus network address-set create as1\n"
+"    Skapa nätverksadressuppsättning as1\n"
 "\n"
-"as1 incus nätverksadressuppsättning skapa as1 < config.yaml\n"
-"Skapa nätverksadressuppsättning med konfiguration från config.yaml"
+"incus network address-set create as1 < config.yaml\n"
+"    Skapa nätverksadressuppsättning as1 med konfiguration från config.yaml"
 
 #: cmd/incus/network.go:339
 msgid ""
@@ -10506,7 +10482,6 @@ msgstr ""
 "Skapa en ny nätverksvidarebefordran för nätverk n1 från config.yaml"
 
 #: cmd/incus/network_integration.go:90
-#, fuzzy
 msgid ""
 "incus network integration create o1 ovn\n"
 "   Create network integration o1 of type ovn\n"
@@ -10515,10 +10490,12 @@ msgid ""
 "    Create network integration o1 of type ovn with configuration from "
 "config.yaml"
 msgstr ""
-"incus nätverksintegration skapa o1 ovn\n"
+"incus network integration create o1 ovn\n"
+"    Skapa nätverksintegration o1 av typen ovn\n"
 "\n"
-"incus nätverksintegration skapa o1 ovn < config.yaml\n"
-"Skapa nätverksintegration o1 av typen ovn med konfiguration från config.yaml"
+"incus network integration create o1 ovn < config.yaml\n"
+"    Skapa nätverksintegration o1 av typen ovn med konfiguration från "
+"config.yaml"
 
 #: cmd/incus/network_integration.go:225
 msgid ""
@@ -10533,7 +10510,6 @@ msgstr ""
 "integration.yaml"
 
 #: cmd/incus/network_load_balancer.go:314
-#, fuzzy
 msgid ""
 "incus network load-balancer create n1 127.0.0.1\n"
 "    Create network load-balancer for network n1\n"
@@ -10543,9 +10519,10 @@ msgid ""
 "config.yaml"
 msgstr ""
 "incus network load-balancer create n1 127.0.0.1\n"
+"    Skapa nätverkslastbalanserare för nätverk n1\n"
 "\n"
 "incus network load-balancer create n1 127.0.0.1 < config.yaml\n"
-"Skapa nätverkslastbalanserare för nätverk n1 med konfiguration från "
+"    Skapa nätverkslastbalanserare för nätverk n1 med konfiguration från "
 "config.yaml"
 
 #: cmd/incus/network_peer.go:307
@@ -10577,7 +10554,6 @@ msgstr ""
 "i filen config.yaml"
 
 #: cmd/incus/network_zone.go:374
-#, fuzzy
 msgid ""
 "incus network zone create z1\n"
 "    Create network zone z1\n"
@@ -10585,13 +10561,13 @@ msgid ""
 "incus network zone create z1 < config.yaml\n"
 "    Create network zone z1 with configuration from config.yaml"
 msgstr ""
-"incus nätverkszon skapa z1\n"
+"incus network zone create z1\n"
+"    Skapa nätverkszon z1\n"
 "\n"
-"incus nätverkszon skapa z1 < config.yaml\n"
-"Skapa nätverkszon z1 med konfiguration från config.yaml"
+"incus network zone create z1 < config.yaml\n"
+"    Skapa nätverkszon z1 med konfiguration från config.yaml"
 
 #: cmd/incus/network_zone.go:1024
-#, fuzzy
 msgid ""
 "incus network zone record create z1 r1\n"
 "    Create record r1 for zone z1\n"
@@ -10599,21 +10575,21 @@ msgid ""
 "incus network zone record create z1 r1 < config.yaml\n"
 "    Create record r1 for zone z1 with configuration from config.yaml"
 msgstr ""
-"incus nätverkszonpost skapa z1 r1\n"
+"incus network zone record create z1 r1\n"
+"    Skapa post r1 för zon z1\n"
 "\n"
-"incus nätverkszonpost skapa z1 r1 < config.yaml\n"
-"Skapa post r1 för zon z1 med konfiguration från config.yaml"
+"incus network zone record create z1 r1 < config.yaml\n"
+"    Skapa post r1 för zon z1 med konfiguration från config.yaml"
 
 #: cmd/incus/operation.go:292
 msgid ""
 "incus operation show 344a79e4-d88a-45bf-9c39-c72c26f6ab8a\n"
 "    Show details on that operation UUID"
 msgstr ""
-"incus-operation visa 344a79e4-d88a-45bf-9c39-c72c26f6ab8a Visa detaljer om "
-"den operationen UUID"
+"incus operation show 344a79e4-d88a-45bf-9c39-c72c26f6ab8a\n"
+"    Visa detaljer om den operationen UUID"
 
 #: cmd/incus/profile.go:186
-#, fuzzy
 msgid ""
 "incus profile assign foo default,bar\n"
 "    Set the profiles for \"foo\" to \"default\" and \"bar\".\n"
@@ -10625,13 +10601,13 @@ msgid ""
 "    Remove all profile assigned to \"foo\""
 msgstr ""
 "incus profile assign foo default,bar\n"
-"Ställ in profilerna för \"foo\" till \"default\" och \"bar\".\n"
+"    Ställ in profilerna för \"foo\" till \"default\" och \"bar\".\n"
 "\n"
 "incus profile assign foo default\n"
-"Återställ \"foo\" till att endast använda profilen\n"
+"    Återställ \"foo\" till att endast använda profilen\n"
 "\n"
-"\"default\". incus profile assign foo ''\n"
-"Ta bort alla profiler från \"foo\\"
+"incus profile assign foo --no-profiles\n"
+"    Ta bort alla profiler från \"foo\""
 
 #: cmd/incus/profile.go:345
 msgid ""
@@ -10724,7 +10700,8 @@ msgid ""
 "incus snapshot restore u1 snap0\n"
 "    Restore instance u1 to snapshot snap0"
 msgstr ""
-"incus snapshot restore u1 snap0 Återställ instans u1 till snapshot snap0"
+"incus snapshot restore u1 snap0\n"
+"    Återställ instans u1 till snapshot snap0"
 
 #: cmd/incus/storage_bucket.go:108
 msgid ""
@@ -10763,16 +10740,16 @@ msgid ""
 "incus storage bucket export default b1\n"
 "    Download a backup tarball of the b1 storage bucket from the default pool."
 msgstr ""
-"incus lagringsbucket export default b1 Ladda ner en säkerhetskopia av b1-"
-"lagringsbucketen från standardpoolen."
+"incus storage bucket export default b1\n"
+"    Ladda ner en säkerhetskopia av b1-lagringsbucketen från standardpoolen."
 
 #: cmd/incus/storage_bucket.go:1475
 msgid ""
 "incus storage bucket import default backup0.tar.gz\n"
 "\t\tCreate a new storage bucket using backup0.tar.gz as the source."
 msgstr ""
-"incus lagringsbucket import standard backup0.tar.gz Skapa en ny "
-"lagringsbucket med backup0.tar.gz som källa."
+"incus storage bucket import default backup0.tar.gz\n"
+"\t\tSkapa en ny lagringsbucket med backup0.tar.gz som källa."
 
 #: cmd/incus/storage_bucket.go:974
 msgid ""
@@ -10796,9 +10773,9 @@ msgid ""
 "    Will show the properties of a bucket key called \"foo\" for a bucket "
 "called \"data\" in the \"default\" pool."
 msgstr ""
-"incus storage bucket key visa standarddata foo Visar egenskaperna för en "
-"bucket-nyckel som heter \"foo\" för en bucket som heter \"data\" i poolen "
-"\"standard\"."
+"incus storage bucket key show default data foo\n"
+"    Visar egenskaperna för en bucket-nyckel som heter \"foo\" för en bucket "
+"som heter \"data\" i poolen \"standard\"."
 
 #: cmd/incus/storage_bucket.go:701
 msgid ""
@@ -10811,7 +10788,6 @@ msgstr ""
 "\"standard\"."
 
 #: cmd/incus/storage.go:110
-#, fuzzy
 msgid ""
 "incus storage create s1 dir\n"
 "    Create a storage pool s1\n"
@@ -10821,10 +10797,10 @@ msgid ""
 "\t"
 msgstr ""
 "incus storage create s1 dir\n"
+"    Skapa en lagringspool s1\n"
 "\n"
 "incus storage create s1 dir < config.yaml\n"
-"Skapa en lagringspool med hjälp av innehållet i config.yaml\n"
-".\n"
+"    Skapa en lagringspool s1 med hjälp av innehållet i config.yaml\n"
 "\t"
 
 #: cmd/incus/storage.go:268
@@ -11052,31 +11028,29 @@ msgid "info"
 msgstr "info"
 
 #: cmd/incus/usage/usage.go:828
-#, fuzzy
 msgid "instance"
-msgstr "Lista instanser"
+msgstr "instans"
 
 #: cmd/incus/usage/usage.go:829
-#, fuzzy
 msgid "interface"
-msgstr "Värdgränssnitt"
+msgstr "gränssnitt"
 
 #: cmd/incus/usage/usage.go:832
 msgid "key"
-msgstr ""
+msgstr "nyckel"
 
 #: cmd/incus/usage/usage.go:830
-#, fuzzy
 msgid "listen address"
-msgstr "Saknad lyssningsadress"
+msgstr "lyssningsadress"
 
 #: cmd/incus/usage/usage.go:831
+#, fuzzy
 msgid "listen port"
-msgstr ""
+msgstr "lyssna port"
 
 #: cmd/incus/usage/usage.go:834
 msgid "member"
-msgstr ""
+msgstr "medlem"
 
 #: cmd/incus/remote.go:503
 msgid "n"
@@ -11087,23 +11061,21 @@ msgid "name"
 msgstr "namn"
 
 #: cmd/incus/usage/usage.go:835
-#, fuzzy
 msgid "network"
-msgstr "Ta bort nätverk"
+msgstr "nätverk"
 
 #: cmd/incus/usage/usage.go:836
-#, fuzzy
 msgid "network integration"
-msgstr "nätverk eller integration"
+msgstr "nätverk integration"
 
 #: cmd/incus/network_peer.go:299
 msgid "network or integration"
 msgstr "nätverk eller integration"
 
 #: cmd/incus/usage/usage.go:894
-#, fuzzy, c-format
+#, c-format
 msgid "new %s name"
-msgstr "Nätverksnamn"
+msgstr "nytt %s namn"
 
 #: cmd/incus/config_trust.go:478 cmd/incus/image.go:945 cmd/incus/image.go:950
 #: cmd/incus/image.go:1164
@@ -11113,7 +11085,7 @@ msgstr "nej"
 #: cmd/incus/usage/parse.go:50
 #, c-format
 msgid "not enough arguments; expected a value for %s"
-msgstr ""
+msgstr "inte tillräckligt med argument; förväntade sig ett värde för %s"
 
 #: cmd/incus/remote.go:495
 msgid "ok (y/n/[fingerprint])?"
@@ -11122,25 +11094,23 @@ msgstr "ok (y/n/[fingeravtryck])?"
 #: cmd/incus/usage/parse.go:35
 #, c-format
 msgid "one of %s or %s"
-msgstr ""
+msgstr "en av %s eller %s"
 
 #: cmd/incus/usage/usage.go:837
-#, fuzzy
 msgid "operation"
-msgstr "applikation"
+msgstr "operation"
 
 #: cmd/incus/usage/usage.go:838
-#, fuzzy
 msgid "path"
-msgstr "API-sökväg"
+msgstr "sökväg"
 
 #: cmd/incus/usage/usage.go:839
 msgid "peer"
-msgstr ""
+msgstr "nätverkspeern"
 
 #: cmd/incus/usage/legacysupport.go:8
 msgid "please switch to the “<key>=<value>” syntax"
-msgstr ""
+msgstr "vänligen byt till syntaxen “<key>=<value>”"
 
 #: cmd/incus/config.go:55
 msgid "please use `incus profile`"
@@ -11148,11 +11118,12 @@ msgstr "använd `incus profile`"
 
 #: cmd/incus/usage/usage.go:840
 msgid "pool"
-msgstr ""
+msgstr "lagringspool"
 
 #: cmd/incus/usage/usage.go:841
+#, fuzzy
 msgid "port"
-msgstr ""
+msgstr "port"
 
 #: cmd/incus/admin_init.go:36
 msgid "preseed.yaml"
@@ -11161,25 +11132,24 @@ msgstr "preseed.yaml"
 #: cmd/incus/usage/usage.go:842
 #, fuzzy
 msgid "profile"
-msgstr "Profiler:"
+msgstr "profil"
 
 #: cmd/incus/usage/usage.go:843
-#, fuzzy
 msgid "project"
-msgstr "Alla projekt"
+msgstr "projekt"
 
 #: cmd/incus/usage/usage.go:844
-#, fuzzy
 msgid "protocol"
-msgstr "Protokoll: %s"
+msgstr "protokoll"
 
 #: cmd/incus/usage/usage.go:845
 msgid "query"
-msgstr ""
+msgstr "fråga"
 
 #: cmd/incus/usage/usage.go:846
+#, fuzzy
 msgid "record"
-msgstr ""
+msgstr "rekord"
 
 #: cmd/incus/usage/usage.go:847
 #, fuzzy
@@ -11188,16 +11158,15 @@ msgstr "<fjärr>"
 
 #: cmd/incus/usage/usage.go:851
 msgid "role"
-msgstr ""
+msgstr "roll"
 
 #: cmd/incus/image.go:684
 msgid "rootfs tarball"
 msgstr "rootfs-tarball"
 
 #: cmd/incus/usage/usage.go:852
-#, fuzzy
 msgid "snapshot"
-msgstr "Ögonblicksbilder:"
+msgstr "ögonblicksbild"
 
 #: cmd/incus/remote_unix.go:35
 msgid "socket file"
@@ -11217,27 +11186,26 @@ msgid "sshfs mounting %q on %q"
 msgstr "sshfs monterar %q på %q"
 
 #: cmd/incus/file.go:758
-#, fuzzy
 msgid "stdin can only be used once, with no other source arguments"
-msgstr "--all kan inte användas tillsammans med andra argument"
+msgstr "stdin kan bara användas en gång, utan andra källargument"
 
 #: cmd/incus/usage/usage.go:854
 msgid "symlink target path"
-msgstr ""
+msgstr "symlänkens målsökväg"
 
 #: cmd/incus/usage/usage.go:855
-#, fuzzy
 msgid "tarball"
-msgstr "rootfs-tarball"
+msgstr "arkiv"
 
 #: cmd/incus/usage/usage.go:900
-#, fuzzy, c-format
+#, c-format
 msgid "target %s"
-msgstr "<mål>"
+msgstr "mål %s"
 
 #: cmd/incus/usage/usage.go:856
+#, fuzzy
 msgid "template"
-msgstr ""
+msgstr "mall"
 
 #: cmd/incus/remote.go:120 cmd/incus/usage/usage.go:857
 msgid "token"
@@ -11246,7 +11214,7 @@ msgstr "token"
 #: cmd/incus/usage/parse.go:67
 #, c-format
 msgid "too many arguments; unexpected %s"
-msgstr ""
+msgstr "för många argument; oväntade %s"
 
 #: cmd/incus/storage.go:522
 msgid "total space"
@@ -11254,21 +11222,21 @@ msgstr "totalt utrymme"
 
 #: cmd/incus/usage/usage.go:853 cmd/incus/usage/usage.go:858
 msgid "type"
-msgstr ""
+msgstr "typ"
 
 #: cmd/incus/usage/parse.go:91
-#, fuzzy, c-format
+#, c-format
 msgid "unexpected %s"
-msgstr "Länk upptäckt: %v"
+msgstr "oväntat %s"
 
 #: cmd/incus/usage/parse.go:98
 #, c-format
 msgid "unexpected %s; expected %s"
-msgstr ""
+msgstr "oväntade %s; förväntade %s"
 
 #: cmd/incus/usage/parse.go:47
 msgid "unexpected end of argument; did you forget a suffix?"
-msgstr ""
+msgstr "oväntat slut på argumentet; glömde du ett suffix?"
 
 #: cmd/incus/version.go:39
 msgid "unreachable"
@@ -11280,7 +11248,7 @@ msgstr "används av"
 
 #: cmd/incus/usage/usage.go:860
 msgid "value"
-msgstr ""
+msgstr "värde"
 
 #: cmd/incus/usage/usage.go:861
 #, fuzzy
@@ -11289,7 +11257,7 @@ msgstr "Kolumner"
 
 #: cmd/incus/usage/usage.go:862
 msgid "warning UUID"
-msgstr ""
+msgstr "varning UUID"
 
 #: cmd/incus/remote.go:505
 msgid "y"
@@ -11302,13 +11270,14 @@ msgid "yes"
 msgstr "ja"
 
 #: cmd/incus/usage/usage.go:863
+#, fuzzy
 msgid "zone"
-msgstr ""
+msgstr "zon"
 
 #: cmd/incus/usage/utils.go:52
 #, c-format
 msgid "“%s”"
-msgstr ""
+msgstr "“%s”"
 
 #~ msgid "Action (defaults to GET)"
 #~ msgstr "Åtgärd (standardinställning är GET)"
