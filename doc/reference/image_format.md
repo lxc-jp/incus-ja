@@ -112,7 +112,7 @@ templates:
 
 #### テンプレートファイル
 
-テンプレートファイルは[Pongo2](https://www.schlachter.tech/solutions/pongo2-template-engine/)形式を使います。
+テンプレートファイルは[Pongo2](https://pongo2.dev/)形式を使います。
 
 テンプレートファイルは常に以下のコンテキストを受け取ります。
 

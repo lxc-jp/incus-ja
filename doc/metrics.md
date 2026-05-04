@@ -246,7 +246,11 @@ scrape_configs:
 Incus は、Prometheus によって収集された Incus メトリクスと Loki からのログエントリを表示するように設定された[Grafanaダッシュボード](https://grafana.com/grafana/dashboards/19727-incus/)を提供します。
 
 ```{note}
-このダッシュボードはGrafana 8.4以降が必要です。
+このダッシュボードはPrometheusとLokiの両方をGrafana内のデータソースとして設定したGrafana 8.4以降が必要です。
+
+Grafana内にプレイスホルダーのLokiデータソースを追加し、完全にセットアップされたLokiサーバーがない環境のダッシュボードをインポートできます。インポート後、ダッシュボード下部のログのセクションを削除し、その後プレイスホルダーのLokiデータソースを削除してください。
+
+LokiへのIncusのログ出力は[関連するサーバー設定](server-options-logging)で設定できます。
 ```
 
 Grafana のドキュメントを参照して、インストールとサインインの手順を確認してください:
@@ -273,7 +277,7 @@ Grafana のドキュメントを参照して、インストールとサインイ
 
    1. 他のフィールドはデフォルトの設定のままにし、{guilabel}`保存＆テスト`をクリックします。
 
-1. Loki をデータソースとして設定します:
+1. [Loki](https://grafana.com/oss/loki/) をデータソースとして設定します:
 
    1. {guilabel}`Configuration` > {guilabel}`Data sources`に移動します。
    1. {guilabel}`Add data source`をクリックします。

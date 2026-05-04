@@ -33,6 +33,8 @@
   どちらのコマンドも、ストレージボリュームをディスクデバイスとして追加するための同じメカニズムを使用します。
 
   `source=<volume_name>/<sub_path>`というシンタクスを使ってカスタムボリュームのサブパスをインスタンスにアタッチできます。
+  サブパスがカスタムボリューム内に存在しない場合、デバイスの起動時に自動的に作成されます。
+  ディレクトリーがこのように自動的に作成される場合、{config:option}`device-disk-device-conf:initial.uid`、{config:option}`device-disk-device-conf:initial.gid`、{config:option}`device-disk-device-conf:initial.mode`オプションがオーナーとパーミションを設定するために使われます（デフォルト値はそれぞれ`0`、`0`、`0711`）。
 
 ホスト上のパス
 : ホストのパス（ファイルシステムまたはブロックデバイスのいずれか）をインスタンスと共有するには、ディスクデバイスとして追加し、`source`としてホストパスを指定します:
@@ -115,6 +117,17 @@ overlayfsの挙動を使ったTmpfs
     incus init <image> <instance_name> --device <device_name>,initial.zfs.block_mode=true
 
 カスタムボリュームオプションに初期ボリューム設定を使ったりボリュームのサイズを設定はできないことに注意してください。
+
+(devices-disk-initial-uid-gid-mode)=
+## `initial.uid`、`initial.gid`、`initial.mode`
+
+`initial.uid`、`initial.gid`、`initial.mode`は3つの異なるシナリオで使われます：
+
+- rootディスクデバイスでは、これらはストレージドライバーに渡され、インスタンスのrootボリュームの作成時にオーナーとパーミッションを設定するのに使われます（ドライバーがサポートする場合）。
+- `tmpfs:`と`tmpfs-overlay:`ディスクデバイスでは、`tmpfs`マウント時の`uid=`、`gid=`、`mode=`マウントオプションに変換されます。
+- `source`がサブパスを含む（例：`source=myvol/sub/path`）カスタムボリュームディスクでは、デバイスの起動時に自動的に作成されるサブディレクトリーのオーナーとパーミションとして使われます。
+
+すべての場合で、`initial.uid`と`initial.gid`のデフォルトは`0`で、`initial.mode`のデフォルトは`0711`（8進数）です。
 
 ## デバイスオプション
 

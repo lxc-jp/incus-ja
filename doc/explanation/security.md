@@ -125,7 +125,7 @@ incus config device override <instance> <NIC> security.mac_filtering=true
 ```
 
 これらの機能を併用することで、ブリッジに接続されているインスタンスが MAC アドレスや IP アドレスを詐称することを防ぐことができます。
-これらのオプションは、ホスト上で利用可能なものに応じて、`xtables`（`iptables`、`ip6tables`、`ebtables`）または`nftables`を使用して実装されます。
+これらのオプションは`nftables`を使用して実装されます。
 
 これらのオプションは、ネストされたコンテナが異なる MAC アドレスを持つ親ネットワークを使用すること（ブリッジされた NIC や`macvlan` NIC を使用すること）を効果的に防止することができるのは注目に値します。
 

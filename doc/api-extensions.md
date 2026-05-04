@@ -3009,3 +3009,35 @@ SR-IOV NICに以下のプロパティーを追加します：
 ## `metrics_project_resources`
 
 `/1.0/metrics`のエンドポイントにプロジェクトレベルのメトリクスを追加します。これはリソースのカウント、設定された制限値、プロジェクト毎の現在の使用量を含みます。
+
+## `storage_volume_nbd`
+
+ストレージボリュームとインスタンスに以下のAPIを追加します：
+
+* `POST /1.0/storage-pools/POOL/volumes/TYPE/VOLUME/nbd`
+* `GET /1.0/storage-pools/POOL/volumes/TYPE/VOLUME/bitmaps`
+* `POST /1.0/storage-pools/POOL/volumes/TYPE/VOLUME/bitmaps`
+* `GET /1.0/storage-pools/POOL/volumes/TYPE/VOLUME/bitmaps/NAME`
+* `DELETE /1.0/storage-pools/POOL/volumes/TYPE/VOLUME/bitmaps/NAME`
+* `POST /1.0/instances/NAME/bitmaps`
+
+Incusブロックストレージボリュームへの生の`NBD`接続を取得できるようにします。
+また、それらのボリュームのダーティービットマップの情報を取得し、インクリメンタルバックアップに使えるようにします。
+インスタンスレベルのエンドポイントはVMと依存するボリュームにまたがって一貫性のあるビットマップの作成を可能にします。
+
+## `projects_restricted_storage_pool_access`
+
+プロジェクト内で度のストレージプールにアクセスできるかを（カンマ区切りリストとして）指定する`restricted.storage-pools.access`プロジェクト設定キーを追加します。
+指定しない場合は、すべてのストレージプールがアクセスできます。
+
+リストにないストレージプールはプールサイズのリミットが0である（`limits.disk.pool.POOLNAME=0`）のと同じように扱われ、プロジェクトからはアクセスできず隠された状態になります。
+
+## `server_shutdown_action`
+
+`core.shutdown_action`サーバー設定オプションを追加します。
+
+デフォルト値の`shutdown`は従来の挙動を維持しますが、`evacuate`を設定するとクラスター化されたサーバーはシャットダウンされそうになると稼働中のインスタンスのシャットダウンを回避しようと試みます。
+
+## `instances_placement_scriptlet_rebalance`
+
+クラスターリバランシングのトリガーに配置スクリプトレットのトリガーを追加します。
