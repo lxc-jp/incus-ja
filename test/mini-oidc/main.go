@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/lxc/incus/v6/test/mini-oidc/minioidc"
+	"github.com/lxc/incus/v7/test/mini-oidc/minioidc"
 )
 
 func main() {

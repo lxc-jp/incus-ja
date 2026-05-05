@@ -8,8 +8,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/lxc/incus/v6/shared/logger"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/shared/logger"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // InMemoryNetwork creates a fully in-memory listener and dial function.

@@ -11,11 +11,11 @@ import (
 
 	"github.com/mdlayher/netx/eui64"
 
-	"github.com/lxc/incus/v6/internal/iprange"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/iprange"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // ErrDHCPNotSupported indicates network doesn't support DHCP for this IP protocol.

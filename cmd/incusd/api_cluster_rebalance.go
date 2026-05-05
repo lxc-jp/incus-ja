@@ -9,17 +9,20 @@ import (
 	"strconv"
 	"time"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/internal/server/task"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/scriptlet"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/internal/server/task"
+	"github.com/lxc/incus/v7/shared/api"
+	apiScriptlet "github.com/lxc/incus/v7/shared/api/scriptlet"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osarch"
 )
 
 // ServerScore represents server score taken into account during load balancing.
@@ -105,44 +108,36 @@ func calculateServersScore(s *state.State, members []db.NodeInfo) (map[string][]
 	return sortAndGroupByArch(scores), nil
 }
 
-// clusterRebalanceServers is responsible for instances migration from most to less busy server.
-func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *ServerScore, dstServer *ServerScore, maxToMigrate int64) (int64, error) {
+// clusterRebalanceServers is responsible for instances migration from the most busy server to less busy candidates.
+func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *ServerScore, candidates []*ServerScore, leaderAddress string, maxToMigrate int64) (int64, error) {
 	numOfMigrated := int64(0)
 
-	// Keep track of project restrictions.
-	projectStatuses := map[string]bool{}
+	// Restrict candidates to servers less loaded than the source.
+	lessLoadedCandidates := make([]*ServerScore, 0, len(candidates))
+	for _, c := range candidates {
+		if c.Score >= srcServer.Score {
+			continue
+		}
 
-	// Get a list of migratable instances.
+		lessLoadedCandidates = append(lessLoadedCandidates, c)
+	}
+
+	if len(lessLoadedCandidates) == 0 {
+		return numOfMigrated, nil
+	}
+
+	// The default target is the least-loaded candidate (last in the sorted list).
+	dstServer := lessLoadedCandidates[len(lessLoadedCandidates)-1]
+
+	// Get the list of instances on the source.
 	var dbInstances []dbCluster.Instance
 	err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
 		var err error
 
-		// Get the instance list.
 		instType := instancetype.VM
 		dbInstances, err = dbCluster.GetInstances(ctx, tx.Tx(), dbCluster.InstanceFilter{Node: &srcServer.NodeInfo.Name, Type: &instType})
 		if err != nil {
 			return fmt.Errorf("Failed to get instances: %w", err)
-		}
-
-		// Check project restrictions.
-		for _, dbInst := range dbInstances {
-			_, ok := projectStatuses[dbInst.Project]
-			if ok {
-				continue
-			}
-
-			dbProject, err := dbCluster.GetProject(ctx, tx.Tx(), dbInst.Project)
-			if err != nil {
-				return fmt.Errorf("Failed to get project: %w", err)
-			}
-
-			apiProject, err := dbProject.ToAPI(ctx, tx.Tx())
-			if err != nil {
-				return fmt.Errorf("Failed to load project: %w", err)
-			}
-
-			_, _, err = project.CheckTarget(ctx, s.Authorizer, nil, tx, apiProject, dstServer.NodeInfo.Name, []db.NodeInfo{dstServer.NodeInfo})
-			projectStatuses[dbInst.Project] = err == nil
 		}
 
 		return nil
@@ -151,14 +146,9 @@ func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *Ser
 		return -1, fmt.Errorf("Failed to get instances: %w", err)
 	}
 
-	// Filter for instances that can be live migrated to the new target.
+	// Filter for instances that can be live migrated to a new target.
 	var instances []instance.Instance
 	for _, dbInst := range dbInstances {
-		if !projectStatuses[dbInst.Project] {
-			// Project restrictions prevent moving to that target.
-			continue
-		}
-
 		inst, err := instance.LoadByProjectAndName(s, dbInst.Project, dbInst.Name)
 		if err != nil {
 			return -1, fmt.Errorf("Failed to load instance: %w", err)
@@ -191,23 +181,33 @@ func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *Ser
 		instances = append(instances, inst)
 	}
 
-	// Calculate current and target scores.
-	targetScore := (srcServer.Score + dstServer.Score) / 2
-	currentScore := dstServer.Score
-	targetServerUsage := &ServerUsage{
-		MemoryUsage: dstServer.Resources.Memory.Used,
-		MemoryTotal: dstServer.Resources.Memory.Total,
-		CPUUsage:    dstServer.Resources.Load.Average1Min,
-		CPUTotal:    dstServer.Resources.CPU.Total,
+	// Map candidate name to its score data for quick lookup.
+	candidateByName := make(map[string]*ServerScore, len(lessLoadedCandidates))
+	for _, c := range lessLoadedCandidates {
+		candidateByName[c.NodeInfo.Name] = c
 	}
 
-	// Prepare the API client.
-	srcNode, err := cluster.Connect(srcServer.NodeInfo.Address, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
+	// Track running usage and score per target so multiple instances heading to the same target accumulate correctly.
+	runningUsage := make(map[string]*ServerUsage, len(lessLoadedCandidates))
+	runningScore := make(map[string]uint8, len(lessLoadedCandidates))
+	for _, c := range lessLoadedCandidates {
+		runningUsage[c.NodeInfo.Name] = &ServerUsage{
+			MemoryUsage: c.Resources.Memory.Used,
+			MemoryTotal: c.Resources.Memory.Total,
+			CPUUsage:    c.Resources.Load.Average1Min,
+			CPUTotal:    c.Resources.CPU.Total,
+		}
+
+		runningScore[c.NodeInfo.Name] = c.Score
+	}
+
+	placementScriptletEnabled := s.GlobalConfig.InstancesPlacementScriptlet() != ""
+
+	// Prepare the source API client.
+	srcClient, err := cluster.Connect(srcServer.NodeInfo.Address, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
 	if err != nil {
 		return -1, fmt.Errorf("Failed to connect to cluster member: %w", err)
 	}
-
-	srcNode = srcNode.UseTarget(dstServer.NodeInfo.Name)
 
 	for _, inst := range instances {
 		if numOfMigrated >= maxToMigrate {
@@ -215,9 +215,114 @@ func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *Ser
 			return numOfMigrated, nil
 		}
 
-		if currentScore >= targetScore {
-			// We've balanced the load.
-			return numOfMigrated, nil
+		// Filter the candidate list for this instance using project restrictions.
+		var instanceCandidates []*ServerScore
+		err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+			dbProject, err := dbCluster.GetProject(ctx, tx.Tx(), inst.Project().Name)
+			if err != nil {
+				return fmt.Errorf("Failed to get project: %w", err)
+			}
+
+			apiProject, err := dbProject.ToAPI(ctx, tx.Tx())
+			if err != nil {
+				return fmt.Errorf("Failed to load project: %w", err)
+			}
+
+			for _, c := range lessLoadedCandidates {
+				_, _, err := project.CheckTarget(ctx, s.Authorizer, nil, tx, apiProject, c.NodeInfo.Name, []db.NodeInfo{c.NodeInfo})
+				if err != nil {
+					continue
+				}
+
+				instanceCandidates = append(instanceCandidates, c)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return -1, fmt.Errorf("Failed to filter candidates for instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+		}
+
+		if len(instanceCandidates) == 0 {
+			// No allowed targets for this instance.
+			continue
+		}
+
+		// Default target is the least-loaded allowed candidate.
+		instanceDstServer := instanceCandidates[len(instanceCandidates)-1]
+		chosenTarget := &instanceDstServer.NodeInfo
+
+		// Default fallback: if scriptlet not enabled and the global least-loaded candidate is allowed, prefer it.
+		if !placementScriptletEnabled {
+			for _, c := range instanceCandidates {
+				if c.NodeInfo.Name == dstServer.NodeInfo.Name {
+					chosenTarget = &dstServer.NodeInfo
+					break
+				}
+			}
+		}
+
+		if placementScriptletEnabled {
+			archName, err := osarch.ArchitectureName(inst.Architecture())
+			if err != nil {
+				return -1, fmt.Errorf("Failed getting architecture for instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+			}
+
+			profileNames := make([]string, 0, len(inst.Profiles()))
+			for _, p := range inst.Profiles() {
+				profileNames = append(profileNames, p.Name)
+			}
+
+			placementReq := apiScriptlet.InstancePlacement{
+				InstancesPost: api.InstancesPost{
+					Name: inst.Name(),
+					Type: api.InstanceType(inst.Type().String()),
+					InstancePut: api.InstancePut{
+						Architecture: archName,
+						Config:       inst.ExpandedConfig(),
+						Devices:      inst.ExpandedDevices().CloneNative(),
+						Profiles:     profileNames,
+					},
+				},
+				Project: inst.Project().Name,
+				Reason:  apiScriptlet.InstancePlacementReasonRebalance,
+			}
+
+			// Build the scriptlet candidate list sorted from least to most loaded.
+			sortedCandidates := make([]db.NodeInfo, 0, len(instanceCandidates))
+			for i := len(instanceCandidates) - 1; i >= 0; i-- {
+				sortedCandidates = append(sortedCandidates, instanceCandidates[i].NodeInfo)
+			}
+
+			scriptCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+			scriptTarget, err := scriptlet.InstancePlacementRun(scriptCtx, logger.Log, s, &placementReq, sortedCandidates, leaderAddress)
+			cancel()
+			if err != nil {
+				return -1, fmt.Errorf("Failed instance placement scriptlet for instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+			}
+
+			if scriptTarget != nil {
+				chosenTarget = scriptTarget
+			}
+		}
+
+		// Skip if the chosen target is the source itself.
+		if chosenTarget.Name == srcServer.NodeInfo.Name {
+			continue
+		}
+
+		// Look up the score data for the chosen target.
+		chosenScore, ok := candidateByName[chosenTarget.Name]
+		if !ok {
+			// Chosen target isn't in our candidate list (shouldn't happen).
+			continue
+		}
+
+		// Per-target target score: midpoint between source and chosen target initial loads.
+		targetScore := (srcServer.Score + chosenScore.Score) / 2
+		if runningScore[chosenTarget.Name] >= targetScore {
+			// We've already balanced load against this target.
+			continue
 		}
 
 		// Calculate resource consumption.
@@ -232,7 +337,7 @@ func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *Ser
 			CPUUsage:    float64(memUsage),
 		}
 
-		expectedScore := calculateScore(targetServerUsage, additionalUsage)
+		expectedScore := calculateScore(runningUsage[chosenTarget.Name], additionalUsage)
 		if expectedScore >= targetScore {
 			// Skip the instance as it would have too big an impact.
 			continue
@@ -244,7 +349,9 @@ func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *Ser
 			Live:      true,
 		}
 
-		migrationOp, err := srcNode.MigrateInstance(inst.Name(), req)
+		targetClient := srcClient.UseTarget(chosenTarget.Name)
+
+		migrationOp, err := targetClient.MigrateInstance(inst.Name(), req)
 		if err != nil {
 			return -1, fmt.Errorf("Migration API failure: %w", err)
 		}
@@ -260,18 +367,18 @@ func clusterRebalanceServers(ctx context.Context, s *state.State, srcServer *Ser
 			return -1, err
 		}
 
-		// Update counters and scores.
-		numOfMigrated += 1
-		currentScore = expectedScore
-		targetServerUsage.MemoryUsage += additionalUsage.MemoryUsage
-		targetServerUsage.CPUUsage += additionalUsage.CPUUsage
+		// Update counters and per-target running state.
+		numOfMigrated++
+		runningScore[chosenTarget.Name] = expectedScore
+		runningUsage[chosenTarget.Name].MemoryUsage += additionalUsage.MemoryUsage
+		runningUsage[chosenTarget.Name].CPUUsage += additionalUsage.CPUUsage
 	}
 
 	return numOfMigrated, nil
 }
 
 // clusterRebalance performs cluster re-balancing.
-func clusterRebalance(ctx context.Context, s *state.State, servers map[string][]*ServerScore) error {
+func clusterRebalance(ctx context.Context, s *state.State, servers map[string][]*ServerScore, leaderAddress string) error {
 	rebalanceThreshold := s.GlobalConfig.ClusterRebalanceThreshold()
 	rebalanceBatch := s.GlobalConfig.ClusterRebalanceBatch()
 	numOfMigrated := int64(0)
@@ -300,7 +407,7 @@ func clusterRebalance(ctx context.Context, s *state.State, servers map[string][]
 			continue // Skip as threshold condition is not met.
 		}
 
-		n, err := clusterRebalanceServers(ctx, s, v[0], v[leastBusyIndex], rebalanceBatch-numOfMigrated)
+		n, err := clusterRebalanceServers(ctx, s, v[0], v[1:], leaderAddress, rebalanceBatch-numOfMigrated)
 		if err != nil {
 			return fmt.Errorf("Failed to rebalance cluster: %w", err)
 		}
@@ -354,7 +461,7 @@ func autoRebalanceCluster(ctx context.Context, d *Daemon) error {
 		return fmt.Errorf("Failed calculating servers score: %w", err)
 	}
 
-	err = clusterRebalance(ctx, s, servers)
+	err = clusterRebalance(ctx, s, servers, leader)
 	if err != nil {
 		return fmt.Errorf("Failed rebalancing cluster: %w", err)
 	}

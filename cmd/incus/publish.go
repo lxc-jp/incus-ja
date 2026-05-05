@@ -8,13 +8,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdPublish struct {
@@ -31,21 +31,20 @@ type cmdPublish struct {
 
 var cmdPublishUsage = u.Usage{u.MakePath(u.Instance, u.Snapshot.Optional()).Remote(), u.RemoteColonOpt, u.LegacyKV.List(0)}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdPublish) Command() *cobra.Command {
+func (c *cmdPublish) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("publish", cmdPublishUsage...)
 	cmd.Short = i18n.G("Publish instances as images")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Publish instances as images`))
 
-	cmd.RunE = c.Run
-	cmd.Flags().BoolVar(&c.flagMakePublic, "public", false, i18n.G("Make the image public"))
-	cmd.Flags().StringArrayVar(&c.flagAliases, "alias", nil, i18n.G("New alias to define at target")+"``")
-	cmd.Flags().BoolVarP(&c.flagForce, "force", "f", false, i18n.G("Stop the instance if currently running"))
-	cmd.Flags().StringVar(&c.flagCompressionAlgorithm, "compression", "", i18n.G("Compression algorithm to use (`none` for uncompressed)"))
-	cmd.Flags().StringVar(&c.flagExpiresAt, "expire", "", i18n.G("Image expiration date (format: rfc3339)")+"``")
-	cmd.Flags().BoolVar(&c.flagReuse, "reuse", false, i18n.G("If the image alias already exists, delete and create a new one"))
-	cmd.Flags().StringVar(&c.flagFormat, "format", "unified", i18n.G("Image format")+"``")
+	cmd.RunE = c.run
+	cli.AddBoolFlag(cmd.Flags(), &c.flagMakePublic, "public", i18n.G("Make the image public"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagAliases, "alias", i18n.G("New alias to define at target"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagForce, "force|f", i18n.G("Stop the instance if currently running"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagCompressionAlgorithm, "compression", "", "", i18n.G("Compression algorithm to use (`none` for uncompressed)"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagExpiresAt, "expire", "", "", i18n.G("Image expiration date (format: rfc3339)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagReuse, "reuse", i18n.G("If the image alias already exists, delete and create a new one"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format", "unified", "", i18n.G("Image format"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -62,8 +61,7 @@ func (c *cmdPublish) Command() *cobra.Command {
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdPublish) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdPublish) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdPublishUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -199,7 +197,7 @@ func (c *cmdPublish) Run(cmd *cobra.Command, args []string) error {
 		req.ExpiresAt = expiresAt
 	}
 
-	existingAliases, err := GetCommonAliases(dstServer, aliases...)
+	existingAliases, err := getCommonAliases(dstServer, aliases...)
 	if err != nil {
 		return fmt.Errorf(i18n.G("Error retrieving aliases: %w"), err)
 	}

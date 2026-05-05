@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	ovnNB "github.com/lxc/incus/v6/internal/server/network/ovn/schema/ovn-nb"
-	ovnSB "github.com/lxc/incus/v6/internal/server/network/ovn/schema/ovn-sb"
+	ovnNB "github.com/lxc/incus/v7/internal/server/network/ovn/schema/ovn-nb"
+	ovnSB "github.com/lxc/incus/v7/internal/server/network/ovn/schema/ovn-sb"
 )
 
 // GetLogicalRouterPortActiveChassisHostname gets the hostname of the chassis managing the logical router port.

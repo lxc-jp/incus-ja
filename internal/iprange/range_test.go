@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/lxc/incus/v6/internal/iprange"
+	"github.com/lxc/incus/v7/internal/iprange"
 )
 
 // parseRange is a custom parse function to not depend on other packages.

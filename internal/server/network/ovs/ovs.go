@@ -10,7 +10,7 @@ import (
 	"github.com/go-logr/logr"
 	ovsdbClient "github.com/ovn-kubernetes/libovsdb/client"
 
-	ovsSwitch "github.com/lxc/incus/v6/internal/server/network/ovs/schema/ovs"
+	ovsSwitch "github.com/lxc/incus/v7/internal/server/network/ovs/schema/ovs"
 )
 
 // VSwitch client.

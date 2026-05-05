@@ -9,14 +9,14 @@ import (
 	"os"
 	"path/filepath"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/ports"
-	"github.com/lxc/incus/v6/internal/server/response"
-	localvsock "github.com/lxc/incus/v6/internal/server/vsock"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	agentAPI "github.com/lxc/incus/v6/shared/api/agent"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/ports"
+	"github.com/lxc/incus/v7/internal/server/response"
+	localvsock "github.com/lxc/incus/v7/internal/server/vsock"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	agentAPI "github.com/lxc/incus/v7/shared/api/agent"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 var api10Cmd = APIEndpoint{

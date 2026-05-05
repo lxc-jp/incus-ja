@@ -28,46 +28,46 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/kballard/go-shellquote"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/filter"
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	internalIO "github.com/lxc/incus/v6/internal/io"
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/node"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	projectutils "github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/internal/server/task"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/filter"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	internalIO "github.com/lxc/incus/v7/internal/io"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/node"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	projectutils "github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/internal/server/task"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var imagesCmd = APIEndpoint{
 	Path: "images",
 
 	Get:  APIEndpointAction{Handler: imagesGet, AllowUntrusted: true},
-	Post: APIEndpointAction{Handler: imagesPost, AllowUntrusted: true},
+	Post: APIEndpointAction{Handler: imagesPost, AllowUntrusted: true, LargeRequest: true},
 }
 
 var imageCmd = APIEndpoint{
@@ -172,7 +172,7 @@ func compressFile(compress string, infile io.Reader, outfile io.Writer) error {
 			return err
 		}
 
-		_, err = io.Copy(outfile, tempfile)
+		_, err = util.SafeCopy(outfile, tempfile)
 		if err != nil {
 			return err
 		}
@@ -540,7 +540,7 @@ func imgPostRemoteInfo(ctx context.Context, s *state.State, r *http.Request, req
 		return nil, errors.New("must specify one of alias or fingerprint for init from image")
 	}
 
-	info, _, err := ImageDownload(ctx, r, s, op, &ImageDownloadArgs{
+	info, _, err := imageDownload(ctx, r, s, op, &imageDownloadArgs{
 		Server:            req.Source.Server,
 		Protocol:          req.Source.Protocol,
 		Certificate:       req.Source.Certificate,
@@ -611,16 +611,32 @@ func imgPostRemoteInfo(ctx context.Context, s *state.State, r *http.Request, req
 func imgPostURLInfo(ctx context.Context, s *state.State, r *http.Request, req api.ImagesPost, op *operations.Operation, project string, budget int64) (*api.Image, error) {
 	var err error
 
+	// Check the request.
 	if req.Source.URL == "" {
 		return nil, errors.New("Missing URL")
 	}
 
+	// Validate that the initial image target is allowed.
+	// The imageDownload function will validate the ultimate file download location later.
+	err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		err := projectutils.AllowImageDownload(tx, project, req.Source.URL)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the image download headers from the provided URL.
+	// Provide some information about the current server to the target.
 	myhttp, err := localUtil.HTTPClient("", s.Proxy)
 	if err != nil {
 		return nil, err
 	}
 
-	// Resolve the image URL
 	head, err := http.NewRequest("HEAD", req.Source.URL, nil)
 	if err != nil {
 		return nil, err
@@ -645,6 +661,7 @@ func imgPostURLInfo(ctx context.Context, s *state.State, r *http.Request, req ap
 		return nil, err
 	}
 
+	// Get the image fingerprint and download URL.
 	hash := raw.Header.Get("Incus-Image-Hash")
 	if hash == "" {
 		return nil, errors.New("Missing Incus-Image-Hash header")
@@ -655,8 +672,8 @@ func imgPostURLInfo(ctx context.Context, s *state.State, r *http.Request, req ap
 		return nil, errors.New("Missing Incus-Image-URL header")
 	}
 
-	// Import the image
-	info, _, err := ImageDownload(ctx, r, s, op, &ImageDownloadArgs{
+	// Download the image itself.
+	info, _, err := imageDownload(ctx, r, s, op, &imageDownloadArgs{
 		Server:      url,
 		Protocol:    "direct",
 		Alias:       hash,
@@ -669,6 +686,7 @@ func imgPostURLInfo(ctx context.Context, s *state.State, r *http.Request, req ap
 		return nil, err
 	}
 
+	// Apply user provided attributes and overrides.
 	err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
 		var id int
 
@@ -740,7 +758,7 @@ func getImgPostInfo(ctx context.Context, s *state.State, r *http.Request, buildd
 			return nil, errors.New("Invalid multipart image")
 		}
 
-		size, err = io.Copy(io.MultiWriter(imageTarf, hash256), part)
+		size, err = util.SafeCopy(io.MultiWriter(imageTarf, hash256), part)
 		info.Size += size
 
 		_ = imageTarf.Close()
@@ -773,7 +791,7 @@ func getImgPostInfo(ctx context.Context, s *state.State, r *http.Request, buildd
 
 		defer func() { _ = os.Remove(rootfsTarf.Name()) }()
 
-		size, err = io.Copy(io.MultiWriter(rootfsTarf, hash256), part)
+		size, err = util.SafeCopy(io.MultiWriter(rootfsTarf, hash256), part)
 		info.Size += size
 
 		_ = rootfsTarf.Close()
@@ -824,7 +842,7 @@ func getImgPostInfo(ctx context.Context, s *state.State, r *http.Request, buildd
 			return nil, err
 		}
 
-		size, err = io.Copy(hash256, post)
+		size, err = util.SafeCopy(hash256, post)
 		if err != nil {
 			l.Error("Failed to copy the tarfile", logger.Ctx{"err": err})
 			return nil, err
@@ -898,7 +916,13 @@ func getImgPostInfo(ctx context.Context, s *state.State, r *http.Request, buildd
 		info.Aliases = []api.ImageAlias{}
 		aliasNames, _ := url.ParseQuery(aliasesHeaders)
 
-		for _, aliasName := range aliasNames["alias"] {
+		// Check if we're using the URL encoded syntax (multiple entries) or just a simple header (single entry).
+		aliases, ok := aliasNames["alias"]
+		if !ok {
+			aliases = []string{aliasesHeaders}
+		}
+
+		for _, aliasName := range aliases {
 			alias := api.ImageAlias{
 				Name: aliasName,
 			}
@@ -909,11 +933,18 @@ func getImgPostInfo(ctx context.Context, s *state.State, r *http.Request, buildd
 
 	var profileIds []int64
 	if len(profilesHeaders) > 0 {
-		p, _ := url.ParseQuery(profilesHeaders)
-		profileIds = make([]int64, len(p["profile"]))
+		profileNames, _ := url.ParseQuery(profilesHeaders)
+
+		// Check if we're using the URL encoded syntax (multiple entries) or just a simple header (single entry).
+		profiles, ok := profileNames["profile"]
+		if !ok {
+			profiles = []string{profilesHeaders}
+		}
+
+		profileIds = make([]int64, len(profiles))
 
 		err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
-			for i, val := range p["profile"] {
+			for i, val := range profiles {
 				profileID, _, err := tx.GetProfile(ctx, project, val)
 				if response.IsNotFoundError(err) {
 					return fmt.Errorf("Profile '%s' doesn't exist", val)
@@ -1179,7 +1210,7 @@ func imagesPost(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	_, err = io.Copy(internalIO.NewQuotaWriter(post, budget), r.Body)
+	_, err = util.SafeCopy(internalIO.NewQuotaWriter(post, budget), r.Body)
 	if err != nil {
 		logger.Errorf("Store image POST data to disk: %v", err)
 		cleanup(builddir, post)
@@ -1459,7 +1490,12 @@ func getImageMetadata(fname string) (*api.ImageMetadata, string, error) {
 		}
 
 		if hdr.Name == "metadata.yaml" || hdr.Name == "./metadata.yaml" {
-			err = yaml.NewDecoder(tr).Decode(&result)
+			loader, err := yaml.NewLoader(localUtil.MaxBytesReader(tr, 1024*1024))
+			if err != nil {
+				return nil, "unknown", err
+			}
+
+			err = loader.Load(&result)
 			if err != nil {
 				return nil, "unknown", err
 			}
@@ -2339,7 +2375,7 @@ func autoUpdateImage(ctx context.Context, s *state.State, op *operations.Operati
 		default:
 		}
 
-		newInfo, _, err = ImageDownload(ctx, nil, s, op, &ImageDownloadArgs{
+		newInfo, _, err = imageDownload(ctx, nil, s, op, &imageDownloadArgs{
 			Server:      source.Server,
 			Protocol:    source.Protocol,
 			Certificate: source.Certificate,
@@ -2792,6 +2828,11 @@ func pruneExpiredImages(ctx context.Context, s *state.State, op *operations.Oper
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -3082,6 +3123,11 @@ func imageValidSecret(s *state.State, r *http.Request, projectName string, finge
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: fingerprint
+//      description: Fingerprint
+//      type: string
+//      required: true
 //    - in: query
 //      name: project
 //      description: Project name
@@ -3128,6 +3174,11 @@ func imageValidSecret(s *state.State, r *http.Request, projectName string, finge
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -3223,6 +3274,11 @@ func imageGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -3332,6 +3388,11 @@ func imagePut(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -3690,6 +3751,11 @@ func imageAliasesGet(d *Daemon, r *http.Request) response.Response {
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: name
+//      description: Alias name
+//      type: string
+//      required: true
 //    - in: query
 //      name: project
 //      description: Project name
@@ -3731,6 +3797,11 @@ func imageAliasesGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Alias name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -3803,6 +3874,11 @@ func imageAliasGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Alias name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -3867,6 +3943,11 @@ func imageAliasDelete(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Alias name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -3958,6 +4039,11 @@ func imageAliasPut(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Alias name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -4064,6 +4150,11 @@ func imageAliasPatch(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Alias name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -4152,6 +4243,11 @@ func imageAliasPost(d *Daemon, r *http.Request) response.Response {
 //    - application/octet-stream
 //    - multipart/form-data
 //  parameters:
+//    - in: path
+//      name: fingerprint
+//      description: Fingerprint
+//      type: string
+//      required: true
 //    - in: query
 //      name: project
 //      description: Project name
@@ -4182,6 +4278,11 @@ func imageAliasPost(d *Daemon, r *http.Request) response.Response {
 //	  - application/octet-stream
 //	  - multipart/form-data
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -4342,6 +4443,11 @@ func imageExport(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -4496,6 +4602,11 @@ func imageExportPost(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -4615,6 +4726,11 @@ func imageImportFromNode(imagesDir string, client incus.InstanceServer, fingerpr
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: fingerprint
+//	    description: Fingerprint
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name

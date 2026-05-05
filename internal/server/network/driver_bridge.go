@@ -18,31 +18,30 @@ import (
 
 	"github.com/mdlayher/netx/eui64"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/server/apparmor"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/daemon"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/warningtype"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq/dhcpalloc"
-	firewallDrivers "github.com/lxc/incus/v6/internal/server/firewall/drivers"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/network/acl"
-	addressset "github.com/lxc/incus/v6/internal/server/network/address-set"
-	"github.com/lxc/incus/v6/internal/server/project"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/internal/server/warnings"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/server/apparmor"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/daemon"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/warningtype"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq/dhcpalloc"
+	firewallDrivers "github.com/lxc/incus/v7/internal/server/firewall/drivers"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/network/acl"
+	addressset "github.com/lxc/incus/v7/internal/server/network/address-set"
+	"github.com/lxc/incus/v7/internal/server/project"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/internal/server/warnings"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // Default MTU for bridge interface.
@@ -1369,30 +1368,10 @@ func (n *bridge) setup(oldConfig map[string]string) error {
 		fmt.Sprintf("--interface=%s", n.name),
 	}
 
-	dnsmasqVersion, err := dnsmasq.GetVersion()
-	if err != nil {
-		return err
-	}
-
-	// --dhcp-rapid-commit option is only supported on >2.79.
-	minVer, _ := version.NewDottedVersion("2.79")
-	if dnsmasqVersion.Compare(minVer) > 0 {
-		dnsmasqCmd = append(dnsmasqCmd, "--dhcp-rapid-commit")
-	}
-
-	// --no-negcache option is only supported on >2.47.
-	minVer, _ = version.NewDottedVersion("2.47")
-	if dnsmasqVersion.Compare(minVer) > 0 {
-		dnsmasqCmd = append(dnsmasqCmd, "--no-negcache")
-	}
+	dnsmasqCmd = append(dnsmasqCmd, "--dhcp-rapid-commit", "--no-negcache")
 
 	if !daemon.Debug {
-		// --quiet options are only supported on >2.67.
-		minVer, _ := version.NewDottedVersion("2.67")
-
-		if dnsmasqVersion.Compare(minVer) > 0 {
-			dnsmasqCmd = append(dnsmasqCmd, []string{"--quiet-dhcp", "--quiet-dhcp6", "--quiet-ra"}...)
-		}
+		dnsmasqCmd = append(dnsmasqCmd, "--quiet-dhcp", "--quiet-dhcp6", "--quiet-ra")
 	}
 
 	var dnsIPv4 []string

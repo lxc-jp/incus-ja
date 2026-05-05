@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdManpage struct {
@@ -21,16 +21,15 @@ type cmdManpage struct {
 
 var cmdManpageUsage = u.Usage{u.Target(u.Directory)}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdManpage) Command() *cobra.Command {
+func (c *cmdManpage) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("manpage", cmdManpageUsage...)
 	cmd.Short = i18n.G("Generate manpages for all commands")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Generate manpages for all commands`))
 	cmd.Hidden = true
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", "man", i18n.G("Format (man|md|rest|yaml)")+"``")
-	cmd.Flags().BoolVar(&c.flagAll, "all", false, i18n.G("Include less common commands"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", "man", "", i18n.G("Format (man|md|rest|yaml)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagAll, "all|a", i18n.G("Include less common commands"))
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		format := cmd.Flag("format").Value.String()
@@ -42,13 +41,12 @@ func (c *cmdManpage) Command() *cobra.Command {
 		}
 	}
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdManpage) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdManpage) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdManpageUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err

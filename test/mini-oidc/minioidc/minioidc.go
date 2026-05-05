@@ -15,7 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/zitadel/oidc/v3/pkg/op"
 
-	"github.com/lxc/incus/v6/test/mini-oidc/storage"
+	"github.com/lxc/incus/v7/test/mini-oidc/storage"
 )
 
 func init() {

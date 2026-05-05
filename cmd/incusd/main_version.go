@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/version"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v7/internal/version"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdVersion struct {

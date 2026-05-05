@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/lxc/incus/v6/shared/simplestreams"
+	"github.com/lxc/incus/v7/shared/simplestreams"
 )
 
 // ProtocolSimpleStreams implements a SimpleStreams API client.

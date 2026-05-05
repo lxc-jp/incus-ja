@@ -23,33 +23,33 @@ import (
 	ovsClient "github.com/ovn-kubernetes/libovsdb/client"
 	ovsdbModel "github.com/ovn-kubernetes/libovsdb/model"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/iprange"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq/dhcpalloc"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/locking"
-	"github.com/lxc/incus/v6/internal/server/network/acl"
-	addressset "github.com/lxc/incus/v6/internal/server/network/address-set"
-	networkOVN "github.com/lxc/incus/v6/internal/server/network/ovn"
-	ovnNB "github.com/lxc/incus/v6/internal/server/network/ovn/schema/ovn-nb"
-	ovnSB "github.com/lxc/incus/v6/internal/server/network/ovn/schema/ovn-sb"
-	"github.com/lxc/incus/v6/internal/server/network/ovs"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/iprange"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq/dhcpalloc"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/locking"
+	"github.com/lxc/incus/v7/internal/server/network/acl"
+	addressset "github.com/lxc/incus/v7/internal/server/network/address-set"
+	networkOVN "github.com/lxc/incus/v7/internal/server/network/ovn"
+	ovnNB "github.com/lxc/incus/v7/internal/server/network/ovn/schema/ovn-nb"
+	ovnSB "github.com/lxc/incus/v7/internal/server/network/ovn/schema/ovn-sb"
+	"github.com/lxc/incus/v7/internal/server/network/ovs"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 const (
@@ -404,6 +404,64 @@ func (n *ovn) getExternalSubnetInUse(uplinkNetworkName string) ([]externalSubnet
 	externalSubnets = append(externalSubnets, ovnNICExternalRoutes...)
 
 	return externalSubnets, nil
+}
+
+// validateUplinkAddressNotInUse checks for conflicting externAddresses in other networks/forwards/loadbalancers.
+func (n *ovn) validateUplinkAddressNotInUse(uplinkNetworkName string, ipAddress net.IP) error {
+	if ipAddress == nil {
+		return nil
+	}
+
+	return n.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		projectNetworks, err := tx.GetCreatedNetworks(ctx)
+		if err != nil {
+			return fmt.Errorf("Failed to load all networks: %w", err)
+		}
+
+		for projectName, networks := range projectNetworks {
+			for _, netInfo := range networks {
+				if netInfo.Type != "ovn" || netInfo.Config["network"] != uplinkNetworkName {
+					continue
+				}
+
+				// Skip our own network so updates that keep the same IP don't conflict with themselves.
+				if projectName == n.project && netInfo.Name == n.name {
+					continue
+				}
+
+				for _, k := range []string{ovnVolatileUplinkIPv4, ovnVolatileUplinkIPv6} {
+					otherIP := net.ParseIP(netInfo.Config[k])
+					if otherIP != nil && otherIP.Equal(ipAddress) {
+						// Vague error to avoid leaking resources from other projects.
+						return fmt.Errorf("Uplink address %q is already in use by another OVN network", ipAddress.String())
+					}
+				}
+			}
+		}
+
+		// Check forward and load balancer listen addresses across networks connected to our uplink.
+		externalSubnetsInUse, err := n.common.getExternalSubnetInUse(ctx, tx, uplinkNetworkName, false)
+		if err != nil {
+			return fmt.Errorf("Failed getting external subnets in use: %w", err)
+		}
+
+		for _, externalSubnetUser := range externalSubnetsInUse {
+			if externalSubnetUser.usageType != subnetUsageNetworkForward && externalSubnetUser.usageType != subnetUsageNetworkLoadBalancer {
+				continue
+			}
+
+			if SubnetContainsIP(&externalSubnetUser.subnet, ipAddress) {
+				kind := "network forward"
+				if externalSubnetUser.usageType == subnetUsageNetworkLoadBalancer {
+					kind = "network load balancer"
+				}
+
+				return fmt.Errorf("Uplink address %q is already in use by a %s", ipAddress.String(), kind)
+			}
+		}
+
+		return nil
+	})
 }
 
 // Validate network config.
@@ -909,6 +967,31 @@ func (n *ovn) Validate(config map[string]string, clientType request.ClientType) 
 	// All tests below are related to the uplink network, skip if we don't have one.
 	if uplink == nil {
 		return nil
+	}
+
+	// If a caller has explicitly pinned the OVN router's external uplink IP via the volatile keys,
+	// make sure the chosen address isn't already used elsewhere on the same uplink. Without this
+	// check two networks (or a network and a forward/load balancer) can end up sharing the same
+	// external IP, which silently breaks routing.
+	for _, key := range []string{ovnVolatileUplinkIPv4, ovnVolatileUplinkIPv6} {
+		if config[key] == "" {
+			continue
+		}
+
+		// Skip if unchanged and already created
+		if config[key] == n.config[key] && n.status == api.NetworkStatusCreated {
+			continue
+		}
+
+		ipAddress := net.ParseIP(config[key])
+		if ipAddress == nil {
+			continue
+		}
+
+		err = n.validateUplinkAddressNotInUse(uplink.Name, ipAddress)
+		if err != nil {
+			return err
+		}
 	}
 
 	// If NAT disabled, parse the external subnets that are being requested.
@@ -2799,16 +2882,25 @@ func (n *ovn) setup(update bool) error {
 		deleteRoutes := []net.IPNet{defaultIPv4Route, defaultIPv6Route}
 		defaultRoutes := make([]networkOVN.OVNRouterRoute, 0, 2)
 
+		currentRoutes, err := n.ovnnb.GetLogicalRouterRoutes(context.TODO(), n.getRouterName())
+		if err != nil {
+			return fmt.Errorf("Failed to retrieve currently set routes on network %s", n.name)
+		}
+
 		if routerIntPortIPv4Net != nil {
 			// If l3only mode is enabled then each instance IPv4 will get its own /32 route added when
 			// the instance NIC starts. However to stop packets toward unknown IPs within the internal
 			// subnet escaping onto the uplink network we add a less specific discard route for the
 			// whole internal subnet.
 			if util.IsTrue(n.config["ipv4.l3only"]) {
-				defaultRoutes = append(defaultRoutes, networkOVN.OVNRouterRoute{
+				route := networkOVN.OVNRouterRoute{
 					Prefix:  *routerIntPortIPv4Net,
 					Discard: true,
-				})
+				}
+
+				if !ovnRouteExists(currentRoutes, route) {
+					defaultRoutes = append(defaultRoutes, route)
+				}
 			} else {
 				deleteRoutes = append(deleteRoutes, *routerIntPortIPv4Net)
 			}
@@ -2820,10 +2912,14 @@ func (n *ovn) setup(update bool) error {
 			// subnet escaping onto the uplink network we add a less specific discard route for the
 			// whole internal subnet.
 			if util.IsTrue(n.config["ipv6.l3only"]) {
-				defaultRoutes = append(defaultRoutes, networkOVN.OVNRouterRoute{
+				route := networkOVN.OVNRouterRoute{
 					Prefix:  *routerIntPortIPv6Net,
 					Discard: true,
-				})
+				}
+
+				if !ovnRouteExists(currentRoutes, route) {
+					defaultRoutes = append(defaultRoutes, route)
+				}
 			} else {
 				deleteRoutes = append(deleteRoutes, *routerIntPortIPv6Net)
 			}
@@ -5322,6 +5418,30 @@ func (n *ovn) InstanceDevicePortStop(ovsExternalOVNPort networkOVN.OVNSwitchPort
 	dnsUUID, _, dnsIPs, err := n.ovnnb.GetLogicalSwitchPortDNS(context.TODO(), instancePortName)
 	if err != nil {
 		return err
+	}
+
+	portUUID, err := n.ovnnb.GetLogicalSwitchPortUUID(context.TODO(), instancePortName)
+	if err != nil {
+		return fmt.Errorf("Failed getting logical port UUID for port group removal: %w", err)
+	}
+
+	if portUUID != "" {
+		portGroups, err := n.ovnnb.GetPortGroupsByPort(context.TODO(), portUUID)
+		if err != nil {
+			return fmt.Errorf("Failed getting port groups for instance NIC port: %w", err)
+		}
+
+		if len(portGroups) > 0 {
+			removeChangeSet := map[networkOVN.OVNPortGroup][]networkOVN.OVNSwitchPortUUID{}
+			for _, pg := range portGroups {
+				acl.OVNPortGroupInstanceNICSchedule(portUUID, removeChangeSet, pg)
+			}
+
+			err = n.ovnnb.UpdatePortGroupMembers(context.TODO(), map[networkOVN.OVNPortGroup][]networkOVN.OVNSwitchPortUUID{}, removeChangeSet)
+			if err != nil {
+				return fmt.Errorf("Failed removing instance NIC port from port groups: %w", err)
+			}
+		}
 	}
 
 	// Cleanup logical switch port and associated config.

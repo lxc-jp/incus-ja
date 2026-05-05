@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lxc/incus/v6/cmd/generate-database/lex"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/cmd/generate-database/lex"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Mapping holds information for mapping database tables to a Go structure.

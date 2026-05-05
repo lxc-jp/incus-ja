@@ -5,8 +5,8 @@ package operations
 import (
 	"errors"
 
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 func registerDBOperation(op *Operation, opType operationtype.Type) error {

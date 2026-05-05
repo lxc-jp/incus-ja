@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/iprange"
+	"github.com/lxc/incus/v7/internal/iprange"
 )
 
 func Example_parseIPRange() {

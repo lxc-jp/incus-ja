@@ -18,35 +18,33 @@ import (
 
 	"github.com/gorilla/mux"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/filter"
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/certificate"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	clusterConfig "github.com/lxc/incus/v6/internal/server/cluster/config"
-	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	instanceDrivers "github.com/lxc/incus/v6/internal/server/instance/drivers"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/node"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/revert"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/filter"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/certificate"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	clusterConfig "github.com/lxc/incus/v7/internal/server/cluster/config"
+	clusterRequest "github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/node"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/revert"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var clusterCmd = APIEndpoint{
@@ -1531,6 +1529,12 @@ func clusterNodesPost(d *Daemon, r *http.Request) response.Response {
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Cluster member name
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    description: Cluster member
@@ -1639,6 +1643,11 @@ func clusterNodeGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Cluster member name
+//	    type: string
+//	    required: true
 //	  - in: body
 //	    name: cluster
 //	    description: Cluster member configuration
@@ -1672,6 +1681,11 @@ func clusterNodePatch(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Cluster member name
+//	    type: string
+//	    required: true
 //	  - in: body
 //	    name: cluster
 //	    description: Cluster member configuration
@@ -1985,6 +1999,11 @@ func clusterValidateConfig(config map[string]string) error {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Cluster member name
+//	    type: string
+//	    required: true
 //	  - in: body
 //	    name: cluster
 //	    description: Cluster member rename request
@@ -2058,6 +2077,12 @@ func clusterNodePost(d *Daemon, r *http.Request) response.Response {
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Cluster member name
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -2888,6 +2913,12 @@ func internalClusterRaftNodeDelete(d *Daemon, r *http.Request) response.Response
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Cluster member name
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    description: Cluster member state
@@ -2947,6 +2978,11 @@ func clusterNodeStateGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Cluster member name
+//	    type: string
+//	    required: true
 //	  - in: body
 //	    name: cluster
 //	    description: Cluster member state
@@ -3022,94 +3058,8 @@ func clusterNodeStatePost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	if req.Action == "evacuate" {
-		stopFunc := func(inst instance.Instance, action string) error {
-			l := logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
-
-			if action == "force-stop" {
-				// Handle forced shutdown.
-				err = inst.Stop(false)
-				if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
-					return fmt.Errorf("Failed to force stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
-				}
-			} else if action == "stateful-stop" {
-				// Handle stateful stop.
-				err = inst.Stop(true)
-				if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
-					return fmt.Errorf("Failed to stateful stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
-				}
-			} else {
-				// Get the shutdown timeout for the instance.
-				timeout := inst.ExpandedConfig()["boot.host_shutdown_timeout"]
-				val, err := strconv.Atoi(timeout)
-				if err != nil {
-					val = evacuateHostShutdownDefaultTimeout
-				}
-
-				// Start with a clean shutdown.
-				err = inst.Shutdown(time.Duration(val) * time.Second)
-				if err != nil {
-					l.Warn("Failed shutting down instance, forcing stop", logger.Ctx{"err": err})
-
-					// Fallback to forced stop.
-					err = inst.Stop(false)
-					if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
-						return fmt.Errorf("Failed to stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
-					}
-				}
-			}
-
-			// Mark the instance as RUNNING in volatile so its state can be properly restored.
-			err = inst.VolatileSet(map[string]string{"volatile.last_state.power": instance.PowerStateRunning})
-			if err != nil {
-				l.Warn("Failed to set instance state to RUNNING", logger.Ctx{"err": err})
-			}
-
-			return nil
-		}
-
-		migrateFunc := func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, op *operations.Operation) error {
-			// Migrate the instance.
-			req := api.InstancePost{
-				Migration: true,
-				Live:      live,
-			}
-
-			err := migrateInstance(ctx, s, inst, req, sourceMemberInfo, targetMemberInfo, "", op)
-			if err != nil {
-				return fmt.Errorf("Failed to migrate instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
-			}
-
-			if !startInstance || live {
-				return nil
-			}
-
-			// Start it back up on target.
-			dest, err := cluster.Connect(targetMemberInfo.Address, s.Endpoints.NetworkCert(), s.ServerCert(), r, true)
-			if err != nil {
-				return fmt.Errorf("Failed to connect to destination %q for instance %q in project %q: %w", targetMemberInfo.Address, inst.Name(), inst.Project().Name, err)
-			}
-
-			dest = dest.UseProject(inst.Project().Name)
-
-			if op != nil {
-				_ = op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Starting %q in project %q", inst.Name(), inst.Project().Name)})
-			}
-
-			startOp, err := dest.UpdateInstanceState(inst.Name(), api.InstanceStatePut{Action: "start"}, "")
-			if err != nil {
-				return err
-			}
-
-			err = startOp.Wait()
-			if err != nil {
-				return err
-			}
-
-			return nil
-		}
-
 		run := func(op *operations.Operation) error {
-			return evacuateClusterMember(context.Background(), s, op, name, req.Mode, stopFunc, migrateFunc)
+			return evacuateClusterMember(context.Background(), s, op, name, req.Mode, evacuateStopInstance, evacuateMigrateInstance(r))
 		}
 
 		op, err := operations.OperationCreate(s, "", operations.OperationClassTask, operationtype.ClusterMemberEvacuate, nil, nil, run, nil, nil, r)

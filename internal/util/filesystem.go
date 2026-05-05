@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	internalIO "github.com/lxc/incus/v6/internal/io"
-	"github.com/lxc/incus/v6/shared/util"
+	internalIO "github.com/lxc/incus/v7/internal/io"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // FileMove tries to move a file by using os.Rename,
@@ -83,7 +83,7 @@ func FileCopy(source string, dest string) error {
 		}
 	}
 
-	_, err = io.Copy(d, s)
+	_, err = util.SafeCopy(d, s)
 	if err != nil {
 		return err
 	}

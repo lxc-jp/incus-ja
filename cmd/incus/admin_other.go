@@ -5,17 +5,16 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	"github.com/lxc/incus/v6/internal/i18n"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	"github.com/lxc/incus/v7/internal/i18n"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdAdmin struct {
 	global *cmdGlobal
 }
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdAdmin) Command() *cobra.Command {
+func (c *cmdAdmin) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("admin")
 	cmd.Short = i18n.G("Manage incus daemon")
@@ -24,7 +23,15 @@ func (c *cmdAdmin) Command() *cobra.Command {
 
 	// os
 	adminOSCmd := cmdAdminOS{global: c.global}
-	cmd.AddCommand(adminOSCmd.Command())
+	cmd.AddCommand(adminOSCmd.command())
+
+	// recover sub-command
+	adminRecoverCmd := cmdAdminRecover{global: c.global}
+	cmd.AddCommand(adminRecoverCmd.command())
+
+	// sql sub-command
+	sqlCmd := cmdAdminSQL{global: c.global}
+	cmd.AddCommand(sqlCmd.command())
 
 	return cmd
 }

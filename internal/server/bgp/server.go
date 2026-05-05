@@ -16,9 +16,9 @@ import (
 	bgpPacket "github.com/osrg/gobgp/v4/pkg/packet/bgp"
 	bgpServer "github.com/osrg/gobgp/v4/pkg/server"
 
-	"github.com/lxc/incus/v6/internal/ports"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/internal/ports"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 // Server represents a BGP server instance.

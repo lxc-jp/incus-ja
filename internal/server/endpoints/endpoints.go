@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/endpoints/listeners"
-	"github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/logger"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/endpoints/listeners"
+	"github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/logger"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // Config holds various configuration values that affect endpoints initialization.

@@ -3,13 +3,13 @@ package drivers
 import (
 	"io"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 type mock struct {
@@ -204,6 +204,11 @@ func (d *mock) UnmountVolumeSnapshot(snapVol Volume, op *operations.Operation) (
 // VolumeSnapshots returns a list of snapshots for the volume (in no particular order).
 func (d *mock) VolumeSnapshots(vol Volume, op *operations.Operation) ([]string, error) {
 	return nil, nil
+}
+
+// CanRestoreVolume checks whether a volume snapshot can be restored.
+func (d *mock) CanRestoreVolume(vol Volume, snapshotName string) error {
+	return nil
 }
 
 // RestoreVolume restores a volume from a snapshot.

@@ -5,8 +5,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	clusterConfig "github.com/lxc/incus/v6/internal/server/cluster/config"
-	"github.com/lxc/incus/v6/shared/api"
+	clusterConfig "github.com/lxc/incus/v7/internal/server/cluster/config"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // Logger is an interface that must be implemented by all loggers.

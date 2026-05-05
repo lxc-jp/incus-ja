@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
@@ -14,19 +13,18 @@ import (
 
 	"github.com/gorilla/mux"
 
-	clusterConfig "github.com/lxc/incus/v6/internal/server/cluster/config"
-	clusterRequest "github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/internal/server/storage/s3"
-	"github.com/lxc/incus/v6/internal/server/storage/s3/miniod"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	clusterConfig "github.com/lxc/incus/v7/internal/server/cluster/config"
+	clusterRequest "github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/internal/server/storage/s3"
+	"github.com/lxc/incus/v7/internal/server/storage/s3/local"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // swagger:operation GET / server api_get
@@ -278,33 +276,7 @@ func storageBucketsServer(d *Daemon) *http.Server {
 				return
 			}
 
-			// Fast path.
-			minioProc, err := miniod.Get(project.StorageVolume(bucket.Project, bucket.Name))
-			if minioProc == nil || err != nil {
-				// Slow path.
-				logger.Errorf("auth slow")
-				pool, err := storagePools.LoadByName(s, bucket.PoolName)
-				if err != nil {
-					errResult := s3.Error{Code: s3.ErrorCodeInternalError, Message: err.Error()}
-					errResult.Response(w)
-
-					return
-				}
-
-				minioProc, err = pool.ActivateBucket(bucket.Project, bucket.Name, nil)
-				if err != nil {
-					errResult := s3.Error{Code: s3.ErrorCodeInternalError, Message: err.Error()}
-					errResult.Response(w)
-
-					return
-				}
-			}
-
-			u := minioProc.URL()
-
-			rproxy := httputil.NewSingleHostReverseProxy(&u)
-			rproxy.ServeHTTP(w, r)
-
+			serveLocalBucket(d, w, r, bucket)
 			return
 		}
 
@@ -313,7 +285,7 @@ func storageBucketsServer(d *Daemon) *http.Server {
 		listResult.Response(w)
 	})
 
-	// We use the NotFoundHandler to reverse proxy requests to dynamically started local MinIO processes.
+	// We use the NotFoundHandler to dispatch requests to local buckets by path.
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Wait until daemon is fully started.
 		<-d.waitReady.Done()
@@ -364,32 +336,7 @@ func storageBucketsServer(d *Daemon) *http.Server {
 			return
 		}
 
-		// Fast path.
-		minioProc, err := miniod.Get(project.StorageVolume(bucket.Project, bucket.Name))
-		if minioProc == nil || err != nil {
-			// Slow path.
-			logger.Errorf("anon slow")
-			pool, err := storagePools.LoadByName(s, bucket.PoolName)
-			if err != nil {
-				errResult := s3.Error{Code: s3.ErrorCodeInternalError, Message: err.Error()}
-				errResult.Response(w)
-
-				return
-			}
-
-			minioProc, err = pool.ActivateBucket(bucket.Project, bucket.Name, nil)
-			if err != nil {
-				errResult := s3.Error{Code: s3.ErrorCodeInternalError, Message: err.Error()}
-				errResult.Response(w)
-
-				return
-			}
-		}
-
-		u := minioProc.URL()
-
-		rproxy := httputil.NewSingleHostReverseProxy(&u)
-		rproxy.ServeHTTP(w, r)
+		serveLocalBucket(d, w, r, bucket)
 	})
 
 	return &http.Server{
@@ -397,6 +344,64 @@ func storageBucketsServer(d *Daemon) *http.Server {
 		IdleTimeout:       30 * time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
 	}
+}
+
+// serveLocalBucket mounts the bucket volume, loads its keys, and dispatches the
+// request to the in-process S3 handler. Always called for buckets backed by
+// local storage drivers (dir, btrfs, zfs).
+func serveLocalBucket(d *Daemon, w http.ResponseWriter, r *http.Request, bucket *db.StorageBucket) {
+	s := d.State()
+
+	pool, err := storagePools.LoadByName(s, bucket.PoolName)
+	if err != nil {
+		(&s3.Error{Code: s3.ErrorCodeInternalError, Message: err.Error()}).Response(w)
+		return
+	}
+
+	// Load credentials for the bucket.
+	var keys []*db.StorageBucketKey
+	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+		keys, err = tx.GetStoragePoolBucketKeys(ctx, bucket.ID)
+		return err
+	})
+	if err != nil {
+		(&s3.Error{Code: s3.ErrorCodeInternalError, Message: err.Error()}).Response(w)
+		return
+	}
+
+	creds := make([]local.Credential, 0, len(keys))
+	for _, k := range keys {
+		creds = append(creds, local.Credential{
+			AccessKey: k.AccessKey,
+			SecretKey: k.SecretKey,
+			Role:      local.Role(k.Role),
+		})
+	}
+
+	bucketDir, unmount, err := pool.MountLocalBucket(bucket.Project, bucket.Name, nil)
+	if err != nil {
+		(&s3.Error{Code: s3.ErrorCodeInternalError, Message: err.Error()}).Response(w)
+		return
+	}
+
+	defer func() {
+		err := unmount()
+		if err != nil {
+			logger.Errorf("Failed unmounting bucket %q after S3 request: %v", bucket.Name, err)
+		}
+	}()
+
+	srv := local.NewServer(bucketDir, creds)
+
+	// Migrate any data left over from the legacy minio layout, but only
+	// once the request has cleared authentication. This is a no-op once
+	// the bucket has been migrated.
+	srv.OnAuthenticated = func() error {
+		return local.MigrateMinioBucket(bucketDir, bucket.Name)
+	}
+
+	srv.ServeHTTP(w, r)
 }
 
 type httpServer struct {

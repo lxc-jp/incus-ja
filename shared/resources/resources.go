@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // Cache to speed up concurrent runs.

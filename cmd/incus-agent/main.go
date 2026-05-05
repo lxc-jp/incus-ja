@@ -1,3 +1,5 @@
+//go:debug httpmuxgo121=0
+
 package main
 
 import (
@@ -7,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v7/internal/version"
 )
 
 type cmdGlobal struct {
@@ -23,7 +25,7 @@ type cmdGlobal struct {
 func main() {
 	// agent command (main)
 	agentCmd := cmdAgent{}
-	app := agentCmd.Command()
+	app := agentCmd.command()
 	app.SilenceUsage = true
 	app.CompletionOptions = cobra.CompletionOptions{DisableDefaultCmd: true}
 

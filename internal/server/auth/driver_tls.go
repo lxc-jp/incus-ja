@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/lxc/incus/v6/internal/server/certificate"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/certificate"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // TLS represents a TLS authorizer.

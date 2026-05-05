@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type srcManual struct{}

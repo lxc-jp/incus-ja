@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/server/sys"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/subprocess"
+	"github.com/lxc/incus/v7/internal/server/sys"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/subprocess"
 )
 
 type nullWriteCloser struct {
@@ -65,6 +65,11 @@ func QemuImg(sysOS *sys.OS, cmd []string, imgPath string, dstPath string, tracke
 		cmdPath, err := exec.LookPath(c)
 		if err != nil {
 			return "", fmt.Errorf("Failed to find executable %q: %w", c, err)
+		}
+
+		cmdFullPath, err := filepath.EvalSymlinks(cmdPath)
+		if err == nil {
+			cmdPath = cmdFullPath
 		}
 
 		allowedCmdPaths = append(allowedCmdPaths, cmdPath)

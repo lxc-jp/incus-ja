@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/logger"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // Open the node-local database object.

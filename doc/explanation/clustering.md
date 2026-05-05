@@ -180,8 +180,8 @@ Incus では埋め込まれたスクリプト(スクリプトレット)を使っ
 
    `instance_placement(request, candidate_members)`:
 
-- `request`は、[`scriptlet.InstancePlacement`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstancePlacement) の展開された表現を含むオブジェクトである。このリクエストには、`project`および`reason`フィールドが含まれています。`reason`は、`new`、`evacuation`、または`relocation`のいずれかである。
-- `candidate_members`は、[`api.ClusterMember`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMember) エントリを表すクラスタメンバーオブジェクトの`list`である。
+- `request`は、[`scriptlet.InstancePlacement`](https://pkg.go.dev/github.com/lxc/incus/shared/api/scriptlet/#InstancePlacement) の展開された表現を含むオブジェクトです。このリクエストには、`project`および`reason`フィールドが含まれています。`reason`は、`new`、`evacuation`、`relocation`、`rebalance`のいずれかです。
+- `candidate_members`は、[`api.ClusterMember`](https://pkg.go.dev/github.com/lxc/incus/shared/api#ClusterMember) エントリを表すクラスタメンバーオブジェクトの`list`です。`reason`が`rebalance`の場合、`list`はソース以外のすべての互換性のあるクラスターメンバーのリストが、負荷が軽いものから重い順にソートした順番で設定されます。
 
 たとえば:
 

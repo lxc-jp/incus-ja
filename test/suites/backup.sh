@@ -292,11 +292,6 @@ EOF
 }
 
 test_bucket_recover() {
-    if ! command -v "minio" > /dev/null 2>&1; then
-        echo "==> SKIP: Skip bucket recovery test due to missing minio"
-        return
-    fi
-
     (
         set -e
 
@@ -312,14 +307,6 @@ test_bucket_recover() {
         # Create storage bucket
         incus storage bucket create "${poolName}" "${bucketName}"
 
-        # Create storage bucket keys
-        key1=$(incus storage bucket key create "${poolName}" "${bucketName}" key1 --role admin)
-        key2=$(incus storage bucket key create "${poolName}" "${bucketName}" key2 --role read-only)
-        key1_accessKey=$(echo "$key1" | awk '/^Access key/ { print $3 }')
-        key1_secretKey=$(echo "$key1" | awk '/^Secret key/ { print $3 }')
-        key2_accessKey=$(echo "$key2" | awk '/^Access key/ { print $3 }')
-        key2_secretKey=$(echo "$key2" | awk '/^Secret key/ { print $3 }')
-
         # Remove bucket from global DB
         incus admin sql global "delete from storage_buckets where name = '${bucketName}'"
 
@@ -332,18 +319,6 @@ EOF
 
         # Verify bucket is recovered
         incus storage bucket ls "${poolName}" --format compact | grep "${bucketName}"
-
-        # Verify bucket key with role admin is recovered
-        recoveredKey1=$(incus storage bucket key show "${poolName}" "${bucketName}" "${key1_accessKey}")
-        echo "${recoveredKey1}" | grep "role: admin"
-        echo "${recoveredKey1}" | grep "access-key: ${key1_accessKey}"
-        echo "${recoveredKey1}" | grep "secret-key: ${key1_secretKey}"
-
-        # Verify bucket key with role read-only is recovered
-        recoveredKey2=$(incus storage bucket key show "${poolName}" "${bucketName}" "${key2_accessKey}")
-        echo "${recoveredKey2}" | grep "role: read-only"
-        echo "${recoveredKey2}" | grep "access-key: ${key2_accessKey}"
-        echo "${recoveredKey2}" | grep "secret-key: ${key2_secretKey}"
     )
 }
 
@@ -519,6 +494,11 @@ test_backup_import_with_project() {
     incus import "${INCUS_DIR}/c3.tar.gz" -s pool_2
 
     incus rm -f c3
+
+    # Import from stdin
+    incus import - -s pool_2 < "${INCUS_DIR}/c3.tar.gz"
+    incus rm -f c3
+
     rm "${INCUS_DIR}/c3.tar.gz"
 
     # Reset default storage pool
@@ -617,6 +597,9 @@ test_backup_export_with_project() {
     incus snapshot create c1-foo
 
     incus export c1-foo "${INCUS_DIR}/c1-foo.tar.gz"
+
+    # Export to stdout
+    incus export c1-foo - > /dev/null
 
     incus delete --force c1-foo
     rm "${INCUS_DIR}/c1-foo.tar.gz"
@@ -856,10 +839,15 @@ test_backup_volume_export_with_project() {
         rm "${INCUS_DIR}/testvol-optimized.tar.gz"
     fi
 
+    # Export to stdout / import from stdin
+    incus storage volume detach "${custom_vol_pool}" testvol2 c1
+    incus storage volume rm "${custom_vol_pool}" testvol2
+    incus storage volume import "${custom_vol_pool}" - testvol2 < "${INCUS_DIR}/testvol.tar.gz"
+    incus storage volume export "${custom_vol_pool}" testvol2 - > /dev/null
+
     # Clean up.
     rm -rf "${INCUS_DIR}/non-optimized/"* "${INCUS_DIR}/optimized/"*
     incus storage volume detach "${custom_vol_pool}" testvol c1
-    incus storage volume detach "${custom_vol_pool}" testvol2 c1
     incus storage volume rm "${custom_vol_pool}" testvol
     incus storage volume rm "${custom_vol_pool}" testvol2
     incus rm -f c1

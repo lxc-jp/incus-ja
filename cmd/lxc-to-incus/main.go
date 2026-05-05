@@ -48,7 +48,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v7/internal/version"
 )
 
 type cmdGlobal struct {
@@ -59,7 +59,7 @@ type cmdGlobal struct {
 func main() {
 	// migrate command (main)
 	migrateCmd := cmdMigrate{}
-	app := migrateCmd.Command()
+	app := migrateCmd.command()
 	app.SilenceUsage = true
 	app.CompletionOptions = cobra.CompletionOptions{DisableDefaultCmd: true}
 
@@ -78,7 +78,7 @@ func main() {
 
 	// netcat sub-command
 	netcatCmd := cmdNetcat{global: &globalCmd}
-	app.AddCommand(netcatCmd.Command())
+	app.AddCommand(netcatCmd.command())
 
 	// Run the main command and handle errors
 	err := app.Execute()

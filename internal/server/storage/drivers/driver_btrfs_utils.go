@@ -17,16 +17,17 @@ import (
 	"unsafe"
 
 	"github.com/google/uuid"
+	"go.yaml.in/yaml/v4"
 	"golang.org/x/sys/unix"
-	"gopkg.in/yaml.v2"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
 )
 
 // Errors.
@@ -401,12 +402,7 @@ func (d *btrfs) setSubvolumeReadonlyProperty(path string, readonly bool) error {
 		return nil
 	}
 
-	args := []string{"property", "set"}
-	if btrfsPropertyForce {
-		args = append(args, "-f")
-	}
-
-	args = append(args, "-ts", path, "ro", fmt.Sprintf("%t", readonly))
+	args := []string{"property", "set", "-f", "-ts", path, "ro", fmt.Sprintf("%t", readonly)}
 
 	_, err := subprocess.RunCommand("btrfs", args...)
 	return err
@@ -570,7 +566,7 @@ func (d *btrfs) restorationHeader(vol Volume, snapshots []string) (*BTRFSMetaDat
 }
 
 // loadOptimizedBackupHeader extracts optimized backup header from a given ReadSeeker.
-func (d *btrfs) loadOptimizedBackupHeader(r io.ReadSeeker, mountPath string) (*BTRFSMetaDataHeader, error) {
+func (d *btrfs) loadOptimizedBackupHeader(r io.ReadSeeker, mountPath string, basePrefix string) (*BTRFSMetaDataHeader, error) {
 	header := BTRFSMetaDataHeader{}
 
 	// Extract.
@@ -591,8 +587,13 @@ func (d *btrfs) loadOptimizedBackupHeader(r io.ReadSeeker, mountPath string) (*B
 			return nil, fmt.Errorf("Error reading backup file for optimized backup header file: %w", err)
 		}
 
-		if hdr.Name == "backup/optimized_header.yaml" {
-			err = yaml.NewDecoder(tr).Decode(&header)
+		if hdr.Name == filepath.Join(basePrefix, "optimized_header.yaml") {
+			loader, err := yaml.NewLoader(localUtil.MaxBytesReader(tr, 1024*1024))
+			if err != nil {
+				return nil, fmt.Errorf("Error parsing optimized backup header file: %w", err)
+			}
+
+			err = loader.Load(&header)
 			if err != nil {
 				return nil, fmt.Errorf("Error parsing optimized backup header file: %w", err)
 			}

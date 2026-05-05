@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdNetworkListAllocations struct {
@@ -32,8 +32,7 @@ type networkAllocationColumn struct {
 
 var cmdNetworkListAllocationsUsage = u.Usage{u.RemoteColonOpt}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdNetworkListAllocations) Command() *cobra.Command {
+func (c *cmdNetworkListAllocations) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("list-allocations", cmdNetworkListAllocationsUsage...)
 	cmd.Short = i18n.G("List network allocations in use")
@@ -43,8 +42,8 @@ Default column layout: uatnm
 
 == Columns ==
 The -c option takes a comma separated list of arguments that control
-which instance attributes to output when displaying in table or csv
-format.
+which network allocations attribute attributes to output when
+displaying in table or csv format.
 
 Column arguments are either pre-defined shorthand chars (see below),
 or (extended) config keys.
@@ -60,12 +59,12 @@ Pre-defined column shorthand chars:
 
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.MaximumNArgs(1)
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
-	cmd.Flags().StringVarP(&c.flagProject, "project", "p", api.ProjectDefaultName, i18n.G("Run again a specific project"))
-	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("Run against all projects"))
-	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultNetworkAllocationColumns, i18n.G("Columns")+"``")
+	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
+	cli.AddStringFlag(cmd.Flags(), &c.flagProject, "project|p", api.ProjectDefaultName, "", i18n.G("Run again a specific project"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagAllProjects, "all-projects", i18n.G("Run against all projects"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultNetworkAllocationColumns, "", i18n.G("Columns"))
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
@@ -131,8 +130,7 @@ func (c *cmdNetworkListAllocations) macAddressColumnData(alloc api.NetworkAlloca
 	return alloc.Hwaddr
 }
 
-// Run runs the actual command logic.
-func (c *cmdNetworkListAllocations) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdNetworkListAllocations) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdNetworkListAllocationsUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err

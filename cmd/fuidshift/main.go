@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v7/internal/version"
 )
 
 type cmdGlobal struct {
@@ -16,7 +16,7 @@ type cmdGlobal struct {
 func main() {
 	// shift command (main)
 	shiftCmd := cmdShift{}
-	app := shiftCmd.Command()
+	app := shiftCmd.command()
 	app.SilenceUsage = true
 	app.CompletionOptions = cobra.CompletionOptions{DisableDefaultCmd: true}
 

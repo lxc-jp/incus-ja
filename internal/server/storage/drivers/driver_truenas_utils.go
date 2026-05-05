@@ -12,16 +12,15 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 const (
 	tnToolName            = "truenas_incus_ctl"
-	tnMinVersion          = "0.7.2" // deactivate --wait with sync functionality
 	tnDefaultVolblockSize = 16 * 1024
 )
 
@@ -177,9 +176,9 @@ func (d *truenas) objectsExist(objects []string, optType string) (map[string]boo
 	// unlike zfs, `list` will return nfs and other objects for all.
 	switch optType {
 	case "":
-		t = "fs,vol,snap"
+		t = "filesystem,volume,snapshot"
 	case "dataset":
-		t = "fs,vol"
+		t = "filesystem,volume"
 	default:
 		t = optType
 	}
@@ -456,9 +455,20 @@ func (d *truenas) locateOrActivateIscsiDataset(dataset string) (bool, string, er
 	reverter := revert.New()
 	defer reverter.Fail()
 
-	statusPath, err := d.runIscsiCmd("locate", "--create", "--parsable", dataset) // --create implies activate
-	if err != nil {
-		return false, "", err
+	var statusPath string
+	for range 5 {
+		var err error
+
+		statusPath, err = d.runIscsiCmd("locate", "--create", "--parsable", dataset) // --create implies activate
+		if err != nil {
+			return false, "", err
+		}
+
+		if statusPath != "" {
+			break
+		}
+
+		time.Sleep(time.Second)
 	}
 
 	reverter.Add(func() { _ = d.deactivateIscsiDataset(dataset) })
@@ -542,10 +552,6 @@ func (d *truenas) deactivateIscsiDataset(dataset string) error {
 
 // refreshIscsiBus refreshes the iscsi bus.
 func (d *truenas) refreshIscsiBus() error {
-	if !tnHasIscsiRefresh {
-		return fmt.Errorf("TrueNAS: iSCSI Refresh requires tool version 0.7.5, current version: %s", tnVersion)
-	}
-
 	_, err := d.runTool("share", "iscsi", "refresh")
 	if err != nil {
 		return err
@@ -614,9 +620,14 @@ func (d *truenas) deleteDataset(dataset string, recursive bool, options ...strin
 }
 
 func (d *truenas) getDatasetProperty(dataset string, key string) (string, error) {
-	output, err := d.runTool(d.getDatasetOrSnapshot(dataset), "list", "--no-headers", "--parsable", "-o", key, dataset)
-	if err != nil {
-		return "", err
+	output, ok := d.getCachedProperty(dataset, key)
+	if !ok {
+		var err error
+
+		output, err = d.runTool(d.getDatasetOrSnapshot(dataset), "list", "--no-headers", "--parsable", "-o", key, dataset)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	return strings.TrimSpace(output), nil

@@ -8,8 +8,8 @@ import (
 
 	"github.com/adhocore/gronx"
 
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/util"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // SnapshotScheduleAliases contains the mapping of scheduling aliases to cron syntax

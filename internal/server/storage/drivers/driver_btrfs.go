@@ -11,25 +11,23 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/migration"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/migration"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var (
-	btrfsVersion       string
-	btrfsLoaded        bool
-	btrfsPropertyForce bool
+	btrfsVersion string
+	btrfsLoaded  bool
 )
 
 type btrfs struct {
@@ -71,22 +69,6 @@ func (d *btrfs) load() error {
 		if err != nil || count != 1 {
 			return errors.New("The 'btrfs' tool isn't working properly")
 		}
-	}
-
-	// Check if we need --force to set properties.
-	ver5142, err := version.Parse("5.14.2")
-	if err != nil {
-		return err
-	}
-
-	ourVer, err := version.Parse(btrfsVersion)
-	if err != nil {
-		return err
-	}
-
-	// If running 5.14.2 or older, we need --force.
-	if ourVer.Compare(ver5142) > 0 {
-		btrfsPropertyForce = true
 	}
 
 	btrfsLoaded = true

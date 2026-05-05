@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdWait struct {
@@ -24,7 +24,7 @@ type cmdWait struct {
 
 var cmdWaitUsage = u.Usage{u.Instance.Remote(), u.Placeholder(i18n.G("condition"))}
 
-func (c *cmdWait) Command() *cobra.Command {
+func (c *cmdWait) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("wait", cmdWaitUsage...)
 	cmd.Short = i18n.G("Wait for an instance to satisfy a condition")
@@ -41,10 +41,10 @@ Supported Conditions:
 	cmd.Example = cli.FormatSection("", i18n.G(`incus wait v1 agent
 	Wait for VM instance v1 to have a functional agent.`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
-	cmd.Flags().IntVar(&c.flagInterval, "interval", 5, i18n.G("Polling interval (in seconds)")+"``")
-	cmd.Flags().IntVar(&c.flagTimeOut, "timeout", -1, i18n.G("Maximum wait time")+"``")
+	cli.AddIntFlag(cmd.Flags(), &c.flagInterval, "interval", 5, i18n.G("Polling interval (in seconds)"))
+	cli.AddIntFlag(cmd.Flags(), &c.flagTimeOut, "timeout", -1, i18n.G("Maximum wait time"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -57,8 +57,7 @@ Supported Conditions:
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdWait) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdWait) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdWaitUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err

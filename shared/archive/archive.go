@@ -15,10 +15,10 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/subprocess"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/subprocess"
 )
 
 // RunWrapper is an optional function that's used to wrap rsync, useful for confinement like AppArmor.
@@ -109,6 +109,14 @@ func CompressedTarReader(ctx context.Context, r io.ReadSeeker, unpacker []string
 			return nil, cancelFunc, subprocess.NewRunError(unpacker[0], unpacker[1:], err, nil, &buffer)
 		}
 
+		// Close the pipe upon completion.
+		chDone := make(chan struct{}, 1)
+		go func() {
+			err := cmd.Wait()
+			_ = pipeWriter.CloseWithError(err)
+			close(chDone)
+		}()
+
 		ctxCancelFunc := cancelFunc
 
 		// Now that unpacker process has started, wrap context cancel function with one that waits for
@@ -116,7 +124,7 @@ func CompressedTarReader(ctx context.Context, r io.ReadSeeker, unpacker []string
 		cancelFunc = func() {
 			ctxCancelFunc()
 			_ = pipeWriter.Close()
-			_ = cmd.Wait()
+			<-chDone
 
 			if cleanup != nil {
 				cleanup()

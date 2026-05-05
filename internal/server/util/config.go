@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // CompareConfigs compares two config maps and returns an error if they differ.

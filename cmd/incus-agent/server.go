@@ -10,10 +10,11 @@ import (
 	"net/http"
 	"time"
 
-	internalIO "github.com/lxc/incus/v6/internal/io"
-	"github.com/lxc/incus/v6/internal/server/response"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/logger"
+	internalIO "github.com/lxc/incus/v7/internal/io"
+	"github.com/lxc/incus/v7/internal/server/response"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 func restServer(tlsConfig *tls.Config, cert *x509.Certificate, debug bool, d *Daemon) *http.Server {
@@ -58,7 +59,7 @@ func createCmd(restAPI *http.ServeMux, version string, c APIEndpoint, cert *x509
 			newBody := &bytes.Buffer{}
 			captured := &bytes.Buffer{}
 			multiW := io.MultiWriter(newBody, captured)
-			_, err := io.Copy(multiW, r.Body)
+			_, err := util.SafeCopy(multiW, r.Body)
 			if err != nil {
 				_ = response.InternalError(err).Render(w)
 				return

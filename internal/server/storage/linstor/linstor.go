@@ -12,8 +12,8 @@ import (
 
 	linstorClient "github.com/LINBIT/golinstor/client"
 
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Client represents an HTTP Linstor client.

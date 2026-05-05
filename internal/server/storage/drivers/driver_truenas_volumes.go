@@ -14,18 +14,18 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/migration"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // CreateVolume creates an empty volume and can optionally fill it by executing the supplied
@@ -958,60 +958,6 @@ func (d *truenas) UpdateVolume(vol Volume, changedConfig map[string]string) erro
 	return d.updateVolume(vol, changedConfig)
 }
 
-// CacheVolumeSnapshots fetches snapshot usage properties for all snapshots on the volume.
-func (d *truenas) CacheVolumeSnapshots(vol Volume) error {
-	// NOTE: this actually gets info for all datasets and snapshots.
-
-	// Lock the cache.
-	d.cacheMu.Lock()
-	defer d.cacheMu.Unlock()
-
-	// Check if we've already cached the data.
-	if d.cache != nil {
-		return nil
-	}
-
-	// Get the usage data.
-	out, err := d.runTool("list", "--no-headers", "--parsable", "-o", "name,used,referenced", "-r", "-t", "snap,fs,vol", d.dataset(vol, false))
-	if err != nil {
-		d.logger.Warn("Coulnd't list volume snapshots", logger.Ctx{"err": err})
-
-		// The cache is an optional performance improvement, don't block on failure.
-		return nil
-	}
-
-	// Parse and update the cache.
-	d.cache = map[string]map[string]int64{}
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) != 3 {
-			continue
-		}
-
-		usedInt, err := strconv.ParseInt(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		referencedInt, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		d.cache[fields[0]] = map[string]int64{
-			"used":       usedInt,
-			"referenced": referencedInt,
-		}
-	}
-
-	return nil
-}
-
 // GetVolumeUsage returns the disk space used by the volume.
 func (d *truenas) GetVolumeUsage(vol Volume) (int64, error) {
 	// Determine what key to use.
@@ -1037,23 +983,8 @@ func (d *truenas) GetVolumeUsage(vol Volume) (int64, error) {
 		}
 	}
 
-	// Try to use the cached data.
-	d.cacheMu.Lock()
-	defer d.cacheMu.Unlock()
-
-	dataset := d.dataset(vol, false)
-	if d.cache != nil {
-		cache, ok := d.cache[dataset]
-		if ok {
-			value, ok := cache[key]
-			if ok {
-				return value, nil
-			}
-		}
-	}
-
 	// Get the current value.
-	value, err := d.getDatasetProperty(dataset, key)
+	value, err := d.getDatasetProperty(d.dataset(vol, false), key)
 	if err != nil {
 		return -1, err
 	}
@@ -1151,21 +1082,6 @@ func (d *truenas) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool
 				return err
 			}
 		} else if sizeBytes > oldVolSizeBytes {
-
-			// Grow FileSystem
-
-			if !tnHasIscsiRefresh {
-				if inUse {
-					return fmt.Errorf("Growing an online TrueNAS filesystem requires iSCSI Refresh support. Please update the TrueNAS tool: %w", ErrInUse)
-				}
-
-				// Deactivate if necessary, so we can re-activate after changing the zvol size, since we can't use refresh
-				_, err = d.deactivateVolume(vol)
-				if err != nil {
-					return err
-				}
-			}
-
 			// Grow block device first, ignoring any shrink errors, which could happen because we've already ignored a shrink error when shrinking.
 			err = d.setVolsize(dataset, sizeBytes, false)
 			if err != nil {
@@ -1188,7 +1104,7 @@ func (d *truenas) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool
 				return err
 			}
 
-			if tnHasIscsiRefresh && actualSize < sizeBytes {
+			if actualSize < sizeBytes {
 				// refresh until it does actually grow
 				for range 20 {
 					// rescan iscsi devices to pickup any size change
@@ -1448,6 +1364,42 @@ func (d *truenas) deactivateVolume(vol Volume) (bool, error) {
 	return didDeactivate, nil
 }
 
+// ActivateTask allows running a function while the volume is active (but not mounted).
+func (d *truenas) ActivateTask(vol Volume, task func(devPath string, op *operations.Operation) error, op *operations.Operation) error {
+	// Prevent concurrent mounting actions.
+	unlock, err := vol.MountLock()
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	// Setup a reverter.
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	// Activate the volume.
+	activated, volDevPath, err := d.activateVolume(vol)
+	if err != nil {
+		return err
+	}
+
+	if !activated {
+		return errors.New("Volume is already active, can't run exclusive activation task")
+	}
+
+	// Run the task.
+	taskErr := task(volDevPath, op)
+
+	// Deactivate the volume.
+	_, err = d.deactivateVolume(vol)
+	if err != nil {
+		return err
+	}
+
+	return taskErr
+}
+
 // MountVolume mounts a volume and increments ref counter. Please call UnmountVolume() when done with the volume.
 func (d *truenas) MountVolume(vol Volume, op *operations.Operation) error {
 	unlock, err := vol.MountLock()
@@ -1674,7 +1626,7 @@ func (d *truenas) CreateVolumeSnapshot(vol Volume, op *operations.Operation) err
 	defer reverter.Fail()
 
 	// Create the parent directory.
-	err := createParentSnapshotDirIfMissing(d.name, vol.volType, parentName)
+	err := CreateParentSnapshotDirIfMissing(d.name, vol.volType, parentName)
 	if err != nil {
 		return err
 	}
@@ -1986,12 +1938,8 @@ func (d *truenas) VolumeSnapshots(vol Volume, op *operations.Operation) ([]strin
 	return snapshots, nil
 }
 
-// RestoreVolume restores a volume from a snapshot.
-func (d *truenas) RestoreVolume(vol Volume, snapshotName string, op *operations.Operation) error {
-	return d.restoreVolume(vol, snapshotName, false, op)
-}
-
-func (d *truenas) restoreVolume(vol Volume, snapshotName string, isMigration bool, op *operations.Operation) error {
+// CanRestoreVolume checks whether a volume snapshot can be restored.
+func (d *truenas) CanRestoreVolume(vol Volume, snapshotName string) error {
 	// Get the list of snapshots.
 	dataset := d.dataset(vol, false)
 	entries, err := d.getDatasets(dataset, "snapshot")
@@ -2034,6 +1982,22 @@ func (d *truenas) restoreVolume(vol Volume, snapshotName string, isMigration boo
 		// Setup custom error to tell the backend what to delete.
 		err := ErrDeleteSnapshots{}
 		err.Snapshots = snapshots
+		return err
+	}
+
+	return nil
+}
+
+// RestoreVolume restores a volume from a snapshot.
+func (d *truenas) RestoreVolume(vol Volume, snapshotName string, op *operations.Operation) error {
+	return d.restoreVolume(vol, snapshotName, false, op)
+}
+
+func (d *truenas) restoreVolume(vol Volume, snapshotName string, isMigration bool, op *operations.Operation) error {
+	dataset := d.dataset(vol, false)
+
+	err := d.CanRestoreVolume(vol, snapshotName)
+	if err != nil {
 		return err
 	}
 

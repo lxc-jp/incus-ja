@@ -1,7 +1,7 @@
 package incus
 
 import (
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // GetNetworkAllocations returns a list of Network allocations for a specific project.

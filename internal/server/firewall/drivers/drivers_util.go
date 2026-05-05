@@ -45,7 +45,7 @@ func portRangeStr(portRange [2]uint64, delimiter string) string {
 // getOptimisedDNATRanges returns a map of listen port ranges to target port ranges that can be
 // applied in any order.
 //
-// Both Xtables and Nftables are able to apply rules for multiple listen ports at a time when a
+// Nftables is able to apply rules for multiple listen ports at a time when a
 // listen port range exactly matches the corresponding target port range (e.g. "80-85" to "80-85")
 // or when there is a single target port (e.g. "80-85" to "80"). This function checks when these
 // conditions are met and returns a map of listen and target port ranges to be applied by the loaded

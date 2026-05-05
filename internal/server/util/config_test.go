@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
 )
 
 func Test_CompareConfigsMismatch(t *testing.T) {

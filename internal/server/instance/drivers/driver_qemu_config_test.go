@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lxc/incus/v6/internal/server/instance/drivers/cfg"
-	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers/cfg"
+	"github.com/lxc/incus/v7/shared/osarch"
 )
 
 func TestQemuConfigTemplates(t *testing.T) {
@@ -122,7 +122,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			opts     qemuSerialOpts
 			expected string
 		}{{
-			qemuSerialOpts{qemuDevOpts{"pci", "qemu_pcie0", "00.5", false}, "qemu_serial-chardev", 32},
+			qemuSerialOpts{qemuDevOpts{"pci", "qemu_pcie0", "00.5", false}, "qemu_serial-chardev", 32, true},
 			`# Virtual serial bus
 			[device "dev-qemu_serial"]
 			addr = "00.5"
@@ -166,6 +166,30 @@ func TestQemuConfigTemplates(t *testing.T) {
 			chardev = "qemu_spicedir-chardev"
 			driver = "virtserialport"
 			name = "org.spice-space.webdav.0"
+			`,
+		}, {
+			qemuSerialOpts{qemuDevOpts{"pci", "qemu_pcie0", "00.5", false}, "qemu_serial-chardev", 32, false},
+			`# Virtual serial bus
+			[device "dev-qemu_serial"]
+			addr = "00.5"
+			bus = "qemu_pcie0"
+			driver = "virtio-serial-pci"
+
+			# Serial identifier
+			[chardev "qemu_serial-chardev"]
+			backend = "ringbuf"
+			size = "32B"
+
+			[device "qemu_serial"]
+			bus = "dev-qemu_serial.0"
+			chardev = "qemu_serial-chardev"
+			driver = "virtserialport"
+			name = "org.linuxcontainers.incus"
+
+			[device "qemu_serial_legacy"]
+			bus = "dev-qemu_serial.0"
+			driver = "virtserialport"
+			name = "org.linuxcontainers.lxd"
 			`,
 		}}
 		for _, tc := range testCases {
@@ -211,6 +235,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			addr = "00.0"
 			bus = "qemu_pcie1"
 			driver = "virtio-scsi-pci"
+			num_queues = "4"
 			`,
 		}, {
 			qemuDevOpts{"ccw", "qemu_pcie2", "00.2", true},
@@ -218,10 +243,11 @@ func TestQemuConfigTemplates(t *testing.T) {
 			[device "qemu_scsi"]
 			driver = "virtio-scsi-ccw"
 			multifunction = "on"
+			num_queues = "4"
 			`,
 		}}
 		for _, tc := range testCases {
-			runTest(tc.expected, qemuSCSI(&tc.opts))
+			runTest(tc.expected, qemuSCSI(&tc.opts, 4))
 		}
 	})
 
@@ -418,17 +444,16 @@ func TestQemuConfigTemplates(t *testing.T) {
 			expected string
 		}{{
 			qemuCPUOpts{
-				architecture:        "x86_64",
-				cpuCount:            8,
-				cpuSockets:          1,
-				cpuCores:            4,
-				cpuThreads:          2,
-				cpuNumaNodes:        []uint64{},
-				cpuNumaMapping:      []qemuNumaEntry{},
-				cpuNumaHostNodes:    []uint64{},
-				hugepages:           "",
-				memory:              7629,
-				qemuMemObjectFormat: "repeated",
+				architecture:     "x86_64",
+				cpuCount:         8,
+				cpuSockets:       1,
+				cpuCores:         4,
+				cpuThreads:       2,
+				cpuNumaNodes:     []uint64{},
+				cpuNumaMapping:   []qemuNumaEntry{},
+				cpuNumaHostNodes: []uint64{},
+				hugepages:        "",
+				memory:           7629,
 			},
 			`# CPU
 			[smp-opts]
@@ -457,10 +482,9 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuNumaMapping: []qemuNumaEntry{
 					{node: 20, socket: 21, core: 22, thread: 23},
 				},
-				cpuNumaHostNodes:    []uint64{8, 9, 10},
-				hugepages:           "/hugepages/path",
-				memory:              12000,
-				qemuMemObjectFormat: "indexed",
+				cpuNumaHostNodes: []uint64{8, 9, 10},
+				hugepages:        "/hugepages/path",
+				memory:           12000,
 			},
 			`# CPU
 			[smp-opts]
@@ -531,10 +555,9 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuNumaMapping: []qemuNumaEntry{
 					{node: 20, socket: 21, core: 22, thread: 23},
 				},
-				cpuNumaHostNodes:    []uint64{8, 9, 10},
-				hugepages:           "",
-				memory:              12000,
-				qemuMemObjectFormat: "indexed",
+				cpuNumaHostNodes: []uint64{8, 9, 10},
+				hugepages:        "",
+				memory:           12000,
 			},
 			`# CPU
 			[smp-opts]
@@ -594,10 +617,9 @@ func TestQemuConfigTemplates(t *testing.T) {
 					{node: 11, socket: 12, core: 13, thread: 14},
 					{node: 20, socket: 21, core: 22, thread: 23},
 				},
-				cpuNumaHostNodes:    []uint64{8, 9, 10},
-				hugepages:           "",
-				memory:              12000,
-				qemuMemObjectFormat: "repeated",
+				cpuNumaHostNodes: []uint64{8, 9, 10},
+				hugepages:        "",
+				memory:           12000,
 			},
 			`# CPU
 			[smp-opts]
@@ -607,7 +629,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			threads = "1"
 
 			[object "mem0"]
-			host-nodes = "8"
+			host-nodes.0 = "8"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
 			size = "12000M"
@@ -618,7 +640,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			type = "node"
 
 			[object "mem1"]
-			host-nodes = "9"
+			host-nodes.0 = "9"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
 			size = "12000M"
@@ -629,7 +651,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			type = "node"
 
 			[object "mem2"]
-			host-nodes = "10"
+			host-nodes.0 = "10"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
 			size = "12000M"
@@ -664,10 +686,9 @@ func TestQemuConfigTemplates(t *testing.T) {
 					{node: 11, socket: 12, core: 13, thread: 14},
 					{node: 20, socket: 21, core: 22, thread: 23},
 				},
-				cpuNumaHostNodes:    []uint64{8, 9, 10},
-				hugepages:           "/hugepages",
-				memory:              12000,
-				qemuMemObjectFormat: "indexed",
+				cpuNumaHostNodes: []uint64{8, 9, 10},
+				hugepages:        "/hugepages",
+				memory:           12000,
 			},
 			`# CPU
 			[smp-opts]
@@ -1024,6 +1045,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 				devAddr:       "00.0",
 				multifunction: true,
 				ports:         3,
+				spice:         true,
 			},
 			`# USB controller
 			[device "qemu_usb"]
@@ -1057,6 +1079,22 @@ func TestQemuConfigTemplates(t *testing.T) {
 			[device "qemu_spice-usb3"]
 			chardev = "qemu_spice-usb-chardev3"
 			driver = "usb-redir"`,
+		}, {
+			qemuUSBOpts{
+				devBus:        "qemu_pcie1",
+				devAddr:       "00.0",
+				multifunction: true,
+				ports:         3,
+				spice:         false,
+			},
+			`# USB controller
+			[device "qemu_usb"]
+			addr = "00.0"
+			bus = "qemu_pcie1"
+			driver = "qemu-xhci"
+			multifunction = "on"
+			p2 = "3"
+			p3 = "3"`,
 		}}
 		for _, tc := range testCases {
 			runTest(tc.expected, qemuUSB(&tc.opts))

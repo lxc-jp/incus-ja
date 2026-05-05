@@ -14,16 +14,16 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/termios"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/termios"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdConfigTrust struct {
@@ -31,8 +31,7 @@ type cmdConfigTrust struct {
 	config *cmdConfig
 }
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrust) Command() *cobra.Command {
+func (c *cmdConfigTrust) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("trust")
 	cmd.Short = i18n.G("Manage trusted clients")
@@ -40,35 +39,35 @@ func (c *cmdConfigTrust) Command() *cobra.Command {
 
 	// Add
 	configTrustAddCmd := cmdConfigTrustAdd{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustAddCmd.Command())
+	cmd.AddCommand(configTrustAddCmd.command())
 
 	// Add certificate
 	configTrustAddCertificateCmd := cmdConfigTrustAddCertificate{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustAddCertificateCmd.Command())
+	cmd.AddCommand(configTrustAddCertificateCmd.command())
 
 	// Edit
 	configTrustEditCmd := cmdConfigTrustEdit{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustEditCmd.Command())
+	cmd.AddCommand(configTrustEditCmd.command())
 
 	// List
 	configTrustListCmd := cmdConfigTrustList{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustListCmd.Command())
+	cmd.AddCommand(configTrustListCmd.command())
 
 	// List tokens
 	configTrustListTokensCmd := cmdConfigTrustListTokens{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustListTokensCmd.Command())
+	cmd.AddCommand(configTrustListTokensCmd.command())
 
 	// Remove
 	configTrustRemoveCmd := cmdConfigTrustRemove{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustRemoveCmd.Command())
+	cmd.AddCommand(configTrustRemoveCmd.command())
 
 	// Revoke token
 	configTrustRevokeTokenCmd := cmdConfigTrustRevokeToken{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustRevokeTokenCmd.Command())
+	cmd.AddCommand(configTrustRevokeTokenCmd.command())
 
 	// Show
 	configTrustShowCmd := cmdConfigTrustShow{global: c.global, config: c.config, configTrust: c}
-	cmd.AddCommand(configTrustShowCmd.Command())
+	cmd.AddCommand(configTrustShowCmd.command())
 
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
@@ -88,8 +87,7 @@ type cmdConfigTrustAdd struct {
 
 var cmdConfigTrustAddUsage = u.Usage{u.NewName(u.Client).Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustAdd) Command() *cobra.Command {
+func (c *cmdConfigTrustAdd) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("add", cmdConfigTrustAddUsage...)
 	cmd.Short = i18n.G("Add new trusted client")
@@ -99,16 +97,15 @@ func (c *cmdConfigTrustAdd) Command() *cobra.Command {
 This will issue a trust token to be used by the client to add itself to the trust store.
 `))
 
-	cmd.Flags().BoolVar(&c.flagRestricted, "restricted", false, i18n.G("Restrict the certificate to one or more projects"))
-	cmd.Flags().StringVar(&c.flagProjects, "projects", "", i18n.G("List of projects to restrict the certificate to")+"``")
+	cli.AddBoolFlag(cmd.Flags(), &c.flagRestricted, "restricted", i18n.G("Restrict the certificate to one or more projects"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagProjects, "projects", "", "", i18n.G("List of projects to restrict the certificate to"))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustAdd) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustAdd) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustAddUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -164,8 +161,7 @@ type cmdConfigTrustAddCertificate struct {
 
 var cmdConfigTrustAddCertificateUsage = u.Usage{u.RemoteColonOpt, u.Placeholder(i18n.G("cert.crt"))}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustAddCertificate) Command() *cobra.Command {
+func (c *cmdConfigTrustAddCertificate) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("add-certificate", cmdConfigTrustAddCertificateUsage...)
 	cmd.Short = i18n.G("Add new trusted client certificate")
@@ -177,19 +173,18 @@ The following certificate types are supported:
 - metrics
 `))
 
-	cmd.Flags().BoolVar(&c.flagRestricted, "restricted", false, i18n.G("Restrict the certificate to one or more projects"))
-	cmd.Flags().StringVar(&c.flagProjects, "projects", "", i18n.G("List of projects to restrict the certificate to")+"``")
-	cmd.Flags().StringVar(&c.flagName, "name", "", i18n.G("Alternative certificate name")+"``")
-	cmd.Flags().StringVar(&c.flagType, "type", "client", i18n.G("Type of certificate")+"``")
-	cmd.Flags().StringVar(&c.flagDescription, "description", "", i18n.G("Certificate description")+"``")
+	cli.AddBoolFlag(cmd.Flags(), &c.flagRestricted, "restricted", i18n.G("Restrict the certificate to one or more projects"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagProjects, "projects", "", "", i18n.G("List of projects to restrict the certificate to"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagName, "name", "", "", i18n.G("Alternative certificate name"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagType, "type|t", "client", "", i18n.G("Type of certificate"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagDescription, "description", "", "", i18n.G("Certificate description"))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustAddCertificate) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustAddCertificate) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustAddCertificateUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -260,14 +255,13 @@ type cmdConfigTrustEdit struct {
 
 var cmdConfigTrustEditUsage = u.Usage{u.Fingerprint.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustEdit) Command() *cobra.Command {
+func (c *cmdConfigTrustEdit) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("edit", cmdConfigTrustEditUsage...)
 	cmd.Short = i18n.G("Edit trust configurations as YAML")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Edit trust configurations as YAML`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
@@ -280,8 +274,7 @@ func (c *cmdConfigTrustEdit) helpTemplate() string {
 ### Note that the fingerprint is shown but cannot be changed`)
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustEdit) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustEdit) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustEditUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -292,14 +285,14 @@ func (c *cmdConfigTrustEdit) Run(cmd *cobra.Command, args []string) error {
 
 	// If stdin isn't a terminal, read text from it
 	if !termios.IsTerminal(getStdinFd()) {
-		contents, err := io.ReadAll(os.Stdin)
+		loader, err := yaml.NewLoader(os.Stdin)
 		if err != nil {
 			return err
 		}
 
 		newdata := api.CertificatePut{}
-		err = yaml.Unmarshal(contents, &newdata)
-		if err != nil {
+		err = loader.Load(&newdata)
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 
@@ -312,7 +305,7 @@ func (c *cmdConfigTrustEdit) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Marshal(&cert)
+	data, err := yaml.Dump(&cert, yaml.V2)
 	if err != nil {
 		return err
 	}
@@ -326,7 +319,7 @@ func (c *cmdConfigTrustEdit) Run(cmd *cobra.Command, args []string) error {
 	for {
 		// Parse the text received from the editor
 		newdata := api.CertificatePut{}
-		err = yaml.Unmarshal(content, &newdata)
+		err = yaml.Load(content, &newdata)
 		if err == nil {
 			err = d.UpdateCertificate(fingerprint, newdata, etag)
 		}
@@ -377,8 +370,7 @@ type rowData struct {
 
 var cmdConfigTrustListUsage = u.Usage{u.RemoteColonOpt, u.Filter.List(0)}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustList) Command() *cobra.Command {
+func (c *cmdConfigTrustList) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("list", cmdConfigTrustListUsage...)
 	cmd.Aliases = []string{"ls"}
@@ -404,14 +396,14 @@ Column shorthand chars:
 	r - Whether certificate is restricted
 	p - Newline-separated list of projects`))
 
-	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", "ntdfe", i18n.G("Columns")+"``")
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
+	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", "ntdfe", "", i18n.G("Columns"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
 	}
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
@@ -494,8 +486,7 @@ func (c *cmdConfigTrustList) projectColumnData(rowData rowData) string {
 	return strings.Join(projects, "\n")
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustList) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustList) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustListUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -567,8 +558,7 @@ type configTrustListTokenColumn struct {
 
 var cmdConfigTrustListTokensUsage = u.Usage{u.RemoteColonOpt}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustListTokens) Command() *cobra.Command {
+func (c *cmdConfigTrustListTokens) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("list-tokens", cmdConfigTrustListTokensUsage...)
 	cmd.Short = i18n.G("List all active certificate add tokens")
@@ -591,14 +581,14 @@ Pre-defined column shorthand chars:
   n - Name
   t - Token
   E - Expires At`))
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
-	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultConfigTrustListTokenColumns, i18n.G("Columns")+"``")
+	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
+	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultConfigTrustListTokenColumns, "", i18n.G("Columns"))
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
 	}
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
@@ -649,8 +639,7 @@ func (c *cmdConfigTrustListTokens) expiresAtColumnData(token *api.CertificateAdd
 	return token.ExpiresAt.Local().Format(dateLayout)
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustListTokens) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustListTokens) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustListTokensUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -713,29 +702,26 @@ type cmdConfigTrustRemove struct {
 	configTrust *cmdConfigTrust
 }
 
-var cmdConfigTrustRemoveUsage = u.Usage{u.LegacyRemote(u.Fingerprint)}
+var cmdConfigTrustRemoveUsage = u.Usage{u.Fingerprint.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustRemove) Command() *cobra.Command {
+func (c *cmdConfigTrustRemove) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("remove", cmdConfigTrustRemoveUsage...)
 	cmd.Aliases = []string{"delete", "rm"}
 	cmd.Short = i18n.G("Remove trusted client")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Remove trusted client`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustRemove) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustRemove) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustRemoveUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
 	}
 
-	u.LegacyRemoteSynthesize(parsed[0])
 	d := parsed[0].RemoteServer
 	fingerprint := parsed[0].RemoteObject.String
 
@@ -750,28 +736,25 @@ type cmdConfigTrustRevokeToken struct {
 	configTrust *cmdConfigTrust
 }
 
-var cmdConfigTrustRevokeTokenUsage = u.Usage{u.LegacyRemote(u.Token)}
+var cmdConfigTrustRevokeTokenUsage = u.Usage{u.Token.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustRevokeToken) Command() *cobra.Command {
+func (c *cmdConfigTrustRevokeToken) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("revoke-token", cmdConfigTrustRevokeTokenUsage...)
 	cmd.Short = i18n.G("Revoke certificate add token")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Revoke certificate add token`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustRevokeToken) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustRevokeToken) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustRevokeTokenUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
 	}
 
-	u.LegacyRemoteSynthesize(parsed[0])
 	d := parsed[0].RemoteServer
 	remoteName := parsed[0].RemoteName
 	token := parsed[0].RemoteObject.String
@@ -823,20 +806,18 @@ type cmdConfigTrustShow struct {
 
 var cmdConfigTrustShowUsage = u.Usage{u.Fingerprint.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigTrustShow) Command() *cobra.Command {
+func (c *cmdConfigTrustShow) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("show", cmdConfigTrustShowUsage...)
 	cmd.Short = i18n.G("Show trust configurations")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Show trust configurations`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigTrustShow) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigTrustShow) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigTrustShowUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -851,7 +832,7 @@ func (c *cmdConfigTrustShow) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Marshal(&cert)
+	data, err := yaml.Dump(&cert, yaml.V2)
 	if err != nil {
 		return err
 	}

@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/server/instance/drivers/cfg"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/resources"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers/cfg"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/resources"
 )
 
 func writeHeader(sb *strings.Builder, comment string, name string) {
@@ -207,6 +207,7 @@ type qemuSerialOpts struct {
 	dev              qemuDevOpts
 	charDevName      string
 	ringbufSizeBytes int
+	spice            bool
 }
 
 func qemuSerial(opts *qemuSerialOpts) []cfg.Section {
@@ -216,7 +217,7 @@ func qemuSerial(opts *qemuSerialOpts) []cfg.Section {
 		ccwName: "virtio-serial-ccw",
 	}
 
-	return []cfg.Section{{
+	sections := []cfg.Section{{
 		Name:    `device "dev-qemu_serial"`,
 		Comment: "Virtual serial bus",
 		Entries: qemuDeviceEntries(&entriesOpts),
@@ -249,37 +250,43 @@ func qemuSerial(opts *qemuSerialOpts) []cfg.Section {
 			"name":   "org.linuxcontainers.lxd",
 			"bus":    "dev-qemu_serial.0",
 		},
-	}, {
-		Name:    `chardev "qemu_spice-chardev"`,
-		Comment: "Spice agent",
-		Entries: map[string]string{
-			"backend": "spicevmc",
-			"name":    "vdagent",
-		},
-	}, {
-		Name: `device "qemu_spice"`,
-		Entries: map[string]string{
-			"driver":  "virtserialport",
-			"name":    "com.redhat.spice.0",
-			"chardev": "qemu_spice-chardev",
-			"bus":     "dev-qemu_serial.0",
-		},
-	}, {
-		Name:    `chardev "qemu_spicedir-chardev"`,
-		Comment: "Spice folder",
-		Entries: map[string]string{
-			"backend": "spiceport",
-			"name":    "org.spice-space.webdav.0",
-		},
-	}, {
-		Name: `device "qemu_spicedir"`,
-		Entries: map[string]string{
-			"driver":  "virtserialport",
-			"name":    "org.spice-space.webdav.0",
-			"chardev": "qemu_spicedir-chardev",
-			"bus":     "dev-qemu_serial.0",
-		},
 	}}
+
+	if opts.spice {
+		sections = append(sections, []cfg.Section{{
+			Name:    `chardev "qemu_spice-chardev"`,
+			Comment: "Spice agent",
+			Entries: map[string]string{
+				"backend": "spicevmc",
+				"name":    "vdagent",
+			},
+		}, {
+			Name: `device "qemu_spice"`,
+			Entries: map[string]string{
+				"driver":  "virtserialport",
+				"name":    "com.redhat.spice.0",
+				"chardev": "qemu_spice-chardev",
+				"bus":     "dev-qemu_serial.0",
+			},
+		}, {
+			Name:    `chardev "qemu_spicedir-chardev"`,
+			Comment: "Spice folder",
+			Entries: map[string]string{
+				"backend": "spiceport",
+				"name":    "org.spice-space.webdav.0",
+			},
+		}, {
+			Name: `device "qemu_spicedir"`,
+			Entries: map[string]string{
+				"driver":  "virtserialport",
+				"name":    "org.spice-space.webdav.0",
+				"chardev": "qemu_spicedir-chardev",
+				"bus":     "dev-qemu_serial.0",
+			},
+		}}...)
+	}
+
+	return sections
 }
 
 type qemuPCIeOpts struct {
@@ -307,17 +314,18 @@ func qemuPCIe(opts *qemuPCIeOpts) []cfg.Section {
 	}}
 }
 
-func qemuSCSI(opts *qemuDevOpts) []cfg.Section {
-	entriesOpts := qemuDevEntriesOpts{
+func qemuSCSI(opts *qemuDevOpts, numQueues int) []cfg.Section {
+	entries := qemuDeviceEntries(&qemuDevEntriesOpts{
 		dev:     *opts,
 		pciName: "virtio-scsi-pci",
 		ccwName: "virtio-scsi-ccw",
-	}
+	})
+	entries["num_queues"] = fmt.Sprintf("%d", numQueues)
 
 	return []cfg.Section{{
 		Name:    `device "qemu_scsi"`,
 		Comment: "SCSI controller",
-		Entries: qemuDeviceEntries(&entriesOpts),
+		Entries: entries,
 	}}
 }
 
@@ -502,19 +510,18 @@ type qemuNumaEntry struct {
 }
 
 type qemuCPUOpts struct {
-	architecture        string
-	cpuCount            int
-	cpuRequested        int
-	cpuSockets          int
-	cpuCores            int
-	cpuThreads          int
-	cpuNumaNodes        []uint64
-	cpuNumaMapping      []qemuNumaEntry
-	cpuNumaHostNodes    []uint64
-	hugepages           string
-	memory              int64
-	memoryHostNodes     []int64
-	qemuMemObjectFormat string
+	architecture     string
+	cpuCount         int
+	cpuRequested     int
+	cpuSockets       int
+	cpuCores         int
+	cpuThreads       int
+	cpuNumaNodes     []uint64
+	cpuNumaMapping   []qemuNumaEntry
+	cpuNumaHostNodes []uint64
+	hugepages        string
+	memory           int64
+	memoryHostNodes  []int64
 }
 
 func qemuCPUNumaHostNode(opts *qemuCPUOpts, index int) []cfg.Section {
@@ -592,13 +599,7 @@ func qemuCPU(opts *qemuCPUOpts, pinning bool) []cfg.Section {
 			numaHostNode[0].Entries["policy"] = "bind"
 
 			for index, element := range opts.memoryHostNodes {
-				var hostNodesKey string
-				if opts.qemuMemObjectFormat == "indexed" {
-					hostNodesKey = fmt.Sprintf("host-nodes.%d", index)
-				} else {
-					hostNodesKey = "host-nodes"
-				}
-
+				hostNodesKey := fmt.Sprintf("host-nodes.%d", index)
 				numaHostNode[0].Entries[hostNodesKey] = fmt.Sprintf("%d", element)
 			}
 		}
@@ -616,14 +617,7 @@ func qemuCPU(opts *qemuCPUOpts, pinning bool) []cfg.Section {
 			numaHostNode[0].Entries["share"] = "on"
 		}
 
-		var hostNodesKey string
-		if opts.qemuMemObjectFormat == "indexed" {
-			hostNodesKey = "host-nodes.0"
-		} else {
-			hostNodesKey = "host-nodes"
-		}
-
-		numaHostNode[0].Entries[hostNodesKey] = fmt.Sprintf("%d", element)
+		numaHostNode[0].Entries["host-nodes.0"] = fmt.Sprintf("%d", element)
 		sections = append(sections, numaHostNode...)
 	}
 
@@ -891,6 +885,7 @@ type qemuUSBOpts struct {
 	devAddr       string
 	multifunction bool
 	ports         int
+	spice         bool
 }
 
 func qemuUSB(opts *qemuUSBOpts) []cfg.Section {
@@ -913,41 +908,53 @@ func qemuUSB(opts *qemuUSBOpts) []cfg.Section {
 		Entries: entries,
 	}}
 
-	for i := 1; i <= 3; i++ {
-		chardev := fmt.Sprintf("qemu_spice-usb-chardev%d", i)
-		sections = append(sections, []cfg.Section{{
-			Name: fmt.Sprintf(`chardev "%s"`, chardev),
-			Entries: map[string]string{
-				"backend": "spicevmc",
-				"name":    "usbredir",
-			},
-		}, {
-			Name: fmt.Sprintf(`device "qemu_spice-usb%d"`, i),
-			Entries: map[string]string{
-				"driver":  "usb-redir",
-				"chardev": chardev,
-			},
-		}}...)
+	if opts.spice {
+		for i := 1; i <= 3; i++ {
+			chardev := fmt.Sprintf("qemu_spice-usb-chardev%d", i)
+			sections = append(sections, []cfg.Section{{
+				Name: fmt.Sprintf(`chardev "%s"`, chardev),
+				Entries: map[string]string{
+					"backend": "spicevmc",
+					"name":    "usbredir",
+				},
+			}, {
+				Name: fmt.Sprintf(`device "qemu_spice-usb%d"`, i),
+				Entries: map[string]string{
+					"driver":  "usb-redir",
+					"chardev": chardev,
+				},
+			}}...)
+		}
 	}
 
 	return sections
 }
 
-func qemuAudio(opts *qemuDevOpts) []cfg.Section {
+type qemuAudioOpts struct {
+	dev   qemuDevOpts
+	spice bool
+}
+
+func qemuAudio(opts *qemuAudioOpts) []cfg.Section {
 	entries := qemuDeviceEntries(&qemuDevEntriesOpts{
-		dev:     *opts,
+		dev:     opts.dev,
 		pciName: "virtio-sound-pci",
 	})
 
-	entries["audiodev"] = "qemu_spice-audiodev"
+	audioDriver := "none"
+	if opts.spice {
+		audioDriver = "spice"
+	}
+
+	entries["audiodev"] = "qemu_sound-audiodev"
 	return []cfg.Section{{
-		Name:    `audiodev "qemu_spice-audiodev"`,
+		Name:    `audiodev "qemu_sound-audiodev"`,
 		Comment: "Sound device",
 		Entries: map[string]string{
-			"driver": "spice",
+			"driver": audioDriver,
 		},
 	}, {
-		Name:    `device "qemu_spice-audio"`,
+		Name:    `device "qemu_sound"`,
 		Entries: entries,
 	}}
 }

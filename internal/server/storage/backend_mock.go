@@ -2,22 +2,22 @@ package storage
 
 import (
 	"io"
+	"net"
 	"net/url"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	backupConfig "github.com/lxc/incus/v6/internal/server/backup/config"
-	"github.com/lxc/incus/v6/internal/server/cluster/request"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/internal/server/storage/drivers"
-	"github.com/lxc/incus/v6/internal/server/storage/s3/miniod"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	backupConfig "github.com/lxc/incus/v7/internal/server/backup/config"
+	"github.com/lxc/incus/v7/internal/server/cluster/request"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/internal/server/storage/drivers"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
 )
 
 type mockBackend struct {
@@ -200,11 +200,6 @@ func (b *mockBackend) UnmountInstance(inst instance.Instance, op *operations.Ope
 	return nil
 }
 
-// CacheInstanceSnapshots is used to pre-fetch snapshot information ahead of bulk queries.
-func (b *mockBackend) CacheInstanceSnapshots(inst instance.ConfigReader) error {
-	return nil
-}
-
 func (b *mockBackend) CreateInstanceSnapshot(i instance.Instance, src instance.Instance, op *operations.Operation) error {
 	return nil
 }
@@ -214,6 +209,11 @@ func (b *mockBackend) RenameInstanceSnapshot(inst instance.Instance, newName str
 }
 
 func (b *mockBackend) DeleteInstanceSnapshot(inst instance.Instance, op *operations.Operation) error {
+	return nil
+}
+
+// CanRestoreInstanceSnapshot checks if an instance snapshot can be restored.
+func (b *mockBackend) CanRestoreInstanceSnapshot(inst instance.Instance, src instance.Instance) error {
 	return nil
 }
 
@@ -273,8 +273,10 @@ func (b *mockBackend) DeleteBucketKey(projectName string, bucketName string, key
 	return nil
 }
 
-func (b *mockBackend) ActivateBucket(projectName string, bucketName string, op *operations.Operation) (*miniod.Process, error) {
-	return nil, nil
+// MountLocalBucket mounts the local bucket volume and returns its mount path
+// along with an unmount function that the caller must invoke when finished.
+func (b *mockBackend) MountLocalBucket(projectName string, bucketName string, op *operations.Operation) (string, func() error, error) {
+	return "", func() error { return nil }, nil
 }
 
 func (b *mockBackend) GetBucketURL(bucketName string) *url.URL {
@@ -329,7 +331,8 @@ func (b *mockBackend) ImportCustomVolume(projectName string, poolVol *backupConf
 	return nil, nil
 }
 
-func (b *mockBackend) CreateCustomVolumeSnapshot(projectName string, volName string, newSnapshotName string, expiryDate time.Time, op *operations.Operation) error {
+// CreateCustomVolumeSnapshot creates a snapshot of a custom volume.
+func (b *mockBackend) CreateCustomVolumeSnapshot(projectName string, volName string, newSnapshotName string, expiryDate time.Time, instanceStateful bool, op *operations.Operation) error {
 	return nil
 }
 
@@ -376,4 +379,14 @@ func (b *mockBackend) BackupBucket(projectName string, bucketName string, tarWri
 // CreateBucketFromBackup creates a bucket from a tarball.
 func (b *mockBackend) CreateBucketFromBackup(srcBackup backup.Info, srcData io.ReadSeeker, op *operations.Operation) error {
 	return nil
+}
+
+// GetInstanceNBD returns an NBD connection to the VM's root disk.
+func (b *mockBackend) GetInstanceNBD(inst instance.Instance, writable bool) (net.Conn, func(), error) {
+	return nil, nil, nil
+}
+
+// GetCustomVolumeNBD returns an NBD connection to a VM's additional disk.
+func (b *mockBackend) GetCustomVolumeNBD(projectName string, volName string, writable bool) (net.Conn, func(), error) {
+	return nil, nil, nil
 }

@@ -20,27 +20,32 @@ import (
 	liblxc "github.com/lxc/go-lxc"
 	"golang.org/x/sys/unix"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/ws"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/ws"
 )
 
 type consoleWs struct {
 	// instance currently worked on
 	instance instance.Instance
+
+	// daemon state (used to emit lifecycle events)
+	state *state.State
 
 	// websocket connections to bridge pty fds to
 	conns map[int]*websocket.Conn
@@ -164,6 +169,12 @@ func (s *consoleWs) connectVGA(r *http.Request, w http.ResponseWriter) error {
 			s.connsLock.Unlock()
 
 			s.controlConnected <- true
+
+			// Emit a single instance-console event per session here. SPICE clients open one
+			// dynamic websocket per channel (display, cursor, inputs, ...) and emitting from the
+			// per-channel path would produce many duplicate events for one user-visible session.
+			s.state.Events.SendLifecycle(s.instance.Project().Name, lifecycle.InstanceConsole.Event(s.instance, logger.Ctx{"type": s.protocol}))
+
 			return nil
 		}
 
@@ -437,6 +448,11 @@ func (s *consoleWs) cancel(*operations.Operation) error {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -577,6 +593,7 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 	ws.allConnected = make(chan bool, 1)
 	ws.controlConnected = make(chan bool, 1)
 	ws.instance = inst
+	ws.state = s
 	ws.width = post.Width
 	ws.height = post.Height
 	ws.protocol = post.Type
@@ -603,6 +620,11 @@ func instanceConsolePost(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name
@@ -786,6 +808,11 @@ func instanceConsoleLogGet(d *Daemon, r *http.Request) response.Response {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: project
 //	    description: Project name

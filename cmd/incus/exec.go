@@ -11,14 +11,14 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/termios"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/termios"
 )
 
 type cmdExec struct {
@@ -38,8 +38,7 @@ type cmdExec struct {
 
 var cmdExecUsage = u.Usage{u.Instance.Remote(), u.EndOfFlags, u.CommandLine}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdExec) Command() *cobra.Command {
+func (c *cmdExec) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("exec", cmdExecUsage...)
 	cmd.Short = i18n.G("Execute commands in instances")
@@ -60,15 +59,15 @@ Mode defaults to non-interactive, interactive mode is selected if both stdin AND
 incus exec c1 -- ls -lh /
 	Run the "ls -lh /" command in instance "c1"`))
 
-	cmd.RunE = c.Run
-	cmd.Flags().StringArrayVar(&c.flagEnvironment, "env", nil, i18n.G("Environment variable to set (e.g. HOME=/home/foo)")+"``")
-	cmd.Flags().StringVar(&c.flagMode, "mode", "auto", i18n.G("Override the terminal mode (auto, interactive or non-interactive)")+"``")
-	cmd.Flags().BoolVarP(&c.flagForceInteractive, "force-interactive", "t", false, i18n.G("Force pseudo-terminal allocation"))
-	cmd.Flags().BoolVarP(&c.flagForceNonInteractive, "force-noninteractive", "T", false, i18n.G("Disable pseudo-terminal allocation"))
-	cmd.Flags().BoolVarP(&c.flagDisableStdin, "disable-stdin", "n", false, i18n.G("Disable stdin (reads from /dev/null)"))
-	cmd.Flags().Uint32Var(&c.flagUser, "user", 0, i18n.G("User ID to run the command as (default 0)")+"``")
-	cmd.Flags().Uint32Var(&c.flagGroup, "group", 0, i18n.G("Group ID to run the command as (default 0)")+"``")
-	cmd.Flags().StringVar(&c.flagCwd, "cwd", "", i18n.G("Directory to run the command in (default /root)")+"``")
+	cmd.RunE = c.run
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagEnvironment, "env", i18n.G("Environment variable to set (e.g. HOME=/home/foo)"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagMode, "mode", "auto", "", i18n.G("Override the terminal mode (auto, interactive or non-interactive)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagForceInteractive, "force-interactive|t", i18n.G("Force pseudo-terminal allocation"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagForceNonInteractive, "force-noninteractive|T", i18n.G("Disable pseudo-terminal allocation"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagDisableStdin, "disable-stdin|n", i18n.G("Disable stdin (reads from /dev/null)"))
+	cli.AddUint32Flag(cmd.Flags(), &c.flagUser, "user", i18n.G("User ID to run the command as (default 0)"))
+	cli.AddUint32Flag(cmd.Flags(), &c.flagGroup, "group", i18n.G("Group ID to run the command as (default 0)"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagCwd, "cwd", "", "", i18n.G("Directory to run the command in (default /root)"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -98,8 +97,7 @@ func (c *cmdExec) sendTermSize(control *websocket.Conn) error {
 	return control.WriteJSON(msg)
 }
 
-// Run runs the actual command logic.
-func (c *cmdExec) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdExec) run(cmd *cobra.Command, args []string) error {
 	conf := c.global.conf
 	parsed, err := cmdExecUsage.Parse(conf, cmd, args)
 	if err != nil {

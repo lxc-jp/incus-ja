@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/db/query"
-	"github.com/lxc/incus/v6/internal/server/db/schema"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/osarch"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/db/query"
+	"github.com/lxc/incus/v7/internal/server/db/schema"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osarch"
 )
 
 // Schema for the cluster database.
@@ -335,7 +335,7 @@ JOIN
 	for _, projectID := range projectIDs {
 		_, err = tx.Exec(`INSERT OR REPLACE INTO projects_config (project_id,key,value) VALUES(?,?,?);`, projectID, "features.networks.zones", "true")
 		if err != nil {
-			return fmt.Errorf("Failed adding features.networks.zones=true to project ID %q: %w", projectID, err)
+			return fmt.Errorf("Failed adding features.networks.zones=true to project ID %d: %w", projectID, err)
 		}
 
 		logger.Info("Added features.networks.zones=true on project with features.networks=true", logger.Ctx{"projectID": projectID})

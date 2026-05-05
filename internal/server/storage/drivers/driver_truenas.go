@@ -8,25 +8,22 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/lxc/incus/v6/internal/migration"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/migration"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var (
-	tnVersion         string
-	tnLoaded          bool
-	tnHasIscsiRefresh bool
+	tnVersion string
+	tnLoaded  bool
 )
 
 var tnDefaultSettings = map[string]string{
@@ -40,45 +37,19 @@ var tnDefaultSettings = map[string]string{
 
 type truenas struct {
 	common
-
-	// Temporary cache (typically lives for the duration of a query).
-	cache   map[string]map[string]int64
-	cacheMu sync.Mutex
 }
 
-func (d *truenas) isVersionGE(thisVersion version.DottedVersion, thatVersion string) bool {
-	ver, err := version.Parse(thatVersion)
-	if err != nil {
-		return false
+func (d *truenas) initVersion() error {
+	if tnVersion != "" {
+		return nil
 	}
 
-	return (thisVersion.Compare(ver) >= 0)
-}
-
-func (d *truenas) initVersionAndCapabilities() error {
-	// Get the version information.
-	if tnVersion == "" {
-		ver, err := d.version()
-		if err != nil {
-			return err
-		}
-
-		tnVersion = ver
-	}
-
-	ourVer, err := version.Parse(tnVersion)
+	ver, err := d.version()
 	if err != nil {
 		return err
 	}
 
-	// this same logic can be used for feature detection based on versions.
-	if !d.isVersionGE(*ourVer, tnMinVersion) {
-		return fmt.Errorf("TrueNAS driver requires %s v%s or later, but the currently installed version is v%s", tnToolName, tnMinVersion, tnVersion)
-	}
-
-	// iscsi refresh allows rescanning the iscsi bus
-	tnHasIscsiRefresh = d.isVersionGE(*ourVer, "0.7.5")
-
+	tnVersion = ver
 	return nil
 }
 
@@ -118,8 +89,7 @@ func (d *truenas) load() error {
 		}
 	}
 
-	// also tests for available features
-	err := d.initVersionAndCapabilities()
+	err := d.initVersion()
 	if err != nil {
 		return err
 	}

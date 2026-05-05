@@ -16,13 +16,13 @@ import (
 	"github.com/LINBIT/golinstor/clonestatus"
 	"github.com/google/uuid"
 
-	"github.com/lxc/incus/v6/internal/migration"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/migration"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // LinstorSatellitePaths lists the possible FS paths for the Satellite script.
@@ -237,6 +237,11 @@ func (d *linstor) createResourceGroup() error {
 	props, err := d.drbdPropsFromConfig(d.config)
 	if err != nil {
 		return fmt.Errorf("Could parse config into DRBD props: %w", err)
+	}
+
+	// Some tuning to speed up resync.
+	if props["DrbdOptions/Disk/rs-discard-granularity"] == "" {
+		props["DrbdOptions/Disk/rs-discard-granularity"] = "1048576"
 	}
 
 	err = linstor.Client.ResourceGroups.Modify(context.TODO(), resourceGroup.Name, linstorClient.ResourceGroupModify{

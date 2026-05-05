@@ -1,10 +1,10 @@
 package device
 
 import (
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // VolatileSetter is a function that accepts one or more key/value strings to save into the
@@ -64,7 +64,7 @@ type Device interface {
 	Stop() (*deviceConfig.RunConfig, error)
 
 	// Remove performs any host-side cleanup when a device is removed from an instance.
-	Remove() error
+	Remove(cleanupDependencies bool) error
 }
 
 // device represents a sealed interface that implements Device, but also contains some internal

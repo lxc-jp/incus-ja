@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/version"
+	"github.com/lxc/incus/v7/internal/version"
 )
 
 type cmdGlobal struct {
@@ -43,26 +43,26 @@ func main() {
 
 	// add sub-command.
 	addCmd := cmdAdd{global: &globalCmd}
-	app.AddCommand(addCmd.Command())
+	app.AddCommand(addCmd.command())
 
 	// generate-metadata sub-command.
 	generateMetadataCmd := cmdGenerateMetadata{global: &globalCmd}
-	app.AddCommand(generateMetadataCmd.Command())
+	app.AddCommand(generateMetadataCmd.command())
 
 	// list sub-command.
 	listCmd := cmdList{global: &globalCmd}
-	app.AddCommand(listCmd.Command())
+	app.AddCommand(listCmd.command())
 
 	// remove sub-command.
 	removeCmd := cmdRemove{global: &globalCmd}
-	app.AddCommand(removeCmd.Command())
+	app.AddCommand(removeCmd.command())
 
 	// verify sub-command.
 	verifyCmd := cmdVerify{global: &globalCmd}
-	app.AddCommand(verifyCmd.Command())
+	app.AddCommand(verifyCmd.command())
 
 	pruneCmd := cmdPrune{global: &globalCmd}
-	app.AddCommand(pruneCmd.Command())
+	app.AddCommand(pruneCmd.command())
 
 	// Run the main command and handle errors.
 	err := app.Execute()

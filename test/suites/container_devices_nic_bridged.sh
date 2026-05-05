@@ -2,18 +2,6 @@ test_container_devices_nic_bridged() {
     ensure_import_testimage
     ensure_has_localhost_remote "${INCUS_ADDR}"
 
-    firewallDriver=$(incus info | awk -F ":" '/firewall:/{gsub(/ /, "", $0); print $2}')
-
-    if [ "$firewallDriver" != "xtables" ] && [ "$firewallDriver" != "nftables" ]; then
-        echo "Unrecognised firewall driver: ${firewallDriver}"
-        false
-    fi
-
-    if [ "$firewallDriver" = "nftables" ] && uname -r | grep -q ^5.15.0; then
-        echo "==> SKIP: nftables support on kernel $(uname -r) isn't good enough"
-        return
-    fi
-
     vethHostName="veth$$"
     ctName="nt$$"
     ctMAC="0a:92:a7:0d:b7:d9"
@@ -97,13 +85,8 @@ test_container_devices_nic_bridged() {
     fi
 
     # Check that limits.priority was correctly configured in the firewall.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -t mangle -S | grep -c "${ctName} (${vethHostName}) netprio" | grep 1
-        iptables -t mangle -S | grep "${ctName} (${vethHostName}) netprio" | grep "0000:0005"
-    else
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:5"
-    fi
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:5"
 
     # Check profile custom MTU is applied in container on boot.
     if ! incus exec "${ctName}" -- grep "1400" /sys/class/net/eth0/mtu; then
@@ -188,13 +171,8 @@ test_container_devices_nic_bridged() {
     fi
 
     # Check that limits.priority was correctly configured in the firewall.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -t mangle -S | grep -c "${ctName} (${vethHostName}) netprio" | grep 1
-        iptables -t mangle -S | grep "${ctName} (${vethHostName}) netprio" | grep "0000:0006"
-    else
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:6"
-    fi
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:6"
 
     # Check custom MTU is applied on hot-plug.
     if ! incus exec "${ctName}" -- grep "1401" /sys/class/net/eth0/mtu; then
@@ -248,13 +226,8 @@ test_container_devices_nic_bridged() {
     fi
 
     # Check that limits.priority was correctly configured in the firewall.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -t mangle -S | grep -c "${ctName} (${vethHostName}) netprio" | grep 1
-        iptables -t mangle -S | grep "${ctName} (${vethHostName}) netprio" | grep "0000:0005"
-    else
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:5"
-    fi
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:5"
 
     # Check profile custom MTU is applied on hot-removal.
     if ! incus exec "${ctName}" -- grep "1400" /sys/class/net/eth0/mtu; then
@@ -340,13 +313,8 @@ test_container_devices_nic_bridged() {
     fi
 
     # Check that limits.priority was correctly configured in the firewall.
-    if [ "$firewallDriver" = "xtables" ]; then
-        iptables -t mangle -S | grep -c "${ctName} (${vethHostName}) netprio" | grep 1
-        iptables -t mangle -S | grep "${ctName} (${vethHostName}) netprio" | grep "0000:0006"
-    else
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
-        nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:6"
-    fi
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep -c "meta priority set" | grep 1
+    nft -nn list chain netdev incus "egress.netprio.${ctName}.${vethHostName}" | grep "meta priority set 0:6"
 
     # Check custom MTU is applied update.
     if ! incus exec "${ctName}" -- grep "1402" /sys/class/net/eth0/mtu; then

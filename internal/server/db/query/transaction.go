@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // Transaction executes the given function within a database transaction with a 30s context timeout.

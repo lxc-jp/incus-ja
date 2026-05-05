@@ -14,9 +14,9 @@ import (
 	ovsdbModel "github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 
-	"github.com/lxc/incus/v6/internal/server/ip"
-	ovsSwitch "github.com/lxc/incus/v6/internal/server/network/ovs/schema/ovs"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	ovsSwitch "github.com/lxc/incus/v7/internal/server/network/ovs/schema/ovs"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // ovnBridgeMappingMutex locks access to read/write external-ids:ovn-bridge-mappings.

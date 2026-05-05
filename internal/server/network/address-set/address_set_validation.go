@@ -3,8 +3,8 @@ package addressset
 import (
 	"fmt"
 
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // ValidName checks the address set name is valid.

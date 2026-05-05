@@ -20,26 +20,27 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/iprange"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/device/nictype"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq"
-	"github.com/lxc/incus/v6/internal/server/dnsmasq/dhcpalloc"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/iprange"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/device/nictype"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq"
+	"github.com/lxc/incus/v7/internal/server/dnsmasq/dhcpalloc"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	networkOVN "github.com/lxc/incus/v7/internal/server/network/ovn"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 func networkValidPort(value string) error {
@@ -1590,4 +1591,19 @@ func ipInPointerRanges(ipAddr net.IP, ipRanges []*iprange.Range) bool {
 	}
 
 	return false
+}
+
+// ovnRouteExists checks if the given route already exists in the provided list of current routes.
+func ovnRouteExists(currentRoutes []networkOVN.OVNRouterRoute, route networkOVN.OVNRouterRoute) bool {
+	return slices.ContainsFunc(currentRoutes, func(existing networkOVN.OVNRouterRoute) bool {
+		if existing.Prefix.String() != route.Prefix.String() {
+			return false
+		}
+
+		if route.Discard != existing.Discard {
+			return false
+		}
+
+		return existing.NextHop.Equal(route.NextHop) && existing.Port == route.Port
+	})
 }

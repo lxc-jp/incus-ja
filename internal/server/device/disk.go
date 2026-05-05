@@ -13,34 +13,38 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/sys/unix"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/rsync"
-	"github.com/lxc/incus/v6/internal/server/cgroup"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/warningtype"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/project"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	storageDrivers "github.com/lxc/incus/v6/internal/server/storage/drivers"
-	"github.com/lxc/incus/v6/internal/server/warnings"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/idmap"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/rsync"
+	"github.com/lxc/incus/v7/internal/server/cgroup"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/warningtype"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/response"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	storageDrivers "github.com/lxc/incus/v7/internal/server/storage/drivers"
+	"github.com/lxc/incus/v7/internal/server/warnings"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/idmap"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
+
+var diskISOGenerateMu sync.Mutex
 
 // Special disk "source" value used for generating a VM cloud-init config ISO.
 const diskSourceCloudInit = "cloud-init:config"
@@ -738,12 +742,22 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 			}
 
 			// Extract initial configuration from the profile and validate them against appropriate
-			// storage driver. Currently initial configuration is only applicable to root disk devices.
+			// storage driver. Initial configuration is applicable to root disk devices and to non-root
+			// custom volume disks (where initial.uid/gid/mode are used when auto-creating sub-directories).
 			initialConfig := make(map[string]string)
 			for k, v := range d.config {
 
 				// gendoc:generate(entity=devices, group=disk, key=initial.*)
 				//
+				// For root disk devices, this is used to override the storage pool's default volume
+				// configuration when creating the instance's root volume.
+				//
+				// For custom volumes, only `initial.uid`, `initial.gid` and `initial.mode` are
+				// accepted and they are used when auto-creating sub-directories inside the custom
+				// volume (when the `source` includes a sub-path that doesn't exist).
+				//
+				// `initial.uid`, `initial.gid` and `initial.mode` are also used to set the ownership
+				// and mode of the file system when the `source` is `tmpfs:` or `tmpfs-overlay:`.
 				// ---
 				//  type: string
 				//  required: no
@@ -756,27 +770,33 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 
 			if len(initialConfig) > 0 {
 				if !internalInstance.IsRootDiskDevice(d.config) {
-					return errors.New("Non-root disk device cannot contain initial.* configuration")
-				}
+					// For non-root disks, only allow initial.uid/gid/mode (used for auto-creating
+					// missing sub-directories on custom volumes).
+					for k := range initialConfig {
+						if k != "uid" && k != "gid" && k != "mode" {
+							return fmt.Errorf("Non-root disk device only supports initial.uid, initial.gid and initial.mode configuration, not %q", "initial."+k)
+						}
+					}
+				} else {
+					volumeType, err := storagePools.InstanceTypeToVolumeType(d.inst.Type())
+					if err != nil {
+						return err
+					}
 
-				volumeType, err := storagePools.InstanceTypeToVolumeType(d.inst.Type())
-				if err != nil {
-					return err
-				}
+					// Create temporary volume definition.
+					vol := storageDrivers.NewVolume(
+						d.pool.Driver(),
+						d.pool.Name(),
+						volumeType,
+						storagePools.InstanceContentType(d.inst),
+						d.name,
+						initialConfig,
+						d.pool.Driver().Config())
 
-				// Create temporary volume definition.
-				vol := storageDrivers.NewVolume(
-					d.pool.Driver(),
-					d.pool.Name(),
-					volumeType,
-					storagePools.InstanceContentType(d.inst),
-					d.name,
-					initialConfig,
-					d.pool.Driver().Config())
-
-				err = d.pool.Driver().ValidateVolume(vol, true)
-				if err != nil {
-					return fmt.Errorf("Invalid initial device configuration: %v", err)
+					err = d.pool.Driver().ValidateVolume(vol, true)
+					if err != nil {
+						return fmt.Errorf("Invalid initial device configuration: %v", err)
+					}
 				}
 			}
 		}
@@ -917,6 +937,21 @@ func (d *disk) Register() error {
 		// Try to mount the volume that should already be mounted to reinitialize the ref counter.
 		_, err = pool.MountCustomVolume(storageProjectName, volName, nil)
 		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Add performs any setup when a device is added to an instance.
+// It is called irrespective of whether the instance is running or not.
+func (d *disk) Add() error {
+	if d.config["pool"] != "" && d.config["source"] != "" {
+		// During migration, the storage volume may not be present at this moment,
+		// so do not raise an error.
+		_, err := d.updateDependentConfig()
+		if err != nil && !response.IsNotFoundError(err) {
 			return err
 		}
 	}
@@ -1738,6 +1773,9 @@ func (d *disk) postStart() error {
 func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 	expandedDevices := d.inst.ExpandedDevices()
 
+	reverter := revert.New()
+	defer reverter.Fail()
+
 	if internalInstance.IsRootDiskDevice(d.config) {
 		// Make sure we have a valid root disk device (and only one).
 		newRootDiskDeviceKey, _, err := internalInstance.GetRootDiskDevice(expandedDevices.CloneNative())
@@ -1812,10 +1850,12 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 			}
 		}
 	} else if d.config["pool"] != "" && d.config["source"] != "" {
-		err := d.updateDependentConfig()
+		cleanup, err := d.updateDependentConfig()
 		if err != nil {
 			return err
 		}
+
+		reverter.Add(func() { _ = cleanup() })
 	}
 
 	// Only apply IO limits and attach/detach logic if instance is running.
@@ -1860,6 +1900,7 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 	}
 
+	reverter.Success()
 	return nil
 }
 
@@ -1944,8 +1985,8 @@ func (d *disk) generateLimits(runConf *deviceConfig.RunConfig) error {
 	}
 
 	if hasDiskLimits {
-		if !d.state.OS.CGInfo.Supports(cgroup.Blkio, nil) {
-			return errors.New("Cannot apply disk limits as blkio cgroup controller is missing")
+		if !cgroup.Supports(cgroup.IO) {
+			return errors.New("Cannot apply disk limits as IO cgroup controller is missing")
 		}
 
 		diskLimits, err := d.getDiskLimits()
@@ -1996,11 +2037,13 @@ type cgroupWriter struct {
 	runConf *deviceConfig.RunConfig
 }
 
-func (w *cgroupWriter) Get(version cgroup.Backend, controller string, key string) (string, error) {
+// Get is unimplemented for this cgroup handler.
+func (w *cgroupWriter) Get(controller string, key string) (string, error) {
 	return "", errors.New("This cgroup handler does not support reading")
 }
 
-func (w *cgroupWriter) Set(version cgroup.Backend, controller string, key string, value string) error {
+// Set queues a cgroup key/value to be applied as part of the run config.
+func (w *cgroupWriter) Set(controller string, key string, value string) error {
 	w.runConf.CGroups = append(w.runConf.CGroups, deviceConfig.RunConfigItem{
 		Key:   key,
 		Value: value,
@@ -2167,8 +2210,23 @@ func (d *disk) createDevice(srcPath string) (func(), string, bool, error) {
 		}
 	} else if d.config["source"] != "" {
 		// Handle mounting a sub-path.
-		_, volPath := internalInstance.SplitVolumeSource(d.config["source"])
+		volName, volPath := internalInstance.SplitVolumeSource(d.config["source"])
 		if volPath != "" {
+			// Get the parent volume.
+			storageProjectName, err := project.StorageVolumeProject(d.state.DB.Cluster, d.inst.Project().Name, db.StoragePoolVolumeTypeCustom)
+			if err != nil {
+				return nil, "", false, err
+			}
+
+			var dbVolume *db.StorageVolume
+			err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				dbVolume, err = tx.GetStoragePoolVolume(ctx, d.pool.ID(), storageProjectName, db.StoragePoolVolumeTypeCustom, volName, true)
+				return err
+			})
+			if err != nil {
+				return nil, "", false, err
+			}
+
 			// Open file handle to parent for use with openat2 later.
 			// Has to use unix.O_PATH to support directories and sockets.
 			srcVolPath, err := os.OpenFile(srcPath, unix.O_PATH, 0)
@@ -2178,17 +2236,33 @@ func (d *disk) createDevice(srcPath string) (func(), string, bool, error) {
 
 			defer func() { _ = srcVolPath.Close() }()
 
-			// Use openat2 to prevent resolving to a mount path outside of the volume.
-			fd, err := unix.Openat2(int(srcVolPath.Fd()), volPath, &unix.OpenHow{
+			openHow := &unix.OpenHow{
 				Flags:   unix.O_PATH | unix.O_CLOEXEC,
 				Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS,
-			})
+			}
+
+			// Use openat2 to prevent resolving to a mount path outside of the volume.
+			fd, err := unix.Openat2(int(srcVolPath.Fd()), volPath, openHow)
 			if err != nil {
 				if errors.Is(err, unix.EXDEV) {
 					return nil, "", false, fmt.Errorf("Volume sub-path %q resolves outside of the volume", volPath)
 				}
 
-				return nil, "", false, fmt.Errorf("Failed opening volume sub-path %q: %w", volPath, err)
+				if !errors.Is(err, unix.ENOENT) {
+					return nil, "", false, fmt.Errorf("Failed opening volume sub-path %q: %w", volPath, err)
+				}
+
+				// Sub-path doesn't exist, attempt to create the missing directories
+				// using the initial.* configuration (if provided).
+				err = d.createVolumeSubPath(dbVolume.Config, srcPath, volPath)
+				if err != nil {
+					return nil, "", false, err
+				}
+
+				fd, err = unix.Openat2(int(srcVolPath.Fd()), volPath, openHow)
+				if err != nil {
+					return nil, "", false, fmt.Errorf("Failed opening volume sub-path %q: %w", volPath, err)
+				}
 			}
 
 			srcPathFd := os.NewFile(uintptr(fd), volPath)
@@ -2256,6 +2330,118 @@ func (d *disk) createDevice(srcPath string) (func(), string, bool, error) {
 	reverter.Success()
 
 	return cleanup, devPath, isFile, err
+}
+
+// createVolumeSubPath creates any missing directory components of volPath, anchored at volRootPath.
+// It uses os.Root to ensure that path resolution stays within the volume root. Newly created
+// directories use the initial.uid, initial.gid and initial.mode configuration when provided.
+func (d *disk) createVolumeSubPath(volConfig map[string]string, volRootPath string, volPath string) error {
+	// Get the instance idmap.
+	var nextIdmap *idmap.Set
+
+	if util.IsFalseOrEmpty(volConfig["security.shifted"]) {
+		var err error
+
+		c, ok := d.inst.(instance.Container)
+		// Get the container's idmap.
+		if ok {
+			if c.IsRunning() {
+				nextIdmap, err = c.CurrentIdmap()
+				if err != nil {
+					return err
+				}
+			} else {
+				nextIdmap, err = c.NextIdmap()
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	mode := os.FileMode(0o711)
+	if d.config["initial.mode"] != "" {
+		m, err := strconv.ParseInt(d.config["initial.mode"], 8, 0)
+		if err != nil {
+			return fmt.Errorf(`Invalid "initial.mode" value %q: %w`, d.config["initial.mode"], err)
+		}
+
+		mode = os.FileMode(m)
+	}
+
+	uid := int64(0)
+	if d.config["initial.uid"] != "" {
+		v, err := strconv.Atoi(d.config["initial.uid"])
+		if err != nil {
+			return fmt.Errorf(`Invalid "initial.uid" value %q: %w`, d.config["initial.uid"], err)
+		}
+
+		uid = int64(v)
+	}
+
+	gid := int64(0)
+	if d.config["initial.gid"] != "" {
+		v, err := strconv.Atoi(d.config["initial.gid"])
+		if err != nil {
+			return fmt.Errorf(`Invalid "initial.gid" value %q: %w`, d.config["initial.gid"], err)
+		}
+
+		gid = int64(v)
+	}
+
+	if nextIdmap != nil {
+		uid, gid = nextIdmap.ShiftIntoNS(uid, gid)
+	}
+
+	volRoot, err := os.OpenRoot(volRootPath)
+	if err != nil {
+		return fmt.Errorf("Failed opening volume path %q: %w", volRootPath, err)
+	}
+
+	defer func() { _ = volRoot.Close() }()
+
+	var current string
+	for _, component := range strings.Split(volPath, "/") {
+		if component == "" || component == "." {
+			continue
+		}
+
+		if component == ".." {
+			return fmt.Errorf("Volume sub-path %q must not contain %q components", volPath, "..")
+		}
+
+		if current == "" {
+			current = component
+		} else {
+			current = current + "/" + component
+		}
+
+		_, err := volRoot.Lstat(current)
+		if err == nil {
+			continue
+		}
+
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("Failed checking volume sub-path component %q: %w", current, err)
+		}
+
+		err = volRoot.Mkdir(current, mode.Perm())
+		if err != nil {
+			return fmt.Errorf("Failed creating volume sub-path component %q: %w", current, err)
+		}
+
+		err = volRoot.Lchown(current, int(uid), int(gid))
+		if err != nil {
+			return fmt.Errorf("Failed setting ownership on volume sub-path component %q: %w", current, err)
+		}
+
+		err = volRoot.Chmod(current, mode.Perm())
+		if err != nil {
+			return fmt.Errorf("Failed setting permissions on volume sub-path component %q: %w", current, err)
+		}
+	}
+
+	return nil
 }
 
 // localSourceOpen opens a local disk source path and returns a file handle to it.
@@ -2943,6 +3129,10 @@ func (d *disk) getParentBlocks(path string) ([]string, error) {
 // generateVMAgent generates an ISO containing the VM agent binary and config.
 // Returns the path to the ISO.
 func (d *disk) generateVMAgentDrive() (string, error) {
+	// Take a lock to avoid concurrent start/migrate filling up the disk.
+	diskISOGenerateMu.Lock()
+	defer diskISOGenerateMu.Unlock()
+
 	scratchDir := filepath.Join(d.inst.DevicesPath(), linux.PathNameEncode(d.name))
 	defer func() { _ = os.RemoveAll(scratchDir) }()
 
@@ -3022,6 +3212,10 @@ func (d *disk) generateVMAgentDrive() (string, error) {
 // generateVMConfigDrive generates an ISO containing the cloud init config for a VM.
 // Returns the path to the ISO.
 func (d *disk) generateVMConfigDrive() (string, error) {
+	// Take a lock to avoid concurrent start/migrate filling up the disk.
+	diskISOGenerateMu.Lock()
+	defer diskISOGenerateMu.Unlock()
+
 	scratchDir := filepath.Join(d.inst.DevicesPath(), linux.PathNameEncode(d.name))
 	defer func() { _ = os.RemoveAll(scratchDir) }()
 
@@ -3121,7 +3315,7 @@ func (d *disk) cephCreds() (string, string) {
 }
 
 // Remove cleans up the device when it is removed from an instance.
-func (d *disk) Remove() error {
+func (d *disk) Remove(cleanupDependencies bool) error {
 	// Remove the config.iso file for cloud-init config drives.
 	if d.config["source"] == diskSourceCloudInit {
 		pool, err := storagePools.LoadByInstance(d.state, d.inst)
@@ -3140,6 +3334,15 @@ func (d *disk) Remove() error {
 		err = os.Remove(isoPath)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("Failed removing %s file: %w", diskSourceCloudInit, err)
+		}
+	}
+
+	if d.config["pool"] != "" && d.config["source"] != "" && util.IsTrue(d.config["dependent"]) && cleanupDependencies {
+		d.config["dependent"] = ""
+		// If the volume doesn't exist, ignore this as we remove the device anyway.
+		_, err := d.updateDependentConfig()
+		if err != nil && !response.IsNotFoundError(err) {
+			return err
 		}
 	}
 
@@ -3169,13 +3372,13 @@ func (d *disk) getAttachedInstanceCount(projectName string, volume *db.StorageVo
 }
 
 // updateDependentConfig applies changes to dependent configuration settings.
-func (d *disk) updateDependentConfig() error {
+func (d *disk) updateDependentConfig() (func() error, error) {
 	// Parse the volume name and path.
 	volName, _ := internalInstance.SplitVolumeSource(d.config["source"])
 
 	storageProjectName, err := project.StorageVolumeProject(d.state.DB.Cluster, d.inst.Project().Name, db.StoragePoolVolumeTypeCustom)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var dbVolume *db.StorageVolume
@@ -3184,7 +3387,7 @@ func (d *disk) updateDependentConfig() error {
 		return err
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to fetch local storage volume record: %w", err)
+		return nil, err
 	}
 
 	if dbVolume.Type == db.StoragePoolVolumeTypeNameCustom {
@@ -3195,11 +3398,11 @@ func (d *disk) updateDependentConfig() error {
 				return err
 			})
 			if err != nil {
-				return fmt.Errorf("Failed loading custom volume: %w", err)
+				return nil, fmt.Errorf("Failed loading custom volume: %w", err)
 			}
 
 			if len(volSnapshots) > 0 {
-				return fmt.Errorf("Cannot attach volume with snapshots as dependent")
+				return nil, fmt.Errorf("Cannot attach volume with snapshots as dependent")
 			}
 
 			var snapshots []cluster.Instance
@@ -3208,14 +3411,14 @@ func (d *disk) updateDependentConfig() error {
 				return err
 			})
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			for _, snap := range snapshots {
 				_, snapName, _ := api.GetParentAndSnapshotName(snap.Name)
-				err = d.pool.CreateCustomVolumeSnapshot(storageProjectName, volName, snapName, snap.ExpiryDate.Time, nil)
+				err = d.pool.CreateCustomVolumeSnapshot(storageProjectName, volName, snapName, snap.ExpiryDate.Time, false, nil)
 				if err != nil {
-					return err
+					return nil, err
 				}
 			}
 		}
@@ -3227,9 +3430,27 @@ func (d *disk) updateDependentConfig() error {
 			return tx.UpdateStoragePoolVolume(ctx, storageProjectName, volName, db.StoragePoolVolumeTypeCustom, d.pool.ID(), poolVolumePut.Description, poolVolumePut.Config)
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	cleanup := func() error {
+		poolVolumePut := dbVolume.Writable()
+		if util.IsTrue(d.config["dependent"]) {
+			poolVolumePut.Config["dependent"] = ""
+		} else {
+			poolVolumePut.Config["dependent"] = "true"
+		}
+
+		err = d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			return tx.UpdateStoragePoolVolume(ctx, storageProjectName, volName, db.StoragePoolVolumeTypeCustom, d.pool.ID(), poolVolumePut.Description, poolVolumePut.Config)
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return cleanup, nil
 }

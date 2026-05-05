@@ -10,17 +10,17 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/internal/server/task"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/internal/server/task"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type instanceType struct {
@@ -38,7 +38,7 @@ func instanceSaveCache() error {
 		return nil
 	}
 
-	data, err := yaml.Marshal(&instanceTypes)
+	data, err := yaml.Dump(&instanceTypes, yaml.V2)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func instanceLoadCache() error {
 		return err
 	}
 
-	err = yaml.Unmarshal(content, &instanceTypes)
+	err = yaml.Load(content, &instanceTypes)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func instanceRefreshTypes(ctx context.Context, s *state.State) error {
 			return err
 		}
 
-		err = yaml.Unmarshal(content, target)
+		err = yaml.Load(content, target)
 		if err != nil {
 			return err
 		}

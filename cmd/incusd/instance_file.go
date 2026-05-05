@@ -17,16 +17,16 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/sftp"
 
-	internalInstance "github.com/lxc/incus/v6/internal/instance"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/util"
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 func instanceFileHandler(d *Daemon, r *http.Request) response.Response {
@@ -93,6 +93,11 @@ func instanceFileHandler(d *Daemon, r *http.Request) response.Response {
 //	  - application/json
 //	  - application/octet-stream
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: path
 //	    description: Path to the file
@@ -175,6 +180,11 @@ func instanceFileGet(s *state.State, inst instance.Instance, path string, r *htt
 //
 //	---
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: path
 //	    description: Path to the file
@@ -244,6 +254,11 @@ func instanceFileHead(_ *state.State, inst instance.Instance, path string, _ *ht
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: path
 //	    description: Path to the file
@@ -322,6 +337,11 @@ func instanceFilePost(s *state.State, inst instance.Instance, path string, r *ht
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: path
 //	    description: Path to the file
@@ -549,7 +569,7 @@ func fileSFTPPost(client *sftp.Client, path string, r *http.Request, onSuccess f
 		}
 
 		// Transfer the file into the instance.
-		_, err = io.Copy(file, r.Body)
+		_, err = util.SafeCopy(file, r.Body)
 		if err != nil {
 			return response.InternalError(err)
 		}

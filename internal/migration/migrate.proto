@@ -80,6 +80,7 @@ message DependentVolume {
 	optional btrfsFeatures		btrfsFeatures	= 7;
 	optional int64			volumeSize	= 8;
 	repeated Snapshot               snapshots	= 9;
+	optional string			deviceName	= 10;
 }
 
 message MigrationHeader {

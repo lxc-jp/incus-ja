@@ -5,10 +5,10 @@ import (
 	"crypto/x509"
 	"net/http"
 
-	"github.com/lxc/incus/v6/internal/server/certificate"
-	authScriptlet "github.com/lxc/incus/v6/internal/server/scriptlet/auth"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
+	"github.com/lxc/incus/v7/internal/server/certificate"
+	authScriptlet "github.com/lxc/incus/v7/internal/server/scriptlet/auth"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // Scriptlet represents a scriptlet authorizer.

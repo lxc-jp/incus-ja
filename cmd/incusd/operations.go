@@ -12,22 +12,22 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/lxc/incus/v6/internal/jmap"
-	"github.com/lxc/incus/v6/internal/server/auth"
-	"github.com/lxc/incus/v6/internal/server/cluster"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/request"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/internal/server/task"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/jmap"
+	"github.com/lxc/incus/v7/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/cluster"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/request"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/internal/server/task"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 var operationCmd = APIEndpoint{
@@ -144,6 +144,12 @@ func waitForOperations(ctx context.Context, cluster *db.Cluster, consoleShutdown
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: id
+//	    description: Operation ID
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    description: Operation
@@ -233,6 +239,12 @@ func operationGet(d *Daemon, r *http.Request) response.Response {
 //	---
 //	produces:
 //	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: id
+//	    description: Operation ID
+//	    type: string
+//	    required: true
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -839,6 +851,11 @@ func operationsGetByType(s *state.State, r *http.Request, projectName string, op
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: id
+//      description: Operation ID
+//      type: string
+//      required: true
 //    - in: query
 //      name: secret
 //      description: Authentication token
@@ -885,6 +902,11 @@ func operationsGetByType(s *state.State, r *http.Request, projectName string, op
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: id
+//	    description: Operation ID
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: timeout
 //	    description: Timeout in seconds (-1 means never)
@@ -1064,6 +1086,11 @@ func (r *operationWebSocket) Code() int {
 //  produces:
 //    - application/json
 //  parameters:
+//    - in: path
+//      name: id
+//      description: Operation ID
+//      type: string
+//      required: true
 //    - in: query
 //      name: secret
 //      description: Authentication token
@@ -1090,6 +1117,11 @@ func (r *operationWebSocket) Code() int {
 //	produces:
 //	  - application/json
 //	parameters:
+//	  - in: path
+//	    name: id
+//	    description: Operation ID
+//	    type: string
+//	    required: true
 //	  - in: query
 //	    name: secret
 //	    description: Authentication token

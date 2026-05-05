@@ -9,8 +9,8 @@ import (
 	"github.com/mdlayher/vsock"
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/server/endpoints/listeners"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/server/endpoints/listeners"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 func createVsockListener(cert *localtls.CertInfo) (net.Listener, error) {

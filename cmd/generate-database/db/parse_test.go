@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/lxc/incus/v6/cmd/generate-database/db"
+	"github.com/lxc/incus/v7/cmd/generate-database/db"
 )
 
 type Person struct {

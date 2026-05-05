@@ -12,12 +12,12 @@ import (
 	liblxc "github.com/lxc/go-lxc"
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type cmdMigrate struct {
@@ -34,14 +34,14 @@ type cmdMigrate struct {
 	flagContainers []string
 }
 
-func (c *cmdMigrate) Command() *cobra.Command {
+func (c *cmdMigrate) command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lxc-to-incus",
 		Short: i18n.G("Command line client for container migration"),
 	}
 
 	// Wrappers
-	cmd.RunE = c.RunE
+	cmd.RunE = c.run
 
 	// Flags
 	cmd.Flags().BoolVar(&c.flagDryRun, "dry-run", false, i18n.G("Dry run mode"))
@@ -60,7 +60,7 @@ func (c *cmdMigrate) Command() *cobra.Command {
 	return cmd
 }
 
-func (c *cmdMigrate) RunE(cmd *cobra.Command, args []string) error {
+func (c *cmdMigrate) run(cmd *cobra.Command, args []string) error {
 	if (len(c.flagContainers) == 0 && !c.flagAll) || (len(c.flagContainers) > 0 && c.flagAll) {
 		return errors.New("You must either pass container names or --all")
 	}

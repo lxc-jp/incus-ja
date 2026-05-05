@@ -6,15 +6,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/migration"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/migration"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 var (
@@ -42,8 +42,10 @@ func (d *linstor) load() error {
 		return nil
 	}
 
-	// Validate the DRBD minimum version. The module should be already loaded by the
-	// Linstor satellite service.
+	// Validate the DRBD minimum version. The module should be already loaded by the Linstor satellite service.
+	//
+	// There are two major versions of DRBD, the one from the Linux kernel and the out of tree one used by Linstor.
+	// We need to ensure that the system is using the out of tree version (>= 9.0) as both are available even on modern systems.
 	drbdVer, err := d.drbdVersion()
 	if err != nil {
 		return err

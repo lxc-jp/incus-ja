@@ -12,10 +12,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/linux"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/logger"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/linux"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 var (
@@ -30,16 +30,16 @@ type cmdDaemon struct {
 	flagGroup string
 }
 
-func (c *cmdDaemon) Command() *cobra.Command {
+func (c *cmdDaemon) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "incus-user"
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 	cmd.Flags().StringVar(&c.flagGroup, "group", "", "The group of users that will be allowed to talk to incus-user"+"``")
 
 	return cmd
 }
 
-func (c *cmdDaemon) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdDaemon) run(cmd *cobra.Command, args []string) error {
 	// Only root should run this.
 	if os.Geteuid() != 0 {
 		return errors.New("This must be run as root")

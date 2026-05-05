@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/cancel"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/cancel"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Image handling functions
@@ -300,7 +300,7 @@ func incusDownloadImage(fingerprint string, uri string, userAgent string, do fun
 			return nil, errors.New("Invalid multipart image")
 		}
 
-		size, err := io.Copy(io.MultiWriter(req.MetaFile, hash256), part)
+		size, err := util.SafeCopy(io.MultiWriter(req.MetaFile, hash256), part)
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +318,7 @@ func incusDownloadImage(fingerprint string, uri string, userAgent string, do fun
 			return nil, errors.New("Invalid multipart image")
 		}
 
-		size, err = io.Copy(io.MultiWriter(req.RootfsFile, hash256), part)
+		size, err = util.SafeCopy(io.MultiWriter(req.RootfsFile, hash256), part)
 		if err != nil {
 			return nil, err
 		}
@@ -346,7 +346,7 @@ func incusDownloadImage(fingerprint string, uri string, userAgent string, do fun
 		return nil, errors.New("No filename in Content-Disposition header")
 	}
 
-	size, err := io.Copy(io.MultiWriter(req.MetaFile, hash256), body)
+	size, err := util.SafeCopy(io.MultiWriter(req.MetaFile, hash256), body)
 	if err != nil {
 		return nil, err
 	}
@@ -491,7 +491,7 @@ func (r *ProtocolIncus) CreateImage(image api.ImagesPost, args *ImageCreateArgs)
 				return
 			}
 
-			_, ioErr = io.Copy(fw, args.MetaFile)
+			_, ioErr = util.SafeCopy(fw, args.MetaFile)
 			if ioErr != nil {
 				return
 			}
@@ -507,7 +507,7 @@ func (r *ProtocolIncus) CreateImage(image api.ImagesPost, args *ImageCreateArgs)
 				return
 			}
 
-			_, ioErr = io.Copy(fw, args.RootfsFile)
+			_, ioErr = util.SafeCopy(fw, args.RootfsFile)
 			if ioErr != nil {
 				return
 			}

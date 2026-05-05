@@ -8,13 +8,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/internal/ports"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/internal/ports"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdAdminInit struct {
@@ -35,8 +35,7 @@ type cmdAdminInit struct {
 
 var cmdAdminInitUsage = u.Usage{u.Sequence(u.Flag("preseed"), u.Placeholder(i18n.G("preseed.yaml")).Optional()).Optional()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdAdminInit) Command() *cobra.Command {
+func (c *cmdAdminInit) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("init", cmdAdminInitUsage...)
 	cmd.Short = i18n.G("Configure the daemon")
@@ -48,24 +47,23 @@ func (c *cmdAdminInit) Command() *cobra.Command {
   init --preseed [preseed.yaml]
   init --dump
 `
-	cmd.RunE = c.Run
-	cmd.Flags().BoolVar(&c.flagAuto, "auto", false, i18n.G("Automatic (non-interactive) mode"))
-	cmd.Flags().BoolVar(&c.flagMinimal, "minimal", false, i18n.G("Minimal configuration (non-interactive)"))
-	cmd.Flags().BoolVar(&c.flagPreseed, "preseed", false, i18n.G("Pre-seed mode, expects YAML config from stdin"))
-	cmd.Flags().BoolVar(&c.flagDump, "dump", false, i18n.G("Dump YAML config to stdout"))
+	cmd.RunE = c.run
+	cli.AddBoolFlag(cmd.Flags(), &c.flagAuto, "auto", i18n.G("Automatic (non-interactive) mode"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagMinimal, "minimal", i18n.G("Minimal configuration (non-interactive)"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagPreseed, "preseed", i18n.G("Pre-seed mode, expects YAML config from stdin"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagDump, "dump", i18n.G("Dump YAML config to stdout"))
 
-	cmd.Flags().StringVar(&c.flagNetworkAddress, "network-address", "", i18n.G("Address to bind to (default: none)")+"``")
-	cmd.Flags().IntVar(&c.flagNetworkPort, "network-port", -1, fmt.Sprintf(i18n.G("Port to bind to (default: %d)")+"``", ports.HTTPSDefaultPort))
-	cmd.Flags().StringVar(&c.flagStorageBackend, "storage-backend", "", i18n.G("Storage backend to use (btrfs, dir, lvm or zfs, default: dir)")+"``")
-	cmd.Flags().StringVar(&c.flagStorageDevice, "storage-create-device", "", i18n.G("Setup device based storage using DEVICE")+"``")
-	cmd.Flags().IntVar(&c.flagStorageLoopSize, "storage-create-loop", -1, i18n.G("Setup loop based storage with SIZE in GiB")+"``")
-	cmd.Flags().StringVar(&c.flagStoragePool, "storage-pool", "", i18n.G("Storage pool to use or create")+"``")
+	cli.AddStringFlag(cmd.Flags(), &c.flagNetworkAddress, "network-address", "", "", i18n.G("Address to bind to (default: none)"))
+	cli.AddIntFlag(cmd.Flags(), &c.flagNetworkPort, "network-port", -1, fmt.Sprintf(i18n.G("Port to bind to (default: %d)"), ports.HTTPSDefaultPort))
+	cli.AddStringFlag(cmd.Flags(), &c.flagStorageBackend, "storage-backend", "", "", i18n.G("Storage backend to use (btrfs, dir, lvm or zfs, default: dir)"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagStorageDevice, "storage-create-device", "", "", i18n.G("Setup device based storage using DEVICE"))
+	cli.AddIntFlag(cmd.Flags(), &c.flagStorageLoopSize, "storage-create-loop", -1, i18n.G("Setup loop based storage with SIZE in GiB"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagStoragePool, "storage-pool", "", "", i18n.G("Storage pool to use or create"))
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdAdminInit) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdAdminInit) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdAdminInitUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -111,7 +109,7 @@ func (c *cmdAdminInit) Run(cmd *cobra.Command, args []string) error {
 
 	// Dump mode
 	if c.flagDump {
-		err := c.RunDump(d)
+		err := c.runDump(d)
 		if err != nil {
 			return err
 		}
@@ -124,19 +122,19 @@ func (c *cmdAdminInit) Run(cmd *cobra.Command, args []string) error {
 
 	switch {
 	case c.flagPreseed:
-		config, err = c.RunPreseed(parsed[0].List[1])
+		config, err = c.runPreseed(parsed[0].List[1])
 		if err != nil {
 			return err
 		}
 
 	case c.flagAuto || c.flagMinimal:
-		config, err = c.RunAuto(d, server)
+		config, err = c.runAuto(d, server)
 		if err != nil {
 			return err
 		}
 
 	default:
-		config, err = c.RunInteractive(cmd, d, server)
+		config, err = c.runInteractive(cmd, d, server)
 		if err != nil {
 			return err
 		}

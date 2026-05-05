@@ -12,6 +12,7 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,22 +23,22 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/archive"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/migration"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/archive"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // CreateVolume creates an empty volume and can optionally fill it by executing the supplied
@@ -462,7 +463,7 @@ func (d *zfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData 
 
 		if len(srcBackup.Snapshots) > 0 {
 			// Create new snapshots directory.
-			err := createParentSnapshotDirIfMissing(d.name, v.volType, v.name)
+			err := CreateParentSnapshotDirIfMissing(d.name, v.volType, v.name)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -481,7 +482,7 @@ func (d *zfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData 
 				prefix = "volume-snapshots"
 			}
 
-			srcFile := fmt.Sprintf("backup/%s/%s", prefix, fileName)
+			srcFile := filepath.Join(basePrefix, prefix, fileName)
 			dstSnapshot := fmt.Sprintf("%s@snapshot-%s", d.dataset(v, false), snapName)
 			err = unpackVolume(v, srcData, unpacker, srcFile, dstSnapshot)
 			if err != nil {
@@ -501,7 +502,7 @@ func (d *zfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcData 
 			fileName = "volume.bin"
 		}
 
-		err = unpackVolume(v, srcData, unpacker, fmt.Sprintf("backup/%s", fileName), d.dataset(v, false))
+		err = unpackVolume(v, srcData, unpacker, filepath.Join(basePrefix, fileName), d.dataset(v, false))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -685,26 +686,15 @@ func (d *zfs) CreateVolumeFromCopy(vol Volume, srcVol Volume, copySnapshots bool
 
 		// Handle transferring snapshots.
 		if len(snapshots) > 0 {
-			args := []string{"send", "-R"}
-
-			// Use raw flag is supported, this is required to send/receive encrypted volumes (and enables compression).
-			if zfsRaw {
-				args = append(args, "-w")
-			}
-
-			args = append(args, srcSnapshot)
-
+			// Raw send is required to send/receive encrypted volumes (and enables compression).
+			args := []string{"send", "-R", "-w", srcSnapshot}
 			sender = exec.Command("zfs", args...)
 		} else {
 			args := []string{"send"}
 
 			// Check if nesting is required.
 			if d.needsRecursion(d.dataset(srcVol, false)) {
-				args = append(args, "-R")
-
-				if zfsRaw {
-					args = append(args, "-w")
-				}
+				args = append(args, "-R", "-w")
 			}
 
 			if d.config["zfs.clone_copy"] == "rebase" {
@@ -1099,7 +1089,7 @@ func (d *zfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWriteCl
 	// Handle zfs send/receive migration.
 	if len(volTargetArgs.Snapshots) > 0 {
 		// Create the parent directory.
-		err := createParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
+		err := CreateParentSnapshotDirIfMissing(d.name, vol.volType, vol.name)
 		if err != nil {
 			return err
 		}
@@ -1296,11 +1286,7 @@ func (d *zfs) RefreshVolume(vol Volume, srcVol Volume, srcSnapshots []Volume, al
 
 		// Check if nesting is required.
 		if d.needsRecursion(d.dataset(src, false)) {
-			args = append(args, "-R")
-
-			if zfsRaw {
-				args = append(args, "-w")
-			}
+			args = append(args, "-R", "-w")
 		}
 
 		if origin.Name() != src.Name() {
@@ -1810,58 +1796,6 @@ func (d *zfs) UpdateVolume(vol Volume, changedConfig map[string]string) error {
 	return d.updateVolume(vol, changedConfig)
 }
 
-// CacheVolumeSnapshots fetches snapshot usage properties for all snapshots on the volume.
-func (d *zfs) CacheVolumeSnapshots(vol Volume) error {
-	// Lock the cache.
-	d.cacheMu.Lock()
-	defer d.cacheMu.Unlock()
-
-	// Check if we've already cached the data.
-	if d.cache != nil {
-		return nil
-	}
-
-	// Get the usage data.
-	out, err := subprocess.RunCommand("zfs", "list", "-H", "-p", "-o", "name,used,referenced", "-r", "-t", "all", d.dataset(vol, false))
-	if err != nil {
-		d.logger.Warn("Coulnd't list volume snapshots", logger.Ctx{"err": err})
-
-		// The cache is an optional performance improvement, don't block on failure.
-		return nil
-	}
-
-	// Parse and update the cache.
-	d.cache = map[string]map[string]int64{}
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) != 3 {
-			continue
-		}
-
-		usedInt, err := strconv.ParseInt(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		referencedInt, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		d.cache[fields[0]] = map[string]int64{
-			"used":       usedInt,
-			"referenced": referencedInt,
-		}
-	}
-
-	return nil
-}
-
 // GetVolumeUsage returns the disk space used by the volume.
 func (d *zfs) GetVolumeUsage(vol Volume) (int64, error) {
 	// Determine what key to use.
@@ -1884,20 +1818,6 @@ func (d *zfs) GetVolumeUsage(vol Volume) (int64, error) {
 			}
 
 			return int64(stat.Blocks-stat.Bfree) * int64(stat.Bsize), nil
-		}
-	}
-
-	// Try to use the cached data.
-	d.cacheMu.Lock()
-	defer d.cacheMu.Unlock()
-
-	if d.cache != nil {
-		cache, ok := d.cache[d.dataset(vol, false)]
-		if ok {
-			value, ok := cache[key]
-			if ok {
-				return value, nil
-			}
 		}
 	}
 
@@ -3035,11 +2955,7 @@ func (d *zfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, bas
 
 		// Check if nesting is required.
 		if d.needsRecursion(path) {
-			args = append(args, "-R")
-
-			if zfsRaw {
-				args = append(args, "-w")
-			}
+			args = append(args, "-R", "-w")
 		}
 
 		if parent != "" {
@@ -3106,7 +3022,7 @@ func (d *zfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, bas
 				prefix = "volume-snapshots"
 			}
 
-			target := fmt.Sprintf("backup/%s/%s", prefix, fileName)
+			target := filepath.Join(basePrefix, prefix, fileName)
 			err := sendToFile(d.dataset(snapshot, false), parent, target)
 			if err != nil {
 				return err
@@ -3143,7 +3059,7 @@ func (d *zfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, bas
 		fileName = "volume.bin"
 	}
 
-	err = sendToFile(srcSnapshot, finalParent, fmt.Sprintf("backup/%s", fileName))
+	err = sendToFile(srcSnapshot, finalParent, filepath.Join(basePrefix, fileName))
 	if err != nil {
 		return err
 	}
@@ -3160,7 +3076,7 @@ func (d *zfs) CreateVolumeSnapshot(vol Volume, op *operations.Operation) error {
 	defer reverter.Fail()
 
 	// Create the parent directory.
-	err := createParentSnapshotDirIfMissing(d.name, vol.volType, parentName)
+	err := CreateParentSnapshotDirIfMissing(d.name, vol.volType, parentName)
 	if err != nil {
 		return err
 	}
@@ -3572,12 +3488,8 @@ func (d *zfs) VolumeSnapshots(vol Volume, op *operations.Operation) ([]string, e
 	return snapshots, nil
 }
 
-// RestoreVolume restores a volume from a snapshot.
-func (d *zfs) RestoreVolume(vol Volume, snapshotName string, op *operations.Operation) error {
-	return d.restoreVolume(vol, snapshotName, false, op)
-}
-
-func (d *zfs) restoreVolume(vol Volume, snapshotName string, migration bool, op *operations.Operation) error {
+// CanRestoreVolume restores a volume from a snapshot.
+func (d *zfs) CanRestoreVolume(vol Volume, snapshotName string) error {
 	// Get the list of snapshots.
 	entries, err := d.getDatasets(d.dataset(vol, false), "snapshot")
 	if err != nil {
@@ -3622,6 +3534,20 @@ func (d *zfs) restoreVolume(vol Volume, snapshotName string, migration bool, op 
 		return err
 	}
 
+	return nil
+}
+
+// RestoreVolume restores a volume from a snapshot.
+func (d *zfs) RestoreVolume(vol Volume, snapshotName string, op *operations.Operation) error {
+	return d.restoreVolume(vol, snapshotName, false, op)
+}
+
+func (d *zfs) restoreVolume(vol Volume, snapshotName string, isMigration bool, op *operations.Operation) error {
+	err := d.CanRestoreVolume(vol, snapshotName)
+	if err != nil {
+		return err
+	}
+
 	// Restore the snapshot.
 	datasets, err := d.getDatasets(d.dataset(vol, false), "snapshot")
 	if err != nil {
@@ -3660,9 +3586,9 @@ func (d *zfs) restoreVolume(vol Volume, snapshotName string, migration bool, op 
 	}
 
 	// For VM images, restore the associated filesystem dataset too.
-	if !migration && vol.IsVMBlock() {
+	if !isMigration && vol.IsVMBlock() {
 		fsVol := vol.NewVMBlockFilesystemVolume()
-		err := d.restoreVolume(fsVol, snapshotName, migration, op)
+		err := d.restoreVolume(fsVol, snapshotName, isMigration, op)
 		if err != nil {
 			return err
 		}
@@ -3772,4 +3698,42 @@ func (d *zfs) FillVolumeConfig(vol Volume) error {
 
 func (d *zfs) isBlockBacked(vol Volume) bool {
 	return util.IsTrue(vol.Config()["zfs.block_mode"])
+}
+
+// ActivateTask allows running a function while the volume is active (but not mounted).
+func (d *zfs) ActivateTask(vol Volume, task func(devPath string, op *operations.Operation) error, op *operations.Operation) error {
+	// Prevent concurrent mounting actions.
+	unlock, err := vol.MountLock()
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	// Activate the volume.
+	activated, err := d.activateVolume(vol)
+	if err != nil {
+		return err
+	}
+
+	if !activated {
+		return errors.New("Volume is already active, can't run exclusive activation task")
+	}
+
+	// Get the device path.
+	volDevPath, err := d.GetVolumeDiskPath(vol)
+	if err != nil {
+		return err
+	}
+
+	// Run the task.
+	taskErr := task(volDevPath, op)
+
+	// Deactivate the volume.
+	_, err = d.deactivateVolume(vol)
+	if err != nil {
+		return err
+	}
+
+	return taskErr
 }

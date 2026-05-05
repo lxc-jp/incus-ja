@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/lxc/incus/v6/cmd/generate-database/file"
-	"github.com/lxc/incus/v6/cmd/generate-database/lex"
+	"github.com/lxc/incus/v7/cmd/generate-database/file"
+	"github.com/lxc/incus/v7/cmd/generate-database/lex"
 )
 
 // Stmt generates a particular database query statement.

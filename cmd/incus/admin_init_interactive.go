@@ -12,24 +12,23 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"go.yaml.in/yaml/v4"
 	"golang.org/x/sys/unix"
-	"gopkg.in/yaml.v2"
 
-	incus "github.com/lxc/incus/v6/client"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/ports"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	incus "github.com/lxc/incus/v7/client"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/ports"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
-// RunInteractive runs the actual command logic.
-func (c *cmdAdminInit) RunInteractive(_ *cobra.Command, d incus.InstanceServer, server *api.Server) (*api.InitPreseed, error) {
+func (c *cmdAdminInit) runInteractive(_ *cobra.Command, d incus.InstanceServer, server *api.Server) (*api.InitPreseed, error) {
 	// Initialize config
-	config := NewInitPressed()
+	config := newInitPressed()
 
 	// Clustering
 	clustering, err := c.global.asker.AskBool(i18n.G("Would you like to use clustering?")+" (yes/no) [default=no]: ", "no")
@@ -84,7 +83,7 @@ func (c *cmdAdminInit) RunInteractive(_ *cobra.Command, d incus.InstanceServer, 
 			object = *config
 		}
 
-		out, err := yaml.Marshal(object)
+		out, err := yaml.Dump(object, yaml.V2)
 		if err != nil {
 			return nil, fmt.Errorf(i18n.G("Failed to render the config: %w"), err)
 		}

@@ -5,7 +5,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // CreateRequestor extracts the lifecycle event requestor data from an http.Request context.

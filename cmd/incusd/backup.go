@@ -9,30 +9,30 @@ import (
 	"os"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/internal/server/db"
-	dbCluster "github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/db/operationtype"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/lifecycle"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	storagePools "github.com/lxc/incus/v6/internal/server/storage"
-	"github.com/lxc/incus/v6/internal/server/storage/drivers"
-	"github.com/lxc/incus/v6/internal/server/task"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/idmap"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/db"
+	dbCluster "github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/db/operationtype"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/lifecycle"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	storagePools "github.com/lxc/incus/v7/internal/server/storage"
+	"github.com/lxc/incus/v7/internal/server/storage/drivers"
+	"github.com/lxc/incus/v7/internal/server/task"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/idmap"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // Create a new backup.
@@ -183,7 +183,7 @@ func backupCreate(s *state.State, args db.InstanceBackup, sourceInst instance.In
 			}
 		} else {
 			backupProgressWriter.WriteCloser = tarFileWriter
-			_, err = io.Copy(backupProgressWriter, tarPipeReader)
+			_, err = util.SafeCopy(backupProgressWriter, tarPipeReader)
 		}
 
 		resCh <- err
@@ -282,7 +282,7 @@ func backupWriteIndex(sourceInst instance.Instance, pool storagePools.Pool, opti
 	}
 
 	// Convert to YAML.
-	indexData, err := yaml.Marshal(&indexInfo)
+	indexData, err := yaml.Dump(&indexInfo, yaml.V2)
 	if err != nil {
 		return err
 	}
@@ -532,7 +532,7 @@ func volumeBackupCreate(s *state.State, args db.StoragePoolVolumeBackup, project
 					_ = tarPipeWriter.Close()
 				}
 			} else {
-				_, err = io.Copy(fileWriter, tarPipeReader)
+				_, err = util.SafeCopy(fileWriter, tarPipeReader)
 			}
 
 			resCh <- err
@@ -615,7 +615,7 @@ func volumeBackupWriteIndex(projectName string, volumeName string, pool storageP
 	}
 
 	// Convert to YAML.
-	indexData, err := yaml.Marshal(indexInfo)
+	indexData, err := yaml.Dump(indexInfo, yaml.V2)
 	if err != nil {
 		return err
 	}
@@ -791,7 +791,7 @@ func bucketBackupCreate(s *state.State, args db.StoragePoolBucketBackup, project
 				_ = tarPipeWriter.Close()
 			}
 		} else {
-			_, err = io.Copy(tarFileWriter, tarPipeReader)
+			_, err = util.SafeCopy(tarFileWriter, tarPipeReader)
 		}
 
 		resCh <- err
@@ -858,7 +858,7 @@ func bucketBackupWriteIndex(projectName string, bucketName string, pool storageP
 	}
 
 	// Convert to YAML.
-	indexData, err := yaml.Marshal(indexInfo)
+	indexData, err := yaml.Dump(indexInfo, yaml.V2)
 	if err != nil {
 		return err
 	}

@@ -17,12 +17,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/units"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type ociInfo struct {
@@ -88,6 +89,11 @@ func (r *ProtocolOCI) GetImage(fingerprint string) (*api.Image, string, error) {
 			return nil, "", errors.New("OCI container handling requires \"skopeo\" be present on the system")
 		}
 
+		err, ok := r.errors[fingerprint]
+		if ok {
+			return nil, "", err
+		}
+
 		return nil, "", errors.New("Image not found")
 	}
 
@@ -131,6 +137,11 @@ func (r *ProtocolOCI) GetImageFile(fingerprint string, req ImageFileRequest) (*I
 		_, err := exec.LookPath("skopeo")
 		if err != nil {
 			return nil, errors.New("OCI container handling requires \"skopeo\" be present on the system")
+		}
+
+		err, ok := r.errors[fingerprint]
+		if ok {
+			return nil, err
 		}
 
 		return nil, errors.New("Image not found")
@@ -249,7 +260,7 @@ func (r *ProtocolOCI) GetImageFile(fingerprint string, req ImageFileRequest) (*I
 		pipeWrite.Close()
 	}()
 
-	size, err := io.Copy(req.MetaFile, pipeRead)
+	size, err := util.SafeCopy(req.MetaFile, pipeRead)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +296,7 @@ func (r *ProtocolOCI) GetImageFile(fingerprint string, req ImageFileRequest) (*I
 		pipeWrite.Close()
 	}()
 
-	size, err = io.Copy(req.RootfsFile, pipeRead)
+	size, err = util.SafeCopy(req.RootfsFile, pipeRead)
 	if err != nil {
 		return nil, err
 	}
@@ -408,6 +419,8 @@ func (r *ProtocolOCI) GetImageAlias(name string) (*api.ImageAliasesEntry, string
 	stdout, err := r.runSkopeo("inspect", name)
 	if err != nil {
 		logger.Debug("Error getting image alias", logger.Ctx{"name": name, "stdout": stdout, "stderr": err})
+		r.errors[name] = err
+
 		return nil, "", err
 	}
 
@@ -415,6 +428,8 @@ func (r *ProtocolOCI) GetImageAlias(name string) (*api.ImageAliasesEntry, string
 	var info ociInfo
 	err = json.Unmarshal([]byte(stdout), &info)
 	if err != nil {
+		r.errors[name] = err
+
 		return nil, "", err
 	}
 
@@ -423,11 +438,15 @@ func (r *ProtocolOCI) GetImageAlias(name string) (*api.ImageAliasesEntry, string
 
 	archID, err := osarch.ArchitectureID(info.Architecture)
 	if err != nil {
+		r.errors[name] = err
+
 		return nil, "", err
 	}
 
 	archName, err := osarch.ArchitectureName(archID)
 	if err != nil {
+		r.errors[name] = err
+
 		return nil, "", err
 	}
 

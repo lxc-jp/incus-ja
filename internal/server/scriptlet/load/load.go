@@ -3,7 +3,7 @@ package load
 import (
 	"go.starlark.net/starlark"
 
-	"github.com/lxc/incus/v6/shared/scriptlet"
+	"github.com/lxc/incus/v7/shared/scriptlet"
 )
 
 // nameInstancePlacement is the name used in Starlark for the instance placement scriptlet.

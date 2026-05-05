@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,10 +13,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 var (
@@ -29,7 +28,7 @@ type cmdAgent struct {
 	global *cmdGlobal
 }
 
-func (c *cmdAgent) Command() *cobra.Command {
+func (c *cmdAgent) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "incus-agent [--debug]"
 	cmd.Short = "Incus virtual machine agent"
@@ -40,12 +39,12 @@ func (c *cmdAgent) Command() *cobra.Command {
   It will normally be started through init scripts present or injected
   into the virtual machine.
 `
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-func (c *cmdAgent) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdAgent) run(cmd *cobra.Command, args []string) error {
 	if c.global.flagService {
 		return runService("Incus-Agent", c)
 	}
@@ -79,7 +78,7 @@ func (c *cmdAgent) Run(cmd *cobra.Command, args []string) error {
 		}
 
 		// Copy the data.
-		_, err = io.Copy(dst, src)
+		_, err = util.SafeCopy(dst, src)
 		if err != nil {
 			return err
 		}

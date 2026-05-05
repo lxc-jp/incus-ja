@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdOperation struct {
@@ -26,8 +26,7 @@ type operationColumn struct {
 	Data func(api.Operation) string
 }
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdOperation) Command() *cobra.Command {
+func (c *cmdOperation) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("operation")
 	cmd.Short = i18n.G("List, show and delete background operations")
@@ -37,15 +36,15 @@ func (c *cmdOperation) Command() *cobra.Command {
 
 	// Delete
 	operationDeleteCmd := cmdOperationDelete{global: c.global, operation: c}
-	cmd.AddCommand(operationDeleteCmd.Command())
+	cmd.AddCommand(operationDeleteCmd.command())
 
 	// List
 	operationListCmd := cmdOperationList{global: c.global, operation: c}
-	cmd.AddCommand(operationListCmd.Command())
+	cmd.AddCommand(operationListCmd.command())
 
 	// Show
 	operationShowCmd := cmdOperationShow{global: c.global, operation: c}
-	cmd.AddCommand(operationShowCmd.Command())
+	cmd.AddCommand(operationShowCmd.command())
 
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
@@ -61,8 +60,7 @@ type cmdOperationDelete struct {
 
 var cmdOperationDeleteUsage = u.Usage{u.Operation.Remote().List(1)}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdOperationDelete) Command() *cobra.Command {
+func (c *cmdOperationDelete) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("delete", cmdOperationDeleteUsage...)
 	cmd.Aliases = []string{"cancel", "rm", "remove"}
@@ -70,13 +68,12 @@ func (c *cmdOperationDelete) Command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Delete background operations (will attempt to cancel)`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdOperationDelete) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdOperationDelete) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdOperationDeleteUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -119,8 +116,7 @@ type cmdOperationList struct {
 
 var cmdOperationListUsage = u.Usage{u.RemoteColonOpt}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdOperationList) Command() *cobra.Command {
+func (c *cmdOperationList) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("list", cmdOperationListUsage...)
 	cmd.Aliases = []string{"ls"}
@@ -132,8 +128,8 @@ Default column layout: itdscCl
 
 == Columns ==
 The -c option takes a comma separated list of arguments that control
-which instance attributes to output when displaying in table or csv
-format.
+which attributes of background operations to output when displaying
+in table or csv format.
 
 Column arguments are either pre-defined shorthand chars (see below),
 or (extended) config keys.
@@ -148,15 +144,15 @@ Pre-defined column shorthand chars:
   c - Cancelable
   C - Created
   L - Location of the operation (e.g. its cluster member)`))
-	cmd.Flags().StringVarP(&c.flagFormat, "format", "f", c.global.defaultListFormat(), i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`)+"``")
-	cmd.Flags().BoolVar(&c.flagAllProjects, "all-projects", false, i18n.G("List operations from all projects")+"``")
-	cmd.Flags().StringVarP(&c.flagColumns, "columns", "c", defaultOperationColumns, i18n.G("Columns")+"``")
+	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagAllProjects, "all-projects", i18n.G("List operations from all projects"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultOperationColumns, "", i18n.G("Columns"))
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		return cli.ValidateFlagFormatForListOutput(cmd.Flag("format").Value.String())
 	}
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
@@ -232,8 +228,7 @@ func (c *cmdOperationList) locationColumnData(op api.Operation) string {
 	return op.Location
 }
 
-// Run runs the actual command logic.
-func (c *cmdOperationList) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdOperationList) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdOperationListUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -288,8 +283,7 @@ type cmdOperationShow struct {
 
 var cmdOperationShowUsage = u.Usage{u.Operation.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdOperationShow) Command() *cobra.Command {
+func (c *cmdOperationShow) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("show", cmdOperationShowUsage...)
 	cmd.Short = i18n.G("Show details on a background operation")
@@ -299,13 +293,12 @@ func (c *cmdOperationShow) Command() *cobra.Command {
 		`incus operation show 344a79e4-d88a-45bf-9c39-c72c26f6ab8a
     Show details on that operation UUID`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdOperationShow) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdOperationShow) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdOperationShowUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -321,7 +314,7 @@ func (c *cmdOperationShow) Run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Render as YAML
-	data, err := yaml.Marshal(&op)
+	data, err := yaml.Dump(&op, yaml.V2)
 	if err != nil {
 		return err
 	}

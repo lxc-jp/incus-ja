@@ -276,16 +276,16 @@ test_storage() {
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c1pool1 c1pool1 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c1pool1 c1pool1 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c1pool1 c1pool1
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c2pool2 c2pool2 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" custom/c2pool2 c2pool2 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool1" c2pool2 c2pool2
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool2" c3pool1
@@ -300,8 +300,8 @@ test_storage() {
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" custom/c4pool2 c4pool2 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" custom/c4pool2 c4pool2 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2
             incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2 c4pool2-renamed
             incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool2" c4pool2-renamed c4pool2
@@ -322,32 +322,32 @@ test_storage() {
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c5pool3 c5pool3 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c5pool3 c5pool3 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool3" c5pool3 c5pool3 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" custom/c5pool3 c5pool3 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" custom/c5pool3 c5pool3 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c5pool3 c5pool3 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c5pool3 c5pool3 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool3" c5pool3 c5pool3 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool4" c6pool4
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c6pool4 c5pool3 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c6pool4 c5pool3 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool4" c6pool4 c5pool3 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" custom/c6pool4 c5pool3 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" custom/c6pool4 c5pool3 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c6pool4 c5pool3 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c6pool4 c5pool3 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool4" c6pool4 c5pool3 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool3" c7pool3
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c7pool3 c7pool3 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c7pool3 c7pool3 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool3" c7pool3 c7pool3 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" custom/c7pool3 c7pool3 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" custom/c7pool3 c7pool3 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c7pool3 c7pool3 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool3" c7pool3 c7pool3 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool3" c7pool3 c7pool3 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4 c8pool4 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4 c8pool4 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4 c8pool4 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" custom/c8pool4 c8pool4 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" custom/c8pool4 c8pool4 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4 c8pool4 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4 c8pool4 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4 c8pool4 testDevice
             incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4 c8pool4-renamed
             incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool4" c8pool4-renamed c8pool4
@@ -363,16 +363,16 @@ test_storage() {
         incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c9pool5 c9pool5 testDevice /opt
         ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c9pool5 c9pool5 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool5" c9pool5 c9pool5 testDevice
-        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" custom/c9pool5 c9pool5 testDevice /opt
-        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" custom/c9pool5 c9pool5 testDevice2 /opt || false
+        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c9pool5 c9pool5 testDevice /opt
+        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c9pool5 c9pool5 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool5" c9pool5 c9pool5 testDevice
 
         incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5
         incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5 c11pool5 testDevice /opt
         ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5 c11pool5 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5 c11pool5 testDevice
-        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" custom/c11pool5 c11pool5 testDevice /opt
-        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" custom/c11pool5 c11pool5 testDevice2 /opt || false
+        incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5 c11pool5 testDevice /opt
+        ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5 c11pool5 testDevice2 /opt || false
         incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5 c11pool5 testDevice
         incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5 c11pool5-renamed
         incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool5" c11pool5-renamed c11pool5
@@ -443,96 +443,96 @@ test_storage() {
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c10pool6 c10pool6 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c10pool6 c10pool6 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool6" c10pool6 c10pool6 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" custom/c10pool6 c10pool6 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" custom/c10pool6 c10pool6 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c10pool6 c10pool6 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c10pool6 c10pool6 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool6" c10pool6 c10pool6 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool6" c12pool6
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c12pool6 c12pool6 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c12pool6 c12pool6 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool6" c12pool6 c12pool6 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" custom/c12pool6 c12pool6 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" custom/c12pool6 c12pool6 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c12pool6 c12pool6 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool6" c12pool6 c12pool6 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool6" c12pool6 c12pool6 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool11" c10pool11
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c10pool11 c10pool11 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c10pool11 c10pool11 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool11" c10pool11 c10pool11 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" custom/c10pool11 c10pool11 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" custom/c10pool11 c10pool11 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c10pool11 c10pool11 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c10pool11 c10pool11 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool11" c10pool11 c10pool11 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool11" c12pool11
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c12pool11 c10pool11 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c12pool11 c10pool11 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool11" c12pool11 c10pool11 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" custom/c12pool11 c10pool11 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" custom/c12pool11 c10pool11 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c12pool11 c10pool11 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool11" c12pool11 c10pool11 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool11" c12pool11 c10pool11 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool12" c10pool12
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c10pool12 c10pool12 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c10pool12 c10pool12 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool12" c10pool12 c10pool12 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" custom/c10pool12 c10pool12 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" custom/c10pool12 c10pool12 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c10pool12 c10pool12 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c10pool12 c10pool12 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool12" c10pool12 c10pool12 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool12" c12pool12
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c12pool12 c12pool12 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c12pool12 c12pool12 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool12" c12pool12 c12pool12 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" custom/c12pool12 c12pool12 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" custom/c12pool12 c12pool12 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c12pool12 c12pool12 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool12" c12pool12 c12pool12 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool12" c12pool12 c12pool12 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool13" c10pool13
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c10pool13 c10pool13 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c10pool13 c10pool13 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool13" c10pool13 c10pool13 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" custom/c10pool13 c10pool13 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" custom/c10pool13 c10pool13 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c10pool13 c10pool13 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c10pool13 c10pool13 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool13" c10pool13 c10pool13 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool13" c12pool13
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c12pool13 c12pool13 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c12pool13 c12pool13 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool13" c12pool13 c12pool13 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" custom/c12pool13 c12pool13 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" custom/c12pool13 c12pool13 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c12pool13 c12pool13 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool13" c12pool13 c12pool13 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool13" c12pool13 c12pool13 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool14" c10pool14
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c10pool14 c10pool14 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c10pool14 c10pool14 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool14" c10pool14 c10pool14 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" custom/c10pool14 c10pool14 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" custom/c10pool14 c10pool14 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c10pool14 c10pool14 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c10pool14 c10pool14 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool14" c10pool14 c10pool14 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool14" c12pool14
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c12pool14 c12pool14 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c12pool14 c12pool14 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool14" c12pool14 c12pool14 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" custom/c12pool14 c12pool14 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" custom/c12pool14 c12pool14 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c12pool14 c12pool14 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool14" c12pool14 c12pool14 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool14" c12pool14 c12pool14 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c10pool15
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c10pool15 c10pool15 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c10pool15 c10pool15 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c10pool15 c10pool15 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" custom/c10pool15 c10pool15 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" custom/c10pool15 c10pool15 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c10pool15 c10pool15 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c10pool15 c10pool15 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c10pool15 c10pool15 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c12pool15
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c12pool15 c12pool15 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c12pool15 c12pool15 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c12pool15 c12pool15 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" custom/c12pool15 c12pool15 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" custom/c12pool15 c12pool15 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c12pool15 c12pool15 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c12pool15 c12pool15 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-non-thinpool-pool15" c12pool15 c12pool15 testDevice
         fi
 
@@ -550,48 +550,48 @@ test_storage() {
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c13pool7 c13pool7 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c13pool7 c13pool7 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool7" c13pool7 c13pool7 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" custom/c13pool7 c13pool7 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" custom/c13pool7 c13pool7 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c13pool7 c13pool7 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c13pool7 c13pool7 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool7" c13pool7 c13pool7 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool7" c14pool7
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c14pool7 c14pool7 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c14pool7 c14pool7 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool7" c14pool7 c14pool7 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" custom/c14pool7 c14pool7 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" custom/c14pool7 c14pool7 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c14pool7 c14pool7 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool7" c14pool7 c14pool7 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool7" c14pool7 c14pool7 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool8" c15pool8
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c15pool8 c15pool8 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c15pool8 c15pool8 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool8" c15pool8 c15pool8 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" custom/c15pool8 c15pool8 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" custom/c15pool8 c15pool8 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c15pool8 c15pool8 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c15pool8 c15pool8 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool8" c15pool8 c15pool8 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool8" c16pool8
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c16pool8 c16pool8 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c16pool8 c16pool8 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool8" c16pool8 c16pool8 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" custom/c16pool8 c16pool8 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" custom/c16pool8 c16pool8 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c16pool8 c16pool8 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool8" c16pool8 c16pool8 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool8" c16pool8 c16pool8 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool9" c17pool9
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c17pool9 c17pool9 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c17pool9 c17pool9 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool9" c17pool9 c17pool9 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" custom/c17pool9 c17pool9 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" custom/c17pool9 c17pool9 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c17pool9 c17pool9 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c17pool9 c17pool9 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool9" c17pool9 c17pool9 testDevice
 
             incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9
             incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9 c18pool9 testDevice /opt
             ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9 c18pool9 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9 c18pool9 testDevice
-            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" custom/c18pool9 c18pool9 testDevice /opt
-            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" custom/c18pool9 c18pool9 testDevice2 /opt || false
+            incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9 c18pool9 testDevice /opt
+            ! incus storage volume attach "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9 c18pool9 testDevice2 /opt || false
             incus storage volume detach "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9 c18pool9 testDevice
             incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9 c18pool9-renamed
             incus storage volume rename "incustest-$(basename "${INCUS_DIR}")-pool9" c18pool9-renamed c18pool9

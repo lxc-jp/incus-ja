@@ -1,19 +1,20 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	u "github.com/lxc/incus/v6/cmd/incus/usage"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/termios"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	u "github.com/lxc/incus/v7/cmd/incus/usage"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/termios"
 )
 
 type cmdConfigMetadata struct {
@@ -21,8 +22,7 @@ type cmdConfigMetadata struct {
 	config *cmdConfig
 }
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigMetadata) Command() *cobra.Command {
+func (c *cmdConfigMetadata) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("metadata")
 	cmd.Short = i18n.G("Manage instance metadata files")
@@ -30,11 +30,11 @@ func (c *cmdConfigMetadata) Command() *cobra.Command {
 
 	// Edit
 	configMetadataEditCmd := cmdConfigMetadataEdit{global: c.global, config: c.config, configMetadata: c}
-	cmd.AddCommand(configMetadataEditCmd.Command())
+	cmd.AddCommand(configMetadataEditCmd.command())
 
 	// Show
 	configMetadataShowCmd := cmdConfigMetadataShow{global: c.global, config: c.config, configMetadata: c}
-	cmd.AddCommand(configMetadataShowCmd.Command())
+	cmd.AddCommand(configMetadataShowCmd.command())
 
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
@@ -51,14 +51,13 @@ type cmdConfigMetadataEdit struct {
 
 var cmdConfigMetadataEditUsage = u.Usage{u.Instance.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigMetadataEdit) Command() *cobra.Command {
+func (c *cmdConfigMetadataEdit) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("edit", cmdConfigMetadataEditUsage...)
 	cmd.Short = i18n.G("Edit instance metadata files")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Edit instance metadata files`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -95,8 +94,7 @@ func (c *cmdConfigMetadataEdit) helpTemplate() string {
 ###     properties: {}`)
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigMetadataEdit) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigMetadataEdit) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigMetadataEditUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -108,13 +106,13 @@ func (c *cmdConfigMetadataEdit) Run(cmd *cobra.Command, args []string) error {
 	// Edit the metadata
 	if !termios.IsTerminal(getStdinFd()) {
 		metadata := api.ImageMetadata{}
-		content, err := io.ReadAll(os.Stdin)
+		loader, err := yaml.NewLoader(os.Stdin)
 		if err != nil {
 			return err
 		}
 
-		err = yaml.Unmarshal(content, &metadata)
-		if err != nil {
+		err = loader.Load(&metadata)
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 
@@ -126,7 +124,7 @@ func (c *cmdConfigMetadataEdit) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	origContent, err := yaml.Marshal(metadata)
+	origContent, err := yaml.Dump(metadata, yaml.V2)
 	if err != nil {
 		return err
 	}
@@ -139,7 +137,7 @@ func (c *cmdConfigMetadataEdit) Run(cmd *cobra.Command, args []string) error {
 
 	for {
 		metadata := api.ImageMetadata{}
-		err = yaml.Unmarshal(content, &metadata)
+		err = yaml.Load(content, &metadata)
 		if err == nil {
 			err = d.UpdateInstanceMetadata(instanceName, metadata, etag)
 		}
@@ -177,14 +175,13 @@ type cmdConfigMetadataShow struct {
 
 var cmdConfigMetadataShowUsage = u.Usage{u.Instance.Remote()}
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdConfigMetadataShow) Command() *cobra.Command {
+func (c *cmdConfigMetadataShow) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("show", cmdConfigMetadataShowUsage...)
 	cmd.Short = i18n.G("Show instance metadata files")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Show instance metadata files`))
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -197,8 +194,7 @@ func (c *cmdConfigMetadataShow) Command() *cobra.Command {
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdConfigMetadataShow) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdConfigMetadataShow) run(cmd *cobra.Command, args []string) error {
 	parsed, err := cmdConfigMetadataShowUsage.Parse(c.global.conf, cmd, args)
 	if err != nil {
 		return err
@@ -213,7 +209,7 @@ func (c *cmdConfigMetadataShow) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	content, err := yaml.Marshal(metadata)
+	content, err := yaml.Dump(metadata, yaml.V2)
 	if err != nil {
 		return err
 	}

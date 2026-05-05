@@ -1,8 +1,8 @@
 package endpoints
 
 import (
-	"github.com/lxc/incus/v6/internal/linux"
-	localtls "github.com/lxc/incus/v6/shared/tls"
+	"github.com/lxc/incus/v7/internal/linux"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 )
 
 // New creates a new Endpoints instance without bringing it up.

@@ -3,7 +3,7 @@ package instancetype
 import (
 	"errors"
 
-	"github.com/lxc/incus/v6/shared/api"
+	"github.com/lxc/incus/v7/shared/api"
 )
 
 // Type indicates the type of instance.

@@ -8,7 +8,6 @@ __hidden extern void attach_userns_fd(int ns_fd);
 __hidden extern void finalize_userns();
 __hidden extern int in_same_namespace(pid_t pid1, int ns_fd_pid2, const char *ns);
 __hidden extern int can_inject_uevent(const char *uevent, size_t len);
-__hidden extern void checkfeature();
 __hidden extern bool change_namespaces(int pidfd, int nsfd, unsigned int flags);
 __hidden extern int close_inherited(int *fds_to_ignore, size_t len_fds);
 __hidden extern void error(char *msg);
@@ -24,7 +23,5 @@ __hidden extern void forkuevent();
 __hidden extern int mount_detach_idmap(const char *path, int fd_userns);
 __hidden extern int pidfd_nsfd(int pidfd, pid_t pid);
 __hidden extern int preserve_ns(pid_t pid, int ns_fd, const char *ns);
-
-extern bool pidfd_setns_aware;
 
 #endif /* INCUS_H */

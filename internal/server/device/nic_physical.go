@@ -8,20 +8,20 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/db"
-	deviceConfig "github.com/lxc/incus/v6/internal/server/device/config"
-	pcidev "github.com/lxc/incus/v6/internal/server/device/pci"
-	"github.com/lxc/incus/v6/internal/server/instance"
-	"github.com/lxc/incus/v6/internal/server/instance/instancetype"
-	"github.com/lxc/incus/v6/internal/server/ip"
-	"github.com/lxc/incus/v6/internal/server/network"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/state"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/resources"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/db"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
+	pcidev "github.com/lxc/incus/v7/internal/server/device/pci"
+	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/ip"
+	"github.com/lxc/incus/v7/internal/server/network"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/resources"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 type nicPhysical struct {
@@ -78,24 +78,6 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 		//  shortdesc: Boot priority for VMs (higher value boots first)
 		"boot.priority",
 
-		// gendoc:generate(entity=devices, group=nic_physical, key=gvrp)
-		//
-		// ---
-		//  type: bool
-		//  default: false
-		//  managed: no
-		//  shortdesc: Register VLAN using GARP VLAN Registration Protocol
-		"gvrp",
-
-		// gendoc:generate(entity=devices, group=nic_physical, key=mtu)
-		//
-		// ---
-		//  type: integer
-		//  default: MTU of the parent device
-		//  managed: no
-		//  shortdesc: The Maximum Transmit Unit (MTU) of the new interface
-		"mtu",
-
 		// gendoc:generate(entity=devices, group=nic_physical, key=attached)
 		//
 		// ---
@@ -107,11 +89,39 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 	}
 
 	if instConf.Type() == instancetype.Container || instConf.Type() == instancetype.Any {
+		// gendoc:generate(entity=devices, group=nic_physical, key=gvrp)
+		//
+		// ---
+		//  type: bool
+		//  default: false
+		//  managed: no
+		//  condition: container
+		//  shortdesc: Register VLAN using GARP VLAN Registration Protocol
+
+		// gendoc:generate(entity=devices, group=nic_physical, key=hwaddr)
+		//
+		// ---
+		//  type: string
+		//  default: randomly assigned
+		//  managed: no
+		//  condition: container
+		//  shortdesc: The MAC address of the new interface
+
+		// gendoc:generate(entity=devices, group=nic_physical, key=mtu)
+		//
+		// ---
+		//  type: integer
+		//  default: MTU of the parent device
+		//  managed: no
+		//  condition: container
+		//  shortdesc: The Maximum Transmit Unit (MTU) of the new interface
+
 		// gendoc:generate(entity=devices, group=nic_physical, key=vlan)
 		//
 		// ---
 		//  type: integer
 		//  managed: no
+		//  condition: container
 		//  shortdesc: The VLAN ID to attach to
 
 		// gendoc:generate(entity=devices, group=nic_physical, key=vlan.tagged)
@@ -119,8 +129,9 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 		// ---
 		//  type: integer
 		//  managed: no
+		//  condition: container
 		//  shortdesc: Comma-delimited list of VLAN IDs or VLAN ranges to join for tagged traffic
-		optionalFields = append(optionalFields, "hwaddr", "vlan", "vlan.tagged")
+		optionalFields = append(optionalFields, "gvrp", "hwaddr", "mtu", "vlan", "vlan.tagged")
 	}
 
 	// gendoc:generate(entity=devices, group=nic_physical, key=network)
@@ -130,9 +141,12 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 	//  managed: no
 	//  shortdesc: The managed network to link the device to (instead of specifying the `nictype` directly)
 	if d.config["network"] != "" {
+		// List of properties we import from the parent network.
+		networkFields := []string{"gvrp", "mtu", "vlan", "vlan.tagged"}
+
 		requiredFields = append(requiredFields, "network")
 
-		bannedKeys := []string{"nictype", "parent", "mtu", "vlan", "vlan.tagged", "gvrp"}
+		bannedKeys := append([]string{"nictype", "parent"}, networkFields...)
 		for _, bannedKey := range bannedKeys {
 			if d.config[bannedKey] != "" {
 				return fmt.Errorf("Cannot use %q property in conjunction with %q property", bannedKey, "network")
@@ -160,27 +174,31 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 		// Get actual parent device from network's parent setting.
 		d.config["parent"] = netConfig["parent"]
 
-		// If parent is a bridge, ensure it's managed.
-		isParentBridge := d.config["parent"] != "" && util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))
-		if isParentBridge && d.network == nil {
-			return fmt.Errorf("Parent device is a bridge, use nictype=bridged instead")
-		}
-
-		// gendoc:generate(entity=devices, group=nic_physical, key=hwaddr)
-		//
-		// ---
-		//  type: string
-		//  default: randomly assigned
-		//  managed: no
-		//  shortdesc: The MAC address of the new interface
-		optionalFields = append(optionalFields, "hwaddr", "vlan", "vlan.tagged")
-
-		// Copy certain keys verbatim from the network's settings.
-		for _, field := range optionalFields {
+		// Copy certain keys verbatim from the parent network's settings.
+		for _, field := range networkFields {
 			_, found := netConfig[field]
 			if found {
 				d.config[field] = netConfig[field]
 			}
+		}
+
+		// Check if the parent is a bridge.
+		isParentBridge := d.config["parent"] != "" && util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))
+		if isParentBridge {
+			// Validate the NIC as if bridged.
+			bridgedConfig := d.config.Clone()
+			bridgedConfig["type"] = "nic"
+			bridgedConfig["nictype"] = "bridged"
+			bridgedConfig["network"] = ""
+
+			// Instantiate the new device.
+			bridged, err := load(nil, d.state, instConf.Project().Name, d.name, bridgedConfig, nil, nil)
+			if err != nil {
+				return fmt.Errorf("Failed to initialize bridged device: %w", err)
+			}
+
+			// Forward the validateConfig call.
+			return bridged.validateConfig(instConf, partialValidation)
 		}
 	} else {
 		// If no network property supplied, then parent property is required.

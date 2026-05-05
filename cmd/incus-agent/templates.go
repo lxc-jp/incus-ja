@@ -2,16 +2,15 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 func templatesApply(path string) ([]string, error) {
@@ -27,7 +26,7 @@ func templatesApply(path string) ([]string, error) {
 	}
 
 	metadata := &api.ImageMetadata{}
-	err = yaml.Unmarshal(content, metadata)
+	err = yaml.Load(content, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("Could not parse metadata.yaml: %w", err)
 	}
@@ -125,7 +124,7 @@ func templatesApply(path string) ([]string, error) {
 
 			defer func() { _ = src.Close() }()
 
-			_, err = io.Copy(w, src)
+			_, err = util.SafeCopy(w, src)
 			if err != nil {
 				return err
 			}

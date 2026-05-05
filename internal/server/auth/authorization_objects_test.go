@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/lxc/incus/v6/shared/tls/tlstest"
+	"github.com/lxc/incus/v7/shared/tls/tlstest"
 )
 
 type objectSuite struct {

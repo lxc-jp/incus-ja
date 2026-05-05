@@ -12,17 +12,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lxc/incus/v6/internal/incusos"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/server/cgroup"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/idmap"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/osarch"
-	"github.com/lxc/incus/v6/shared/util"
+	"github.com/lxc/incus/v7/internal/incusos"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/server/cgroup"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/shared/idmap"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osarch"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // InotifyTargetInfo records the inotify information associated with a given
@@ -79,35 +78,14 @@ type OS struct {
 	SELinuxContextDaemon      string
 	SELinuxContextInstanceLXC string
 
-	// Cgroup features
-	CGInfo cgroup.Info
-
-	// Kernel features
-	CloseRange              bool // CloseRange indicates support for the close_range syscall.
-	ContainerCoreScheduling bool // ContainerCoreScheduling indicates LXC and kernel support for core scheduling.
-	CoreScheduling          bool // CoreScheduling indicates support for core scheduling syscalls.
-	IdmappedMounts          bool // IdmappedMounts indicates kernel support for VFS idmap.
-	NativeTerminals         bool // NativeTerminals indicates support for TIOGPTPEER ioctl.
-	NetnsGetifaddrs         bool // NetnsGetifaddrs indicates support for NETLINK_GET_STRICT_CHK.
-	PidFds                  bool // PidFds indicates support for PID fds.
-	PidFdsThread            bool // PidFds indicates support for thread PID fds.
-	PidFdSetns              bool // PidFdSetns indicates support for setns through PID fds.
-	SeccompListenerAddfd    bool // SeccompListenerAddfd indicates support for passing new FD to process through seccomp notify.
-	SeccompListener         bool // SeccompListener indicates support for seccomp notify.
-	SeccompListenerContinue bool // SeccompListenerContinue indicates support continuing syscalls path for process through seccomp notify.
-	UeventInjection         bool // UeventInjection indicates support for injecting uevents to a specific netns.
-	UnprivBinfmt            bool // UnprivBinfmt indicates support for mounting binfmt_misc inside of a user namespace.
-	VFS3Fscaps              bool // VFS3FScaps indicates support for v3 filesystem capacbilities.
-
 	// LXC features
 	LXCFeatures map[string]bool
 
 	// OS info
-	ReleaseInfo   map[string]string
-	KernelVersion version.DottedVersion
-	Uname         *linux.Utsname
-	BootTime      time.Time
-	IncusOS       *incusos.Client
+	ReleaseInfo map[string]string
+	Uname       *linux.Utsname
+	BootTime    time.Time
+	IncusOS     *incusos.Client
 }
 
 // DefaultOS returns a fresh uninitialized OS instance with default values.
@@ -190,7 +168,6 @@ func (s *OS) Init() ([]cluster.Warning, error) {
 	dbWarnings = append(dbWarnings, s.initAppArmor()...)
 	dbWarnings = append(dbWarnings, s.initSELinux()...)
 	cgroup.Init()
-	s.CGInfo = cgroup.GetInfo()
 
 	// Fill in the OS release info.
 	osInfo, err := osarch.GetOSRelease()
@@ -206,11 +183,6 @@ func (s *OS) Init() ([]cluster.Warning, error) {
 	}
 
 	s.Uname = uname
-
-	kernelVersion, err := version.Parse(uname.Release)
-	if err == nil {
-		s.KernelVersion = *kernelVersion
-	}
 
 	if util.PathExists("/var/lib/incus-os/") {
 		c, err := incusos.NewClient()

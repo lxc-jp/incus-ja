@@ -14,18 +14,18 @@ import (
 	linstorClient "github.com/LINBIT/golinstor/client"
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/migration"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	localMigration "github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/migration"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	localMigration "github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // FillVolumeConfig populate volume with default config.
@@ -643,6 +643,25 @@ func (d *linstor) ListVolumes() ([]Volume, error) {
 	return volumes, nil
 }
 
+// ActivateTask allows running a function while the volume is active (but not mounted).
+func (d *linstor) ActivateTask(vol Volume, task func(devPath string, op *operations.Operation) error, op *operations.Operation) error {
+	// Prevent concurrent mounting actions.
+	unlock, err := vol.MountLock()
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	volDevPath, err := d.getLinstorDevPath(vol)
+	if err != nil {
+		return err
+	}
+
+	// Run the task.
+	return task(volDevPath, op)
+}
+
 // MountVolume mounts a volume and increments ref counter. Please call UnmountVolume() when done with the volume.
 func (d *linstor) MountVolume(vol Volume, op *operations.Operation) error {
 	l := d.logger.AddContext(logger.Ctx{"volume": vol.Name()})
@@ -812,7 +831,7 @@ func (d *linstor) CreateVolumeSnapshot(snapVol Volume, op *operations.Operation)
 	}
 
 	// Create the parent directory.
-	err := createParentSnapshotDirIfMissing(d.name, snapVol.volType, parentName)
+	err := CreateParentSnapshotDirIfMissing(d.name, snapVol.volType, parentName)
 	if err != nil {
 		return err
 	}
@@ -880,22 +899,8 @@ func (d *linstor) DeleteVolumeSnapshot(snapVol Volume, op *operations.Operation)
 	return nil
 }
 
-// RestoreVolume restores a volume from a snapshot.
-func (d *linstor) RestoreVolume(vol Volume, snapshotName string, op *operations.Operation) error {
-	ourUnmount, err := d.UnmountVolume(vol, false, op)
-	if err != nil {
-		return err
-	}
-
-	if ourUnmount {
-		defer func() { _ = d.MountVolume(vol, op) }()
-	}
-
-	snapVol, err := vol.NewSnapshot(snapshotName)
-	if err != nil {
-		return err
-	}
-
+// CanRestoreVolume checks whether a volume snapshot can be restored.
+func (d *linstor) CanRestoreVolume(vol Volume, snapshotName string) error {
 	resourceDefinition, err := d.getResourceDefinition(vol, false)
 	if err != nil {
 		return err
@@ -942,6 +947,30 @@ func (d *linstor) RestoreVolume(vol Volume, snapshotName string, op *operations.
 		// Setup custom error to tell the backend what to delete.
 		err := ErrDeleteSnapshots{}
 		err.Snapshots = snapshots
+		return err
+	}
+
+	return nil
+}
+
+// RestoreVolume restores a volume from a snapshot.
+func (d *linstor) RestoreVolume(vol Volume, snapshotName string, op *operations.Operation) error {
+	ourUnmount, err := d.UnmountVolume(vol, false, op)
+	if err != nil {
+		return err
+	}
+
+	if ourUnmount {
+		defer func() { _ = d.MountVolume(vol, op) }()
+	}
+
+	snapVol, err := vol.NewSnapshot(snapshotName)
+	if err != nil {
+		return err
+	}
+
+	err = d.CanRestoreVolume(vol, snapshotName)
+	if err != nil {
 		return err
 	}
 

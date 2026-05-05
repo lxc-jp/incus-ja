@@ -7,13 +7,12 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 
 	"golang.org/x/crypto/ssh"
 
-	localtls "github.com/lxc/incus/v6/shared/tls"
-	"github.com/lxc/incus/v6/shared/util"
+	localtls "github.com/lxc/incus/v7/shared/tls"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
 // HasClientCertificate will return true if a client certificate has already been generated.
@@ -40,6 +39,11 @@ func (c *Config) HasRemoteClientCertificate(name string) bool {
 
 // GetClientCertificate returns the client certificate, key and CA (with optional remote name).
 func (c *Config) GetClientCertificate(name string) (string, string, string, error) {
+	// Use the provided value if present.
+	if c.Remotes[name].TLS != nil {
+		return c.Remotes[name].TLS.Certificate, c.Remotes[name].TLS.Key, c.Remotes[name].TLS.CA, nil
+	}
+
 	// Values.
 	var tlsClientCert string
 	var tlsClientKey string
@@ -137,6 +141,17 @@ func (c *Config) GetClientCertificate(name string) (string, string, string, erro
 		tlsClientKey = string(content)
 	}
 
+	// Cache for future use.
+	remote := c.Remotes[name]
+
+	remote.TLS = &RemoteTLS{
+		Certificate: tlsClientCert,
+		Key:         tlsClientKey,
+		CA:          tlsClientCA,
+	}
+
+	c.Remotes[name] = remote
+
 	return tlsClientCert, tlsClientKey, tlsClientCA, nil
 }
 
@@ -187,7 +202,7 @@ func (c *Config) CopyGlobalCert(src string, dst string) error {
 		}
 
 		// Copy the content.
-		_, err = io.Copy(newFile, sourceFile)
+		_, err = util.SafeCopy(newFile, sourceFile)
 		if err != nil {
 			return err
 		}

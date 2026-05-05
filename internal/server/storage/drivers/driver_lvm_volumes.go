@@ -14,18 +14,18 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lxc/incus/v6/internal/instancewriter"
-	"github.com/lxc/incus/v6/internal/linux"
-	"github.com/lxc/incus/v6/internal/rsync"
-	"github.com/lxc/incus/v6/internal/server/backup"
-	"github.com/lxc/incus/v6/internal/server/migration"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/revert"
-	"github.com/lxc/incus/v6/shared/subprocess"
-	"github.com/lxc/incus/v6/shared/util"
-	"github.com/lxc/incus/v6/shared/validate"
+	"github.com/lxc/incus/v7/internal/instancewriter"
+	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/internal/rsync"
+	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/migration"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
+	"github.com/lxc/incus/v7/shared/subprocess"
+	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // CreateVolume creates an empty volume and can optionally fill it by executing the supplied filler function.
@@ -1334,7 +1334,7 @@ func (d *lvm) CreateVolumeSnapshot(snapVol Volume, op *operations.Operation) err
 	}
 
 	// Create the parent directory.
-	err := createParentSnapshotDirIfMissing(d.name, snapVol.volType, parentName)
+	err := CreateParentSnapshotDirIfMissing(d.name, snapVol.volType, parentName)
 	if err != nil {
 		return err
 	}
@@ -1917,12 +1917,19 @@ func (d *lvm) Qcow2DeletionCleanup(snapVol Volume, childName string) error {
 		return err
 	}
 
-	_ = d.removeLogicalVolume(childVolPath)
+	defer func() {
+		// Deactivate volume if was not active before operation.
+		if activated {
+			_, _ = d.deactivateVolume(childVol)
+		}
+	}()
 
 	_, err = d.acquireExclusive(snapVol)
 	if err != nil {
 		return err
 	}
+
+	_ = d.removeLogicalVolume(childVolPath)
 
 	err = d.renameLogicalVolume(snapVolPath, childVolPath)
 	if err != nil {
@@ -1935,11 +1942,6 @@ func (d *lvm) Qcow2DeletionCleanup(snapVol Volume, childName string) error {
 	}
 
 	releaseParent()
-
-	// Deactivate volume if was not active before operation.
-	if activated {
-		_, _ = d.deactivateVolume(childVol)
-	}
 
 	return nil
 }

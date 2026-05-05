@@ -5,10 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lxc/incus/v6/cmd/incus/color"
-	"github.com/lxc/incus/v6/internal/i18n"
-	"github.com/lxc/incus/v6/shared/api"
-	cli "github.com/lxc/incus/v6/shared/cmd"
+	"github.com/lxc/incus/v7/cmd/incus/color"
+	"github.com/lxc/incus/v7/internal/i18n"
+	"github.com/lxc/incus/v7/shared/api"
+	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
 type cmdLaunch struct {
@@ -18,15 +18,15 @@ type cmdLaunch struct {
 	flagConsole string
 }
 
-// Command returns a cobra.Command for use with (*cobra.Command).AddCommand.
-func (c *cmdLaunch) Command() *cobra.Command {
-	cmd := c.init.Command()
+func (c *cmdLaunch) command() *cobra.Command {
+	cmd := c.init.command()
 	cmd.Use = cli.U("launch", cmdCreateUsage...)
 	cmd.Short = i18n.G("Create and start instances from images")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Create and start instances from images`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus launch images:debian/12 u1
+    Create and start a container named u1
 
 incus launch images:debian/12 u1 < config.yaml
     Create and start a container with configuration from config.yaml
@@ -41,10 +41,9 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
     Create and start a virtual machine, overriding the disk size and bus`))
 	cmd.Hidden = false
 
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
-	cmd.Flags().StringVar(&c.flagConsole, "console", "", i18n.G("Immediately attach to the console")+"``")
-	cmd.Flags().Lookup("console").NoOptDefVal = "console"
+	cli.AddStringFlag(cmd.Flags(), &c.flagConsole, "console", "", "console", i18n.G("Immediately attach to the console"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
@@ -57,8 +56,7 @@ incus launch images:debian/12 v2 --vm -d root,size=50GiB -d root,io.bus=nvme
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdLaunch) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdLaunch) run(cmd *cobra.Command, args []string) error {
 	conf := c.global.conf
 	parsed, err := cmdCreateUsage.Parse(conf, cmd, args)
 	if err != nil {

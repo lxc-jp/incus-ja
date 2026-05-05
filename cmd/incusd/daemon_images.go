@@ -11,28 +11,28 @@ import (
 	"slices"
 	"time"
 
-	incus "github.com/lxc/incus/v6/client"
-	internalIO "github.com/lxc/incus/v6/internal/io"
-	"github.com/lxc/incus/v6/internal/server/db"
-	"github.com/lxc/incus/v6/internal/server/db/cluster"
-	"github.com/lxc/incus/v6/internal/server/locking"
-	"github.com/lxc/incus/v6/internal/server/operations"
-	"github.com/lxc/incus/v6/internal/server/project"
-	"github.com/lxc/incus/v6/internal/server/response"
-	"github.com/lxc/incus/v6/internal/server/state"
-	localUtil "github.com/lxc/incus/v6/internal/server/util"
-	internalUtil "github.com/lxc/incus/v6/internal/util"
-	"github.com/lxc/incus/v6/internal/version"
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/cancel"
-	"github.com/lxc/incus/v6/shared/ioprogress"
-	"github.com/lxc/incus/v6/shared/logger"
-	"github.com/lxc/incus/v6/shared/units"
-	"github.com/lxc/incus/v6/shared/util"
+	incus "github.com/lxc/incus/v7/client"
+	internalIO "github.com/lxc/incus/v7/internal/io"
+	"github.com/lxc/incus/v7/internal/server/db"
+	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	"github.com/lxc/incus/v7/internal/server/locking"
+	"github.com/lxc/incus/v7/internal/server/operations"
+	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/response"
+	"github.com/lxc/incus/v7/internal/server/state"
+	localUtil "github.com/lxc/incus/v7/internal/server/util"
+	internalUtil "github.com/lxc/incus/v7/internal/util"
+	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/cancel"
+	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/units"
+	"github.com/lxc/incus/v7/shared/util"
 )
 
-// ImageDownloadArgs used with ImageDownload.
-type ImageDownloadArgs struct {
+// imageDownloadArgs used with imageDownload.
+type imageDownloadArgs struct {
 	ProjectName       string
 	Server            string
 	Protocol          string
@@ -58,8 +58,8 @@ func imageOperationLock(ctx context.Context, fingerprint string) (locking.Unlock
 	return locking.Lock(ctx, fmt.Sprintf("ImageOperation_%s", fingerprint))
 }
 
-// ImageDownload resolves the image fingerprint and if not in the database, downloads it.
-func ImageDownload(ctx context.Context, r *http.Request, s *state.State, op *operations.Operation, args *ImageDownloadArgs) (*api.Image, bool, error) {
+// imageDownload resolves the image fingerprint and if not in the database, downloads it.
+func imageDownload(ctx context.Context, r *http.Request, s *state.State, op *operations.Operation, args *imageDownloadArgs) (*api.Image, bool, error) {
 	var err error
 	var ctxMap logger.Ctx
 
@@ -520,7 +520,7 @@ func ImageDownload(ctx context.Context, r *http.Request, s *state.State, op *ope
 
 		// Download the image
 		writer := internalIO.NewQuotaWriter(io.MultiWriter(f, hash256), args.Budget)
-		size, err := io.Copy(writer, body)
+		size, err := util.SafeCopy(writer, body)
 		if err != nil {
 			return nil, false, err
 		}

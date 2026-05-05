@@ -1,7 +1,7 @@
 package operationtype
 
 import (
-	"github.com/lxc/incus/v6/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/auth"
 )
 
 // Type is a numeric code identifying the type of an Operation.

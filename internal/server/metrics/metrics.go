@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lxc/incus/v6/internal/server/auth"
+	"github.com/lxc/incus/v7/internal/server/auth"
 )
 
 // ProcsTotal is a gauge according to the OpenMetrics spec as its value can decrease.

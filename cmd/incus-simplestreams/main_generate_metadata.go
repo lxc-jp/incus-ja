@@ -10,20 +10,19 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	yaml "gopkg.in/yaml.v2"
+	yaml "go.yaml.in/yaml/v4"
 
-	"github.com/lxc/incus/v6/shared/api"
-	"github.com/lxc/incus/v6/shared/ask"
-	cli "github.com/lxc/incus/v6/shared/cmd"
-	"github.com/lxc/incus/v6/shared/osarch"
+	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/ask"
+	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/osarch"
 )
 
 type cmdGenerateMetadata struct {
 	global *cmdGlobal
 }
 
-// Command generates the command definition.
-func (c *cmdGenerateMetadata) Command() *cobra.Command {
+func (c *cmdGenerateMetadata) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = "generate-metadata <path>"
 	cmd.Short = "Generate a metadata tarball"
@@ -39,13 +38,12 @@ This command will prompt for all of the metadata tarball fields:
  - Architecture
  - Description
 `)
-	cmd.RunE = c.Run
+	cmd.RunE = c.run
 
 	return cmd
 }
 
-// Run runs the actual command logic.
-func (c *cmdGenerateMetadata) Run(cmd *cobra.Command, args []string) error {
+func (c *cmdGenerateMetadata) run(cmd *cobra.Command, args []string) error {
 	// Quick checks.
 	exit, err := cli.CheckArgs(cmd, args, 1, 1)
 	if exit {
@@ -126,7 +124,7 @@ func (c *cmdGenerateMetadata) Run(cmd *cobra.Command, args []string) error {
 	metadata.Properties["description"] = metaDescription
 
 	// Generate YAML.
-	body, err := yaml.Marshal(&metadata)
+	body, err := yaml.Dump(&metadata, yaml.V2)
 	if err != nil {
 		return err
 	}
