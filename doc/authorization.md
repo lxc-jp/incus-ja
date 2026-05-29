@@ -60,7 +60,7 @@ language: none
 - `server -> can_create_certificates`
 - `certificate -> can_edit`
 - `storage_pool -> can_edit`
-- `project -> manager`
+- `project -> admin`
 
 他の関連は許可しても構いません。
 しかし、適切な{ref}`project-restrictions`を適用する必要があります。

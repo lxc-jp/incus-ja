@@ -54,6 +54,24 @@ Incus サーバーをリモートして追加するには、以下のコマン�
 リモートサーバーのフィンガープリントを確認するプロンプトが表示され、トークンの入力を求められます。
 <!-- Include end add remotes -->
 
+### リモートのOCI互換サーバー（例：Docker Hub）を追加する
+
+OCI互換サーバーを追加するには、以下のコマンドを実行します：
+
+    incus remote add <remote_name> <URL> --protocol=oci
+
+URLはHTTPSである必要があります。
+
+例えば、Docker Hubをリモートとして追加するには以下のコマンドを実行します：
+
+    incus remote add oci-docker https://docker.io --protocol=oci
+
+ログインするには、`--token <token>`でトークンを指定します。
+
+例えば、あなた自身のトークンを指定してカスタムのコンテナーレジストリーを追加するには以下のコマンドを実行します：
+
+    incus remote add oci-myregistry https://code.example.org --token abcMyToken --protocol=oci
+
 ## イメージを参照する
 
 イメージを参照するには、リモートとイメージのエイリアスまたはフィンガープリントをコロンで区切って指定します。

@@ -5,7 +5,7 @@
 ネットワークアドレスセットは{ref}`ACL <network-acls>`で使用します。これは{ref}`network-ovn`か`nftables`を使う{ref}`ブリッジネットワーク <network-bridge-firewall>`でのみ動作します。
 ```
 
-ネットワークアドレスセットはCIDRサフィックスありまたはなしのIPv4かIPv6のアドレスのリストです。これらは{ref}`ACL <network-acls-rules-properties>`のsourceまたはdestinationフィールドで使えます。
+ネットワークアドレスセットはCIDRサフィックスありまたはなしのIPv4かIPv6のアドレスのリストです。IP範囲（例えば、`10.0.0.120-10.0.0.130`）もサポートされますが、単一の範囲は最大で256個のアドレスに収める必要があります。それより大きなアドレスセットは代わりにCIDR表記を使ってください。アドレスセットは{ref}`ACL <network-acls-rules-properties>`のsourceまたはdestinationフィールドで使えます。
 
 ## アドレスセットのプロパティ
 
@@ -46,7 +46,7 @@ incus network address-set create <name> [configuration_options...]
 incus network address-set add <name> <address1> <address2>
 ```
 
-セットに追加するアドレスの種類に制限はありません。IPv4とIPv6のアドレスとCIDRを混合して一度に追加できます。
+セットに追加するアドレスの種類に制限はありません。IPv4アドレス、IPv6アドレス、CIDRサブネット、IP範囲を混ぜて指定できます。
 
 アドレスを削除するには、`add`コマンドの代わりに`remove`コマンドが使えます。
 

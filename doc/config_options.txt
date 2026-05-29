@@ -2313,6 +2313,7 @@ OCIコンテナ内で稼働するプロセスのUIDを上書きします。
 :shortdesc: "インスタンスにどのCPUを見せるか"
 :type: "string"
 インスタンスに見せるCPUの番号または範囲。
+仮想マシンでは、`sockets=2,cores=4,threads=2`の形式のCPUトポロジーを指定することもできます。
 
 詳細は{ref}`instance-options-limits-cpu`を参照してください。
 ```
@@ -2804,9 +2805,28 @@ FUSE実装にリダイレクトすべきファイルシステムのマウント�
 <!-- config group instance-snapshots start -->
 ```{config:option} snapshots.expiry instance-snapshots
 :liveupdate: "no"
-:shortdesc: "いつスナップショットを削除するか"
+:shortdesc: "新しく作られたスナップショットをいつ削除するか"
 :type: "string"
 `1M 2H 3d 4w 5m 6y`のような式を指定します。
+
+この値は新しく作成されたスナップショットの有効期限を算出するために使われます。
+スナップショットが作られた日時にこの値が加算され、結果のタイムスタンプがスナップショットの個別の有効期限として保管されます。
+この値の変更は変更後に作成したスナップショットのみに影響します。既存のスナップショットの有効期限は変更されません。
+
+サポートされる単位は`S`（秒）、`M`（分）、`H`（時）、`d`（日）、`w`（週）、`m`（月)、`y`（年）です。
+```
+
+```{config:option} snapshots.expiry.manual instance-snapshots
+:liveupdate: "no"
+:shortdesc: "（スケジュールで作られたのではない）新しく作られたスナップショットをいつ削除するか"
+:type: "string"
+`1M 2H 3d 4w 5m 6y`のような式を指定します。
+
+この値はスケジュールで作られたのではない新しく作成されたスナップショットの有効期限を算出するために使われます。
+スナップショットが作られた日時にこの値が加算され、結果のタイムスタンプがスナップショットの個別の有効期限として保管されます。
+この値の変更は変更後に作成したスナップショットのみに影響します。既存のスナップショットの有効期限は変更されません。
+
+サポートされる単位については{config:option}`instance-snapshots:snapshots.expiry`を参照してください。
 ```
 
 ```{config:option} snapshots.pattern instance-snapshots
@@ -2828,13 +2848,6 @@ FUSE実装にリダイレクトすべきファイルシステムのマウント�
 cronの式（`<minute> <hour> <dom> <month> <dow>`）かスケジュールのエイリアス（`@startup`、`@hourly`、`@daily`、`@midnight`、`@weekly`、`@monthly`、`@annually`、`@yearly`）のカンマと空白区切りリストを設定するか、あるいは自動スナップショットを無効にするためには空にしてください。
 
 cron設定自体がカンマを含むため、他の多くの設定キーと異なり、この設定は単なるカンマ区切りではなくカンマと空白区切りであることに注意してください。
-```
-
-```{config:option} snapshots.expiry.manual instance-snapshots
-:liveupdate: "no"
-:shortdesc: "（スケジュールで作られたのではない）スナップショットをいつ削除するか"
-:type: "string"
-`1M 2H 3d 4w 5m 6y`のような式を指定します。
 ```
 
 ```{config:option} snapshots.schedule.stopped instance-snapshots
@@ -3055,6 +3068,12 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```{config:option} volatile.idmap.next instance-volatile
 :shortdesc: "インスタンスの次回起動時に使用するidmap"
+:type: "string"
+
+```
+
+```{config:option} volatile.last_state.agent instance-volatile
+:shortdesc: "最後のホストのシャットダウン時のインスタンスのエージェントの状態"
 :type: "string"
 
 ```
@@ -3302,6 +3321,14 @@ NVIDIA仮想GPUインスタンスUUID。
 :default: "`1500`"
 :shortdesc: "ブリッジのMTU（tunnel使用時はデフォルト値は変わる）"
 :type: "integer"
+
+```
+
+```{config:option} bridge.multicast_snooping network_bridge-common
+:condition: "ネイティブブリッジ"
+:default: "`true`"
+:shortdesc: "ブリッジのマルチキャストスヌーピングを有効にするかどうか"
+:type: "bool"
 
 ```
 
@@ -5337,6 +5364,22 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 詳細は{ref}`clustering-instance-placement-scriptlet`を参照してください。
 ```
 
+```{config:option} instances.tpm.platform_cert server-miscellaneous
+:scope: "global"
+:shortdesc: "TPM Endorsement Keysのプロビジョンに使うプラットフォームCA証明書"
+:type: "string"
+新しく作られるTPMデバイスのEndorsement Keyとプラットフォーム証明書を署名するのに使うPEM形式のプラットフォームCA証明書。
+`instances.tpm.platform_key`とともに設定する必要があります。
+```
+
+```{config:option} instances.tpm.platform_key server-miscellaneous
+:scope: "global"
+:shortdesc: "PMプラットフォームCA証明書の秘密鍵"
+:type: "string"
+`instances.tpm.platform_cert`に対応するPEM形式の秘密鍵。
+新しく作られるTPMデバイスのEndorsement Keyとプラットフォーム証明書を署名するのに使います。
+```
+
 ```{config:option} network.ovn.ca_cert server-miscellaneous
 :defaultdesc: "存在する場合`/etc/ovn/ovn-central.crt`の中身"
 :scope: "global"
@@ -5515,6 +5558,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group server-openfga end -->
 <!-- config group storage_btrfs-common start -->
+```{config:option} btrfs.create_options storage_btrfs-common
+:default: "-"
+:scope: "global"
+:shortdesc: "プール作成時に`mkfs.btrfs`に渡す追加のオプション"
+:type: "string"
+
+```
+
 ```{config:option} btrfs.mount_options storage_btrfs-common
 :default: "`user_subvol_rm_allowed`"
 :scope: "global"
@@ -5860,6 +5911,13 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```
 
+```{config:option} linstor.raw.* storage_linstor-common
+:scope: "global"
+:shortdesc: "設定する追加のLINSTORプロパティー。例えば、`BCache/PoolName`は`linstor.raw.BCache/PoolName`とエンコードされます。"
+:type: "string"
+
+```
+
 ```{config:option} linstor.resource_group.name storage_linstor-common
 :default: "`incus`"
 :scope: "global"
@@ -6134,7 +6192,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_btrfs-common
@@ -6142,7 +6200,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_btrfs-common
@@ -6163,6 +6221,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group storage_volume_btrfs-common end -->
 <!-- config group storage_volume_ceph-common start -->
+```{config:option} block.create_options storage_volume_ceph-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.create_options`と同じ"
+:shortdesc: "ボリュームをフォーマットする際にファイルシステム作成ツールに渡す追加のオプション"
+:type: "string"
+
+```
+
 ```{config:option} block.filesystem storage_volume_ceph-common
 :condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
 :default: "`volume.block.filesystem`と同じ"
@@ -6240,7 +6306,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_ceph-common
@@ -6248,7 +6314,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_ceph-common
@@ -6330,7 +6396,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_cephfs-common
@@ -6338,7 +6404,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_cephfs-common
@@ -6420,7 +6486,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_dir-common
@@ -6428,7 +6494,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_dir-common
@@ -6449,6 +6515,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group storage_volume_dir-common end -->
 <!-- config group storage_volume_linstor-common start -->
+```{config:option} block.create_options storage_volume_linstor-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.create_options`と同じ"
+:shortdesc: "ボリュームをフォーマットする際にファイルシステム作成ツールに渡す追加のオプション"
+:type: "string"
+
+```
+
 ```{config:option} block.filesystem storage_volume_linstor-common
 :condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
 :default: "`volume.block.filesystem`と同じ"
@@ -6513,6 +6587,13 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```
 
+```{config:option} linstor.raw.* storage_volume_linstor-common
+:scope: "global"
+:shortdesc: "設定する追加のLINSTORプロパティー。例えば、`BCache/PoolName`は`linstor.raw.BCache/PoolName`とエンコードされます。"
+:type: "string"
+
+```
+
 ```{config:option} linstor.remove_snapshots storage_volume_linstor-common
 :condition: "-"
 :default: "`volume.linstor.remove_snapshots`と同じか`false`"
@@ -6558,7 +6639,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_linstor-common
@@ -6566,7 +6647,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_linstor-common
@@ -6587,6 +6668,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group storage_volume_linstor-common end -->
 <!-- config group storage_volume_lvm-common start -->
+```{config:option} block.create_options storage_volume_lvm-common
+:condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
+:default: "`volume.block.create_options`と同じ"
+:shortdesc: "ボリュームをフォーマットする際にファイルシステム作成ツールに渡す追加のオプション"
+:type: "string"
+
+```
+
 ```{config:option} block.filesystem storage_volume_lvm-common
 :condition: "コンテントタイプ`filesystem`のブロックベースのボリューム"
 :default: "`volume.block.filesystem`と同じ"
@@ -6687,7 +6776,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_lvm-common
@@ -6695,7 +6784,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_lvm-common
@@ -6716,6 +6805,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group storage_volume_lvm-common end -->
 <!-- config group storage_volume_truenas-common start -->
+```{config:option} block.create_options storage_volume_truenas-common
+:condition: "-"
+:default: "`volume.block.create_options`と同じ"
+:shortdesc: "ボリュームをフォーマットする際にファイルシステム作成ツールに渡す追加のオプション"
+:type: "string"
+
+```
+
 ```{config:option} block.filesystem storage_volume_truenas-common
 :condition: "-"
 :default: "`volume.block.filesystem`と同じ"
@@ -6793,7 +6890,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_truenas-common
@@ -6801,7 +6898,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_truenas-common
@@ -6846,6 +6943,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group storage_volume_truenas-common end -->
 <!-- config group storage_volume_zfs-common start -->
+```{config:option} block.create_options storage_volume_zfs-common
+:condition: "コンテントタイプ`filesystem`のカスタムボリューム（`zfs.block_mode`が有効）"
+:default: "`volume.block.create_options`と同じ"
+:shortdesc: "ボリュームをフォーマットする際にファイルシステム作成ツールに渡す追加のオプション"
+:type: "string"
+
+```
+
 ```{config:option} block.filesystem storage_volume_zfs-common
 :condition: "コンテントタイプ`filesystem`のカスタムボリューム（`zfs.block_mode`が有効）"
 :default: "`volume.block.filesystem`と同じ"
@@ -6923,7 +7028,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.expiry.manual storage_volume_zfs-common
@@ -6931,7 +7036,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.snapshots.expiry.manual`と同じ"
 :shortdesc: "{{snapshot_expiry_format}}"
 :type: "string"
-
+{{snapshot_expiry_detail}}
 ```
 
 ```{config:option} snapshots.pattern storage_volume_zfs-common

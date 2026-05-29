@@ -50,20 +50,14 @@
 - {ref}`コンテントタイプ <storage-content-types>` が `block` または `iso` のカスタムストレージボリュームはコンテナにはアタッチできず、仮想マシンのみにアタッチできます。
 - データ破壊を防ぐため、 {ref}`コンテントタイプ <storage-content-types>` が `block` のカスタムストレージボリュームは同時に複数の仮想マシンには決してアタッチするべきではありません。
 - {ref}`コンテントタイプ <storage-content-types>` が `iso` のカスタムストレージボリュームは読み取り専用であり、データを破壊することなく同時に複数の仮想マシンにアタッチできます。
-- ファイルシステムのストレージボリュームは仮想マシンの稼働中にアタッチはできません。
+- ファイルシステムのストレージボリュームは`9p`を使用している仮想マシンの稼働中にアタッチはできません。
 
 コンテントタイプ `filesystem` のカスタムストレージボリュームは以下のコマンドを使用します。ここで `<location>` はインスタンス内でストレージボリュームにアクセスするためのパス（例: `/data`）です:
 
-    incus storage volume attach <pool_name> <filesystem_volume_name> <instance_name> <location>
-
-コンテントタイプ `block` のカスタムストレージボリュームは `<location>` を指定しません:
-
-    incus storage volume attach <pool_name> <block_volume_name> <instance_name>
-
-デフォルトでは、カスタムストレージボリュームはインスタンスに {ref}`デバイス <devices>` の名前でボリュームが追加されます。
-異なるデバイス名を使用したい場合は、コマンドにデバイス名を追加できます:
-
     incus storage volume attach <pool_name> <filesystem_volume_name> <instance_name> <device_name> <location>
+
+コンテントタイプ`block`のカスタムストレージボリュームは`<location>`を指定しません（そしてそれらの{ref}`デバイス <devices>`の名前はオプショナルで、デフォルトではボリューム名になります）：
+
     incus storage volume attach <pool_name> <block_volume_name> <instance_name> <device_name>
 
 #### ボリュームをデバイスとしてアタッチする

@@ -13,7 +13,7 @@ Incus との統合は[Incus 専用のプロバイダー](https://github.com/lxc/
 [Ansible](https://www.ansible.com) は infrastructure as code のツールで、特にソフトウェアのプロビジョニングと構成管理にフォーカスしています。
 ほとんどの作業をソフトウェアをデプロイする対象のシステムにまず接続してから行います。
 
-そのために、Ansible は SSH やその他さまざまなプロトコルで接続ができ、そのうちの 1 つが [Incus](https://docs.ansible.com/ansible/latest/collections/community/general/incus_connection.html) です。
+そのために、Ansible は SSH やその他さまざまなプロトコルで接続ができ、そのうちの 1 つが [Incus](https://docs.ansible.com/ansible/latest/collections/community/general/incus_connection.html) です。リモートのIncusサーバーにIncus Ansible Connectionタイプを使う場合は、Linuxディストリビューションで提供される完全なIncusパッケージではなく`incus-client`パッケージを使うほうが良いかもしれません。
 
 これにより、最初に SSH をセットアップすることなしに Incus のインスタンス内にソフトウェアを簡単にデプロイできます。
 

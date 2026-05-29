@@ -237,7 +237,7 @@ Ubuntu ユーザーには現在 2 つの選択肢があります。
 
 1. Zabbly パッケージレポジトリ
 
-    [Zabbly](https://zabbly.com) は Ubuntu の LTS リリース (22.04 と 24.04) 用の最新でありサポート対象である Incus のパッケージを提供します。
+    [Zabbly](https://zabbly.com) は Ubuntu の LTS リリース (22.04、24.04、26.04) 用の最新でありサポート対象である Incus のパッケージを提供します。
     これらのパッケージは Incus の全ての機能を使用するために必要なすべてを含んでいます。
 
     最新のインストール手順はこちらを参照してください: [`https://github.com/zabbly/incus`](https://github.com/zabbly/incus)

@@ -1040,7 +1040,8 @@ definitions:
                 x-go-name: UID
             when:
                 description: When to trigger the template (create, copy or start)
-                example: create
+                example:
+                    - create
                 items:
                     type: string
                 type: array
@@ -5377,7 +5378,10 @@ definitions:
                 additionalProperties:
                     type: string
                 description: Vendor provided key/value pairs.
-                example: '{"EC": ""A-5545", "MN": "103C", "V0": "5W PCIeGen2"}'
+                example:
+                    EC: A-5545
+                    MN: 103C
+                    V0: 5W PCIeGen2
                 type: object
                 x-go-name: Entries
             product_name:
@@ -6907,6 +6911,10 @@ definitions:
                 example: snap0
                 type: string
                 x-go-name: Restore
+        type: object
+        x-go-package: github.com/lxc/incus/v7/shared/api
+    StorageVolumeRebuildPost:
+        title: StorageVolumeRebuildPost represents the fields available for a storage volume rebuild request.
         type: object
         x-go-package: github.com/lxc/incus/v7/shared/api
     StorageVolumeSnapshot:
@@ -18760,6 +18768,16 @@ paths:
                   name: volumeName
                   required: true
                   type: string
+                - description: Whether to have the volume be writable
+                  example: 1
+                  in: query
+                  name: writable
+                  type: integer
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
             produces:
                 - application/json
                 - application/octet-stream
@@ -18775,6 +18793,62 @@ paths:
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume NBD connection
+            tags:
+                - storage
+    /1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}/rebuild:
+        post:
+            consumes:
+                - application/json
+            description: |-
+                Wipes the underlying storage volume and re-creates an empty one with the
+                same configuration. Only allowed for custom volumes without snapshots.
+            operationId: storage_pool_volume_type_rebuild_post
+            parameters:
+                - description: Storage pool name
+                  in: path
+                  name: poolName
+                  required: true
+                  type: string
+                - description: Storage volume type
+                  in: path
+                  name: type
+                  required: true
+                  type: string
+                - description: Storage volume name
+                  in: path
+                  name: volumeName
+                  required: true
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+                - description: Cluster member name
+                  example: server01
+                  in: query
+                  name: target
+                  type: string
+                - description: Storage volume rebuild request
+                  in: body
+                  name: volume
+                  required: true
+                  schema:
+                    $ref: '#/definitions/StorageVolumeRebuildPost'
+            produces:
+                - application/json
+            responses:
+                "202":
+                    $ref: '#/responses/Operation'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Rebuild the storage volume
             tags:
                 - storage
     /1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}/sftp:

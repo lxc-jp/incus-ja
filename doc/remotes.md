@@ -52,7 +52,7 @@ Incus コマンドラインクライアントは`local`リモート、つまり�
 グローバルなシステム毎の設定としてリモートを設定できます。
 これらのリモートは、設定を追加した Incus サーバーのすべてのユーザーで利用できます。
 
-ユーザーはこれらのシステムで設定されたリモートを（たとえば [`incus remote rename`](incus_remote_rename.md)または[`incus remote set-url`](incus_remote_set-url.md)を実行することで）オーバーライドできます。
+ユーザーはこれらのシステムで設定されたリモートを（たとえば [`incus remote rename`](incus_remote_rename.md)または[`incus remote set-urls`](incus_remote_set-urls.md)を実行することで）オーバーライドできます。
 その結果、リモートと対応する証明書がユーザー設定にコピーされます。
 
 グローバルリモートを設定するには、`/etc/incus/`に置かれた`config.yml`ファイルを編集します。
