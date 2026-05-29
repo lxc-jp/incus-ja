@@ -77,12 +77,24 @@ type NodeInfo struct {
 	State         int               // Node state
 	Config        map[string]string // Configuration for the node
 	Groups        []string          // Cluster groups
+
+	// heartbeatRefTime is the time at which the node row was read from the
+	// database. It is used as the reference time for IsOffline so that a
+	// long-running transaction (during which the heartbeat snapshot cannot be
+	// refreshed) doesn't incorrectly classify members as offline just because
+	// the transaction has been open longer than the offline threshold.
+	heartbeatRefTime time.Time
 }
 
 // IsOffline returns true if the last successful heartbeat time of the node is
 // older than the given threshold.
+//
+// The check uses the time at which this NodeInfo was read from the database as
+// the reference point (if known), rather than time.Now(). This avoids false
+// positives when the caller is operating inside a long-running transaction
+// where the heartbeat snapshot can't be refreshed.
 func (n NodeInfo) IsOffline(threshold time.Duration) bool {
-	return nodeIsOffline(threshold, n.Heartbeat)
+	return nodeIsOffline(threshold, n.Heartbeat, n.heartbeatRefTime)
 }
 
 // NodeInfoArgs provides information about the cluster environment for use with NodeInfo.ToAPI().
@@ -168,7 +180,7 @@ func (n NodeInfo) ToAPI(ctx context.Context, tx *ClusterTx, args NodeInfoArgs) (
 		}
 	} else if n.IsOffline(args.OfflineThreshold) {
 		result.Status = "Offline"
-		result.Message = fmt.Sprintf("No heartbeat for %s (%s)", time.Since(n.Heartbeat), n.Heartbeat)
+		result.Message = fmt.Sprintf("No heartbeat for %s (%s)", time.Since(n.Heartbeat).Round(time.Second), n.Heartbeat.Format("2006-01-02 15:04:05 -0700"))
 	} else {
 		// Check for max DB schema and API extensions.
 		maxVersion, err := tx.GetNodeMaxVersion(ctx)
@@ -217,14 +229,14 @@ func (c *ClusterTx) GetNodeByAddress(ctx context.Context, address string) (NodeI
 
 // GetNodeMaxVersion returns the highest schema and API versions possible on the cluster.
 func (c *ClusterTx) GetNodeMaxVersion(ctx context.Context) ([2]int, error) {
-	version := [2]int{}
+	ver := [2]int{}
 
 	// Get the maximum DB schema.
 	var maxSchema int
 	row := c.tx.QueryRowContext(ctx, "SELECT MAX(schema) FROM nodes")
 	err := row.Scan(&maxSchema)
 	if err != nil {
-		return version, err
+		return ver, err
 	}
 
 	// Get the maximum API extension.
@@ -232,13 +244,13 @@ func (c *ClusterTx) GetNodeMaxVersion(ctx context.Context) ([2]int, error) {
 	row = c.tx.QueryRowContext(ctx, "SELECT MAX(api_extensions) FROM nodes")
 	err = row.Scan(&maxAPI)
 	if err != nil {
-		return version, err
+		return ver, err
 	}
 
 	// Compute the combined version.
-	version = [2]int{maxSchema, maxAPI}
+	ver = [2]int{maxSchema, maxAPI}
 
-	return version, nil
+	return ver, nil
 }
 
 // GetNodeWithID returns the node with the given ID.
@@ -262,7 +274,7 @@ func (c *ClusterTx) GetNodeWithID(ctx context.Context, nodeID int) (NodeInfo, er
 // GetPendingNodeByAddress returns the pending node with the given network address.
 func (c *ClusterTx) GetPendingNodeByAddress(ctx context.Context, address string) (NodeInfo, error) {
 	null := NodeInfo{}
-	nodes, err := c.nodes(ctx, true /*pending */, "address=?", address)
+	nodes, err := c.nodes(ctx, true /* pending */, "address=?", address)
 	if err != nil {
 		return null, err
 	}
@@ -359,13 +371,13 @@ func (c *ClusterTx) NodeIsOutdated(ctx context.Context) (bool, error) {
 	}
 
 	// Figure our own version.
-	version := [2]int{}
+	ver := [2]int{}
 	for _, node := range nodes {
 		if node.ID == c.nodeID {
-			version = node.Version()
+			ver = node.Version()
 		}
 	}
-	if version[0] == 0 || version[1] == 0 {
+	if ver[0] == 0 || ver[1] == 0 {
 		return false, errors.New("Inconsistency: local member not found")
 	}
 
@@ -375,7 +387,7 @@ func (c *ClusterTx) NodeIsOutdated(ctx context.Context) (bool, error) {
 			continue
 		}
 
-		n, err := localUtil.CompareVersions(node.Version(), version, true)
+		n, err := localUtil.CompareVersions(node.Version(), ver, true)
 		if err != nil {
 			return false, fmt.Errorf("Failed to compare with version of member %s: %w", node.Name, err)
 		}
@@ -412,8 +424,8 @@ func (c *ClusterTx) GetNodesCount(ctx context.Context) (int, error) {
 // RenameNode changes the name of an existing node.
 //
 // Return an error if a node with the same name already exists.
-func (c *ClusterTx) RenameNode(ctx context.Context, old string, new string) error {
-	count, err := query.Count(ctx, c.tx, "nodes", "name=?", new)
+func (c *ClusterTx) RenameNode(ctx context.Context, old string, newName string) error {
+	count, err := query.Count(ctx, c.tx, "nodes", "name=?", newName)
 	if err != nil {
 		return fmt.Errorf("failed to check existing nodes: %w", err)
 	}
@@ -423,7 +435,7 @@ func (c *ClusterTx) RenameNode(ctx context.Context, old string, new string) erro
 	}
 
 	stmt := `UPDATE nodes SET name=? WHERE name=?`
-	result, err := c.tx.Exec(stmt, new, old)
+	result, err := c.tx.Exec(stmt, newName, old)
 	if err != nil {
 		return fmt.Errorf("failed to update node name: %w", err)
 	}
@@ -463,10 +475,10 @@ func (c *ClusterTx) SetDescription(id int64, description string) error {
 // Nodes returns all members part of the cluster.
 func (c *ClusterTx) nodes(ctx context.Context, pending bool, where string, args ...any) ([]NodeInfo, error) {
 	// Get node roles
-	sql := "SELECT node_id, role FROM nodes_roles"
+	stmt := "SELECT node_id, role FROM nodes_roles"
 
 	nodeRoles := map[int64][]ClusterRole{}
-	err := query.Scan(ctx, c.Tx(), sql, func(scan func(dest ...any) error) error {
+	err := query.Scan(ctx, c.Tx(), stmt, func(scan func(dest ...any) error) error {
 		var nodeID int64
 		var role int
 
@@ -490,11 +502,11 @@ func (c *ClusterTx) nodes(ctx context.Context, pending bool, where string, args 
 	}
 
 	// Get node groups
-	sql = `SELECT node_id, cluster_groups.name FROM nodes_cluster_groups
+	stmt = `SELECT node_id, cluster_groups.name FROM nodes_cluster_groups
 JOIN cluster_groups ON cluster_groups.id = nodes_cluster_groups.group_id`
 	nodeGroups := map[int64][]string{}
 
-	err = query.Scan(ctx, c.Tx(), sql, func(scan func(dest ...any) error) error {
+	err = query.Scan(ctx, c.Tx(), stmt, func(scan func(dest ...any) error) error {
 		var nodeID int64
 		var group string
 
@@ -517,28 +529,31 @@ JOIN cluster_groups ON cluster_groups.id = nodes_cluster_groups.group_id`
 	}
 
 	// Get the node entries
-	sql = "SELECT id, name, address, description, schema, api_extensions, heartbeat, arch, state FROM nodes "
+	stmt = "SELECT id, name, address, description, schema, api_extensions, heartbeat, arch, state FROM nodes "
 
 	if pending {
 		// Include only pending nodes
-		sql += "WHERE state=? "
+		stmt += "WHERE state=? "
 	} else {
 		// Include created and evacuated nodes
-		sql += "WHERE state!=? "
+		stmt += "WHERE state!=? "
 	}
 
 	args = append([]any{ClusterMemberStatePending}, args...)
 
 	if where != "" {
-		sql += fmt.Sprintf("AND %s ", where)
+		stmt += fmt.Sprintf("AND %s ", where)
 	}
 
-	sql += "ORDER BY id"
+	stmt += "ORDER BY id"
 
-	// Process node entries
+	// Process node entries.
+	// refTime anchors the IsOffline check to the time the heartbeat snapshot
+	// was taken (see NodeInfo.heartbeatRefTime).
+	refTime := time.Now()
 	nodes := []NodeInfo{}
-	err = query.Scan(ctx, c.tx, sql, func(scan func(dest ...any) error) error {
-		node := NodeInfo{}
+	err = query.Scan(ctx, c.tx, stmt, func(scan func(dest ...any) error) error {
+		node := NodeInfo{heartbeatRefTime: refTime}
 		err := scan(&node.ID, &node.Name, &node.Address, &node.Description, &node.Schema, &node.APIExtensions, &node.Heartbeat, &node.Architecture, &node.State)
 		if err != nil {
 			return err
@@ -848,14 +863,14 @@ SELECT coalesce(nodes_failure_domains.name,'default')
 // GetNodesFailureDomains returns a map associating each node address with its
 // failure domain code.
 func (c *ClusterTx) GetNodesFailureDomains(ctx context.Context) (map[string]uint64, error) {
-	sql := "SELECT address, coalesce(failure_domain_id, 0) FROM nodes"
+	stmt := "SELECT address, coalesce(failure_domain_id, 0) FROM nodes"
 	type failureDomain struct {
 		Address         string
 		FailureDomainID int64
 	}
 
 	rows := []failureDomain{}
-	err := query.Scan(ctx, c.tx, sql, func(scan func(dest ...any) error) error {
+	err := query.Scan(ctx, c.tx, stmt, func(scan func(dest ...any) error) error {
 		fd := failureDomain{}
 		err := scan(&fd.Address, &fd.FailureDomainID)
 		if err != nil {
@@ -882,7 +897,7 @@ func (c *ClusterTx) GetNodesFailureDomains(ctx context.Context) (map[string]uint
 // GetFailureDomainsNames return a map associating failure domain IDs to their
 // names.
 func (c *ClusterTx) GetFailureDomainsNames(ctx context.Context) (map[uint64]string, error) {
-	sql := "SELECT id, name FROM nodes_failure_domains"
+	stmt := "SELECT id, name FROM nodes_failure_domains"
 
 	type failureDomain struct {
 		ID   int64
@@ -890,7 +905,7 @@ func (c *ClusterTx) GetFailureDomainsNames(ctx context.Context) (map[uint64]stri
 	}
 
 	rows := []failureDomain{}
-	err := query.Scan(ctx, c.tx, sql, func(scan func(dest ...any) error) error {
+	err := query.Scan(ctx, c.tx, stmt, func(scan func(dest ...any) error) error {
 		fd := failureDomain{}
 		err := scan(&fd.ID, &fd.Name)
 		if err != nil {
@@ -980,8 +995,8 @@ func (c *ClusterTx) NodeIsEmpty(ctx context.Context, id int64) (string, error) {
 	}
 
 	images := []image{}
-	sql := `SELECT fingerprint, node_id FROM images JOIN images_nodes ON images.id=images_nodes.image_id`
-	err = query.Scan(ctx, c.tx, sql, func(scan func(dest ...any) error) error {
+	stmt := `SELECT fingerprint, node_id FROM images JOIN images_nodes ON images.id=images_nodes.image_id`
+	err = query.Scan(ctx, c.tx, stmt, func(scan func(dest ...any) error) error {
 		img := image{}
 		err := scan(&img.fingerprint, &img.nodeID)
 		if err != nil {
@@ -1024,13 +1039,13 @@ func (c *ClusterTx) NodeIsEmpty(ctx context.Context, id int64) (string, error) {
 		drivers[i] = fmt.Sprintf("'%s'", entry)
 	}
 
-	sql = `
+	stmt = `
 SELECT storage_volumes.name
   FROM storage_volumes
   JOIN storage_pools ON storage_volumes.storage_pool_id=storage_pools.id
   WHERE storage_volumes.node_id=? AND storage_volumes.type=? AND storage_pools.driver NOT IN (%s)
 `
-	volumes, err := query.SelectStrings(ctx, c.tx, fmt.Sprintf(sql, strings.Join(drivers, ", ")), id, StoragePoolVolumeTypeCustom)
+	volumes, err := query.SelectStrings(ctx, c.tx, fmt.Sprintf(stmt, strings.Join(drivers, ", ")), id, StoragePoolVolumeTypeCustom)
 	if err != nil {
 		return "", fmt.Errorf("Failed to get custom volumes for node %d: %w", id, err)
 	}
@@ -1196,10 +1211,10 @@ func (c *ClusterTx) GetCandidateMembers(ctx context.Context, allMembers []NodeIn
 
 // SetNodeVersion updates the schema and API version of the node with the
 // given id. This is used only in tests.
-func (c *ClusterTx) SetNodeVersion(id int64, version [2]int) error {
+func (c *ClusterTx) SetNodeVersion(id int64, ver [2]int) error {
 	stmt := "UPDATE nodes SET schema=?, api_extensions=? WHERE id=?"
 
-	result, err := c.tx.Exec(stmt, version[0], version[1], id)
+	result, err := c.tx.Exec(stmt, ver[0], ver[1], id)
 	if err != nil {
 		return fmt.Errorf("Failed to update nodes table: %w", err)
 	}
@@ -1216,8 +1231,14 @@ func (c *ClusterTx) SetNodeVersion(id int64, version [2]int) error {
 	return nil
 }
 
-func nodeIsOffline(threshold time.Duration, heartbeat time.Time) bool {
-	offlineTime := time.Now().UTC().Add(-threshold)
+// nodeIsOffline reports whether heartbeat is older than threshold relative to
+// refTime. If refTime is the zero value, time.Now() is used as the reference.
+func nodeIsOffline(threshold time.Duration, heartbeat time.Time, refTime time.Time) bool {
+	if refTime.IsZero() {
+		refTime = time.Now()
+	}
+
+	offlineTime := refTime.UTC().Add(-threshold)
 
 	return heartbeat.Before(offlineTime) || heartbeat.Equal(offlineTime)
 }

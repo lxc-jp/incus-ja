@@ -19,14 +19,17 @@ import (
 	"github.com/lxc/incus/v7/shared/resources"
 	"github.com/lxc/incus/v7/shared/units"
 	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 type qemuCPUTopology struct {
-	Sockets int `json:"sockets"`
-	Cores   int `json:"cores"`
-	Threads int `json:"threads"`
-	vCPUs   map[uint64]uint64
-	nodes   map[uint64][]uint64
+	Sockets  int  `json:"sockets"`
+	Cores    int  `json:"cores"`
+	Threads  int  `json:"threads"`
+	Explicit bool `json:"explicit"`
+
+	vCPUs map[uint64]uint64
+	nodes map[uint64][]uint64
 }
 
 // cpuTopology sets up the qemuCPUTopology struct based on configured CPU limits, host system and guest OS.
@@ -38,6 +41,21 @@ func (d *qemu) cpuTopology() (*qemuCPUTopology, error) {
 
 	if limit == "" {
 		limit = "1"
+	}
+
+	// Check if an explicit CPU topology was requested.
+	if strings.Contains(limit, "=") {
+		sockets, cores, threads, err := validate.ParseCPUTopology(limit)
+		if err != nil {
+			return nil, err
+		}
+
+		topology.Sockets = sockets
+		topology.Cores = cores
+		topology.Threads = threads
+		topology.Explicit = true
+
+		return topology, nil
 	}
 
 	// Check if pinned or floating.
@@ -312,7 +330,7 @@ func (d *qemu) memoryTopology(bs *qemuBootState) (*qemuMemoryTopology, error) {
 		}
 	}
 
-	cpuType := strings.Split(bs.CPUType, ",")[0]
+	cpuType, _, _ := strings.Cut(bs.CPUType, ",")
 	if (cpuType == "host" || cpuType == "kvm64") && memoryHotplugEnabled {
 		if !util.IsTrueOrEmpty(limitsMemoryHotplug) {
 			maxMemoryBytes, err = units.ParseByteSizeString(limitsMemoryHotplug)
@@ -348,13 +366,8 @@ func (d *qemu) memoryTopology(bs *qemuBootState) (*qemuMemoryTopology, error) {
 			// Reduce the maximum by one bit to allow QEMU some headroom.
 			cpuPhysBits--
 
-			// Calculate the max memory limit.
-			maxMemoryBytes = int64(math.Pow(2, float64(cpuPhysBits)))
-
-			// Cap to 1TB.
-			if maxMemoryBytes > 1024*1024*1024*1024 {
-				maxMemoryBytes = 1024 * 1024 * 1024 * 1024
-			}
+			// Calculate the max memory limit, capped to 1TB.
+			maxMemoryBytes = min(int64(math.Pow(2, float64(cpuPhysBits))), 1024*1024*1024*1024)
 
 			// On standalone systems, further cap to the system's total memory.
 			if !d.state.ServerClustered {

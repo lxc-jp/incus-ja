@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand/v2"
 	"net/http"
@@ -43,6 +44,7 @@ import (
 	"github.com/lxc/incus/v7/shared/revert"
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // Track last autorestart of an instance.
@@ -123,9 +125,7 @@ func (d *common) CreationDate() time.Time {
 func (d *common) UpdateDevices(devices deviceConfig.Devices) error {
 	d.localDevices = devices
 
-	for name, devConfig := range devices {
-		d.expandedDevices[name] = devConfig
-	}
+	maps.Copy(d.expandedDevices, devices)
 
 	return nil
 }
@@ -297,12 +297,12 @@ func (d *common) Backups() ([]backup.InstanceBackup, error) {
 	// Build the backup list
 	backups := []backup.InstanceBackup{}
 	for _, backupName := range backupNames {
-		backup, err := instance.BackupLoadByName(d.state, d.project.Name, backupName)
+		b, err := instance.BackupLoadByName(d.state, d.project.Name, backupName)
 		if err != nil {
 			return nil, err
 		}
 
-		backups = append(backups, *backup)
+		backups = append(backups, *b)
 	}
 
 	return backups, nil
@@ -1091,6 +1091,10 @@ func (d *common) recordLastState() error {
 }
 
 func (d *common) setCoreSched(pids []int) error {
+	if !d.state.OS.CoreScheduling {
+		return nil
+	}
+
 	args := []string{
 		"forkcoresched",
 		"0",
@@ -1329,7 +1333,7 @@ func (d *common) devicesAdd(inst instance.Instance, instanceRunning bool, partia
 // devicesRegister calls the Register() function on all of the instance's devices.
 func (d *common) devicesRegister(inst instance.Instance) {
 	for _, entry := range d.ExpandedDevices().Sorted() {
-		err := device.Register(inst, d.state, entry.Name, entry.Config)
+		err := device.Register(inst, d.state, entry.Name, entry.Config, d.deviceVolatileGetFunc(entry.Name))
 		if err != nil {
 			if errors.Is(err, device.ErrUnsupportedDevType) {
 				continue // Skip unsupported device (allows for mixed instance type profiles).
@@ -1628,6 +1632,15 @@ func (d *common) balanceNUMANodes() error {
 	cpusPerNumaNode := int(cpu.Total) / len(nodes)
 
 	limitsCPU, err := strconv.Atoi(conf["limits.cpu"])
+	if err != nil && strings.Contains(conf["limits.cpu"], "=") {
+		// Compute the total from an explicit CPU topology.
+		sockets, cores, threads, topologyErr := validate.ParseCPUTopology(conf["limits.cpu"])
+		if topologyErr == nil {
+			limitsCPU = sockets * cores * threads
+			err = nil
+		}
+	}
+
 	if err == nil && limitsCPU > cpusPerNumaNode {
 		numaNodesToUse := int(math.Ceil(float64(limitsCPU) / float64(cpusPerNumaNode)))
 

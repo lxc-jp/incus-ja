@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -196,8 +197,9 @@ func (d *truenas) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.
 		}
 
 		fsVolFilesystem := vol.ConfigBlockFilesystem()
+		volCreateOptions := vol.ExpandedConfig("block.create_options")
 
-		_, err = makeFSType(devPath, fsVolFilesystem, nil)
+		_, err = makeFSType(devPath, fsVolFilesystem, &mkfsOptions{ExtraArgs: volCreateOptions})
 
 		// de-activate even if there is an err
 		err2 := d.deactivateIscsiDataset(dataset)
@@ -797,6 +799,15 @@ func (d *truenas) commonVolumeRules() map[string]func(value string) error {
 		//  shortdesc: Mount options for block-backed file system volumes
 		"block.mount_options": validate.IsAny,
 
+		// gendoc:generate(entity=storage_volume_truenas, group=common, key=block.create_options)
+		//
+		// ---
+		//  type: string
+		//  condition: -
+		//  default: same as `volume.block.create_options`
+		//  shortdesc: Additional options to pass to the file system creation tool when formatting the volume
+		"block.create_options": validate.IsAny,
+
 		// gendoc:generate(entity=storage_volume_truenas, group=common, key=truenas.blocksize)
 		//
 		// ---
@@ -885,7 +896,7 @@ func (d *truenas) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  shortdesc: Size/quota of the storage volume
 
 	// gendoc:generate(entity=storage_volume_truenas, group=common, key=snapshots.expiry)
-	//
+	// {{snapshot_expiry_detail}}
 	// ---
 	//  type: string
 	//  condition: custom volume
@@ -893,7 +904,7 @@ func (d *truenas) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  shortdesc: {{snapshot_expiry_format}}
 
 	// gendoc:generate(entity=storage_volume_truenas, group=common, key=snapshots.expiry.manual)
-	//
+	// {{snapshot_expiry_detail}}
 	// ---
 	//  type: string
 	//  condition: custom volume
@@ -942,9 +953,7 @@ func (d *truenas) UpdateVolume(vol Volume, changedConfig map[string]string) erro
 	}
 
 	defer func() {
-		for k, v := range old {
-			vol.config[k] = v
-		}
+		maps.Copy(vol.config, old)
 	}()
 
 	// If any of the relevant keys changed, re-apply the quota.
@@ -1039,7 +1048,6 @@ func (d *truenas) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool
 	}
 
 	if vol.contentType == ContentTypeFS {
-
 		if vol.volType == VolumeTypeImage {
 			return fmt.Errorf("Image volumes cannot be resized: %w", ErrCannotBeShrunk)
 		}
@@ -1141,7 +1149,6 @@ func (d *truenas) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool
 			l.Debug("TrueNAS volume filesystem grown")
 		}
 	} else {
-
 		// Block Volume.
 
 		// Block image volumes cannot be resized because they have a readonly snapshot that doesn't get
@@ -2115,7 +2122,7 @@ func (d *truenas) FillVolumeConfig(vol Volume) error {
 	// Copy volume.* configuration options from pool.
 	// If vol has a source, ignore the block mode related config keys from the pool.
 	if vol.hasSource || vol.IsVMBlock() || vol.volType == VolumeTypeCustom && vol.contentType == ContentTypeBlock {
-		excludedKeys = []string{"block.filesystem", "block.mount_options"}
+		excludedKeys = []string{"block.filesystem", "block.mount_options", "block.create_options"}
 	}
 
 	// Copy volume.* configuration options from pool.
@@ -2150,6 +2157,11 @@ func (d *truenas) FillVolumeConfig(vol Volume) error {
 		if vol.config["block.mount_options"] == "" {
 			// Unchangeable volume property: Set unconditionally.
 			vol.config["block.mount_options"] = "discard"
+		}
+
+		// Inherit filesystem creation options from pool if not set.
+		if vol.config["block.create_options"] == "" {
+			vol.config["block.create_options"] = d.config["volume.block.create_options"]
 		}
 	}
 

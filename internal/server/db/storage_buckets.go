@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	dqliteDriver "github.com/cowsql/go-cowsql/driver"
+	cowsqlDriver "github.com/cowsql/go-cowsql/driver"
 
 	"github.com/lxc/incus/v7/internal/server/db/query"
 	"github.com/lxc/incus/v7/internal/version"
@@ -39,7 +39,7 @@ type StorageBucket struct {
 // Accepts filters for narrowing down the results returned. If memberSpecific is true, then the search is
 // restricted to buckets that belong to this member or belong to all members.
 func (c *ClusterTx) GetStoragePoolBuckets(ctx context.Context, memberSpecific bool, filters ...StorageBucketFilter) ([]*StorageBucket, error) {
-	var q *strings.Builder = &strings.Builder{}
+	q := &strings.Builder{}
 	var args []any
 
 	q.WriteString(`
@@ -111,7 +111,7 @@ func (c *ClusterTx) GetStoragePoolBuckets(ctx context.Context, memberSpecific bo
 				q.WriteString(" OR ")
 			}
 
-			q.WriteString(fmt.Sprintf("(%s)", strings.Join(qFilters, " AND ")))
+			fmt.Fprintf(q, "(%s)", strings.Join(qFilters, " AND "))
 		}
 
 		q.WriteString(")")
@@ -226,7 +226,7 @@ func (c *ClusterTx) GetStoragePoolLocalBucket(ctx context.Context, bucketName st
 // GetStoragePoolLocalBucketByAccessKey returns the local Storage Bucket for the given bucket access key.
 // The search is restricted to buckets that belong to this member.
 func (c *ClusterTx) GetStoragePoolLocalBucketByAccessKey(ctx context.Context, accessKey string) (*StorageBucket, error) {
-	var q *strings.Builder = &strings.Builder{}
+	q := &strings.Builder{}
 
 	q.WriteString(`
 	SELECT
@@ -301,9 +301,9 @@ func (c *ClusterTx) CreateStoragePoolBucket(ctx context.Context, poolID int64, p
 		VALUES (?, ?, ?, ?, (SELECT id FROM projects WHERE name = ?))
 		`, poolID, nodeID, info.Name, info.Description, projectName)
 	if err != nil {
-		var dqliteErr dqliteDriver.Error
+		var cowsqlErr cowsqlDriver.Error
 		// Detect SQLITE_CONSTRAINT_UNIQUE (2067) errors.
-		if errors.As(err, &dqliteErr) && dqliteErr.Code == 2067 {
+		if errors.As(err, &cowsqlErr) && cowsqlErr.Code == 2067 {
 			return -1, api.StatusErrorf(http.StatusConflict, "A bucket for that name already exists")
 		}
 
@@ -425,7 +425,7 @@ type StorageBucketKey struct {
 // If there are no bucket keys, it returns an empty list and no error.
 // Accepts filters for narrowing down the results returned.
 func (c *ClusterTx) GetStoragePoolBucketKeys(ctx context.Context, bucketID int64, filters ...StorageBucketKeyFilter) ([]*StorageBucketKey, error) {
-	var q *strings.Builder = &strings.Builder{}
+	q := &strings.Builder{}
 	args := []any{bucketID}
 
 	q.WriteString(`
@@ -459,7 +459,7 @@ func (c *ClusterTx) GetStoragePoolBucketKeys(ctx context.Context, bucketID int64
 				q.WriteString(" OR ")
 			}
 
-			q.WriteString(fmt.Sprintf("(%s)", strings.Join(qFilters, " AND ")))
+			fmt.Fprintf(q, "(%s)", strings.Join(qFilters, " AND "))
 		}
 
 		q.WriteString(")")
@@ -526,9 +526,9 @@ func (c *ClusterTx) CreateStoragePoolBucketKey(ctx context.Context, bucketID int
 		VALUES (?, ?, ?, ?, ?, ?)
 		`, bucketID, info.Name, info.Description, info.Role, info.AccessKey, info.SecretKey)
 	if err != nil {
-		var dqliteErr dqliteDriver.Error
+		var cowsqlErr cowsqlDriver.Error
 		// Detect SQLITE_CONSTRAINT_UNIQUE (2067) errors.
-		if errors.As(err, &dqliteErr) && dqliteErr.Code == 2067 {
+		if errors.As(err, &cowsqlErr) && cowsqlErr.Code == 2067 {
 			return -1, api.StatusErrorf(http.StatusConflict, "A bucket key for that name already exists")
 		}
 

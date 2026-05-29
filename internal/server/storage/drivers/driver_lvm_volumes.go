@@ -299,9 +299,9 @@ func (d *lvm) HasVolume(vol Volume) (bool, error) {
 // FillVolumeConfig populate volume with default config.
 func (d *lvm) FillVolumeConfig(vol Volume) error {
 	// Copy volume.* configuration options from pool.
-	// Exclude "block.filesystem" and "block.mount_options" as they depend on volume type (handled below).
+	// Exclude "block.filesystem", "block.mount_options", and "block.create_options" as they depend on volume type (handled below).
 	// Exclude "lvm.stripes", "lvm.stripes.size" as they only work on non-thin storage pools (handled below).
-	err := d.fillVolumeConfig(&vol, "block.filesystem", "block.mount_options", "lvm.stripes", "lvm.stripes.size")
+	err := d.fillVolumeConfig(&vol, "block.filesystem", "block.mount_options", "block.create_options", "lvm.stripes", "lvm.stripes.size")
 	if err != nil {
 		return err
 	}
@@ -329,6 +329,11 @@ func (d *lvm) FillVolumeConfig(vol Volume) error {
 		if vol.config["block.mount_options"] == "" {
 			// Unchangeable volume property: Set unconditionally.
 			vol.config["block.mount_options"] = "discard"
+		}
+
+		// Inherit filesystem creation options from pool if not set.
+		if vol.config["block.create_options"] == "" {
+			vol.config["block.create_options"] = d.config["volume.block.create_options"]
 		}
 	}
 
@@ -369,6 +374,15 @@ func (d *lvm) commonVolumeRules() map[string]func(value string) error {
 		//  default: same as `volume.block.mount_options`
 		//  shortdesc: Mount options for block-backed file system volumes
 		"block.mount_options": validate.IsAny,
+
+		// gendoc:generate(entity=storage_volume_lvm, group=common, key=block.create_options)
+		//
+		// ---
+		//  type: string
+		//  condition: block-based volume with content type `filesystem`
+		//  default: same as `volume.block.create_options`
+		//  shortdesc: Additional options to pass to the file system creation tool when formatting the volume
+		"block.create_options": validate.IsAny,
 
 		// gendoc:generate(entity=storage_volume_lvm, group=common, key=block.filesystem)
 		//
@@ -480,7 +494,7 @@ func (d *lvm) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  shortdesc: Size/quota of the storage volume
 
 	// gendoc:generate(entity=storage_volume_lvm, group=common, key=snapshots.expiry)
-	//
+	// {{snapshot_expiry_detail}}
 	// ---
 	//  type: string
 	//  condition: custom volume
@@ -488,7 +502,7 @@ func (d *lvm) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  shortdesc: {{snapshot_expiry_format}}
 
 	// gendoc:generate(entity=storage_volume_lvm, group=common, key=snapshots.expiry.manual)
-	//
+	// {{snapshot_expiry_detail}}
 	// ---
 	//  type: string
 	//  condition: custom volume
@@ -1004,7 +1018,8 @@ func (d *lvm) MountVolume(vol Volume, op *operations.Operation) error {
 		reverter.Add(func() { _, _ = d.deactivateVolume(vol) })
 	}
 
-	if vol.contentType == ContentTypeFS {
+	switch vol.contentType {
+	case ContentTypeFS:
 		// Check if already mounted.
 		mountPath := vol.MountPath()
 		if !linux.IsMountPoint(mountPath) {
@@ -1034,7 +1049,8 @@ func (d *lvm) MountVolume(vol Volume, op *operations.Operation) error {
 
 			d.logger.Debug("Mounted logical volume", logger.Ctx{"volName": vol.name, "dev": volDevPath, "path": mountPath, "options": mountOptions})
 		}
-	} else if vol.contentType == ContentTypeBlock || vol.contentType == ContentTypeISO {
+
+	case ContentTypeBlock, ContentTypeISO:
 		// For VMs, mount the filesystem volume.
 		if vol.IsVMBlock() {
 			fsVol := vol.NewVMBlockFilesystemVolume()
@@ -1768,6 +1784,15 @@ func (d *lvm) RestoreVolume(vol Volume, snapshotName string, op *operations.Oper
 		err = d.removeLogicalVolume(d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, tmpVolName))
 		if err != nil {
 			return fmt.Errorf("Error removing original LVM logical volume: %w", err)
+		}
+
+		// For VMs, also restore the filesystem volume.
+		if vol.IsVMBlock() {
+			fsVol := vol.NewVMBlockFilesystemVolume()
+			err := d.RestoreVolume(fsVol, snapshotName, op)
+			if err != nil {
+				return err
+			}
 		}
 
 		reverter.Success()

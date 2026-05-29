@@ -138,14 +138,14 @@ func (m *MetricSet) String() string {
 		}
 
 		// Add TYPE message as specified by OpenMetrics
-		_, err = out.WriteString(fmt.Sprintf("# TYPE %s %s\n", MetricNames[metricType], metricTypeName))
+		_, err = fmt.Fprintf(&out, "# TYPE %s %s\n", MetricNames[metricType], metricTypeName)
 		if err != nil {
 			return ""
 		}
 
 		for _, sample := range m.set[metricType] {
 			firstLabel := true
-			labels := ""
+			var labels strings.Builder
 			labelNames := []string{}
 
 			// Add and sort labels if there are any
@@ -157,19 +157,19 @@ func (m *MetricSet) String() string {
 
 			for _, labelName := range labelNames {
 				if !firstLabel {
-					labels += ","
+					labels.WriteString(",")
 				}
 
-				labels += fmt.Sprintf(`%s="%s"`, labelName, sample.Labels[labelName])
+				fmt.Fprintf(&labels, `%s="%s"`, labelName, sample.Labels[labelName])
 				firstLabel = false
 			}
 
 			valueStr := strconv.FormatFloat(sample.Value, 'g', -1, 64)
 
-			if labels != "" {
-				_, err = out.WriteString(fmt.Sprintf("%s{%s} %s\n", MetricNames[metricType], labels, valueStr))
+			if labels.String() != "" {
+				_, err = fmt.Fprintf(&out, "%s{%s} %s\n", MetricNames[metricType], labels.String(), valueStr)
 			} else {
-				_, err = out.WriteString(fmt.Sprintf("%s %s\n", MetricNames[metricType], valueStr))
+				_, err = fmt.Fprintf(&out, "%s %s\n", MetricNames[metricType], valueStr)
 			}
 
 			if err != nil {

@@ -132,7 +132,7 @@ func (d *lvm) volumeGroupExists(vgName string) (bool, []string, error) {
 	}
 
 	output = strings.TrimSpace(output)
-	tags := strings.SplitN(output, ",", -1)
+	tags := strings.Split(output, ",")
 
 	return true, tags, nil
 }
@@ -350,7 +350,7 @@ func (d *lvm) createDefaultThinPool(lvmVersion, thinPoolName string, thinpoolSiz
 
 // lvmVersionIsAtLeast checks whether the installed version of LVM is at least the specific version.
 func (d *lvm) lvmVersionIsAtLeast(sTypeVersion string, versionString string) (bool, error) {
-	lvmVersionString := strings.Split(sTypeVersion, "/")[0]
+	lvmVersionString, _, _ := strings.Cut(sTypeVersion, "/")
 
 	lvmVersion, err := version.Parse(lvmVersionString)
 	if err != nil {
@@ -452,7 +452,9 @@ func (d *lvm) createLogicalVolume(vgName, thinPoolName string, vol Volume, makeT
 	}
 
 	if vol.contentType == ContentTypeFS {
-		_, err = makeFSType(volDevPath, vol.ConfigBlockFilesystem(), nil)
+		volFilesystem := vol.ConfigBlockFilesystem()
+		volCreateOptions := vol.ExpandedConfig("block.create_options")
+		_, err = makeFSType(volDevPath, volFilesystem, &mkfsOptions{ExtraArgs: volCreateOptions})
 		if err != nil {
 			return fmt.Errorf("Error making filesystem on LVM logical volume: %w", err)
 		}
@@ -587,9 +589,10 @@ func (d *lvm) lvmFullVolumeName(volType VolumeType, contentType ContentType, vol
 	}
 
 	contentTypeSuffix := ""
-	if contentType == ContentTypeBlock {
+	switch contentType {
+	case ContentTypeBlock:
 		contentTypeSuffix = lvmBlockVolSuffix
-	} else if contentType == ContentTypeISO {
+	case ContentTypeISO:
 		contentTypeSuffix = lvmISOVolSuffix
 	}
 
@@ -718,27 +721,27 @@ func (d *lvm) copyThinpoolVolume(vol, srcVol Volume, srcSnapshots []Volume, refr
 	}
 
 	if volExists {
-		if refresh {
-			newVolPath := d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, vol.name)
-			tmpVolName := fmt.Sprintf("%s%s", vol.name, tmpVolSuffix)
-			tmpVolPath := d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, tmpVolName)
-
-			// Rename existing volume to temporary new name so we can revert if needed.
-			err := d.renameLogicalVolume(newVolPath, tmpVolPath)
-			if err != nil {
-				return fmt.Errorf("Error temporarily renaming original LVM logical volume: %w", err)
-			}
-
-			// Record this volume to be removed at the very end.
-			removeVols = append(removeVols, tmpVolName)
-
-			reverter.Add(func() {
-				// Rename the original volume back to the original name.
-				_ = d.renameLogicalVolume(tmpVolPath, newVolPath)
-			})
-		} else {
+		if !refresh {
 			return fmt.Errorf("LVM volume already exists %q", vol.name)
 		}
+
+		newVolPath := d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, vol.name)
+		tmpVolName := fmt.Sprintf("%s%s", vol.name, tmpVolSuffix)
+		tmpVolPath := d.lvmPath(d.config["lvm.vg_name"], vol.volType, vol.contentType, tmpVolName)
+
+		// Rename existing volume to temporary new name so we can revert if needed.
+		err := d.renameLogicalVolume(newVolPath, tmpVolPath)
+		if err != nil {
+			return fmt.Errorf("Error temporarily renaming original LVM logical volume: %w", err)
+		}
+
+		// Record this volume to be removed at the very end.
+		removeVols = append(removeVols, tmpVolName)
+
+		reverter.Add(func() {
+			// Rename the original volume back to the original name.
+			_ = d.renameLogicalVolume(tmpVolPath, newVolPath)
+		})
 	} else {
 		volPath := vol.MountPath()
 		err := vol.EnsureMountPath(false)

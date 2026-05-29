@@ -309,7 +309,7 @@ func (n *physical) Delete(clientType request.ClientType) error {
 		return err
 	}
 
-	return n.common.delete(clientType)
+	return n.delete(clientType)
 }
 
 // Rename renames a network.
@@ -317,7 +317,7 @@ func (n *physical) Rename(newName string) error {
 	n.logger.Debug("Rename", logger.Ctx{"newName": newName})
 
 	// Rename common steps.
-	err := n.common.rename(newName)
+	err := n.rename(newName)
 	if err != nil {
 		return err
 	}
@@ -357,26 +357,43 @@ func (n *physical) setup(oldConfig map[string]string) error {
 
 	hostName := GetHostDevice(n.config["parent"], n.config["vlan"])
 
-	created, err := VLANInterfaceCreate(n.config["parent"], hostName, n.config["vlan"], util.IsTrue(n.config["gvrp"]))
-	if err != nil {
-		return err
+	// When the parent is a VLAN filtering native bridge and a VLAN is configured, don't create a
+	// stacked VLAN interface on the bridge. Such an interface would only be reachable if the VLAN was
+	// also present on the bridge's own self port, which would affect the whole bridge. Consumers of
+	// this network (such as OVN uplinks) connect to the parent bridge directly using a per-VLAN access
+	// port instead.
+	bridgeVLAN := false
+	if n.config["vlan"] != "" && IsNativeBridge(n.config["parent"]) {
+		status, err := BridgeVLANFilteringStatus(n.config["parent"])
+		if err == nil && status == "1" {
+			bridgeVLAN = true
+		}
 	}
 
-	if created {
-		reverter.Add(func() { _ = InterfaceRemove(hostName) })
-	}
-
-	// Set the MTU.
-	if n.config["mtu"] != "" {
-		mtu, err := strconv.ParseUint(n.config["mtu"], 10, 32)
+	var err error
+	created := false
+	if !bridgeVLAN {
+		created, err = VLANInterfaceCreate(n.config["parent"], hostName, n.config["vlan"], util.IsTrue(n.config["gvrp"]))
 		if err != nil {
-			return fmt.Errorf("Invalid MTU %q: %w", n.config["mtu"], err)
+			return err
 		}
 
-		phyLink := &ip.Link{Name: hostName}
-		err = phyLink.SetMTU(uint32(mtu))
-		if err != nil {
-			return fmt.Errorf("Failed setting MTU %q on %q: %w", n.config["mtu"], phyLink.Name, err)
+		if created {
+			reverter.Add(func() { _ = InterfaceRemove(hostName) })
+		}
+
+		// Set the MTU.
+		if n.config["mtu"] != "" {
+			mtu, err := strconv.ParseUint(n.config["mtu"], 10, 32)
+			if err != nil {
+				return fmt.Errorf("Invalid MTU %q: %w", n.config["mtu"], err)
+			}
+
+			phyLink := &ip.Link{Name: hostName}
+			err = phyLink.SetMTU(uint32(mtu))
+			if err != nil {
+				return fmt.Errorf("Failed setting MTU %q on %q: %w", n.config["mtu"], phyLink.Name, err)
+			}
 		}
 	}
 
@@ -449,7 +466,7 @@ func (n *physical) Stop() error {
 func (n *physical) Update(newNetwork api.NetworkPut, targetNode string, clientType request.ClientType) error {
 	n.logger.Debug("Update", logger.Ctx{"clientType": clientType, "newNetwork": newNetwork})
 
-	dbUpdateNeeded, changedKeys, oldNetwork, err := n.common.configChanged(newNetwork)
+	dbUpdateNeeded, changedKeys, oldNetwork, err := n.configChanged(newNetwork)
 	if err != nil {
 		return err
 	}
@@ -462,7 +479,7 @@ func (n *physical) Update(newNetwork api.NetworkPut, targetNode string, clientTy
 	// pending, then don't apply the new settings to the node, just to the database record (ready for the
 	// actual global create request to be initiated).
 	if n.Status() == api.NetworkStatusPending || n.LocalStatus() == api.NetworkStatusPending {
-		return n.common.update(newNetwork, targetNode, clientType)
+		return n.update(newNetwork, targetNode, clientType)
 	}
 
 	reverter := revert.New()
@@ -502,11 +519,11 @@ func (n *physical) Update(newNetwork api.NetworkPut, targetNode string, clientTy
 	// Define a function which reverts everything.
 	reverter.Add(func() {
 		// Reset changes to all nodes and database.
-		_ = n.common.update(oldNetwork, targetNode, clientType)
+		_ = n.update(oldNetwork, targetNode, clientType)
 	})
 
 	// Apply changes to all nodes and database.
-	err = n.common.update(newNetwork, targetNode, clientType)
+	err = n.update(newNetwork, targetNode, clientType)
 	if err != nil {
 		return err
 	}
@@ -550,7 +567,7 @@ func (n *physical) Update(newNetwork api.NetworkPut, targetNode string, clientTy
 	// Do this after the network has been successfully updated so that a failure to notify a dependent network
 	// doesn't prevent the network itself from being updated.
 	if clientType == request.ClientTypeNormal && len(changedKeys) > 0 {
-		n.common.notifyDependentNetworks(changedKeys)
+		n.notifyDependentNetworks(changedKeys)
 	}
 
 	return nil

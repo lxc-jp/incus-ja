@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"slices"
@@ -299,16 +300,16 @@ func createFromMigration(ctx context.Context, s *state.State, r *http.Request, p
 	if req.Source.Refresh || (clusterMoveSourceName != "" && clusterMoveSourceName == req.Name) {
 		inst, err = instance.LoadByProjectAndName(s, projectName, req.Name)
 		if err != nil {
-			if response.IsNotFoundError(err) {
-				if clusterMoveSourceName != "" {
-					// Cluster move doesn't allow renaming as part of migration so fail here.
-					return response.SmartError(errors.New("Cluster move doesn't allow renaming"))
-				}
-
-				req.Source.Refresh = false
-			} else {
+			if !response.IsNotFoundError(err) {
 				return response.SmartError(err)
 			}
+
+			if clusterMoveSourceName != "" {
+				// Cluster move doesn't allow renaming as part of migration so fail here.
+				return response.SmartError(errors.New("Cluster move doesn't allow renaming"))
+			}
+
+			req.Source.Refresh = false
 		}
 	}
 
@@ -363,9 +364,7 @@ func createFromMigration(ctx context.Context, s *state.State, r *http.Request, p
 				return nil
 			}
 
-			for k, v := range reqDevice {
-				devs[dev.Name][k] = v
-			}
+			maps.Copy(devs[dev.Name], reqDevice)
 
 			return nil
 		})
@@ -468,9 +467,7 @@ func createFromMigration(ctx context.Context, s *state.State, r *http.Request, p
 						return nil
 					}
 
-					for k, v := range reqDevice {
-						devs[dev.Name][k] = v
-					}
+					maps.Copy(devs[dev.Name], reqDevice)
 
 					return nil
 				})
@@ -567,7 +564,7 @@ func validateDependentVolumes(source instance.Instance, req *api.InstancesPost) 
 }
 
 // ErrPoolNotRemote indicates the pool is not remote.
-var ErrPoolNotRemote error = errors.New("Pool is not remote")
+var ErrPoolNotRemote = errors.New("Pool is not remote")
 
 // checkVolumesOnRemoteStorage checks whether root and dependent disks are located on remote storage.
 func checkVolumesOnRemoteStorage(s *state.State, pool *api.StoragePool, inst instance.Instance) error {
@@ -615,8 +612,8 @@ func createFromCopy(ctx context.Context, s *state.State, r *http.Request, projec
 		return response.SmartError(err)
 	}
 
-	// If "security.secureboot" has changed, force a NVRAM reset.
-	if util.IsTrueOrEmpty(source.ExpandedConfig()["security.secureboot"]) != util.IsTrueOrEmpty(req.Config["security.secureboot"]) {
+	// If "security.secureboot" has changed, force a NVRAM reset (VMs only).
+	if source.Type() == instancetype.VM && util.IsTrueOrEmpty(source.ExpandedConfig()["security.secureboot"]) != util.IsTrueOrEmpty(req.Config["security.secureboot"]) {
 		req.Config["volatile.apply_nvram"] = "true"
 	}
 
@@ -1657,7 +1654,12 @@ func clusterCopyContainerInternal(ctx context.Context, s *state.State, r *http.R
 
 	websockets := map[string]string{}
 	for k, v := range opAPI.Metadata {
-		websockets[k] = v.(string)
+		vStr, ok := v.(string)
+		if !ok {
+			continue
+		}
+
+		websockets[k] = vStr
 	}
 
 	// Reset the source for a migration

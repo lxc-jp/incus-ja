@@ -24,6 +24,7 @@ import (
 	"github.com/lxc/incus/v7/internal/server/db/cluster"
 	"github.com/lxc/incus/v7/internal/server/instance"
 	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/locking"
 	localMigration "github.com/lxc/incus/v7/internal/server/migration"
 	"github.com/lxc/incus/v7/internal/server/node"
 	"github.com/lxc/incus/v7/internal/server/operations"
@@ -850,7 +851,7 @@ func InstanceContentType(inst instance.ConfigReader) drivers.ContentType {
 // VolumeUsedByProfileDevices finds profiles using a volume and passes them to profileFunc for evaluation.
 // The profileFunc is provided with a profile config, project config and a list of device names that are using
 // the volume.
-func VolumeUsedByProfileDevices(s *state.State, poolName string, projectName string, vol *api.StorageVolume, profileFunc func(profileID int64, profile api.Profile, project api.Project, usedByDevices []string) error) error {
+func VolumeUsedByProfileDevices(s *state.State, poolName string, projectName string, vol *api.StorageVolume, profileFunc func(profileID int64, profile api.Profile, p api.Project, usedByDevices []string) error) error {
 	// Convert the volume type name to our internal integer representation.
 	volumeType, err := VolumeTypeNameToDBType(vol.Type)
 	if err != nil {
@@ -963,7 +964,7 @@ func VolumeUsedByProfileDevices(s *state.State, poolName string, projectName str
 // is returned immediately. The instanceFunc is executed during a DB transaction, so DB queries are not permitted.
 // The instanceFunc is provided with a instance config, project config, instance's profiles and a list of device
 // names that are using the volume.
-func VolumeUsedByInstanceDevices(s *state.State, poolName string, projectName string, vol *api.StorageVolume, expandDevices bool, instanceFunc func(inst db.InstanceArgs, project api.Project, usedByDevices []string) error) error {
+func VolumeUsedByInstanceDevices(s *state.State, poolName string, projectName string, vol *api.StorageVolume, expandDevices bool, instanceFunc func(inst db.InstanceArgs, p api.Project, usedByDevices []string) error) error {
 	// Convert the volume type name to our internal integer representation.
 	volumeType, err := VolumeTypeNameToDBType(vol.Type)
 	if err != nil {
@@ -1041,7 +1042,7 @@ func VolumeUsedByExclusiveRemoteInstancesWithProfiles(s *state.State, poolName s
 	// Always return nil if the storage driver supports mounting volumes
 	// on multiple nodes at once and we're not dealing with a filesystem volume
 	// on top of a block device.
-	if info.VolumeMultiNode && !(info.BlockBacking && vol.ContentType == "filesystem") {
+	if info.VolumeMultiNode && (!info.BlockBacking || vol.ContentType != "filesystem") {
 		return nil, nil
 	}
 
@@ -1062,31 +1063,26 @@ func VolumeUsedByExclusiveRemoteInstancesWithProfiles(s *state.State, poolName s
 	return remoteInstance, nil
 }
 
-// VolumeUsedByDaemon indicates whether the volume is used by daemon storage.
-func VolumeUsedByDaemon(s *state.State, poolName string, volumeName string) (bool, error) {
-	var storageBackups string
-	var storageImages string
+// VolumeUsedByDaemon indicates whether the volume is used by daemon storage, by returning a
+// configuration fragment.
+func VolumeUsedByDaemon(s *state.State, poolName string, volumeName string) (string, error) {
+	daemonVolumes := make(map[string]string, 3)
 	err := s.DB.Node.Transaction(context.TODO(), func(ctx context.Context, tx *db.NodeTx) error {
 		nodeConfig, err := node.ConfigLoad(ctx, tx)
 		if err != nil {
 			return err
 		}
 
-		storageBackups = nodeConfig.StorageBackupsVolume()
-		storageImages = nodeConfig.StorageImagesVolume()
-
+		daemonVolumes[nodeConfig.StorageBackupsVolume()] = "storage.backups_volume"
+		daemonVolumes[nodeConfig.StorageImagesVolume()] = "storage.images_volume"
+		daemonVolumes[nodeConfig.StorageLogsVolume()] = "storage.logs_volume"
 		return nil
 	})
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
-	fullName := fmt.Sprintf("%s/%s", poolName, volumeName)
-	if storageBackups == fullName || storageImages == fullName {
-		return true, nil
-	}
-
-	return false, nil
+	return daemonVolumes[fmt.Sprintf("%s/%s", poolName, volumeName)], nil
 }
 
 // FallbackMigrationType returns the fallback migration transport to use based on volume content type.
@@ -1554,4 +1550,19 @@ func DevicesMapFromBackupConfig(config *backupConfig.Config) map[string]map[stri
 	}
 
 	return devicesMap
+}
+
+// nbdOperationLock acquires a lock for NBD operations on an instance and
+// returns an unlock function.
+func nbdOperationLock(projectName string, instanceName string) (locking.UnlockFunc, error) {
+	l := logger.AddContext(logger.Ctx{"project": projectName, "instance": instanceName})
+	l.Debug("Acquiring NBD lock for instance")
+	defer l.Debug("NBD lock acquired for instance")
+
+	unlock, _ := locking.TryLock(fmt.Sprintf("NBDInstanceOperation_%s", project.Instance(projectName, instanceName)))
+	if unlock == nil {
+		return nil, fmt.Errorf("NBD operation for instance %s already in progress", instanceName)
+	}
+
+	return unlock, nil
 }

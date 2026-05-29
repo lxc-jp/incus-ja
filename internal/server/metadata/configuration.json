@@ -2622,7 +2622,7 @@
 						"limits.cpu": {
 							"defaultdesc": "1 (VMs)",
 							"liveupdate": "yes",
-							"longdesc": "A number or a specific range of CPUs to expose to the instance.\n\nSee {ref}`instance-options-limits-cpu` for more information.",
+							"longdesc": "A number or a specific range of CPUs to expose to the instance.\nFor virtual machines, a CPU topology of the form `sockets=2,cores=4,threads=2` may also be provided.\n\nSee {ref}`instance-options-limits-cpu` for more information.",
 							"shortdesc": "Which CPUs to expose to the instance",
 							"type": "string"
 						}
@@ -3137,16 +3137,16 @@
 					{
 						"snapshots.expiry": {
 							"liveupdate": "no",
-							"longdesc": "Specify an expression like `1M 2H 3d 4w 5m 6y`.",
-							"shortdesc": "When snapshots are to be deleted",
+							"longdesc": "Specify an expression like `1M 2H 3d 4w 5m 6y`.\n\nThis value is used to compute the expiry date of newly created snapshots.\nIt is added to the current time when a snapshot is taken, and the resulting timestamp is stored as that snapshot's individual expiry date.\nChanging this value only affects snapshots created after the change; the expiry date of existing snapshots is not modified.\n\nThe supported units are `S` (seconds), `M` (minutes), `H` (hours), `d` (days), `w` (weeks), `m` (months) and `y` (years).",
+							"shortdesc": "When newly created snapshots are to be deleted",
 							"type": "string"
 						}
 					},
 					{
 						"snapshots.expiry.manual": {
 							"liveupdate": "no",
-							"longdesc": "Specify an expression like `1M 2H 3d 4w 5m 6y`.",
-							"shortdesc": "When snapshots are to be deleted (for those not created through scheduling)",
+							"longdesc": "Specify an expression like `1M 2H 3d 4w 5m 6y`.\n\nThis value is used to compute the expiry date of newly created snapshots that are not created through scheduling.\nIt is added to the current time when a snapshot is taken, and the resulting timestamp is stored as that snapshot's individual expiry date.\nChanging this value only affects snapshots created after the change; the expiry date of existing snapshots is not modified.\n\nSee {config:option}`instance-snapshots:snapshots.expiry` for the supported units.",
+							"shortdesc": "When newly created snapshots are to be deleted (for those not created through scheduling)",
 							"type": "string"
 						}
 					},
@@ -3424,6 +3424,13 @@
 						"volatile.idmap.next": {
 							"longdesc": "",
 							"shortdesc": "The idmap to use the next time the instance starts",
+							"type": "string"
+						}
+					},
+					{
+						"volatile.last_state.agent": {
+							"longdesc": "",
+							"shortdesc": "Instance agent state as of last host shutdown",
 							"type": "string"
 						}
 					},
@@ -3717,6 +3724,15 @@
 							"longdesc": "",
 							"shortdesc": "Bridge MTU (default varies if tunnel in use)",
 							"type": "integer"
+						}
+					},
+					{
+						"bridge.multicast_snooping": {
+							"condition": "native bridge",
+							"default": "`true`",
+							"longdesc": "",
+							"shortdesc": "Whether to enable multicast snooping on the bridge",
+							"type": "bool"
 						}
 					},
 					{
@@ -6035,6 +6051,22 @@
 						}
 					},
 					{
+						"instances.tpm.platform_cert": {
+							"longdesc": "PEM encoded platform CA certificate used to sign the Endorsement\nKey and platform certificate of newly created TPM devices.\nMust be set together with `instances.tpm.platform_key`.",
+							"scope": "global",
+							"shortdesc": "Platform CA certificate used to provision TPM Endorsement Keys",
+							"type": "string"
+						}
+					},
+					{
+						"instances.tpm.platform_key": {
+							"longdesc": "PEM encoded private key matching `instances.tpm.platform_cert`.\nUsed to sign the Endorsement Key and platform certificate of newly\ncreated TPM devices.",
+							"scope": "global",
+							"shortdesc": "Private key for the TPM platform CA certificate",
+							"type": "string"
+						}
+					},
+					{
 						"network.ovn.ca_cert": {
 							"defaultdesc": "Content of `/etc/ovn/ovn-central.crt` if present",
 							"longdesc": "",
@@ -6243,6 +6275,15 @@
 		"storage_btrfs": {
 			"common": {
 				"keys": [
+					{
+						"btrfs.create_options": {
+							"default": "-",
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "Additional options to pass to `mkfs.btrfs` when creating the pool",
+							"type": "string"
+						}
+					},
 					{
 						"btrfs.mount_options": {
 							"default": "`user_subvol_rm_allowed`",
@@ -6666,6 +6707,14 @@
 						}
 					},
 					{
+						"linstor.raw.*": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "Extra LINSTOR properties to set. For example, `BCache/PoolName` is encoded as `linstor.raw.BCache/PoolName`.",
+							"type": "string"
+						}
+					},
+					{
 						"linstor.resource_group.name": {
 							"default": "`incus`",
 							"longdesc": "",
@@ -6983,7 +7032,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -6992,7 +7041,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7021,6 +7070,15 @@
 		"storage_volume_ceph": {
 			"common": {
 				"keys": [
+					{
+						"block.create_options": {
+							"condition": "block-based volume with content type `filesystem`",
+							"default": "same as `volume.block.create_options`",
+							"longdesc": "",
+							"shortdesc": "Additional options to pass to the file system creation tool when formatting the volume",
+							"type": "string"
+						}
+					},
 					{
 						"block.filesystem": {
 							"condition": "block-based volume with content type `filesystem`",
@@ -7106,7 +7164,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7115,7 +7173,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7211,7 +7269,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7220,7 +7278,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7316,7 +7374,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7325,7 +7383,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7354,6 +7412,15 @@
 		"storage_volume_linstor": {
 			"common": {
 				"keys": [
+					{
+						"block.create_options": {
+							"condition": "block-based volume with content type `filesystem`",
+							"default": "same as `volume.block.create_options`",
+							"longdesc": "",
+							"shortdesc": "Additional options to pass to the file system creation tool when formatting the volume",
+							"type": "string"
+						}
+					},
 					{
 						"block.filesystem": {
 							"condition": "block-based volume with content type `filesystem`",
@@ -7427,6 +7494,14 @@
 						}
 					},
 					{
+						"linstor.raw.*": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "Extra LINSTOR properties to set. For example, `BCache/PoolName` is encoded as `linstor.raw.BCache/PoolName`.",
+							"type": "string"
+						}
+					},
+					{
 						"linstor.remove_snapshots": {
 							"condition": "-",
 							"default": "same as `volume.linstor.remove_snapshots` or `false`",
@@ -7475,7 +7550,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7484,7 +7559,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7513,6 +7588,15 @@
 		"storage_volume_lvm": {
 			"common": {
 				"keys": [
+					{
+						"block.create_options": {
+							"condition": "block-based volume with content type `filesystem`",
+							"default": "same as `volume.block.create_options`",
+							"longdesc": "",
+							"shortdesc": "Additional options to pass to the file system creation tool when formatting the volume",
+							"type": "string"
+						}
+					},
 					{
 						"block.filesystem": {
 							"condition": "block-based volume with content type `filesystem`",
@@ -7624,7 +7708,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7633,7 +7717,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7662,6 +7746,15 @@
 		"storage_volume_truenas": {
 			"common": {
 				"keys": [
+					{
+						"block.create_options": {
+							"condition": "-",
+							"default": "same as `volume.block.create_options`",
+							"longdesc": "",
+							"shortdesc": "Additional options to pass to the file system creation tool when formatting the volume",
+							"type": "string"
+						}
+					},
 					{
 						"block.filesystem": {
 							"condition": "-",
@@ -7747,7 +7840,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7756,7 +7849,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7812,6 +7905,15 @@
 		"storage_volume_zfs": {
 			"common": {
 				"keys": [
+					{
+						"block.create_options": {
+							"condition": "block-based volume with content type `filesystem` (`zfs.block_mode` enabled)",
+							"default": "same as `volume.block.create_options`",
+							"longdesc": "",
+							"shortdesc": "Additional options to pass to the file system creation tool when formatting the volume",
+							"type": "string"
+						}
+					},
 					{
 						"block.filesystem": {
 							"condition": "block-based volume with content type `filesystem` (`zfs.block_mode` enabled)",
@@ -7897,7 +7999,7 @@
 						"snapshots.expiry": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}
@@ -7906,7 +8008,7 @@
 						"snapshots.expiry.manual": {
 							"condition": "custom volume",
 							"default": "same as `volume.snapshot.expiry.manual`",
-							"longdesc": "",
+							"longdesc": "{{snapshot_expiry_detail}}",
 							"shortdesc": "{{snapshot_expiry_format}}",
 							"type": "string"
 						}

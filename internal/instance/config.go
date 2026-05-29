@@ -180,6 +180,7 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 
 	// gendoc:generate(entity=instance, group=resource-limits, key=limits.cpu)
 	// A number or a specific range of CPUs to expose to the instance.
+	// For virtual machines, a CPU topology of the form `sockets=2,cores=4,threads=2` may also be provided.
 	//
 	// See {ref}`instance-options-limits-cpu` for more information.
 	// ---
@@ -187,7 +188,15 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//  defaultdesc: 1 (VMs)
 	//  liveupdate: yes
 	//  shortdesc: Which CPUs to expose to the instance
-	"limits.cpu": validate.Optional(validate.IsValidCPUSet),
+	"limits.cpu": validate.Optional(func(value string) error {
+		// A CPU topology (e.g. "sockets=2,cores=4,threads=2") is only valid for VMs and is
+		// rejected for containers later on, once the instance type is known.
+		if strings.Contains(value, "=") {
+			return validate.IsValidCPUTopology(value)
+		}
+
+		return validate.IsValidCPUSet(value)
+	}),
 
 	// gendoc:generate(entity=instance, group=resource-limits, key=limits.cpu.nodes)
 	// A comma-separated list of NUMA node IDs or ranges to place the instance CPUs on.
@@ -226,8 +235,9 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 			return nil
 		}
 
-		if strings.HasSuffix(value, "%") {
-			num, err := strconv.ParseInt(strings.TrimSuffix(value, "%"), 10, 64)
+		before, ok := strings.CutSuffix(value, "%")
+		if ok {
+			num, err := strconv.ParseInt(before, 10, 64)
 			if err != nil {
 				return err
 			}
@@ -344,10 +354,16 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 
 	// gendoc:generate(entity=instance, group=snapshots, key=snapshots.expiry)
 	// Specify an expression like `1M 2H 3d 4w 5m 6y`.
+	//
+	// This value is used to compute the expiry date of newly created snapshots.
+	// It is added to the current time when a snapshot is taken, and the resulting timestamp is stored as that snapshot's individual expiry date.
+	// Changing this value only affects snapshots created after the change; the expiry date of existing snapshots is not modified.
+	//
+	// The supported units are `S` (seconds), `M` (minutes), `H` (hours), `d` (days), `w` (weeks), `m` (months) and `y` (years).
 	// ---
 	//  type: string
 	//  liveupdate: no
-	//  shortdesc: When snapshots are to be deleted
+	//  shortdesc: When newly created snapshots are to be deleted
 	"snapshots.expiry": func(value string) error {
 		// Validate expression
 		_, err := GetExpiry(time.Time{}, value)
@@ -356,10 +372,16 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 
 	// gendoc:generate(entity=instance, group=snapshots, key=snapshots.expiry.manual)
 	// Specify an expression like `1M 2H 3d 4w 5m 6y`.
+	//
+	// This value is used to compute the expiry date of newly created snapshots that are not created through scheduling.
+	// It is added to the current time when a snapshot is taken, and the resulting timestamp is stored as that snapshot's individual expiry date.
+	// Changing this value only affects snapshots created after the change; the expiry date of existing snapshots is not modified.
+	//
+	// See {config:option}`instance-snapshots:snapshots.expiry` for the supported units.
 	// ---
 	//  type: string
 	//  liveupdate: no
-	//  shortdesc: When snapshots are to be deleted (for those not created through scheduling)
+	//  shortdesc: When newly created snapshots are to be deleted (for those not created through scheduling)
 	"snapshots.expiry.manual": func(value string) error {
 		// Validate expression
 		_, err := GetExpiry(time.Time{}, value)
@@ -425,6 +447,13 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//  shortdesc: Instance marked itself as ready
 	"volatile.last_state.ready": validate.IsBool,
 
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.last_state.agent)
+	//
+	// ---
+	//  type: string
+	//  shortdesc: Instance agent state as of last host shutdown
+	"volatile.last_state.agent": validate.IsAny,
+
 	// gendoc:generate(entity=instance, group=volatile, key=volatile.rebalance.last_move)
 	//
 	// ---
@@ -466,9 +495,10 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 			return nil
 		}
 
-		if strings.HasSuffix(value, "%") {
+		before, ok := strings.CutSuffix(value, "%")
+		if ok {
 			// Percentage based allocation
-			_, err := strconv.Atoi(strings.TrimSuffix(value, "%"))
+			_, err := strconv.Atoi(before)
 			if err != nil {
 				return err
 			}

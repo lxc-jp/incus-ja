@@ -107,13 +107,13 @@ func storagePoolVolumeUsedByGet(s *state.State, requestProjectName string, poolN
 	}
 
 	// Check if the daemon itself is using it.
-	used, err := storagePools.VolumeUsedByDaemon(s, poolName, vol.Name)
+	frag, err := storagePools.VolumeUsedByDaemon(s, poolName, vol.Name)
 	if err != nil {
 		return []string{}, err
 	}
 
-	if used {
-		return []string{api.NewURL().Path(version.APIVersion).String()}, nil
+	if frag != "" {
+		return []string{api.NewURL().Path(version.APIVersion).Target(vol.Location).Fragment(frag).String()}, nil
 	}
 
 	// Look for instances using this volume.
@@ -152,8 +152,8 @@ func storagePoolVolumeBackupLoadByName(ctx context.Context, s *state.State, proj
 		return nil, err
 	}
 
-	volumeName := strings.Split(backupName, "/")[0]
-	backup := backup.NewVolumeBackup(s, projectName, poolName, volumeName, b.ID, b.Name, b.CreationDate, b.ExpiryDate, b.VolumeOnly, b.OptimizedStorage)
+	volumeName, _, _ := strings.Cut(backupName, "/")
+	volBackup := backup.NewVolumeBackup(s, projectName, poolName, volumeName, b.ID, b.Name, b.CreationDate, b.ExpiryDate, b.VolumeOnly, b.OptimizedStorage)
 
-	return backup, nil
+	return volBackup, nil
 }

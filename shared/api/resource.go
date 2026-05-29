@@ -802,10 +802,10 @@ type ResourcesMemoryNode struct {
 // API extension: resources.
 type ResourcesStoragePool struct {
 	// Disk space usage
-	Space ResourcesStoragePoolSpace `json:"space,omitempty" yaml:"space,omitempty"`
+	Space ResourcesStoragePoolSpace `json:"space" yaml:"space"`
 
 	// Disk inode usage
-	Inodes ResourcesStoragePoolInodes `json:"inodes,omitempty" yaml:"inodes,omitempty"`
+	Inodes ResourcesStoragePoolInodes `json:"inodes" yaml:"inodes"`
 }
 
 // ResourcesStoragePoolSpace represents the space available to a given storage pool
@@ -1007,7 +1007,7 @@ type ResourcesPCIVPD struct {
 	ProductName string `json:"product_name,omitempty" yaml:"product_name,omitempty"`
 
 	// Vendor provided key/value pairs.
-	// Example: {"EC": ""A-5545", "MN": "103C", "V0": "5W PCIeGen2"}
+	// Example: {"EC": "A-5545", "MN": "103C", "V0": "5W PCIeGen2"}
 	Entries map[string]string `json:"entries,omitempty" yaml:"entries,omitempty"`
 }
 

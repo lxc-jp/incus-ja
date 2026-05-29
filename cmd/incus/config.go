@@ -97,7 +97,7 @@ func (c *cmdConfigEdit) command() *cobra.Command {
 		`Edit instance or server configurations as YAML`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus config edit <instance> < instance.yaml
-    Update the instance configuration from config.yaml.`))
+    Update the instance configuration from instance.yaml.`))
 
 	cli.AddStringFlag(cmd.Flags(), &c.config.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cmd.RunE = c.run
@@ -136,7 +136,7 @@ func (c *cmdConfigEdit) helpTemplate() string {
 }
 
 func (c *cmdConfigEdit) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdConfigEditUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdConfigEditUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func (c *cmdConfigGet) command() *cobra.Command {
 func (c *cmdConfigGet) run(cmd *cobra.Command, args []string) error {
 	// Do NOT blindly copy the following parsing line; it performs right-to-left parsing, which in
 	// most cases is NOT what you want.
-	parsed, err := cmdConfigGetUsage.Parse(c.global.conf, cmd, args, true)
+	parsed, err := c.global.Parse(cmdConfigGetUsage, cmd, args, true)
 	if err != nil {
 		return err
 	}
@@ -587,7 +587,7 @@ func (c *cmdConfigSet) set(cmd *cobra.Command, parsed []*u.Parsed) error {
 				return op.Wait()
 			}
 
-			return errors.New(i18n.G("The is no config key to set on an instance snapshot."))
+			return errors.New(i18n.G("There is no config key to set on an instance snapshot."))
 		}
 
 		inst, etag, err := d.GetInstance(parsedPath.String)
@@ -660,7 +660,7 @@ func (c *cmdConfigSet) set(cmd *cobra.Command, parsed []*u.Parsed) error {
 func (c *cmdConfigSet) run(cmd *cobra.Command, args []string) error {
 	// Do NOT blindly copy the following parsing line; it performs right-to-left parsing, which in
 	// most cases is NOT what you want.
-	parsed, err := cmdConfigSetUsage.Parse(c.global.conf, cmd, args, true)
+	parsed, err := c.global.Parse(cmdConfigSetUsage, cmd, args, true)
 	if err != nil {
 		return err
 	}
@@ -701,7 +701,7 @@ func (c *cmdConfigShow) command() *cobra.Command {
 }
 
 func (c *cmdConfigShow) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdConfigShowUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdConfigShowUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -828,7 +828,7 @@ func (c *cmdConfigUnset) command() *cobra.Command {
 func (c *cmdConfigUnset) run(cmd *cobra.Command, args []string) error {
 	// Do NOT blindly copy the following parsing line; it performs right-to-left parsing, which in
 	// most cases is NOT what you want.
-	parsed, err := cmdConfigUnsetUsage.Parse(c.global.conf, cmd, args, true)
+	parsed, err := c.global.Parse(cmdConfigUnsetUsage, cmd, args, true)
 	if err != nil {
 		return err
 	}

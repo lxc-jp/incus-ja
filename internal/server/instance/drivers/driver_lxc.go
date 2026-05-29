@@ -153,7 +153,7 @@ func lxcSetConfigItem(c *liblxc.Container, key string, value string) error {
 	return nil
 }
 
-func lxcStatusCode(state liblxc.State) api.StatusCode {
+func lxcStatusCode(lxcState liblxc.State) api.StatusCode {
 	return map[int]api.StatusCode{
 		1: api.Stopped,
 		2: api.Starting,
@@ -164,7 +164,7 @@ func lxcStatusCode(state liblxc.State) api.StatusCode {
 		7: api.Frozen,
 		8: api.Thawed,
 		9: api.Error,
-	}[int(state)]
+	}[int(lxcState)]
 }
 
 // lxcCreate creates the DB storage records and sets up instance devices.
@@ -727,9 +727,11 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		}
 	}
 
-	err = lxcSetConfigItem(cc, "lxc.sched.core", "1")
-	if err != nil {
-		return nil, err
+	if d.state.OS.CoreScheduling {
+		err = lxcSetConfigItem(cc, "lxc.sched.core", "1")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Allow for lightweight init
@@ -1051,7 +1053,8 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		//  shortdesc: Environment variables to export
 		after, ok := strings.CutPrefix(k, "environment.")
 		if ok {
-			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("%s=%s", after, v))
+			// LXC supports quoting the value between " even if the value itself contains ".
+			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("%s=\"%s\"", after, v))
 			if err != nil {
 				return nil, err
 			}
@@ -1097,7 +1100,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 				return nil, err
 			}
 		} else {
-			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_DRIVER_CAPABILITIES=%s", nvidiaDriver))
+			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_DRIVER_CAPABILITIES=\"%s\"", nvidiaDriver))
 			if err != nil {
 				return nil, err
 			}
@@ -1105,7 +1108,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 
 		nvidiaRequireCuda := d.expandedConfig["nvidia.require.cuda"]
 		if nvidiaRequireCuda == "" {
-			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_REQUIRE_CUDA=%s", nvidiaRequireCuda))
+			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_REQUIRE_CUDA=\"%s\"", nvidiaRequireCuda))
 			if err != nil {
 				return nil, err
 			}
@@ -1113,7 +1116,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 
 		nvidiaRequireDriver := d.expandedConfig["nvidia.require.driver"]
 		if nvidiaRequireDriver == "" {
-			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_REQUIRE_DRIVER=%s", nvidiaRequireDriver))
+			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_REQUIRE_DRIVER=\"%s\"", nvidiaRequireDriver))
 			if err != nil {
 				return nil, err
 			}
@@ -1173,7 +1176,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		// Configure the swappiness
 		if util.IsFalse(memorySwap) {
 			err = cg.SetMemorySwappiness(0)
-			if err != nil {
+			if err != nil && !errors.Is(err, cgroup.ErrControllerMissing) {
 				return nil, err
 			}
 		} else if memorySwapPriority != "" {
@@ -1332,7 +1335,7 @@ var (
 // IdmappedStorage determines if the container can use idmapped mounts.
 func (d *lxc) IdmappedStorage(fspath string, fstype string) idmap.StorageType {
 	var mode idmap.StorageType = idmap.StorageTypeNone
-	var bindMount bool = fstype == "none" || fstype == ""
+	bindMount := fstype == "none" || fstype == ""
 
 	buf := &unix.Statfs_t{}
 
@@ -1521,9 +1524,10 @@ func (d *lxc) deviceAttachNIC(devName string, configCopy map[string]string, netI
 	ctDevName := ""
 	connected := true
 	for _, dev := range netIF {
-		if dev.Key == "link" {
+		switch dev.Key {
+		case "link":
 			ctDevName = dev.Value
-		} else if dev.Key == "connected" {
+		case "connected":
 			connected = util.IsTrueOrEmpty(dev.Value)
 		}
 	}
@@ -1677,11 +1681,12 @@ func (d *lxc) deviceHandleMounts(mounts []deviceConfig.MountEntryItem) error {
 
 			// Convert options into flags.
 			for _, opt := range mount.Opts {
-				if opt == "bind" {
+				switch opt {
+				case "bind":
 					flags |= unix.MS_BIND
-				} else if opt == "rbind" {
+				case "rbind":
 					flags |= unix.MS_BIND | unix.MS_REC
-				} else if opt == "ro" {
+				case "ro":
 					flags |= unix.MS_RDONLY
 				}
 			}
@@ -1700,30 +1705,37 @@ func (d *lxc) deviceHandleMounts(mounts []deviceConfig.MountEntryItem) error {
 				return fmt.Errorf("Failed to add mount for device inside container: %s", err)
 			}
 		} else {
-			relativeTargetPath := strings.TrimPrefix(mount.TargetPath, "/")
+			err := func() error {
+				relativeTargetPath := strings.TrimPrefix(mount.TargetPath, "/")
 
-			// Connect to files API.
-			files, err := d.FileSFTP()
-			if err != nil {
-				return err
-			}
-
-			defer func() { _ = files.Close() }()
-
-			_, err = files.Lstat(relativeTargetPath)
-			if err == nil {
-				err := d.removeMount(mount.TargetPath)
+				// Connect to files API.
+				files, err := d.FileSFTP()
 				if err != nil {
-					return fmt.Errorf("Error unmounting the device path inside container: %s", err)
+					return err
 				}
 
-				// Only remove mountpoints created in /dev.
-				if strings.HasPrefix(mount.TargetPath, "dev/") {
-					err := files.Remove(relativeTargetPath)
+				defer func() { _ = files.Close() }()
+
+				_, err = files.Lstat(relativeTargetPath)
+				if err == nil {
+					err := d.removeMount(mount.TargetPath)
 					if err != nil {
-						return err
+						return fmt.Errorf("Error unmounting the device path inside container: %s", err)
+					}
+
+					// Only remove mountpoints created in /dev.
+					if strings.HasPrefix(mount.TargetPath, "dev/") {
+						err := files.Remove(relativeTargetPath)
+						if err != nil {
+							return err
+						}
 					}
 				}
+
+				return nil
+			}()
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -1871,11 +1883,12 @@ func (d *lxc) handleIdmappedStorage() (idmap.StorageType, *idmap.Set, error) {
 
 	// Revert the currently applied on-disk idmap.
 	if diskIdmap != nil {
-		if storageType == "zfs" {
+		switch storageType {
+		case "zfs":
 			err = diskIdmap.UnshiftPath(d.RootfsPath(), storageDrivers.ShiftZFSSkipper)
-		} else if storageType == "btrfs" {
+		case "btrfs":
 			err = storageDrivers.UnshiftBtrfsRootfs(d.RootfsPath(), diskIdmap)
-		} else {
+		default:
 			err = diskIdmap.UnshiftPath(d.RootfsPath(), nil)
 		}
 
@@ -1890,11 +1903,12 @@ func (d *lxc) handleIdmappedStorage() (idmap.StorageType, *idmap.Set, error) {
 	// idmap of the container now. Otherwise we will later instruct LXC to
 	// make use of idmapped storage.
 	if nextIdmap != nil && idmapType == idmap.StorageTypeNone {
-		if storageType == "zfs" {
+		switch storageType {
+		case "zfs":
 			err = nextIdmap.ShiftPath(d.RootfsPath(), storageDrivers.ShiftZFSSkipper)
-		} else if storageType == "btrfs" {
+		case "btrfs":
 			err = storageDrivers.ShiftBtrfsRootfs(d.RootfsPath(), nextIdmap)
-		} else {
+		default:
 			err = nextIdmap.ShiftPath(d.RootfsPath(), nil)
 		}
 
@@ -2221,13 +2235,13 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 
 		// Pass any mounts into LXC.
 		if len(runConf.Mounts) > 0 {
-			escapePathFstab := func(path string) string {
+			escapePathFstab := func(mountPath string) string {
 				r := strings.NewReplacer(
 					" ", "\\040",
 					"\t", "\\011",
 					"\n", "\\012",
 					"\\", "\\\\")
-				return r.Replace(path)
+				return r.Replace(mountPath)
 			}
 
 			for _, mount := range runConf.Mounts {
@@ -2304,7 +2318,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 
 	// Override NVIDIA_VISIBLE_DEVICES if we have devices that need it.
 	if len(nvidiaDevices) > 0 {
-		err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_VISIBLE_DEVICES=%s", strings.Join(nvidiaDevices, ",")))
+		err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("NVIDIA_VISIBLE_DEVICES=\"%s\"", strings.Join(nvidiaDevices, ",")))
 		if err != nil {
 			return "", nil, fmt.Errorf("Unable to set NVIDIA_VISIBLE_DEVICES in LXC environment: %w", err)
 		}
@@ -3697,8 +3711,8 @@ func (d *lxc) getLxcState() (liblxc.State, error) {
 	}(cc)
 
 	select {
-	case state := <-monitor:
-		return state, nil
+	case lxcState := <-monitor:
+		return lxcState, nil
 	case <-time.After(5 * time.Second):
 		return liblxc.StateMap["FROZEN"], errors.New("Monitor is unresponsive")
 	}
@@ -3730,7 +3744,11 @@ func (d *lxc) RenderWithUsage() (any, any, error) {
 		return resp, etag, nil
 	}
 
-	snapResp.Size = volumeState.Used
+	// A negative usage means the driver couldn't determine it, so leave the size unset.
+	if volumeState.Used >= 0 {
+		snapResp.Size = volumeState.Used
+	}
+
 	return snapResp, etag, nil
 }
 
@@ -4993,25 +5011,32 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 						return err
 					}
 				} else {
-					// Connect to files API.
-					files, err := d.FileSFTP()
+					err = func() error {
+						// Connect to files API.
+						files, err := d.FileSFTP()
+						if err != nil {
+							return err
+						}
+
+						defer func() { _ = files.Close() }()
+
+						_, err = files.Lstat("/dev/incus")
+						if err == nil {
+							err = d.removeMount("/dev/incus")
+							if err != nil {
+								return err
+							}
+
+							err = files.Remove("/dev/incus")
+							if err != nil {
+								return err
+							}
+						}
+
+						return nil
+					}()
 					if err != nil {
 						return err
-					}
-
-					defer func() { _ = files.Close() }()
-
-					_, err = files.Lstat("/dev/incus")
-					if err == nil {
-						err = d.removeMount("/dev/incus")
-						if err != nil {
-							return err
-						}
-
-						err = files.Remove("/dev/incus")
-						if err != nil {
-							return err
-						}
 					}
 				}
 			} else if key == "linux.kernel_modules" && value != "" {
@@ -5175,7 +5200,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 					memorySwapPriority := d.expandedConfig["limits.memory.swap.priority"]
 					if util.IsFalse(memorySwap) {
 						err = cg.SetMemorySwappiness(0)
-						if err != nil {
+						if err != nil && !errors.Is(err, cgroup.ErrControllerMissing) {
 							return err
 						}
 					} else {
@@ -5189,12 +5214,11 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 						// Maximum priority (10) should be default swappiness (60).
 						err = cg.SetMemorySwappiness(int64(70 - priority))
-						if err != nil {
+						if err != nil && !errors.Is(err, cgroup.ErrControllerMissing) {
 							return err
 						}
 					}
 				}
-
 			} else if key == "limits.cpu" || key == "limits.cpu.nodes" {
 				// Clear the "volatile.cpu.nodes" if needed.
 				d.ClearLimitsCPUNodes(changedConfig)
@@ -5443,18 +5467,18 @@ func (d *lxc) Export(metaWriter io.Writer, rootfsWriter io.Writer, properties ma
 	defer func() { _ = d.unmount() }()
 
 	// Get IDMap to unshift container as the tarball is created.
-	idmap, err := d.DiskIdmap()
+	diskIdmap, err := d.DiskIdmap()
 	if err != nil {
 		d.logger.Error("Failed exporting instance", ctxMap)
 		return nil, err
 	}
 
 	// Create the tarball.
-	metaTarWriter := instancewriter.NewInstanceTarWriter(metaWriter, idmap)
+	metaTarWriter := instancewriter.NewInstanceTarWriter(metaWriter, diskIdmap)
 
 	var rootfsTarWriter *instancewriter.InstanceTarWriter
 	if rootfsWriter != nil {
-		rootfsTarWriter = instancewriter.NewInstanceTarWriter(rootfsWriter, idmap)
+		rootfsTarWriter = instancewriter.NewInstanceTarWriter(rootfsWriter, diskIdmap)
 	}
 
 	// Keep track of the first path we saw for each path with nlink>1.
@@ -5799,6 +5823,7 @@ fi
 	return f.Close()
 }
 
+// MigrateSend sends an instance to a target for migration.
 func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	d.logger.Debug("Migration send starting")
 	defer d.logger.Debug("Migration send stopped")
@@ -5894,7 +5919,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	} else if idmapset != nil {
 		offerHeader.Idmap = make([]*migration.IDMapType, 0, len(idmapset.Entries))
 		for _, ctnIdmap := range idmapset.Entries {
-			idmap := migration.IDMapType{
+			idmapEntry := migration.IDMapType{
 				Isuid:    proto.Bool(ctnIdmap.IsUID),
 				Isgid:    proto.Bool(ctnIdmap.IsGID),
 				Hostid:   proto.Int32(int32(ctnIdmap.HostID)),
@@ -5902,7 +5927,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 				Maprange: proto.Int32(int32(ctnIdmap.MapRange)),
 			}
 
-			offerHeader.Idmap = append(offerHeader.Idmap, &idmap)
+			offerHeader.Idmap = append(offerHeader.Idmap, &idmapEntry)
 		}
 	}
 
@@ -6367,9 +6392,9 @@ func (d *lxc) migrateSendPreDumpLoop(args *preDumpLoopArgs) (bool, error) {
 
 	// The function readCriuStatsDump() reads the CRIU 'stats-dump' file
 	// in path and returns the pages_written, pages_skipped_parent, error.
-	readCriuStatsDump := func(path string) (uint64, uint64, error) {
+	readCriuStatsDump := func(statsPath string) (uint64, uint64, error) {
 		// Get dump statistics with crit
-		dumpStats, err := crit.GetDumpStats(path)
+		dumpStats, err := crit.GetDumpStats(statsPath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("Failed to parse CRIU's 'stats-dump' file: %w", err)
 		}
@@ -6412,11 +6437,11 @@ func (d *lxc) migrateSendPreDumpLoop(args *preDumpLoopArgs) (bool, error) {
 
 	// If in pre-dump mode, the receiving side expects a message to know if this was the last pre-dump.
 	logger.Debug("Sending another CRIU pre-dump header")
-	sync := migration.MigrationSync{
+	syncMsg := migration.MigrationSync{
 		FinalPreDump: proto.Bool(final),
 	}
 
-	data, err := proto.Marshal(&sync)
+	data, err := proto.Marshal(&syncMsg)
 	if err != nil {
 		return false, err
 	}
@@ -6457,6 +6482,7 @@ func (d *lxc) resetContainerDiskIdmap(srcIdmap *idmap.Set) error {
 	return nil
 }
 
+// MigrateReceive receives an instance being migrated from a source.
 func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 	d.logger.Debug("Migration receive starting")
 	defer d.logger.Debug("Migration receive stopped")
@@ -7093,11 +7119,12 @@ func (d *lxc) migrate(args *instance.CriuMigrationArgs) error {
 				return fmt.Errorf("Storage type: %w", err)
 			}
 
-			if storageType == "zfs" {
+			switch storageType {
+			case "zfs":
 				err = idmapset.ShiftPath(args.StateDir, storageDrivers.ShiftZFSSkipper)
-			} else if storageType == "btrfs" {
+			case "btrfs":
 				err = storageDrivers.ShiftBtrfsRootfs(args.StateDir, idmapset)
-			} else {
+			default:
 				err = idmapset.ShiftPath(args.StateDir, nil)
 			}
 
@@ -7272,33 +7299,18 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 		containerMeta["privileged"] = "false"
 	}
 
-	// Setup security check.
-	rootfsPath, err := os.OpenFile(d.RootfsPath(), unix.O_PATH, 0)
+	// Open the container's rootfs as an os.Root. All template
+	// operations will then be relative to this root, avoiding issues with
+	// template files or paths within those templates attempting to access the
+	// fhost rootfs.
+	rootfs, err := os.OpenRoot(d.RootfsPath())
 	if err != nil {
 		return fmt.Errorf("Failed to open instance rootfs path: %w", err)
 	}
 
-	defer func() { _ = rootfsPath.Close() }()
+	defer func() { _ = rootfs.Close() }()
 
-	checkBeneath := func(targetPath string) error {
-		fd, err := unix.Openat2(int(rootfsPath.Fd()), targetPath, &unix.OpenHow{
-			Flags:   unix.O_PATH | unix.O_CLOEXEC,
-			Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS,
-		})
-		if err != nil {
-			if errors.Is(err, unix.EXDEV) {
-				return errors.New("Template is attempting access to path outside of container")
-			}
-
-			return nil
-		}
-
-		_ = unix.Close(fd)
-
-		return nil
-	}
-
-	// Go through the templates
+	// Go through the templates.
 	for tplPath, tpl := range metadata.Templates {
 		err = func(tplPath string, tpl *api.ImageMetadataTemplate) error {
 			var w *os.File
@@ -7310,13 +7322,8 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 				return nil
 			}
 
-			// Perform some security checks.
+			// Perform some early security checks on the template itself.
 			relPath := strings.TrimLeft(tplPath, "/")
-
-			err = checkBeneath(relPath)
-			if err != nil {
-				return err
-			}
 
 			if filepath.Base(tpl.Template) != tpl.Template {
 				return errors.New("Template path is attempting to read outside of template directory")
@@ -7340,15 +7347,47 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 				return errors.New("Template file is a symlink")
 			}
 
-			// Open the file to template, create if needed
-			fullpath := filepath.Join(d.RootfsPath(), relPath)
-			if util.PathExists(fullpath) {
+			// Create the directory hierarchy, this has to be done
+			// somewhat manually as we not only need to create anything that's missing
+			// but also set the correct uid/gid.
+			relDir := path.Dir(relPath)
+
+			parent := ""
+			for _, part := range strings.Split(relDir, "/") {
+				if part == "" || part == "." {
+					continue
+				}
+
+				cur := path.Join(parent, part)
+
+				err = rootfs.Mkdir(cur, 0o755)
+				if err == nil {
+					// Fix ownership of any directory we just created.
+					err = rootfs.Chown(cur, int(rootUID), int(rootGID))
+					if err != nil {
+						return fmt.Errorf("Failed to set ownership on template directory: %w", err)
+					}
+				} else if !errors.Is(err, fs.ErrExist) {
+					return fmt.Errorf("Failed to create template directory: %w", err)
+				}
+
+				parent = cur
+			}
+
+			// Check whether the target file already exists.
+			_, err = rootfs.Stat(relPath)
+			existing := err == nil
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("Failed to check template file: %w", err)
+			}
+
+			if existing {
 				if tpl.CreateOnly {
 					return nil
 				}
 
 				// Open the existing file
-				w, err = os.Create(fullpath)
+				w, err = rootfs.OpenFile(relPath, os.O_WRONLY|os.O_TRUNC, 0)
 				if err != nil {
 					return fmt.Errorf("Failed to create template file: %w", err)
 				}
@@ -7394,14 +7433,8 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 					fileMode = os.FileMode(mode) & os.ModePerm
 				}
 
-				// Create the directories leading to the file
-				err = internalUtil.MkdirAllOwner(path.Dir(fullpath), 0o755, int(rootUID), int(rootGID))
-				if err != nil {
-					return err
-				}
-
-				// Create the file itself
-				w, err = os.Create(fullpath)
+				// Create the file itself beneath the rootfs.
+				w, err = rootfs.OpenFile(relPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode.Perm())
 				if err != nil {
 					return err
 				}
@@ -8036,13 +8069,13 @@ func (d *lxc) diskState() map[string]api.InstanceStateDisk {
 			continue
 		}
 
-		state := api.InstanceStateDisk{}
+		diskState := api.InstanceStateDisk{}
 		if usage != nil {
-			state.Usage = usage.Used
-			state.Total = usage.Total
+			diskState.Usage = usage.Used
+			diskState.Total = usage.Total
 		}
 
-		disk[dev.Name] = state
+		disk[dev.Name] = diskState
 	}
 
 	return disk
@@ -8726,12 +8759,12 @@ func (d *lxc) isCurrentlyPrivileged() bool {
 		return d.IsPrivileged()
 	}
 
-	idmap, err := d.CurrentIdmap()
+	currentIdmap, err := d.CurrentIdmap()
 	if err != nil {
 		return d.IsPrivileged()
 	}
 
-	return idmap == nil
+	return currentIdmap == nil
 }
 
 // IsPrivileged returns if instance is privileged.
@@ -8850,12 +8883,12 @@ func (d *lxc) statusCode() api.StatusCode {
 		}
 	}
 
-	state, err := d.getLxcState()
+	lxcState, err := d.getLxcState()
 	if err != nil {
 		return api.Error
 	}
 
-	statusCode := lxcStatusCode(state)
+	statusCode := lxcStatusCode(lxcState)
 
 	if statusCode == api.Running && util.IsTrue(d.LocalConfig()["volatile.last_state.ready"]) {
 		return api.Ready
@@ -8874,6 +8907,7 @@ func (d *lxc) LogFilePath() string {
 	return filepath.Join(d.LogPath(), "lxc.log")
 }
 
+// CGroup returns the cgroup handler for the instance.
 func (d *lxc) CGroup() (*cgroup.CGroup, error) {
 	// Load the go-lxc struct
 	cc, err := d.initLXC(false)
@@ -8948,6 +8982,7 @@ func (d *lxc) Info() instance.Info {
 	}
 }
 
+// Metrics returns the metrics set for the instance.
 func (d *lxc) Metrics(hostInterfaces []net.Interface) (*metrics.MetricSet, error) {
 	out := metrics.NewMetricSet(map[string]string{"project": d.project.Name, "name": d.name, "type": instancetype.Container.String()})
 
@@ -9093,17 +9128,17 @@ func (d *lxc) Metrics(hostInterfaces []net.Interface) (*metrics.MetricSet, error
 	// Get network stats
 	networkState := d.networkState(hostInterfaces)
 
-	for name, state := range networkState {
+	for name, netState := range networkState {
 		labels := map[string]string{"device": name}
 
-		out.AddSamples(metrics.NetworkReceiveBytesTotal, metrics.Sample{Value: float64(state.Counters.BytesReceived), Labels: labels})
-		out.AddSamples(metrics.NetworkReceivePacketsTotal, metrics.Sample{Value: float64(state.Counters.PacketsReceived), Labels: labels})
-		out.AddSamples(metrics.NetworkTransmitBytesTotal, metrics.Sample{Value: float64(state.Counters.BytesSent), Labels: labels})
-		out.AddSamples(metrics.NetworkTransmitPacketsTotal, metrics.Sample{Value: float64(state.Counters.PacketsSent), Labels: labels})
-		out.AddSamples(metrics.NetworkReceiveErrsTotal, metrics.Sample{Value: float64(state.Counters.ErrorsReceived), Labels: labels})
-		out.AddSamples(metrics.NetworkTransmitErrsTotal, metrics.Sample{Value: float64(state.Counters.ErrorsSent), Labels: labels})
-		out.AddSamples(metrics.NetworkReceiveDropTotal, metrics.Sample{Value: float64(state.Counters.PacketsDroppedInbound), Labels: labels})
-		out.AddSamples(metrics.NetworkTransmitDropTotal, metrics.Sample{Value: float64(state.Counters.PacketsDroppedOutbound), Labels: labels})
+		out.AddSamples(metrics.NetworkReceiveBytesTotal, metrics.Sample{Value: float64(netState.Counters.BytesReceived), Labels: labels})
+		out.AddSamples(metrics.NetworkReceivePacketsTotal, metrics.Sample{Value: float64(netState.Counters.PacketsReceived), Labels: labels})
+		out.AddSamples(metrics.NetworkTransmitBytesTotal, metrics.Sample{Value: float64(netState.Counters.BytesSent), Labels: labels})
+		out.AddSamples(metrics.NetworkTransmitPacketsTotal, metrics.Sample{Value: float64(netState.Counters.PacketsSent), Labels: labels})
+		out.AddSamples(metrics.NetworkReceiveErrsTotal, metrics.Sample{Value: float64(netState.Counters.ErrorsReceived), Labels: labels})
+		out.AddSamples(metrics.NetworkTransmitErrsTotal, metrics.Sample{Value: float64(netState.Counters.ErrorsSent), Labels: labels})
+		out.AddSamples(metrics.NetworkReceiveDropTotal, metrics.Sample{Value: float64(netState.Counters.PacketsDroppedInbound), Labels: labels})
+		out.AddSamples(metrics.NetworkTransmitDropTotal, metrics.Sample{Value: float64(netState.Counters.PacketsDroppedOutbound), Labels: labels})
 	}
 
 	// Get number of processes

@@ -127,6 +127,30 @@ test_storage_buckets() {
     s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" get "s3://${bucketPrefix}.foo/${incusTestFile}" "${incusTestFile}.get"
     rm "${incusTestFile}.get"
 
+    if [ "$incus_backend" != "ceph" ]; then
+        # Test using a presigned URL.
+        signedURL=$(s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" signurl "s3://${bucketPrefix}.foo/${incusTestFile}" "+60" | tr -d '[:space:]')
+        signedURL="https://${signedURL#http://}"
+        curl -sS -k -f "${signedURL}" -o "${incusTestFile}.signed"
+        cmp "${incusTestFile}" "${incusTestFile}.signed"
+        rm "${incusTestFile}.signed"
+
+        # An expired presigned URL must be rejected.
+        expiredEpoch=$(($(date +%s) - 60))
+        expiredURL=$(s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" signurl "s3://${bucketPrefix}.foo/${incusTestFile}" "${expiredEpoch}" | tr -d '[:space:]')
+        expiredURL="https://${expiredURL#http://}"
+        ! curl -sS -k -f "${expiredURL}" -o /dev/null || false
+    fi
+
+    # Test copying a file within a bucket (S3 CopyObject).
+    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" cp "s3://${bucketPrefix}.foo/${incusTestFile}" "s3://${bucketPrefix}.foo/${incusTestFile}.copy"
+    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" ls "s3://${bucketPrefix}.foo" | grep -F "${incusTestFile}.copy"
+    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" get "s3://${bucketPrefix}.foo/${incusTestFile}.copy" "${incusTestFile}.copy.get"
+    cmp "${incusTestFile}" "${incusTestFile}.copy.get"
+    rm "${incusTestFile}.copy.get"
+    ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" cp "s3://${bucketPrefix}.foo/${incusTestFile}" "s3://${bucketPrefix}.foo/${incusTestFile}.rocopy" || false
+    s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" del "s3://${bucketPrefix}.foo/${incusTestFile}.copy"
+
     # Test deleting a file from a bucket.
     ! s3cmdrun "${incus_backend}" "${roAccessKey}" "${roSecretKey}" del "s3://${bucketPrefix}.foo/${incusTestFile}" || false
     s3cmdrun "${incus_backend}" "${adAccessKey}" "${adSecretKey}" del "s3://${bucketPrefix}.foo/${incusTestFile}"
