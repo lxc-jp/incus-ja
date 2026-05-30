@@ -249,6 +249,17 @@ test_storage() {
             incus storage create "incustest-$(basename "${INCUS_DIR}")-valid-lvm-pool-config-pool25" lvm volume.block.mount_options="rw,strictatime,discard"
             incus storage set "incustest-$(basename "${INCUS_DIR}")-valid-lvm-pool-config-pool25" volume.block.mount_options "rw,lazytime"
             incus storage create "incustest-$(basename "${INCUS_DIR}")-valid-lvm-pool-config-pool26" lvm volume.block.filesystem=btrfs
+
+            # Functional test: verify that block.create_options are actually applied to ext4 volumes.
+            incus storage create "incustest-$(basename "${INCUS_DIR}")-lvm-createopts" lvm
+            ensure_import_testimage
+            incus launch testimage c-lvm-createopts -s "incustest-$(basename "${INCUS_DIR}")-lvm-createopts"
+            storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-lvm-createopts" ext4 c-lvm-createopts volume
+            storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-lvm-createopts" xfs c-lvm-createopts volume
+            storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-lvm-createopts" ext4 c-lvm-createopts pool
+            storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-lvm-createopts" xfs c-lvm-createopts pool
+            incus rm -f c-lvm-createopts
+            incus storage delete "incustest-$(basename "${INCUS_DIR}")-lvm-createopts"
         fi
 
         # Set default storage pool for image import.
@@ -870,8 +881,8 @@ test_storage() {
         # Disable quotas. The usage should be 0.
         # shellcheck disable=SC2031
         btrfs quota disable "${INCUS_DIR}/storage-pools/${pool_name}"
-        usage=$(incus query /1.0/instances/c1/state | jq '.disk.root')
-        [ "${usage}" = "null" ]
+        usage=$(incus query /1.0/instances/c1/state | jq '.disk.root.usage')
+        [ "${usage}" = "-1" ]
 
         # Enable quotas. The usage should then be > 0.
         # shellcheck disable=SC2031

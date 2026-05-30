@@ -87,8 +87,9 @@ test_storage_driver_linstor() {
         incus delete -f c1
         incus delete -f c2
 
-        incus storage volume set "incustest-$(basename "${INCUS_DIR}")-pool1" c1 size 500MiB
-        incus storage volume unset "incustest-$(basename "${INCUS_DIR}")-pool1" c1 size
+        # TODO: LINSTOR no longer allows shrinking volumes, uncomment when it gets implemented
+        # incus storage volume set "incustest-$(basename "${INCUS_DIR}")-pool1" c1 size 500MiB
+        # incus storage volume unset "incustest-$(basename "${INCUS_DIR}")-pool1" c1 size
 
         # Validate that we can restore to previous snapshots given that linstor.remove_snapshots is set
         incus storage volume create "incustest-$(basename "${INCUS_DIR}")-pool1" c3
@@ -99,6 +100,22 @@ test_storage_driver_linstor() {
         incus storage volume snapshot restore "incustest-$(basename "${INCUS_DIR}")-pool1" c3 snap0 || false
         incus storage volume snapshot list "incustest-$(basename "${INCUS_DIR}")-pool1" c3 | grep snap0
         ! incus storage volume snapshot list "incustest-$(basename "${INCUS_DIR}")-pool1" c3 | grep snap1 || false
+
+        # Functional test: verify that block.create_options are applied to the volume's filesystem.
+        incus launch testimage c4 -s "incustest-$(basename "${INCUS_DIR}")-pool1"
+        incus list -c b c4 | grep "incustest-$(basename "${INCUS_DIR}")-pool1"
+        storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-pool1" ext4 c4 volume
+        storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-pool1" ext4 c4 pool
+        storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-pool1" xfs  c4 volume
+        storage_check_create_options_applied "incustest-$(basename "${INCUS_DIR}")-pool1" xfs  c4 pool
+        incus delete -f c4
+
+        # Edit raw DRBD keys
+        linstor -m resource-group list-properties "incustest-$(basename "${INCUS_DIR}")-pool1" | jq -e 'any(.[0][]; .key == "DrbdOptions/Disk/rs-discard-granularity" and .value == "1048576")'
+        incus storage set "incustest-$(basename "${INCUS_DIR}")-pool1" linstor.raw.DrbdOptions/Disk/rs-discard-granularity=524288
+        linstor -m resource-group list-properties "incustest-$(basename "${INCUS_DIR}")-pool1" | jq -e 'any(.[0][]; .key == "DrbdOptions/Disk/rs-discard-granularity" and .value == "524288")'
+        incus storage unset "incustest-$(basename "${INCUS_DIR}")-pool1" linstor.raw.DrbdOptions/Disk/rs-discard-granularity
+        linstor -m resource-group list-properties "incustest-$(basename "${INCUS_DIR}")-pool1" | jq -e 'any(.[0][]; .key == "DrbdOptions/Disk/rs-discard-granularity" and .value == "1048576")'
 
         # Cleanup
         incus storage volume delete "incustest-$(basename "${INCUS_DIR}")-pool1" c1

@@ -76,6 +76,31 @@ func (d *ceph) osdPoolExists() (bool, error) {
 	return true, nil
 }
 
+// rbdListPoolVolumes returns the list of RBD images present in the OSD pool.
+func (d *ceph) rbdListPoolVolumes() ([]string, error) {
+	out, err := subprocess.RunCommand(
+		"rbd",
+		"--id", d.config["ceph.user.name"],
+		"--cluster", d.config["ceph.cluster_name"],
+		"--pool", d.config["ceph.osd.pool_name"],
+		"ls")
+	if err != nil {
+		return nil, err
+	}
+
+	images := []string{}
+	for _, line := range strings.Split(out, "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+
+		images = append(images, name)
+	}
+
+	return images, nil
+}
+
 // osdDeletePool destroys an OSD pool.
 //   - A call to osdDeletePool will destroy a pool including any storage
 //     volumes that still exist in the pool.
@@ -911,8 +936,9 @@ func (d *ceph) parseParent(parent string) (Volume, string, error) {
 		name = strings.SplitN(name, "image_", 2)[1]
 
 		// Check for block indicator.
-		if strings.HasSuffix(name, ".block") {
-			name = strings.TrimSuffix(name, ".block")
+		before, ok := strings.CutSuffix(name, ".block")
+		if ok {
+			name = before
 			vol.contentType = ContentTypeBlock
 		} else {
 			vol.contentType = ContentTypeFS
@@ -953,11 +979,12 @@ func (d *ceph) parseParent(parent string) (Volume, string, error) {
 		name = strings.SplitN(name, "custom_", 2)[1]
 
 		// Check for block or ISO indicator.
-		if strings.HasSuffix(name, ".block") {
-			name = strings.TrimSuffix(name, ".block")
+		before, ok := strings.CutSuffix(name, ".block")
+		if ok {
+			name = before
 			vol.contentType = ContentTypeBlock
-		} else if strings.HasSuffix(name, ".iso") {
-			name = strings.TrimSuffix(name, ".iso")
+		} else if before, ok := strings.CutSuffix(name, ".iso"); ok {
+			name = before
 			vol.contentType = ContentTypeISO
 		} else {
 			vol.contentType = ContentTypeFS
@@ -987,8 +1014,9 @@ func (d *ceph) parseParent(parent string) (Volume, string, error) {
 		name = strings.SplitN(name, "container_", 2)[1]
 
 		// Check for block indicator.
-		if strings.HasSuffix(name, ".block") {
-			name = strings.TrimSuffix(name, ".block")
+		before, ok := strings.CutSuffix(name, ".block")
+		if ok {
+			name = before
 			vol.contentType = ContentTypeBlock
 		} else {
 			vol.contentType = ContentTypeFS
@@ -1018,8 +1046,9 @@ func (d *ceph) parseParent(parent string) (Volume, string, error) {
 		name = strings.SplitN(name, "virtual-machine_", 2)[1]
 
 		// Check for block indicator.
-		if strings.HasSuffix(name, ".block") {
-			name = strings.TrimSuffix(name, ".block")
+		before, ok := strings.CutSuffix(name, ".block")
+		if ok {
+			name = before
 			vol.contentType = ContentTypeBlock
 		} else {
 			vol.contentType = ContentTypeFS

@@ -160,7 +160,8 @@ func (d *ceph) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Ope
 	RBDFilesystem := vol.ConfigBlockFilesystem()
 
 	if vol.contentType == ContentTypeFS {
-		_, err = makeFSType(devPath, RBDFilesystem, nil)
+		volCreateOptions := vol.ExpandedConfig("block.create_options")
+		_, err = makeFSType(devPath, RBDFilesystem, &mkfsOptions{ExtraArgs: volCreateOptions})
 		if err != nil {
 			return err
 		}
@@ -798,9 +799,9 @@ func (d *ceph) HasVolume(vol Volume) (bool, error) {
 // FillVolumeConfig populate volume with default config.
 func (d *ceph) FillVolumeConfig(vol Volume) error {
 	// Copy volume.* configuration options from pool.
-	// Exclude 'block.filesystem' and 'block.mount_options'
-	// as this ones are handled below in this function and depends from volume type
-	err := d.fillVolumeConfig(&vol, "block.filesystem", "block.mount_options")
+	// Exclude 'block.filesystem', 'block.mount_options', and 'block.create_options'
+	// as these are handled below in this function and depend on the volume type
+	err := d.fillVolumeConfig(&vol, "block.filesystem", "block.mount_options", "block.create_options")
 	if err != nil {
 		return err
 	}
@@ -829,6 +830,11 @@ func (d *ceph) FillVolumeConfig(vol Volume) error {
 			// Unchangeable volume property: Set unconditionally.
 			vol.config["block.mount_options"] = "discard"
 		}
+
+		// Inherit filesystem creation options from pool if not set.
+		if vol.config["block.create_options"] == "" {
+			vol.config["block.create_options"] = d.config["volume.block.create_options"]
+		}
 	}
 
 	return nil
@@ -854,6 +860,15 @@ func (d *ceph) commonVolumeRules() map[string]func(value string) error {
 		//  default: same as `volume.block.mount_options`
 		//  shortdesc: Mount options for block-backed file system volumes
 		"block.mount_options": validate.IsAny,
+
+		// gendoc:generate(entity=storage_volume_ceph, group=common, key=block.create_options)
+		//
+		// ---
+		//  type: string
+		//  condition: block-based volume with content type `filesystem`
+		//  default: same as `volume.block.create_options`
+		//  shortdesc: Additional options to pass to the file system creation tool when formatting the volume
+		"block.create_options": validate.IsAny,
 	}
 }
 
@@ -916,7 +931,7 @@ func (d *ceph) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  shortdesc: Size/quota of the storage volume
 
 	// gendoc:generate(entity=storage_volume_ceph, group=common, key=snapshots.expiry)
-	//
+	// {{snapshot_expiry_detail}}
 	// ---
 	//  type: string
 	//  condition: custom volume
@@ -924,7 +939,7 @@ func (d *ceph) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  shortdesc: {{snapshot_expiry_format}}
 
 	// gendoc:generate(entity=storage_volume_ceph, group=common, key=snapshots.expiry.manual)
-	//
+	// {{snapshot_expiry_detail}}
 	// ---
 	//  type: string
 	//  condition: custom volume
@@ -1306,7 +1321,8 @@ func (d *ceph) MountVolume(vol Volume, op *operations.Operation) error {
 		reverter.Add(func() { _ = d.rbdUnmapVolume(vol, true) })
 	}
 
-	if vol.contentType == ContentTypeFS {
+	switch vol.contentType {
+	case ContentTypeFS:
 		mountPath := vol.MountPath()
 		if !linux.IsMountPoint(mountPath) {
 			err := vol.EnsureMountPath(false)
@@ -1331,7 +1347,8 @@ func (d *ceph) MountVolume(vol Volume, op *operations.Operation) error {
 
 			d.logger.Debug("Mounted RBD volume", logger.Ctx{"volName": vol.name, "dev": volDevPath, "path": mountPath, "options": mountOptions})
 		}
-	} else if vol.contentType == ContentTypeBlock {
+
+	case ContentTypeBlock:
 		// For VMs, mount the filesystem volume.
 		if vol.IsVMBlock() {
 			fsVol := vol.NewVMBlockFilesystemVolume()

@@ -95,7 +95,7 @@ incus snapshot create u1 snap0 < config.yaml
 	Create a snapshot of "u1" called "snap0" with the configuration from "config.yaml".`))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagStateful, "stateful", i18n.G("Whether or not to snapshot the instance's running state"))
-	cli.AddStringFlag(cmd.Flags(), &c.flagExpiry, "expiry", "", "", i18n.G("Expiry date or time span for the new snapshot"))
+	cli.AddStringFlag(cmd.Flags(), &c.flagExpiry, "expiry", "", "", i18n.G("Expiry for the new snapshot (either a time span like `1d 3H` or a date in `2006/01/02 15:04 MST` format)"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagNoExpiry, "no-expiry", i18n.G("Ignore any configured auto-expiry for the instance"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagReuse, "reuse", i18n.G("If the snapshot name already exists, delete and create a new one"))
 
@@ -113,7 +113,7 @@ incus snapshot create u1 snap0 < config.yaml
 }
 
 func (c *cmdSnapshotCreate) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdSnapshotCreateUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdSnapshotCreateUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -245,7 +245,7 @@ func (c *cmdSnapshotDelete) command() *cobra.Command {
 }
 
 func (c *cmdSnapshotDelete) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdSnapshotDeleteUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdSnapshotDeleteUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -419,7 +419,7 @@ func (c *cmdSnapshotList) statefulColumnData(snapshot api.InstanceSnapshot) stri
 }
 
 func (c *cmdSnapshotList) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdSnapshotListUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdSnapshotListUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -488,7 +488,7 @@ func (c *cmdSnapshotRename) command() *cobra.Command {
 }
 
 func (c *cmdSnapshotRename) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdSnapshotRenameUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdSnapshotRenameUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -552,7 +552,7 @@ If --diskonly is passed, then only the disk will be restored.`))
 }
 
 func (c *cmdSnapshotRestore) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdSnapshotRestoreUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdSnapshotRestoreUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -609,7 +609,7 @@ func (c *cmdSnapshotShow) command() *cobra.Command {
 }
 
 func (c *cmdSnapshotShow) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdSnapshotShowUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdSnapshotShowUsage, cmd, args)
 	if err != nil {
 		return err
 	}

@@ -88,12 +88,12 @@ func (d *zfs) load() error {
 
 	// Get the version information.
 	if zfsVersion == "" {
-		version, err := d.version()
+		ver, err := d.version()
 		if err != nil {
 			return err
 		}
 
-		zfsVersion = version
+		zfsVersion = ver
 	}
 
 	ourVer, err := version.Parse(zfsVersion)
@@ -640,7 +640,7 @@ func (d *zfs) importPool() (bool, error) {
 	}
 
 	// Check if the pool exists.
-	poolName := strings.Split(d.config["zfs.pool_name"], "/")[0]
+	poolName, _, _ := strings.Cut(d.config["zfs.pool_name"], "/")
 	exists, err = d.datasetExists(poolName)
 	if err != nil {
 		return false, err
@@ -732,7 +732,7 @@ func (d *zfs) Unmount() (bool, error) {
 	}
 
 	// Export the pool.
-	poolName := strings.Split(d.config["zfs.pool_name"], "/")[0]
+	poolName, _, _ := strings.Cut(d.config["zfs.pool_name"], "/")
 	_, err = subprocess.RunCommand("zpool", "export", poolName)
 	if err != nil {
 		return false, err
@@ -741,25 +741,22 @@ func (d *zfs) Unmount() (bool, error) {
 	return true, nil
 }
 
+// GetResources returns the pool resource usage information.
 func (d *zfs) GetResources() (*api.ResourcesStoragePool, error) {
-	// Get the total amount of space.
-	availableStr, err := d.getDatasetProperty(d.config["zfs.pool_name"], "available")
+	// Get both properties in a single call, bypassing the per-dataset cache so
+	// we don't trigger a recursive `zfs list` over every volume and snapshot in
+	// the pool just to read the root dataset's usage.
+	props, err := d.getDatasetProperties(d.config["zfs.pool_name"], "available", "used")
 	if err != nil {
 		return nil, err
 	}
 
-	available, err := strconv.ParseUint(strings.TrimSpace(availableStr), 10, 64)
+	available, err := strconv.ParseUint(strings.TrimSpace(props["available"]), 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the used amount of space.
-	usedStr, err := d.getDatasetProperty(d.config["zfs.pool_name"], "used")
-	if err != nil {
-		return nil, err
-	}
-
-	used, err := strconv.ParseUint(strings.TrimSpace(usedStr), 10, 64)
+	used, err := strconv.ParseUint(strings.TrimSpace(props["used"]), 10, 64)
 	if err != nil {
 		return nil, err
 	}
@@ -773,7 +770,7 @@ func (d *zfs) GetResources() (*api.ResourcesStoragePool, error) {
 	return &res, nil
 }
 
-// MigrationType returns the type of transfer methods to be used when doing migrations between pools in preference order.
+// MigrationTypes returns the type of transfer methods to be used when doing migrations between pools in preference order.
 func (d *zfs) MigrationTypes(contentType ContentType, refresh bool, copySnapshots bool, clusterMove bool, storageMove bool) []localMigration.Type {
 	var rsyncFeatures []string
 

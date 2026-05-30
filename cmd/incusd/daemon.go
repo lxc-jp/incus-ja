@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	dqliteClient "github.com/cowsql/go-cowsql/client"
+	cowsqlClient "github.com/cowsql/go-cowsql/client"
 	"github.com/cowsql/go-cowsql/driver"
 	"github.com/gorilla/mux"
 	liblxc "github.com/lxc/go-lxc"
@@ -182,11 +182,11 @@ type DaemonConfig struct {
 	Group              string        // Group name the local unix socket should be chown'ed to
 	Trace              []string      // List of sub-systems to trace
 	RaftLatency        float64       // Coarse grain measure of the cluster latency
-	DqliteSetupTimeout time.Duration // How long to wait for the cluster database to be up
+	CowsqlSetupTimeout time.Duration // How long to wait for the cluster database to be up
 }
 
 // newDaemon returns a new Daemon object with the given configuration.
-func newDaemon(config *DaemonConfig, os *sys.OS) *Daemon {
+func newDaemon(config *DaemonConfig, osInfo *sys.OS) *Daemon {
 	incusEvents := events.NewServer(daemon.Debug, daemon.Verbose, cluster.EventHubPush)
 	devIncusEvents := events.NewDevIncusServer(daemon.Debug, daemon.Verbose)
 	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
@@ -197,7 +197,7 @@ func newDaemon(config *DaemonConfig, os *sys.OS) *Daemon {
 		devIncusEvents: devIncusEvents,
 		events:         incusEvents,
 		db:             &db.DB{},
-		os:             os,
+		os:             osInfo,
 		setupChan:      make(chan struct{}),
 		waitReady:      cancel.New(context.Background()),
 		shutdownCtx:    shutdownCtx,
@@ -215,15 +215,15 @@ func newDaemon(config *DaemonConfig, os *sys.OS) *Daemon {
 func defaultDaemonConfig() *DaemonConfig {
 	return &DaemonConfig{
 		RaftLatency:        3.0,
-		DqliteSetupTimeout: 36 * time.Hour, // Account for snap refresh lag
+		CowsqlSetupTimeout: 36 * time.Hour, // Account for snap refresh lag
 	}
 }
 
 // defaultDaemon returns a new, un-initialized Daemon object with default values.
 func defaultDaemon() *Daemon {
 	config := defaultDaemonConfig()
-	os := sys.DefaultOS()
-	return newDaemon(config, os)
+	osInfo := sys.DefaultOS()
+	return newDaemon(config, osInfo)
 }
 
 // APIEndpoint represents a URL in our API.
@@ -272,7 +272,8 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 	return func(d *Daemon, r *http.Request) response.Response {
 		// Expansion function to deal with partial fingerprints.
 		expandFingerprint := func(projectName string, fingerprint string) string {
-			if objectType == auth.ObjectTypeImage {
+			switch objectType {
+			case auth.ObjectTypeImage:
 				var imgInfo *api.Image
 
 				err := d.db.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -287,7 +288,7 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 				}
 
 				fingerprint = imgInfo.Fingerprint
-			} else if objectType == auth.ObjectTypeCertificate {
+			case auth.ObjectTypeCertificate:
 				err := d.db.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 					dbCertInfo, err := dbCluster.GetCertificateByFingerprintPrefix(ctx, tx.Tx(), fingerprint)
 					if err != nil {
@@ -582,8 +583,8 @@ func (d *Daemon) State() *state.State {
 	// Build a list of instance types.
 	drivers := instanceDrivers.DriverStatuses()
 	instanceTypes := make(map[instancetype.Type]error, len(drivers))
-	for driverType, driver := range drivers {
-		instanceTypes[driverType] = driver.Info.Error
+	for driverType, drv := range drivers {
+		instanceTypes[driverType] = drv.Info.Error
 	}
 
 	d.globalConfigMu.Lock()
@@ -619,12 +620,12 @@ func (d *Daemon) State() *state.State {
 	}
 }
 
-func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
+func (d *Daemon) createCmd(restAPI *mux.Router, apiVersion string, c APIEndpoint) {
 	var uri string
 	if c.Path == "" {
-		uri = fmt.Sprintf("/%s", version)
-	} else if version != "" {
-		uri = fmt.Sprintf("/%s/%s", version, c.Path)
+		uri = fmt.Sprintf("/%s", apiVersion)
+	} else if apiVersion != "" {
+		uri = fmt.Sprintf("/%s/%s", apiVersion, c.Path)
 	} else {
 		uri = fmt.Sprintf("/%s", c.Path)
 	}
@@ -633,7 +634,7 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Block on daemon startup except for the "internal" and "os" APIs.
-		if !slices.Contains([]string{"internal", "os"}, version) {
+		if !slices.Contains([]string{"internal", "os"}, apiVersion) {
 			select {
 			case <-d.setupChan:
 			default:
@@ -659,7 +660,7 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 		}
 
 		// Restrict internal queries to remote, non-cluster, clients
-		if version == "internal" && !slices.Contains([]string{"unix", "cluster"}, protocol) {
+		if apiVersion == "internal" && !slices.Contains([]string{"unix", "cluster"}, protocol) {
 			internalAllowed := func() bool {
 				// Reject any unauthenticated request.
 				if !trusted {
@@ -749,7 +750,7 @@ func (d *Daemon) createCmd(restAPI *mux.Router, version string, c APIEndpoint) {
 		// - /1.0/operations endpoints
 		// - GET queries
 		allowedDuringShutdown := func() bool {
-			if version == "internal" {
+			if apiVersion == "internal" {
 				return true
 			}
 
@@ -992,9 +993,9 @@ func (d *Daemon) init() error {
 
 	// Detect and cached available instance types from operational drivers.
 	drivers := instanceDrivers.DriverStatuses()
-	for _, driver := range drivers {
-		if driver.Warning != nil {
-			dbWarnings = append(dbWarnings, *driver.Warning)
+	for _, drv := range drivers {
+		if drv.Warning != nil {
+			dbWarnings = append(dbWarnings, *drv.Warning)
 		}
 	}
 
@@ -1080,7 +1081,7 @@ func (d *Daemon) init() error {
 		d.serverCertInt = serverCert
 	}
 
-	/* Setup dqlite */
+	/* Setup cowsql */
 	clusterLogLevel := "ERROR"
 	if slices.Contains(trace, "dqlite") {
 		clusterLogLevel = "TRACE"
@@ -1168,14 +1169,14 @@ func (d *Daemon) init() error {
 			driver.WithContext(d.gateway.Context()),
 			driver.WithConnectionTimeout(10 * time.Second),
 			driver.WithContextTimeout(contextTimeout),
-			driver.WithLogFunc(cluster.DqliteLog),
+			driver.WithLogFunc(cluster.CowsqlLog),
 		}
 
 		if slices.Contains(trace, "database") {
-			options = append(options, driver.WithTracing(dqliteClient.LogDebug))
+			options = append(options, driver.WithTracing(cowsqlClient.LogDebug))
 		}
 
-		d.db.Cluster, err = db.OpenCluster(context.Background(), "db.bin", store, localClusterAddress, dir, d.config.DqliteSetupTimeout, options...)
+		d.db.Cluster, err = db.OpenCluster(context.Background(), "db.bin", store, localClusterAddress, dir, d.config.CowsqlSetupTimeout, options...)
 		if err == nil {
 			logger.Info("Initialized global database")
 			break
@@ -1496,6 +1497,9 @@ func (d *Daemon) init() error {
 		// This should come after the event handler go routines have been started.
 		devicesRegister(instances)
 
+		// Reap any forkproxy helpers left behind by an out-of-cgroup kill of the previous daemon.
+		cleanupOrphanedProxyHelpers(instances)
+
 		// Setup seccomp handler
 		seccompServer, err := seccomp.NewSeccompServer(d.State(), internalUtil.RunPath("seccomp.socket"), func(pid int32, state *state.State) (seccomp.Instance, error) {
 			return findContainerForPid(pid, state)
@@ -1631,8 +1635,8 @@ func (d *Daemon) stopClusterTasks() {
 // numRunningInstances returns the number of running instances.
 func (d *Daemon) numRunningInstances(instances []instance.Instance) int {
 	count := 0
-	for _, instance := range instances {
-		if instance.IsRunning() {
+	for _, inst := range instances {
+		if inst.IsRunning() {
 			count = count + 1
 		}
 	}
@@ -1643,6 +1647,20 @@ func (d *Daemon) numRunningInstances(instances []instance.Instance) int {
 // Stop stops the shared daemon.
 func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 	logger.Info("Starting shutdown sequence", logger.Ctx{"signal": sig})
+
+	s := d.State()
+
+	evacuated := false
+	if sig == unix.SIGPWR && d.serverClustered && s.GlobalConfig.ShutdownAction() == "evacuate" && !s.DB.Cluster.LocalNodeIsEvacuated() {
+		// Handle early evacuation before proceeding with shutdown.
+		logger.Info("Evacuating cluster member")
+		err := evacuateShutdown(ctx, s, d.serverName)
+		if err != nil {
+			logger.Error("Failed to evacuate cluster member, falling back to regular shutdown", logger.Ctx{"err": err})
+		} else {
+			evacuated = true
+		}
+	}
 
 	// Cancelling the context will make everyone aware that we're shutting down.
 	d.shutdownCancel()
@@ -1660,8 +1678,6 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 			d.gateway.Kill()
 		}
 	}
-
-	s := d.State()
 
 	var err error
 	var instances []instance.Instance
@@ -1717,18 +1733,6 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 
 		// Full shutdown requested.
 		if sig == unix.SIGPWR {
-			// Check if we should evacuate the cluster member instead of just shutting down.
-			evacuated := false
-			if d.serverClustered && s.GlobalConfig.ShutdownAction() == "evacuate" && !s.DB.Cluster.LocalNodeIsEvacuated() {
-				logger.Info("Evacuating cluster member")
-				err := evacuateShutdown(ctx, s, d.serverName)
-				if err != nil {
-					logger.Error("Failed to evacuate cluster member, falling back to regular shutdown", logger.Ctx{"err": err})
-				} else {
-					evacuated = true
-				}
-			}
-
 			if !evacuated {
 				instancesShutdown(instances)
 
@@ -1798,7 +1802,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 	}
 
 	if d.gateway != nil {
-		trackError(d.gateway.Shutdown(), "Shutdown dqlite")
+		trackError(d.gateway.Shutdown(), "Shutdown cowsql")
 	}
 
 	if d.endpoints != nil {
@@ -1879,11 +1883,11 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string) er
 
 		leaderAddress, err := d.gateway.LeaderAddress()
 		if err != nil {
-			if errors.Is(err, cluster.ErrNodeIsNotClustered) {
-				isLeader = true
-			} else {
+			if !errors.Is(err, cluster.ErrNodeIsNotClustered) {
 				return nil, err
 			}
+
+			isLeader = true
 		} else if leaderAddress == d.localConfig.ClusterAddress() {
 			isLeader = true
 		}
@@ -2192,9 +2196,9 @@ func initializeDbObject(d *Daemon) error {
 
 	// Hook to run when the local database is created from scratch. It will
 	// create the default profile and mark all patches as applied.
-	freshHook := func(db *db.Node) error {
+	freshHook := func(nodeDB *db.Node) error {
 		for _, patchName := range patchesGetNames() {
-			err := db.MarkPatchAsApplied(patchName)
+			err := nodeDB.MarkPatchAsApplied(patchName)
 			if err != nil {
 				return err
 			}
@@ -2276,15 +2280,15 @@ func (d *Daemon) heartbeatHandler(w http.ResponseWriter, _ *http.Request, isLead
 
 	// Extract the raft nodes from the heartbeat info.
 	raftNodes := make([]db.RaftNode, 0)
-	for _, node := range hbData.Members {
-		if node.RaftID > 0 {
+	for _, member := range hbData.Members {
+		if member.RaftID > 0 {
 			raftNodes = append(raftNodes, db.RaftNode{
-				NodeInfo: dqliteClient.NodeInfo{
-					ID:      node.RaftID,
-					Address: node.Address,
-					Role:    db.RaftRole(node.RaftRole),
+				NodeInfo: cowsqlClient.NodeInfo{
+					ID:      member.RaftID,
+					Address: member.Address,
+					Role:    db.RaftRole(member.RaftRole),
 				},
-				Name: node.Name,
+				Name: member.Name,
 			})
 		}
 	}
@@ -2384,11 +2388,9 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 	// Run asynchronously so that connecting to remote members doesn't delay other heartbeat tasks.
 	wg := sync.WaitGroup{}
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		cluster.EventsUpdateListeners(d.State(), heartbeatData.Members, d.events.Inject)
-		wg.Done()
-	}()
+	})
 
 	// Only update the node list if there are no state change task failures.
 	// If there are failures, then we leave the old state so that we can re-try the tasks again next heartbeat.
@@ -2406,9 +2408,9 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 		onlineVoters := 0
 		onlineStandbys := 0
 
-		for _, node := range heartbeatData.Members {
-			role := db.RaftRole(node.RaftRole)
-			if node.Online {
+		for _, member := range heartbeatData.Members {
+			role := db.RaftRole(member.RaftRole)
+			if member.Online {
 				// Count online members that have voter or stand-by raft role.
 				switch role {
 				case db.RaftVoter:
@@ -2417,12 +2419,12 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 					onlineStandbys++
 				}
 
-				if node.RaftID == 0 {
+				if member.RaftID == 0 {
 					hasNodesNotPartOfRaft = true
 				}
 
 				// Check if a 'database-client' node currently has a raft role other than 'spare'.
-				if slices.Contains(node.Roles, db.ClusterRoleDatabaseClient) && node.RaftRole != int(db.RaftSpare) {
+				if slices.Contains(member.Roles, db.ClusterRoleDatabaseClient) && member.RaftRole != int(db.RaftSpare) {
 					hasDbClientToProcess = true
 				}
 			} else if role != db.RaftSpare {
@@ -2470,6 +2472,15 @@ func (d *Daemon) setupOVN() error {
 	d.ovnnb = nil
 	d.ovnsb = nil
 
+	// Get the OVN northbound address.
+	ovnNBAddr := d.globalConfig.NetworkOVNNorthboundConnection()
+
+	// If OVN isn't configured, leave the clients cleared and return.
+	// This avoids touching OVS on nodes that don't have it installed.
+	if ovnNBAddr == "" {
+		return nil
+	}
+
 	// Connect to OpenVswitch.
 	vswitch, err := d.getOVS()
 	if err != nil {
@@ -2481,9 +2492,6 @@ func (d *Daemon) setupOVN() error {
 	if err != nil {
 		return fmt.Errorf("Failed to get OVN southbound connection string: %w", err)
 	}
-
-	// Get the OVN northbound address.
-	ovnNBAddr := d.globalConfig.NetworkOVNNorthboundConnection()
 
 	// Get the SSL certificates if needed.
 	sslCACert, sslClientCert, sslClientKey := d.globalConfig.NetworkOVNSSL()

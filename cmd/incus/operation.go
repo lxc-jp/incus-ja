@@ -74,7 +74,7 @@ func (c *cmdOperationDelete) command() *cobra.Command {
 }
 
 func (c *cmdOperationDelete) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdOperationDeleteUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdOperationDeleteUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (c *cmdOperationList) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`List background operations
 
-Default column layout: itdscCl
+Default column layout: itdscCL
 
 == Columns ==
 The -c option takes a comma separated list of arguments that control
@@ -229,7 +229,7 @@ func (c *cmdOperationList) locationColumnData(op api.Operation) string {
 }
 
 func (c *cmdOperationList) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdOperationListUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdOperationListUsage, cmd, args)
 	if err != nil {
 		return err
 	}
@@ -299,7 +299,7 @@ func (c *cmdOperationShow) command() *cobra.Command {
 }
 
 func (c *cmdOperationShow) run(cmd *cobra.Command, args []string) error {
-	parsed, err := cmdOperationShowUsage.Parse(c.global.conf, cmd, args)
+	parsed, err := c.global.Parse(cmdOperationShowUsage, cmd, args)
 	if err != nil {
 		return err
 	}

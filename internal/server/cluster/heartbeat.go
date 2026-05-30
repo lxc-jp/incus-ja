@@ -65,9 +65,9 @@ type APIHeartbeatVersion struct {
 }
 
 // NewAPIHearbeat returns initialized APIHeartbeat.
-func NewAPIHearbeat(cluster *db.Cluster) *APIHeartbeat {
+func NewAPIHearbeat(dbCluster *db.Cluster) *APIHeartbeat {
 	return &APIHeartbeat{
-		cluster: cluster,
+		cluster: dbCluster,
 	}
 }
 
@@ -309,7 +309,7 @@ func (g *Gateway) heartbeat(ctx context.Context, mode heartbeatMode) {
 	}
 
 	// Avoid concurrent heartbeat loops.
-	// This is possible when both the regular task and the out of band heartbeat round from a dqlite
+	// This is possible when both the regular task and the out of band heartbeat round from a cowsql
 	// connection or notification restart both kick in at the same time.
 	g.HeartbeatLock.Lock()
 	defer g.HeartbeatLock.Unlock()
@@ -555,7 +555,7 @@ func HeartbeatNode(taskCtx context.Context, address string, networkCert *localtl
 		return err
 	}
 
-	setDqliteVersionHeader(request)
+	setCowsqlVersionHeader(request)
 
 	// Use 1s later timeout to give HTTP client chance timeout with more useful info.
 	ctx, cancel := context.WithTimeout(taskCtx, timeout+time.Second)
@@ -563,15 +563,15 @@ func HeartbeatNode(taskCtx context.Context, address string, networkCert *localtl
 	request = request.WithContext(ctx)
 	request.Close = true // Immediately close the connection after the request is done
 
-	response, err := client.Do(request)
+	resp, err := client.Do(request)
 	if err != nil {
 		return fmt.Errorf("Failed to send heartbeat request: %w", err)
 	}
 
-	defer func() { _ = response.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }()
 
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Heartbeat request failed with status: %w", api.StatusErrorf(response.StatusCode, "%s", response.Status))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Heartbeat request failed with status: %w", api.StatusErrorf(resp.StatusCode, "%s", resp.Status))
 	}
 
 	return nil

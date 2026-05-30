@@ -35,13 +35,13 @@ type common struct {
 	patches     map[string]func() error
 }
 
-func (d *common) init(state *state.State, name string, config map[string]string, logger logger.Logger, volIDFunc func(volType VolumeType, volName string) (int64, error), commonRules *Validators) {
+func (d *common) init(s *state.State, name string, config map[string]string, log logger.Logger, volIDFunc func(volType VolumeType, volName string) (int64, error), commonRules *Validators) {
 	d.name = name
 	d.config = config
 	d.getVolID = volIDFunc
 	d.commonRules = commonRules
-	d.state = state
-	d.logger = logger
+	d.state = s
+	d.logger = log
 }
 
 // isRemote returns false indicating this driver does not use remote storage.
@@ -50,7 +50,7 @@ func (d *common) isRemote() bool {
 }
 
 // validatePool validates a pool config against common rules and optional driver specific rules.
-func (d *common) validatePool(config map[string]string, driverRules map[string]func(value string) error, volumeRules map[string]func(value string) error) error {
+func (d *common) validatePool(config map[string]string, driverRules map[string]func(value string) error, volumeRules map[string]func(value string) error, skip ...string) error {
 	checkedFields := map[string]struct{}{}
 
 	// Get rules common for all drivers.
@@ -75,6 +75,7 @@ func (d *common) validatePool(config map[string]string, driverRules map[string]f
 	}
 
 	// Look for any unchecked fields, as these are unknown fields and validation should fail.
+key:
 	for k := range config {
 		_, checked := checkedFields[k]
 		if checked {
@@ -84,6 +85,13 @@ func (d *common) validatePool(config map[string]string, driverRules map[string]f
 		// User keys are not validated.
 		if strings.HasPrefix(k, "user.") {
 			continue
+		}
+
+		// Skipped keys are not validated.
+		for _, skipped := range skip {
+			if strings.HasPrefix(k, skipped+".") {
+				continue key
+			}
 		}
 
 		return fmt.Errorf("Invalid option %q", k)
@@ -142,7 +150,7 @@ func (d *common) FillVolumeConfig(vol Volume) error {
 // This functions has a removeUnknownKeys option that if set to true will remove any unknown fields
 // (excluding those starting with "user.") which can be used when translating a volume config to a
 // different storage driver that has different options.
-func (d *common) validateVolume(vol Volume, driverRules map[string]func(value string) error, removeUnknownKeys bool) error {
+func (d *common) validateVolume(vol Volume, driverRules map[string]func(value string) error, removeUnknownKeys bool, skip ...string) error {
 	checkedFields := map[string]struct{}{}
 
 	// Get rules common for all drivers.
@@ -161,6 +169,7 @@ func (d *common) validateVolume(vol Volume, driverRules map[string]func(value st
 	}
 
 	// Look for any unchecked fields, as these are unknown fields and validation should fail.
+key:
 	for k := range vol.config {
 		_, checked := checkedFields[k]
 		if checked {
@@ -172,11 +181,18 @@ func (d *common) validateVolume(vol Volume, driverRules map[string]func(value st
 			continue
 		}
 
-		if removeUnknownKeys {
-			delete(vol.config, k)
-		} else {
+		// Skipped keys are not validated.
+		for _, skipped := range skip {
+			if strings.HasPrefix(k, skipped+".") {
+				continue key
+			}
+		}
+
+		if !removeUnknownKeys {
 			return fmt.Errorf("Invalid option for volume %q option %q", vol.name, k)
 		}
+
+		delete(vol.config, k)
 	}
 
 	// If volume type is not custom or bucket, don't allow "size" property.
@@ -209,7 +225,7 @@ func (d *common) updateVolume(vol Volume, changedConfig map[string]string) error
 	return nil
 }
 
-// MigrationType returns the type of transfer methods to be used when doing migrations between pools
+// MigrationTypes returns the type of transfer methods to be used when doing migrations between pools
 // in preference order.
 func (d *common) MigrationTypes(contentType ContentType, refresh bool, copySnapshots bool, clusterMove bool, storageMove bool) []localMigration.Type {
 	var transportType migration.MigrationFSType
@@ -531,6 +547,7 @@ func (d *common) UpdateBucketKey(bucket Volume, keyName string, creds S3Credenti
 	return nil, ErrNotSupported
 }
 
+// DeleteBucketKey deletes an existing bucket key.
 func (d *common) DeleteBucketKey(bucket Volume, keyName string, op *operations.Operation) error {
 	return nil
 }

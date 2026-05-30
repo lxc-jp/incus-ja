@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
@@ -22,7 +23,6 @@ import (
 	incus "github.com/lxc/incus/v7/client"
 	u "github.com/lxc/incus/v7/cmd/incus/usage"
 	"github.com/lxc/incus/v7/internal/i18n"
-	"github.com/lxc/incus/v7/internal/instance"
 	"github.com/lxc/incus/v7/shared/api"
 	config "github.com/lxc/incus/v7/shared/cliconfig"
 	"github.com/lxc/incus/v7/shared/termios"
@@ -32,6 +32,46 @@ import (
 
 // Date layout to be used throughout the client.
 const dateLayout = "2006/01/02 15:04 MST"
+
+// bufferedWriter accumulates writes until Flush is called, then becomes a
+// direct pass-through to the underlying writer.
+type bufferedWriter struct {
+	mu      sync.Mutex
+	buf     []byte
+	out     io.Writer
+	flushed bool
+}
+
+func (b *bufferedWriter) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.flushed {
+		return b.out.Write(p)
+	}
+
+	b.buf = append(b.buf, p...)
+	return len(p), nil
+}
+
+func (b *bufferedWriter) Flush() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.flushed {
+		return nil
+	}
+
+	b.flushed = true
+
+	_, err := b.out.Write(b.buf)
+	b.buf = nil
+	return err
+}
+
+func (b *bufferedWriter) Close() error {
+	return nil
+}
 
 // Add a device to an instance.
 func instanceDeviceAdd(client incus.InstanceServer, name string, devName string, dev map[string]string) error {
@@ -250,43 +290,6 @@ func deleteImagesByAliases(client incus.InstanceServer, aliases []api.ImageAlias
 	return nil
 }
 
-func getConfig(args ...string) (map[string]string, error) {
-	if len(args) == 2 && !strings.Contains(args[0], "=") {
-		if args[1] == "-" && !termios.IsTerminal(getStdinFd()) {
-			buf, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return nil, fmt.Errorf(i18n.G("Can't read from stdin: %w"), err)
-			}
-
-			args[1] = string(buf[:])
-		}
-
-		return map[string]string{args[0]: args[1]}, nil
-	}
-
-	values := map[string]string{}
-
-	for _, arg := range args {
-		fields := strings.SplitN(arg, "=", 2)
-		if len(fields) != 2 {
-			return nil, fmt.Errorf(i18n.G("Invalid key=value configuration: %s"), arg)
-		}
-
-		if fields[1] == "-" && !termios.IsTerminal(getStdinFd()) {
-			buf, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return nil, fmt.Errorf(i18n.G("Can't read from stdin: %w"), err)
-			}
-
-			fields[1] = string(buf[:])
-		}
-
-		values[fields[0]] = fields[1]
-	}
-
-	return values, nil
-}
-
 // kvToMap converts a parsed KV list to a KV map.
 func kvToMap(p *u.Parsed) (map[string]string, error) {
 	values := map[string]string{}
@@ -323,7 +326,7 @@ type settable interface {
 // commands.
 func unsetKey(s settable, cmd *cobra.Command, parsed []*u.Parsed) error {
 	i := len(parsed) - 1
-	parsed[i], _ = u.KV.List(0).Parse(nil, nil, nil, &[]string{parsed[i].String + "="}, false)
+	parsed[i], _ = u.KV.List(0).Parse(u.Config{}, nil, &[]string{parsed[i].String + "="})
 	return s.set(cmd, parsed)
 }
 
@@ -341,44 +344,32 @@ func readEnvironmentFile(path string) (map[string]string, error) {
 
 	// Iterate over the lines.
 	for _, line := range lines {
-		if line == "" {
+		// Strip surrounding whitespace and skip empty lines and comments.
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		pieces := strings.SplitN(line, "=", 2)
-		value := ""
-		if len(pieces) > 1 {
-			value = pieces[1]
+		key, value, _ := strings.Cut(line, "=")
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
 		}
 
-		envMap[pieces[0]] = value
+		// Strip a single pair of matching surrounding quotes from the value.
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 {
+			first := value[0]
+			last := value[len(value)-1]
+			if (first == '"' || first == '\'') && first == last {
+				value = value[1 : len(value)-1]
+			}
+		}
+
+		envMap[key] = value
 	}
 
 	return envMap, nil
-}
-
-// instancesExist iterates over a list of instances (or snapshots) and checks that they exist.
-func instancesExist(resources []remoteResource) error {
-	for _, resource := range resources {
-		// Handle snapshots.
-		if instance.IsSnapshot(resource.name) {
-			parent, snap, _ := api.GetParentAndSnapshotName(resource.name)
-
-			_, _, err := resource.server.GetInstanceSnapshot(parent, snap)
-			if err != nil {
-				return fmt.Errorf(i18n.G("Failed checking instance snapshot exists \"%s:%s\": %w"), resource.remote, resource.name, err)
-			}
-
-			continue
-		}
-
-		_, _, err := resource.server.GetInstance(resource.name)
-		if err != nil {
-			return fmt.Errorf(i18n.G("Failed checking instance exists \"%s:%s\": %w"), resource.remote, resource.name, err)
-		}
-	}
-
-	return nil
 }
 
 // structHasField checks if specified struct includes field with given name.
@@ -437,37 +428,6 @@ func getServerSupportedFilters(filters []string, clientFilters []string, singleV
 	return supportedFilters, unsupportedFilters
 }
 
-// guessImage checks that the image name (provided by the user) is correct given an instance remote and image remote.
-func guessImage(conf *config.Config, d incus.InstanceServer, instRemote string, imgRemote string, imageRef string) (string, string) {
-	if instRemote != imgRemote {
-		return imgRemote, imageRef
-	}
-
-	fields := strings.SplitN(imageRef, "/", 2)
-	_, ok := conf.Remotes[fields[0]]
-	if !ok {
-		return imgRemote, imageRef
-	}
-
-	_, _, err := d.GetImageAlias(imageRef)
-	if err == nil {
-		return imgRemote, imageRef
-	}
-
-	_, _, err = d.GetImage(imageRef)
-	if err == nil {
-		return imgRemote, imageRef
-	}
-
-	if len(fields) == 1 {
-		fmt.Fprintf(os.Stderr, i18n.G("The local image '%q' couldn't be found, trying '%q:' instead.")+"\n", imageRef, fields[0])
-		return fields[0], "default"
-	}
-
-	fmt.Fprintf(os.Stderr, i18n.G("The local image '%q' couldn't be found, trying '%q:%q' instead.")+"\n", imageRef, fields[0], fields[1])
-	return fields[0], fields[1]
-}
-
 // getImgInfo returns an image server and image info for the given image name (given by a user)
 // an image remote and an instance remote.
 func getImgInfo(d incus.InstanceServer, conf *config.Config, imgRemote string, instRemote string, imageRef string, source *api.InstanceSource) (incus.ImageServer, *api.Image, error) {
@@ -512,11 +472,10 @@ func getImgInfo(d incus.InstanceServer, conf *config.Config, imgRemote string, i
 // removeElementsFromSlice returns a slice equivalent to removing the given elements from the given list.
 // Elements not present in the list are ignored.
 func removeElementsFromSlice[T comparable](list []T, elements ...T) []T {
-	for i := len(elements) - 1; i >= 0; i-- {
-		element := elements[i]
+	for i, element := range slices.Backward(elements) {
 		match := false
-		for j := len(list) - 1; j >= 0; j-- {
-			if element == list[j] {
+		for j, l := range slices.Backward(list) {
+			if element == l {
 				match = true
 				list = slices.Delete(list, j, j+1)
 				break

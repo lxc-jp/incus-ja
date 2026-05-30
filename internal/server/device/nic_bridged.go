@@ -368,7 +368,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 				return nil
 			}
 
-			ip, _, err := net.ParseCIDR(parentAddress)
+			ipAddr, _, err := net.ParseCIDR(parentAddress)
 			if err != nil {
 				return fmt.Errorf("Invalid network ipv4.address: %w", err)
 			}
@@ -378,7 +378,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 			}
 
 			// IP should not be the same as the parent managed network address.
-			if ip.Equal(net.ParseIP(d.config["ipv4.address"])) {
+			if ipAddr.Equal(net.ParseIP(d.config["ipv4.address"])) {
 				return fmt.Errorf("IP address %q is assigned to parent managed network device %q", d.config["ipv4.address"], d.config["parent"])
 			}
 		}
@@ -403,7 +403,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 				return nil
 			}
 
-			ip, _, err := net.ParseCIDR(parentAddress)
+			ipAddr, _, err := net.ParseCIDR(parentAddress)
 			if err != nil {
 				return fmt.Errorf("Invalid network ipv6.address: %w", err)
 			}
@@ -413,7 +413,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 			}
 
 			// IP should not be the same as the parent managed network address.
-			if ip.Equal(net.ParseIP(d.config["ipv6.address"])) {
+			if ipAddr.Equal(net.ParseIP(d.config["ipv6.address"])) {
 				return fmt.Errorf("IP address %q is assigned to parent managed network device %q", d.config["ipv6.address"], d.config["parent"])
 			}
 		}
@@ -822,8 +822,8 @@ func (d *nicBridged) Start() (*deviceConfig.RunConfig, error) {
 		return nil, err
 	}
 
-	// Disable IPv6 on host-side veth interface (prevents host-side interface getting link-local address)
-	// which isn't needed because the host-side interface is connected to a bridge.
+	// Disable IPv6 on host-side veth interface (prevents host-side interface getting link-local address or RAs).
+	// IPv6 can be disabled as we are going to be bridging the interface and so only the bridge itself needs it enabled.
 	err = localUtil.SysctlSet(fmt.Sprintf("net/ipv6/conf/%s/disable_ipv6", saveData["host_name"]), "1")
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
@@ -844,12 +844,6 @@ func (d *nicBridged) Start() (*deviceConfig.RunConfig, error) {
 	}
 
 	reverter.Add(func() { _ = network.DetachInterface(d.state, d.config["parent"], saveData["host_name"]) })
-
-	// Attempt to disable router advertisement acceptance.
-	err = localUtil.SysctlSet(fmt.Sprintf("net/ipv6/conf/%s/accept_ra", saveData["host_name"]), "0")
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
-	}
 
 	// Attempt to enable port isolation.
 	if util.IsTrue(d.config["security.port_isolation"]) {
@@ -1477,9 +1471,9 @@ func (d *nicBridged) setFilters() (err error) {
 			}
 
 			if nsIP.To4() == nil {
-				ipv4DNS = append(ipv4DNS, ns)
-			} else {
 				ipv6DNS = append(ipv6DNS, ns)
+			} else {
+				ipv4DNS = append(ipv4DNS, ns)
 			}
 		}
 
@@ -1546,9 +1540,10 @@ func allowedIPNets(config deviceConfig.Device) (IPv4Nets []*net.IPNet, IPv6Nets 
 
 		// Get a CIDR string for the instance address
 		if ipAddr != "" {
-			if ipVersion == 4 {
+			switch ipVersion {
+			case 4:
 				routes = append(routes, fmt.Sprintf("%s/32", ipAddr))
-			} else if ipVersion == 6 {
+			case 6:
 				routes = append(routes, fmt.Sprintf("%s/128", ipAddr))
 			}
 		}
@@ -1590,8 +1585,8 @@ const (
 )
 
 // networkClearLease clears leases from a running dnsmasq process.
-func (d *nicBridged) networkClearLease(name string, network string, hwaddr string, mode int) error {
-	leaseFile := internalUtil.VarPath("networks", network, "dnsmasq.leases")
+func (d *nicBridged) networkClearLease(name string, networkName string, hwaddr string, mode int) error {
+	leaseFile := internalUtil.VarPath("networks", networkName, "dnsmasq.leases")
 
 	// Check that we are in fact running a dnsmasq for the network
 	if !util.PathExists(leaseFile) {
@@ -1604,32 +1599,32 @@ func (d *nicBridged) networkClearLease(name string, network string, hwaddr strin
 		return err
 	}
 
-	iface, err := net.InterfaceByName(network)
+	iface, err := net.InterfaceByName(networkName)
 	if err != nil {
-		return fmt.Errorf("Failed getting bridge interface state for %q: %w", network, err)
+		return fmt.Errorf("Failed getting bridge interface state for %q: %w", networkName, err)
 	}
 
 	// Get IPv4 and IPv6 address of interface running dnsmasq on host.
 	addrs, err := iface.Addrs()
 	if err != nil {
-		return fmt.Errorf("Failed getting bridge interface addresses for %q: %w", network, err)
+		return fmt.Errorf("Failed getting bridge interface addresses for %q: %w", networkName, err)
 	}
 
 	var dstIPv4, dstIPv6 net.IP
 	for _, addr := range addrs {
-		ip, _, err := net.ParseCIDR(addr.String())
+		ipAddr, _, err := net.ParseCIDR(addr.String())
 		if err != nil {
 			return err
 		}
 
-		if !ip.IsGlobalUnicast() {
+		if !ipAddr.IsGlobalUnicast() {
 			continue
 		}
 
-		if ip.To4() == nil {
-			dstIPv6 = ip
+		if ipAddr.To4() == nil {
+			dstIPv6 = ipAddr
 		} else {
-			dstIPv4 = ip
+			dstIPv4 = ipAddr
 		}
 	}
 
@@ -1986,8 +1981,8 @@ func (d *nicBridged) State() (*api.InstanceStateNetwork, error) {
 
 	// ipStore appends an IP to ips if not already stored.
 	ipStore := func(newIP net.IP) {
-		for _, ip := range ips {
-			if ip.Equal(newIP) {
+		for _, existingIP := range ips {
+			if existingIP.Equal(newIP) {
 				return
 			}
 		}
@@ -2026,9 +2021,9 @@ func (d *nicBridged) State() (*api.InstanceStateNetwork, error) {
 				// If stateful DHCPv6 is disabled, and IPv6 is enabled on the bridge, the NIC
 				// is likely to use its MAC and SLAAC to configure its address.
 				if hwAddr != nil {
-					ip, err := eui64.ParseMAC(v6subnet.IP, hwAddr)
+					eui64IP, err := eui64.ParseMAC(v6subnet.IP, hwAddr)
 					if err == nil {
-						ipStore(ip)
+						ipStore(eui64IP)
 					}
 				}
 			}
@@ -2061,18 +2056,18 @@ func (d *nicBridged) State() (*api.InstanceStateNetwork, error) {
 
 	// Convert IPs to InstanceStateNetworkAddresses.
 	addresses := []api.InstanceStateNetworkAddress{}
-	for _, ip := range ips {
+	for _, ipAddr := range ips {
 		addr := api.InstanceStateNetworkAddress{}
-		addr.Address = ip.String()
+		addr.Address = ipAddr.String()
 		addr.Family = "inet"
 		addr.Netmask = v4mask
 
-		if ip.To4() == nil {
+		if ipAddr.To4() == nil {
 			addr.Family = "inet6"
 			addr.Netmask = v6mask
 		}
 
-		if ip.IsLinkLocalUnicast() {
+		if ipAddr.IsLinkLocalUnicast() {
 			addr.Scope = "link"
 
 			if addr.Family == "inet6" {
@@ -2099,7 +2094,7 @@ func (d *nicBridged) State() (*api.InstanceStateNetwork, error) {
 		return nil, fmt.Errorf("Failed getting network interface counters: %w", err)
 	}
 
-	network := api.InstanceStateNetwork{
+	netState := api.InstanceStateNetwork{
 		Addresses: addresses,
 		Counters: api.InstanceStateNetworkCounters{
 			BytesReceived:   hostCounters.BytesSent,
@@ -2114,7 +2109,7 @@ func (d *nicBridged) State() (*api.InstanceStateNetwork, error) {
 		Type:     "broadcast",
 	}
 
-	return &network, nil
+	return &netState, nil
 }
 
 func (d *nicBridged) getHostMTU() (int, error) {
@@ -2134,7 +2129,33 @@ func (d *nicBridged) getHostMTU() (int, error) {
 
 // Register sets up anything needed on startup.
 func (d *nicBridged) Register() error {
-	// Skip when not using a managed network.
+	// Determine the bridge name (parent is set for unmanaged, network for managed).
+	bridgeName := d.config["parent"]
+	if bridgeName == "" && d.config["network"] != "" {
+		bridgeName = d.config["network"]
+	}
+
+	// Re-attach the host-side veth to its bridge if it has become orphaned.
+	networkVethFillFromVolatile(d.config, d.volatileGet())
+	hostName := d.config["host_name"]
+
+	if bridgeName != "" && hostName != "" && network.InterfaceExists(bridgeName) && network.InterfaceExists(hostName) {
+		linkInfo, err := ip.LinkByName(hostName)
+		if err == nil && linkInfo.Master != bridgeName {
+			// Re-apply disable_ipv6 before re-attaching to prevent RA processing on the bridge.
+			err = localUtil.SysctlSet(fmt.Sprintf("net/ipv6/conf/%s/disable_ipv6", hostName), "1")
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("Failed disabling IPv6 on host-side veth %q: %w", hostName, err)
+			}
+
+			err = network.AttachInterface(d.state, bridgeName, hostName)
+			if err != nil {
+				return fmt.Errorf("Failed re-attaching host-side veth %q to bridge %q: %w", hostName, bridgeName, err)
+			}
+		}
+	}
+
+	// Skip the rest when not using a managed network.
 	if d.config["network"] == "" {
 		return nil
 	}

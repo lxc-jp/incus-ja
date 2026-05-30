@@ -26,20 +26,20 @@ func coalesceErrors(local bool, errors map[string]error) error {
 		return nil
 	}
 
-	var errorMsg string
+	var errorMsg strings.Builder
 	if local {
-		errorMsg += "The following instances failed to update state:\n"
+		errorMsg.WriteString("The following instances failed to update state:\n")
 	}
 
 	for instName, err := range errors {
 		if local {
-			errorMsg += fmt.Sprintf(" - Instance: %s: %v\n", instName, err)
+			fmt.Fprintf(&errorMsg, " - Instance: %s: %v\n", instName, err)
 		} else {
-			errorMsg += strings.TrimSpace(fmt.Sprintf("%v\n", err))
+			errorMsg.WriteString(strings.TrimSpace(fmt.Sprintf("%v\n", err)))
 		}
 	}
 
-	return fmt.Errorf("%s", errorMsg)
+	return fmt.Errorf("%s", errorMsg.String())
 }
 
 // swagger:operation PUT /1.0/instances instances instances_put
@@ -212,7 +212,13 @@ func instancesPut(d *Daemon, r *http.Request) response.Response {
 		wgAction := sync.WaitGroup{}
 
 		networkCert := s.Endpoints.NetworkCert()
+		offlineThreshold := s.GlobalConfig.OfflineThreshold()
 		for _, member := range members {
+			// Skip cluster members that are currently offline.
+			if member.IsOffline(offlineThreshold) {
+				continue
+			}
+
 			wgAction.Add(1)
 			go func(member db.NodeInfo) {
 				defer wgAction.Done()

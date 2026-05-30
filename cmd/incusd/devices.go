@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -21,12 +23,13 @@ import (
 	"github.com/lxc/incus/v7/internal/server/state"
 	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/resources"
+	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/util"
 )
 
 type deviceTaskCPU struct {
 	id    int64
-	strId string
+	strID string
 	count *int
 }
 
@@ -37,12 +40,12 @@ func (c deviceTaskCPUs) Less(i, j int) bool { return *c[i].count < *c[j].count }
 func (c deviceTaskCPUs) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 
 func deviceNetlinkListener() (chan []string, chan device.USBEvent, chan device.UnixHotplugEvent, error) {
-	NETLINK_KOBJECT_UEVENT := 15
-	UEVENT_BUFFER_SIZE := 2048
+	netlinkKObjectUevent := 15
+	ueventBufferSize := 2048
 
 	fd, err := unix.Socket(
 		unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_CLOEXEC,
-		NETLINK_KOBJECT_UEVENT,
+		netlinkKObjectUevent,
 	)
 	if err != nil {
 		return nil, nil, nil, err
@@ -64,7 +67,7 @@ func deviceNetlinkListener() (chan []string, chan device.USBEvent, chan device.U
 	chUnix := make(chan device.UnixHotplugEvent)
 
 	go func(chCPU chan []string, chUSB chan device.USBEvent, chUnix chan device.UnixHotplugEvent) {
-		b := make([]byte, UEVENT_BUFFER_SIZE*2)
+		b := make([]byte, ueventBufferSize*2)
 		for {
 			r, err := unix.Read(fd, b)
 			if err != nil {
@@ -295,16 +298,16 @@ func deviceNetlinkListener() (chan []string, chan device.USBEvent, chan device.U
  * The `loadBalancing` flag indicates whether the CPU pinning should be load balanced or not (e.g, NUMA placement when `limits.cpu` is a single number which means
  * a required number of vCPUs per instance that can be chosen within a CPU pool).
  */
-func fillFixedInstances(fixedInstances map[int64][]instance.Instance, inst instance.Instance, effectiveCpus []int64, targetCpuPool []int64, targetCpuNum int, loadBalancing bool) {
-	if len(targetCpuPool) < targetCpuNum {
-		diffCount := len(targetCpuPool) - targetCpuNum
-		logger.Warnf("%v CPUs have been required for pinning, but %v CPUs won't be allocated", len(targetCpuPool), -diffCount)
-		targetCpuNum = len(targetCpuPool)
+func fillFixedInstances(fixedInstances map[int64][]instance.Instance, inst instance.Instance, effectiveCpus []int64, targetCPUPool []int64, targetCPUNum int, loadBalancing bool) {
+	if len(targetCPUPool) < targetCPUNum {
+		diffCount := len(targetCPUPool) - targetCPUNum
+		logger.Warnf("%v CPUs have been required for pinning, but %v CPUs won't be allocated", len(targetCPUPool), -diffCount)
+		targetCPUNum = len(targetCPUPool)
 	}
 
-	// If the `targetCpuPool` has been manually specified (explicit CPU IDs/ranges specified with `limits.cpu`)
-	if len(targetCpuPool) == targetCpuNum && !loadBalancing {
-		for _, nr := range targetCpuPool {
+	// If the `targetCPUPool` has been manually specified (explicit CPU IDs/ranges specified with `limits.cpu`)
+	if len(targetCPUPool) == targetCPUNum && !loadBalancing {
+		for _, nr := range targetCPUPool {
 			if !slices.Contains(effectiveCpus, nr) {
 				continue
 			}
@@ -320,14 +323,14 @@ func fillFixedInstances(fixedInstances map[int64][]instance.Instance, inst insta
 		return
 	}
 
-	// If we need to load-balance the instance across the CPUs of `targetCpuPool` (e.g, NUMA placement),
-	// the heuristic is to sort the `targetCpuPool` by usage (number of instances already pinned to each CPU)
+	// If we need to load-balance the instance across the CPUs of `targetCPUPool` (e.g, NUMA placement),
+	// the heuristic is to sort the `targetCPUPool` by usage (number of instances already pinned to each CPU)
 	// and then assign the instance to the first `desiredCpuNum` least used CPUs.
 	usage := map[int64]deviceTaskCPU{}
-	for _, id := range targetCpuPool {
+	for _, id := range targetCPUPool {
 		cpu := deviceTaskCPU{}
 		cpu.id = id
-		cpu.strId = fmt.Sprintf("%d", id)
+		cpu.strID = fmt.Sprintf("%d", id)
 
 		count := 0
 		_, ok := fixedInstances[id]
@@ -347,7 +350,7 @@ func fillFixedInstances(fixedInstances map[int64][]instance.Instance, inst insta
 	sort.Sort(sortedUsage)
 	count := 0
 	for _, cpu := range sortedUsage {
-		if count == targetCpuNum {
+		if count == targetCPUNum {
 			break
 		}
 
@@ -544,7 +547,7 @@ func deviceTaskBalance(s *state.State) {
 	for _, id := range cpus {
 		cpu := deviceTaskCPU{}
 		cpu.id = id
-		cpu.strId = fmt.Sprintf("%d", id)
+		cpu.strID = fmt.Sprintf("%d", id)
 		count := 0
 		cpu.count = &count
 
@@ -558,7 +561,7 @@ func deviceTaskBalance(s *state.State) {
 			continue
 		}
 
-		id := c.strId
+		id := c.strID
 		for _, ctn := range ctns {
 			_, ok := pinning[ctn]
 			if ok {
@@ -584,7 +587,7 @@ func deviceTaskBalance(s *state.State) {
 
 			count -= 1
 
-			id := cpu.strId
+			id := cpu.strID
 			_, ok := pinning[ctn]
 			if ok {
 				pinning[ctn] = append(pinning[ctn], id)
@@ -675,6 +678,72 @@ func devicesRegister(instances []instance.Instance) {
 		}
 
 		inst.RegisterDevices()
+	}
+}
+
+// cleanupOrphanedProxyHelpers reaps forkproxy helpers left running for stopped containers.
+func cleanupOrphanedProxyHelpers(instances []instance.Instance) {
+	for _, inst := range instances {
+		// Only containers spawn forkproxy helpers; proxy devices on VMs only support NAT mode.
+		if inst.Type() != instancetype.Container {
+			continue
+		}
+
+		// Running instances still need their helpers; only consider stopped instances.
+		if inst.IsRunning() {
+			continue
+		}
+
+		devicesPath := inst.DevicesPath()
+		if !util.PathExists(devicesPath) {
+			continue
+		}
+
+		for devName, devConfig := range inst.ExpandedDevices() {
+			if devConfig["type"] != "proxy" {
+				continue
+			}
+
+			pidPath := filepath.Join(devicesPath, fmt.Sprintf("proxy.%s", devName))
+			if !util.PathExists(pidPath) {
+				continue
+			}
+
+			p, err := subprocess.ImportProcess(pidPath)
+			if err != nil {
+				logger.Warn("Failed to import orphaned forkproxy helper, removing stale pid file", logger.Ctx{
+					"project":  inst.Project().Name,
+					"instance": inst.Name(),
+					"device":   devName,
+					"err":      err,
+				})
+
+				_ = os.Remove(pidPath)
+				continue
+			}
+
+			// Verify the PID still belongs to a forkproxy helper before
+			// signalling it, otherwise PID reuse could result in killing
+			// an unrelated process.
+			cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", p.PID))
+			if err != nil || !bytes.Contains(cmdline, []byte("forkproxy")) {
+				_ = os.Remove(pidPath)
+				continue
+			}
+
+			err = p.Stop()
+			if err != nil && !errors.Is(err, subprocess.ErrNotRunning) {
+				logger.Warn("Failed to stop orphaned forkproxy helper", logger.Ctx{
+					"project":  inst.Project().Name,
+					"instance": inst.Name(),
+					"device":   devName,
+					"pid":      p.PID,
+					"err":      err,
+				})
+			}
+
+			_ = os.Remove(pidPath)
+		}
 	}
 }
 

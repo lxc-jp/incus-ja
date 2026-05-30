@@ -3041,3 +3041,53 @@ Incusブロックストレージボリュームへの生の`NBD`接続を取得�
 ## `instances_placement_scriptlet_rebalance`
 
 クラスターリバランシングのトリガーに配置スクリプトレットのトリガーを追加します。
+
+## `network_bridge_multicast_snooping`
+
+これはマネージドのブリッジネットワークに`bridge.multicast_snooping`設定オプションを追加します。
+`false`に設定すると、ブリッジ上のマルチキャストスヌーピングが無効にされます。
+これはNDPのようにマルチキャストに依存するIPv6のプロトコルに役立ちます。
+
+## `storage_create_options`
+
+ブロックデバイス上にボリュームを作成する際に`mkfs`の引数を制御できるようにする`block.create_options`設定オプションを追加します。
+
+同様に、新しいストレージプールを作成する際に`mkfs.btrfs`オプションを制御するために`btrfs.create_options`も追加されました。
+
+## `instances_tpm_platform_cert`
+
+以下の設定オプションを追加します：
+
+* `instances.tpm.platform_cert`
+* `instances.tpm.platform_key`
+
+TPMプラットフォームCA証明書を設定するのに使えます。
+
+設定すると、CAによって署名されたEndorsement KeyをTPMデバイスが受け取ります。
+これらのTPMデバイスに信頼のrootを提供することで、VMが実際に期待されるIncus環境で動作していることを検証するのに使えます。
+
+## `linstor_raw`
+
+LINSTORストレージプールとストレージボリュームの両方に`linstor.raw.*`設定キーを追加します。これによりリソースグループとリソース定義の低レベルのプロパティーを制御できます。
+
+## `network_address_set_ip_ranges`
+
+これは、ネットワークACLルールで既に実現されているのと同様に、ネットワークのアドレスセットでIPの範囲（例：`10.0.0.120-10.0.0.130`）のサポートを追加します。
+
+単一のレンジは最大256このアドレスに展開できます。それより大きなアドレスのセットは代わりにCIDR表記で指定すべきです。
+
+## `storage_volumes_rebuild`
+
+カスタムストレージボリュームをリビルドできるようにします。
+配下のボリュームは削除され、新たに空のボリュームが同じ設定で作られます。
+リビルドはボリュームがスナップショットを持たない場合にのみ行えます。
+
+## `api_fragments`
+
+APIパスのURLフラグメントがパスが指すオブジェクトの設定キーの参照としてクライアントで取り扱われます。
+
+例えば、`/1.0?target=foo#storage.logs_volume`はクラスターメンバー`foo`の`storage.logs_volume`設定キーを参照します。
+
+## `instance_limits_cpu_topology`
+
+これは仮想マシンの`limits.cpu`設定キーを拡張し、明示的なCPUトポロジーを`sockets=2,cores=4,threads=2`の形式で指定できるようにします。
