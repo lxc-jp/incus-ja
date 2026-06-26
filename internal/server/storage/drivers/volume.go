@@ -454,7 +454,7 @@ func (v Volume) UnmountTask(task func(op *operations.Operation) error, keepBlock
 		}
 
 		if ourUnmount {
-			defer func() { _ = v.driver.MountVolumeSnapshot(v, op) }()
+			defer logger.WarnOnError(func() error { return v.driver.MountVolumeSnapshot(v, op) }, "Failed to mount volume snapshot")
 		}
 	} else {
 		ourUnmount, err := v.driver.UnmountVolume(v, keepBlockDev, op)
@@ -463,7 +463,7 @@ func (v Volume) UnmountTask(task func(op *operations.Operation) error, keepBlock
 		}
 
 		if ourUnmount {
-			defer func() { _ = v.driver.MountVolume(v, op) }()
+			defer logger.WarnOnError(func() error { return v.driver.MountVolume(v, op) }, "Failed to mount volume")
 		}
 	}
 
@@ -690,9 +690,19 @@ func (v Volume) ConfigSizeFromSource(srcVol Volume) (string, error) {
 			return volSize, err
 		}
 
-		// The volume/pool specified size is smaller than image minimum size. We must not continue as
-		// these specified sizes provide protection against unpacking a massive image and filling the pool.
 		if volSizeBytes < imgSizeBytes {
+			// The shared cached image volume must be large enough to hold the image. Grow it to
+			// the image size rather than failing, so instances with a sufficciently sized root
+			// disk can be created even when the pool's volume.size is smaller than the image.
+			// Instance volumes keep the strict check below (their root disk size is honored
+			// separately).
+			if v.volType == VolumeTypeImage {
+				return srcVol.config["volatile.rootfs.size"], nil
+			}
+
+			// The volume/pool specified size is smaller than image minimum size. We must not
+			// continue as these specified sizes provide protection against unpacking a massive
+			// image and filling the pool.
 			return "", fmt.Errorf("Source image size (%d) exceeds specified volume size (%d)", imgSizeBytes, volSizeBytes)
 		}
 
@@ -804,7 +814,7 @@ func (v Volume) FileSFTPConn(s *state.State) (net.Conn, error) {
 		return nil, err
 	}
 
-	defer func() { _ = dirFile.Close() }()
+	defer logger.WarnOnError(dirFile.Close, "Failed to close file")
 
 	forkfileAddr, err := net.ResolveUnixAddr("unix", fmt.Sprintf("/proc/self/fd/%d/forkfile.sock", dirFile.Fd()))
 	if err != nil {
@@ -863,7 +873,7 @@ func (v Volume) FileSFTPConn(s *state.State) (net.Conn, error) {
 				return err
 			}
 
-			defer func() { _ = forkfileFile.Close() }()
+			defer logger.WarnOnError(forkfileFile.Close, "Failed to close file")
 
 			args = append(args, "3")
 			extraFiles = append(extraFiles, forkfileFile)
@@ -874,7 +884,7 @@ func (v Volume) FileSFTPConn(s *state.State) (net.Conn, error) {
 				return err
 			}
 
-			defer func() { _ = rootfsFile.Close() }()
+			defer logger.WarnOnError(rootfsFile.Close, "Failed to close file")
 
 			args = append(args, "4")
 			extraFiles = append(extraFiles, rootfsFile)

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/util"
 	"github.com/lxc/incus/v7/shared/validate"
@@ -97,7 +98,7 @@ func (d Nftables) nftParseRuleset() ([]nftGenericItem, error) {
 		return nil, err
 	}
 
-	defer func() { _ = cmd.Wait() }()
+	defer logger.WarnOnError(cmd.Wait, "Failed to wait for command")
 
 	// This only extracts certain generic parts of the ruleset, see man libnftables-json for more info.
 	v := &struct {
@@ -464,7 +465,13 @@ func (d Nftables) InstanceSetupProxyNAT(projectName string, instanceName string,
 		ipFamily = "ip6"
 	}
 
-	listenAddressStr := forward.ListenAddress.String()
+	// A wildcard listen address means traffic to any destination address is forwarded, so the
+	// destination address match is omitted from the generated rules.
+	listenAddressStr := ""
+	if !forward.ListenAddress.IsUnspecified() {
+		listenAddressStr = forward.ListenAddress.String()
+	}
+
 	targetAddressStr := forward.TargetAddress.String()
 
 	// Generate slices of rules to add.

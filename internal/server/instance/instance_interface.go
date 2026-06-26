@@ -23,6 +23,7 @@ import (
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/idmap"
 	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/osinfo"
 )
 
 // HookStart hook used when instance has started.
@@ -112,6 +113,7 @@ type Instance interface {
 	DeleteQcow2Snapshot(devName string, snapshotIndex int, backingFilename string) error
 	ExportQcow2Block(diskName string, blockIndex int) (func(), string, error)
 	ConnectNBD(diskName string, diskSize int64, writable bool) (net.Conn, func(), error)
+	ConnectNBDAllDisks(reuse bool) (net.Conn, func(), error)
 
 	// Config handling.
 	Rename(newName string, applyTemplateTrigger bool) error
@@ -155,7 +157,7 @@ type Instance interface {
 	Description() string
 	CreationDate() time.Time
 	LastUsedDate() time.Time
-	GuestOS() string
+	GuestOS() osinfo.OSType
 
 	Profiles() []api.Profile
 	InitPID() int

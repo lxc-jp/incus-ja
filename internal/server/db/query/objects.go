@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 // SelectObjects executes a statement which must yield rows with a specific
@@ -16,7 +18,7 @@ func SelectObjects(ctx context.Context, stmt *sql.Stmt, rowFunc Dest, args ...an
 		return err
 	}
 
-	defer func() { _ = rows.Close() }()
+	defer logger.WarnOnError(rows.Close, "Failed to close rows")
 
 	for rows.Next() {
 		err = rowFunc(rows.Scan)
@@ -36,7 +38,7 @@ func Scan(ctx context.Context, tx *sql.Tx, query string, rowFunc Dest, inArgs ..
 		return err
 	}
 
-	defer func() { _ = rows.Close() }()
+	defer logger.WarnOnError(rows.Close, "Failed to close rows")
 
 	for rows.Next() {
 		err = rowFunc(rows.Scan)
@@ -71,7 +73,8 @@ func UpsertObject(tx *sql.Tx, table string, columns []string, values []any) (int
 
 	stmt := fmt.Sprintf(
 		"INSERT OR REPLACE INTO %s (%s) VALUES %s",
-		table, strings.Join(columns, ", "), Params(n))
+		table, strings.Join(columns, ", "), Params(n),
+	)
 	result, err := tx.Exec(stmt, values...)
 	if err != nil {
 		return -1, fmt.Errorf("insert or replaced row: %w", err)

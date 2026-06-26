@@ -5,11 +5,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,8 +17,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
-	"github.com/gorilla/mux"
 	"golang.org/x/sys/unix"
 
 	internalInstance "github.com/lxc/incus/v7/internal/instance"
@@ -45,6 +45,7 @@ import (
 	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/osarch"
 	"github.com/lxc/incus/v7/shared/revert"
+	localtls "github.com/lxc/incus/v7/shared/tls"
 	"github.com/lxc/incus/v7/shared/units"
 	"github.com/lxc/incus/v7/shared/util"
 )
@@ -66,6 +67,7 @@ var apiInternal = []APIEndpoint{
 	internalRAFTSnapshotCmd,
 	internalRebalanceLoadCmd,
 	internalReadyCmd,
+	internalServerCertificateCmd,
 	internalShutdownCmd,
 	internalSQLCmd,
 	internalWarningCreateCmd,
@@ -76,6 +78,12 @@ var internalReadyCmd = APIEndpoint{
 	Path: "ready",
 
 	Get: APIEndpointAction{Handler: internalWaitReady, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
+}
+
+var internalServerCertificateCmd = APIEndpoint{
+	Path: "server-certificate",
+
+	Put: APIEndpointAction{Handler: internalServerCertificatePut, AccessHandler: allowPermission(auth.ObjectTypeServer, auth.EntitlementCanEdit)},
 }
 
 var internalShutdownCmd = APIEndpoint{
@@ -335,11 +343,64 @@ func internalShutdown(d *Daemon, r *http.Request) response.Response {
 	})
 }
 
+type internalServerCertificatePutRequest struct {
+	Certificate string `json:"certificate" yaml:"certificate"`
+	Key         string `json:"key"         yaml:"key"`
+}
+
+// serverCertificateUpdateMu prevents concurrent certificate updates.
+var serverCertificateUpdateMu sync.Mutex
+
+func internalServerCertificatePut(d *Daemon, r *http.Request) response.Response {
+	s := d.State()
+
+	if s.ServerClustered {
+		return response.BadRequest(errors.New("Server certificate updates aren't supported in clusters"))
+	}
+
+	req := internalServerCertificatePutRequest{}
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		return response.BadRequest(err)
+	}
+
+	certBytes := []byte(req.Certificate)
+	keyBytes := []byte(req.Key)
+
+	certBlock, _ := pem.Decode(certBytes)
+	if certBlock == nil {
+		return response.BadRequest(errors.New("Certificate must be a PEM encoded certificate"))
+	}
+
+	keyBlock, _ := pem.Decode(keyBytes)
+	if keyBlock == nil {
+		return response.BadRequest(errors.New("Private key must be a PEM encoded key"))
+	}
+
+	cert, err := localtls.KeyPairFromRaw(certBytes, keyBytes)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid certificate or key: %w", err))
+	}
+
+	serverCertificateUpdateMu.Lock()
+	defer serverCertificateUpdateMu.Unlock()
+
+	err = internalUtil.WriteCert(s.OS.VarDir, "server", certBytes, keyBytes, nil)
+	if err != nil {
+		return response.SmartError(fmt.Errorf("Failed to write new server certificate: %w", err))
+	}
+
+	s.Endpoints.NetworkUpdateCert(cert)
+
+	return response.EmptySyncResponse
+}
+
 // internalContainerHookLoadFromRequestReference loads the container from the instance reference in the request.
 // It detects whether the instance reference is an instance ID or instance name and loads instance accordingly.
 func internalContainerHookLoadFromReference(s *state.State, r *http.Request) (instance.Instance, error) {
 	var inst instance.Instance
-	instanceRef, err := url.PathUnescape(mux.Vars(r)["instanceRef"])
+	instanceRef, err := pathVar(r, "instanceRef")
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +526,7 @@ func internalVirtualMachineOnResize(d *Daemon, r *http.Request) response.Respons
 	s := d.State()
 
 	// Get the instance ID.
-	instanceID, err := strconv.Atoi(mux.Vars(r)["instanceRef"])
+	instanceID, err := strconv.Atoi(r.PathValue("instanceRef"))
 	if err != nil {
 		return response.BadRequest(err)
 	}
@@ -627,7 +688,7 @@ func internalSQLSelect(tx *sql.Tx, statement string, result *internalSQL.SQLResu
 		return fmt.Errorf("Failed to execute query: %w", err)
 	}
 
-	defer func() { _ = rows.Close() }()
+	defer logger.WarnOnError(rows.Close, "Failed to close rows")
 
 	result.Columns, err = rows.Columns()
 	if err != nil {

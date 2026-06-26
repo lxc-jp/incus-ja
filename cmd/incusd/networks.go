@@ -8,7 +8,6 @@ import (
 	"maps"
 	"net"
 	"net/http"
-	"net/url"
 	"runtime"
 	"slices"
 	"strconv"
@@ -17,7 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/mux"
 	"golang.org/x/sync/errgroup"
 
 	incus "github.com/lxc/incus/v7/client"
@@ -949,7 +947,7 @@ func networkGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	networkName, err := url.PathUnescape(mux.Vars(r)["networkName"])
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1149,7 +1147,7 @@ func networkDelete(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	networkName, err := url.PathUnescape(mux.Vars(r)["networkName"])
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1285,7 +1283,7 @@ func networkPost(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	networkName, err := url.PathUnescape(mux.Vars(r)["networkName"])
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1432,7 +1430,7 @@ func networkPut(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	networkName, err := url.PathUnescape(mux.Vars(r)["networkName"])
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1674,7 +1672,7 @@ func networkLeasesGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	networkName, err := url.PathUnescape(mux.Vars(r)["networkName"])
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1701,6 +1699,15 @@ func networkLeasesGet(d *Daemon, r *http.Request) response.Response {
 
 func networkStartup(s *state.State) error {
 	var err error
+
+	// Cleanup leftover OVS ports.
+	vswitch, err := s.OVS()
+	if err == nil {
+		err = vswitch.RemoveStaleBridgePorts(s.ShutdownCtx)
+		if err != nil {
+			logger.Warn("Failed to clean up stale OVS ports", logger.Ctx{"err": err})
+		}
+	}
 
 	// Get a list of projects.
 	var projectNames []string
@@ -2119,7 +2126,7 @@ func networkStateGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	networkName, err := url.PathUnescape(mux.Vars(r)["networkName"])
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}

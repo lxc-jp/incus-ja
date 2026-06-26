@@ -2,6 +2,7 @@ package device
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -19,6 +20,8 @@ import (
 	"github.com/lxc/incus/v7/internal/server/instance"
 	storageDrivers "github.com/lxc/incus/v7/internal/server/storage/drivers"
 	"github.com/lxc/incus/v7/shared/idmap"
+	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/osinfo"
 	"github.com/lxc/incus/v7/shared/revert"
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/util"
@@ -204,7 +207,8 @@ func diskCephRbdMap(clusterName string, userName string, poolName string, volume
 		"--cluster", clusterName,
 		"--pool", poolName,
 		"map",
-		volumeName)
+		volumeName,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -225,7 +229,8 @@ again:
 	_, err := subprocess.RunCommand(
 		"rbd",
 		"unmap",
-		unmapImageName)
+		unmapImageName,
+	)
 	if err != nil {
 		var runError subprocess.RunError
 		if errors.As(err, &runError) {
@@ -288,6 +293,24 @@ func diskCephfsOptions(clusterName string, userName string, fsName string, fsPat
 	return srcPath, fsOptions, nil
 }
 
+func virtiofsdHasFeature(cmd string, feature string) bool {
+	output, err := subprocess.RunCommand(cmd, "--print-capabilities")
+	if err != nil {
+		return false
+	}
+
+	var caps struct {
+		Features []string `json:"features"`
+	}
+
+	err = json.Unmarshal([]byte(output), &caps)
+	if err != nil {
+		return false
+	}
+
+	return slices.Contains(caps.Features, feature)
+}
+
 // DiskVMVirtiofsdStart starts a new virtiofsd process.
 // If the idmaps slice is supplied then the proxy process is run inside a user namespace using the supplied maps.
 // Returns UnsupportedError error if the host system or instance does not support virtiosfd, returns normal error
@@ -334,7 +357,7 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 		return nil, nil, err
 	}
 
-	defer func() { _ = socketFileDir.Close() }()
+	defer logger.WarnOnError(socketFileDir.Close, "Failed to close socket directory")
 
 	socketFile := fmt.Sprintf("/proc/self/fd/%d/%s", socketFileDir.Fd(), filepath.Base(socketPath))
 
@@ -358,7 +381,7 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 		return nil, nil, fmt.Errorf("Failed to getting unix listener file for virtiofsd: %w", err)
 	}
 
-	defer func() { _ = unixFile.Close() }()
+	defer logger.WarnOnError(unixFile.Close, "Failed to close unix listener file")
 
 	switch cacheOption {
 	case "metadata":
@@ -402,8 +425,12 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 		if lastGID < 4294967295 {
 			args = append(args, fmt.Sprintf("--translate-gid=forbid-guest:%d:%d", lastGID, 4294967295-lastGID))
 		}
-	} else if inst.GuestOS() != "windows" {
-		args = append(args, "--posix-acl")
+	} else if inst.GuestOS() != osinfo.Windows {
+		if virtiofsdHasFeature(cmd, "posix-acl-negotiation-mode") {
+			args = append(args, "--posix-acl=auto")
+		} else {
+			args = append(args, "--posix-acl")
+		}
 	}
 
 	proc, err := subprocess.NewProcess(cmd, args, logPath, logPath)

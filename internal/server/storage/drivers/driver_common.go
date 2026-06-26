@@ -271,17 +271,14 @@ func (d *common) Config() map[string]string {
 // ApplyPatch looks for a suitable patch and runs it.
 func (d *common) ApplyPatch(name string) error {
 	if d.patches == nil {
-		return fmt.Errorf("The patch mechanism isn't implemented on pool %q", d.name)
+		// No pool specific patches.
+		return nil
 	}
 
 	// Locate the patch.
 	patch, ok := d.patches[name]
 	if !ok {
-		return fmt.Errorf("Patch %q isn't implemented on pool %q", name, d.name)
-	}
-
-	// Handle cases where a patch isn't needed.
-	if patch == nil {
+		// Patch doesn't have a pool-specific hook.
 		return nil
 	}
 
@@ -318,7 +315,7 @@ func (d *common) moveGPTAltHeader(devPath string) error {
 				return err
 			}
 
-			defer func() { _ = loopDeviceAutoDetach(devPath) }()
+			defer logger.WarnOnError(func() error { return loopDeviceAutoDetach(devPath) }, "Failed to detach loop device")
 		}
 	}
 
@@ -334,7 +331,10 @@ func (d *common) moveGPTAltHeader(devPath string) error {
 		if errors.As(runErr.Unwrap(), &exitError) {
 			// sgdisk manpage says exit status 3 means:
 			// "Non-GPT disk detected and no -g option, but operation requires a write action".
-			if exitError.ExitCode() == 3 {
+
+			// Exit status 2 means an error reading the partition table.
+			// This can happen on raw or MBR-only disk image.
+			if exitError.ExitCode() == 2 || exitError.ExitCode() == 3 {
 				return nil // Non-error as non-GPT disk specified.
 			}
 		}

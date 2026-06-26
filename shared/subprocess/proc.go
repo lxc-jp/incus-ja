@@ -13,6 +13,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/util"
 )
 
@@ -177,11 +178,11 @@ func (p *Process) start(ctx context.Context, fds []*os.File) error {
 	}
 
 	if p.Stdout != nil && p.closeFds {
-		defer func() { _ = p.Stdout.Close() }()
+		defer logger.WarnOnError(p.Stdout.Close, "Failed to close stdout")
 	}
 
 	if p.Stderr != nil && p.Stderr != p.Stdout && p.closeFds {
-		defer func() { _ = p.Stderr.Close() }()
+		defer logger.WarnOnError(p.Stderr.Close, "Failed to close stderr")
 	}
 
 	// Start the process.
@@ -269,7 +270,7 @@ func (p *Process) Reload() error {
 
 // Save will save the given process object to a YAML file. Can be imported at a later point.
 func (p *Process) Save(path string) error {
-	dat, err := yaml.Dump(p, yaml.V2)
+	dat, err := yaml.Dump(p, yaml.WithV2Defaults())
 	if err != nil {
 		return fmt.Errorf("Unable to serialize process struct to YAML: %w", err)
 	}

@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 
 	"github.com/lxc/incus/v7/internal/filter"
@@ -412,13 +411,13 @@ func storagePoolVolumesGet(d *Daemon, r *http.Request) response.Response {
 	targetMember := request.QueryParam(r, "target")
 	memberSpecific := targetMember != ""
 
-	poolName, err := url.PathUnescape(mux.Vars(r)["poolName"])
+	poolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
 	// Get the name of the volume type.
-	volumeTypeName, err := url.PathUnescape(mux.Vars(r)["type"])
+	volumeTypeName, err := pathVar(r, "type")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -810,7 +809,7 @@ func filterVolumes(volumes []*db.StorageVolume, clauses *filter.ClauseSet, allPr
 func storagePoolVolumesPost(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	poolName, err := url.PathUnescape(mux.Vars(r)["poolName"])
+	poolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -859,9 +858,8 @@ func storagePoolVolumesPost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Handle being called through the typed URL.
-	_, ok := mux.Vars(r)["type"]
-	if ok {
-		req.Type, err = url.PathUnescape(mux.Vars(r)["type"])
+	if r.PathValue("type") != "" {
+		req.Type, err = pathVar(r, "type")
 		if err != nil {
 			return response.SmartError(err)
 		}
@@ -936,6 +934,25 @@ func storagePoolVolumesPost(d *Daemon, r *http.Request) response.Response {
 
 		return doVolumeCreateOrCopy(s, r, request.ProjectParam(r), projectName, poolName, &req)
 	case "copy":
+		// Check that the caller is allowed to view the source volume.
+		srcProjectName := projectName
+		if req.Source.Project != "" {
+			srcProjectName, err = project.StorageVolumeProject(s.DB.Cluster, req.Source.Project, db.StoragePoolVolumeTypeCustom)
+			if err != nil {
+				return response.SmartError(err)
+			}
+		}
+
+		srcPoolName := req.Source.Pool
+		if srcPoolName == "" {
+			srcPoolName = poolName
+		}
+
+		err = s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectStorageVolume(srcProjectName, srcPoolName, db.StoragePoolVolumeTypeNameCustom, req.Source.Name, req.Source.Location), auth.EntitlementCanView)
+		if err != nil {
+			return response.SmartError(err)
+		}
+
 		if dbVolume != nil {
 			return doCustomVolumeRefresh(s, r, request.ProjectParam(r), projectName, poolName, &req)
 		}
@@ -1247,12 +1264,12 @@ func storagePoolVolumePost(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	// Get the name of the storage volume.
-	volumeName, err := url.PathUnescape(mux.Vars(r)["volumeName"])
+	volumeName, err := pathVar(r, "volumeName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	volumeTypeName, err := url.PathUnescape(mux.Vars(r)["type"])
+	volumeTypeName, err := pathVar(r, "type")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1262,7 +1279,7 @@ func storagePoolVolumePost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Get the name of the storage pool the volume is supposed to be attached to.
-	srcPoolName, err := url.PathUnescape(mux.Vars(r)["poolName"])
+	srcPoolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1981,19 +1998,19 @@ func storagePoolVolumeTypePostMove(s *state.State, r *http.Request, poolName str
 func storagePoolVolumeGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	volumeTypeName, err := url.PathUnescape(mux.Vars(r)["type"])
+	volumeTypeName, err := pathVar(r, "type")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
 	// Get the name of the storage volume.
-	volumeName, err := url.PathUnescape(mux.Vars(r)["volumeName"])
+	volumeName, err := pathVar(r, "volumeName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
 	// Get the name of the storage pool the volume is supposed to be attached to.
-	poolName, err := url.PathUnescape(mux.Vars(r)["poolName"])
+	poolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -2232,19 +2249,19 @@ func storagePoolVolumePut(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	volumeTypeName, err := url.PathUnescape(mux.Vars(r)["type"])
+	volumeTypeName, err := pathVar(r, "type")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
 	// Get the name of the storage volume.
-	volumeName, err := url.PathUnescape(mux.Vars(r)["volumeName"])
+	volumeName, err := pathVar(r, "volumeName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
 	// Get the name of the storage pool the volume is supposed to be attached to.
-	poolName, err := url.PathUnescape(mux.Vars(r)["poolName"])
+	poolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -2421,12 +2438,12 @@ func storagePoolVolumePatch(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	// Get the name of the storage volume.
-	volumeName, err := url.PathUnescape(mux.Vars(r)["volumeName"])
+	volumeName, err := pathVar(r, "volumeName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	volumeTypeName, err := url.PathUnescape(mux.Vars(r)["type"])
+	volumeTypeName, err := pathVar(r, "type")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -2436,7 +2453,7 @@ func storagePoolVolumePatch(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Get the name of the storage pool the volume is supposed to be attached to.
-	poolName, err := url.PathUnescape(mux.Vars(r)["poolName"])
+	poolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -2568,12 +2585,12 @@ func storagePoolVolumeDelete(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	// Get the name of the storage volume.
-	volumeName, err := url.PathUnescape(mux.Vars(r)["volumeName"])
+	volumeName, err := pathVar(r, "volumeName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	volumeTypeName, err := url.PathUnescape(mux.Vars(r)["type"])
+	volumeTypeName, err := pathVar(r, "type")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -2583,7 +2600,7 @@ func storagePoolVolumeDelete(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Get the name of the storage pool the volume is supposed to be attached to.
-	poolName, err := url.PathUnescape(mux.Vars(r)["poolName"])
+	poolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -2699,7 +2716,7 @@ func createStoragePoolVolumeFromISO(s *state.State, r *http.Request, requestProj
 		return response.InternalError(err)
 	}
 
-	defer func() { _ = os.Remove(isoFile.Name()) }()
+	defer logger.WarnOnError(func() error { return os.Remove(isoFile.Name()) }, "Failed to remove ISO file")
 	reverter.Add(func() { _ = isoFile.Close() })
 
 	// Get disk budget for the project if any.
@@ -2727,7 +2744,7 @@ func createStoragePoolVolumeFromISO(s *state.State, r *http.Request, requestProj
 	runReverter := reverter.Clone()
 
 	run := func(op *operations.Operation) error {
-		defer func() { _ = isoFile.Close() }()
+		defer logger.WarnOnError(isoFile.Close, "Failed to close ISO file")
 		defer runReverter.Fail()
 
 		pool, err := storagePools.LoadByName(s, pool)
@@ -2767,7 +2784,7 @@ func createStoragePoolVolumeFromBackup(s *state.State, r *http.Request, requestP
 		return response.InternalError(err)
 	}
 
-	defer func() { _ = os.Remove(backupFile.Name()) }()
+	defer logger.WarnOnError(func() error { return os.Remove(backupFile.Name()) }, "Failed to remove backup file")
 	reverter.Add(func() { _ = backupFile.Close() })
 
 	// Get disk budget for the project if any.
@@ -2812,7 +2829,7 @@ func createStoragePoolVolumeFromBackup(s *state.State, r *http.Request, requestP
 			return response.InternalError(err)
 		}
 
-		defer func() { _ = os.Remove(tarFile.Name()) }()
+		defer logger.WarnOnError(func() error { return os.Remove(tarFile.Name()) }, "Failed to remove tarball file")
 
 		// Decompress to tarFile temporary file.
 		err = archive.ExtractWithFds(decomArgs[0], decomArgs[1:], nil, nil, tarFile)
@@ -2903,7 +2920,7 @@ func createStoragePoolVolumeFromBackup(s *state.State, r *http.Request, requestP
 	runReverter := reverter.Clone()
 
 	run := func(op *operations.Operation) error {
-		defer func() { _ = backupFile.Close() }()
+		defer logger.WarnOnError(backupFile.Close, "Failed to close backup file")
 		defer runReverter.Fail()
 
 		pool, err := storagePools.LoadByName(s, bInfo.Pool)

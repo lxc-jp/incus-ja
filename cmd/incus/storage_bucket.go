@@ -23,6 +23,7 @@ import (
 	"github.com/lxc/incus/v7/shared/archive"
 	cli "github.com/lxc/incus/v7/shared/cmd"
 	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/termios"
 	"github.com/lxc/incus/v7/shared/units"
 	"github.com/lxc/incus/v7/shared/util"
@@ -266,7 +267,8 @@ func (c *cmdStorageBucketEdit) helpTemplate() string {
 ### name: bucket1
 ### used_by: []
 ### config:
-###   size: "61203283968"`)
+###   size: "61203283968"`,
+	)
 }
 
 func (c *cmdStorageBucketEdit) run(cmd *cobra.Command, args []string) error {
@@ -309,7 +311,7 @@ func (c *cmdStorageBucketEdit) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&bucket, yaml.V2)
+	data, err := yaml.Dump(&bucket, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -457,7 +459,8 @@ Pre-defined column shorthand chars:
   e - Project name
   n - Name
   d - Description
-  L - Location of the storage bucket (e.g. its cluster member)`))
+  L - Location of the storage bucket (e.g. its cluster member)`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagAllProjects, "all-projects", i18n.G("Display storage pool buckets from all projects"))
@@ -595,7 +598,8 @@ func (c *cmdStorageBucketSet) command() *cobra.Command {
 		`Set storage bucket configuration keys
 
 For backward compatibility, a single configuration key may still be set with:
-    incus storage bucket set [<remote>:]<pool> <bucket> <key> <value>`))
+    incus storage bucket set [<remote>:]<pool> <bucket> <key> <value>`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.storageBucket.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Set the key as a storage bucket property"))
@@ -700,7 +704,8 @@ func (c *cmdStorageBucketShow) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Show storage bucket configurations`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus storage bucket show default data
-    Will show the properties of a bucket called "data" in the "default" pool.`))
+    Will show the properties of a bucket called "data" in the "default" pool.`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.storageBucket.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cmd.RunE = c.run
@@ -728,7 +733,7 @@ func (c *cmdStorageBucketShow) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&bucket, yaml.V2)
+	data, err := yaml.Dump(&bucket, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -747,7 +752,7 @@ type cmdStorageBucketUnset struct {
 	flagIsProperty bool
 }
 
-var cmdStorageBucketUnsetUsage = u.Usage{u.Pool.Remote(), u.Bucket, u.Key}
+var cmdStorageBucketUnsetUsage = u.Usage{u.Pool.Remote(), u.Bucket, u.Key.List(1)}
 
 func (c *cmdStorageBucketUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
@@ -756,7 +761,7 @@ func (c *cmdStorageBucketUnset) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Unset storage bucket configuration keys`))
 
 	cli.AddStringFlag(cmd.Flags(), &c.storageBucket.flagTarget, "target", "", "", i18n.G("Cluster member name"))
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as a storage bucket property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as storage bucket properties"))
 	cmd.RunE = c.run
 
 	return cmd
@@ -851,7 +856,8 @@ Commas between consecutive shorthand chars are optional.
 Pre-defined column shorthand chars:
   n - Name
   d - Description
-  r - Role`))
+  r - Role`,
+	))
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
 	cli.AddStringFlag(cmd.Flags(), &c.storageBucketKey.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultStorageBucketKeyColumns, "", i18n.G("Columns"))
@@ -1134,7 +1140,8 @@ func (c *cmdStorageBucketKeyEdit) helpTemplate() string {
 ### name: bucket1
 ### used_by: []
 ### config:
-###   size: "61203283968"`)
+###   size: "61203283968"`,
+	)
 }
 
 func (c *cmdStorageBucketKeyEdit) run(cmd *cobra.Command, args []string) error {
@@ -1178,7 +1185,7 @@ func (c *cmdStorageBucketKeyEdit) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&bucket, yaml.V2)
+	data, err := yaml.Dump(&bucket, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -1236,7 +1243,8 @@ func (c *cmdStorageBucketKeyShow) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Show storage bucket key configurations`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus storage bucket key show default data foo
-    Will show the properties of a bucket key called "foo" for a bucket called "data" in the "default" pool.`))
+    Will show the properties of a bucket key called "foo" for a bucket called "data" in the "default" pool.`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.storageBucketKey.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cmd.RunE = c.run
@@ -1265,7 +1273,7 @@ func (c *cmdStorageBucketKeyShow) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&bucket, yaml.V2)
+	data, err := yaml.Dump(&bucket, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -1290,10 +1298,12 @@ func (c *cmdStorageBucketExport) command() *cobra.Command {
 	cmd.Use = cli.U("export", cmdStorageBucketExportUsage...)
 	cmd.Short = i18n.G("Export storage bucket")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Export storage buckets as tarball.`))
+		`Export storage buckets as tarball.`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus storage bucket export default b1
-    Download a backup tarball of the b1 storage bucket from the default pool.`))
+    Download a backup tarball of the b1 storage bucket from the default pool.`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagCompressionAlgorithm, "compression", "", "", i18n.G("Define a compression algorithm: for backup or none"))
 	cli.AddStringFlag(cmd.Flags(), &c.storageBucket.flagTarget, "target", "", "", i18n.G("Cluster member name"))
@@ -1408,7 +1418,7 @@ func (c *cmdStorageBucketExport) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		defer func() { _ = target.Close() }()
+		defer logger.WarnOnError(target.Close, "Failed to close target file")
 	}
 
 	// Prepare the download request.
@@ -1471,10 +1481,12 @@ func (c *cmdStorageBucketImport) command() *cobra.Command {
 	cmd.Use = cli.U("import", cmdStorageBucketImportUsage...)
 	cmd.Short = i18n.G("Import storage bucket")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Import backups of storage buckets.`))
+		`Import backups of storage buckets.`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus storage bucket import default backup0.tar.gz
-		Create a new storage bucket using backup0.tar.gz as the source.`))
+		Create a new storage bucket using backup0.tar.gz as the source.`,
+	))
 	cli.AddStringFlag(cmd.Flags(), &c.storageBucket.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cmd.RunE = c.run
 
@@ -1506,7 +1518,7 @@ func (c *cmdStorageBucketImport) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		defer func() { _ = file.Close() }()
+		defer logger.WarnOnError(file.Close, "Failed to close file")
 	}
 
 	fstat, err := file.Stat()

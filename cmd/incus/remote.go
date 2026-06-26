@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/lxc/incus/v7/shared/api"
 	config "github.com/lxc/incus/v7/shared/cliconfig"
 	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/logger"
 	localtls "github.com/lxc/incus/v7/shared/tls"
 	"github.com/lxc/incus/v7/shared/util"
 )
@@ -96,6 +98,10 @@ func (c *cmdRemote) command() *cobra.Command {
 	remoteGetClientTokenCmd := cmdRemoteGetClientToken{global: c.global, remote: c}
 	cmd.AddCommand(remoteGetClientTokenCmd.command())
 
+	// Set keepalive timeout
+	remoteSetKeepalive := cmdRemoteSetKeepalive{global: c.global, remote: c}
+	cmd.AddCommand(remoteSetKeepalive.command())
+
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
 	cmd.Run = func(cmd *cobra.Command, _ []string) { _ = cmd.Usage() }
@@ -135,7 +141,8 @@ Several remote targets can be provided, to handle switching to other servers if 
   incus remote add some-name server1.example.com server2.example.com
 
 The remote name can be ignored if a single target is provided.
-`))
+`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagAcceptCert, "accept-certificate", i18n.G("Accept certificate"))
@@ -730,7 +737,8 @@ func (c *cmdRemoteGenerateCertificate) command() *cobra.Command {
 	cmd.Use = cli.U("generate-certificate", cmdRemoteGenerateCertificateUsage...)
 	cmd.Short = i18n.G("Generate the client certificate")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Manually trigger the generation of a client certificate`))
+		`Manually trigger the generation of a client certificate`,
+	))
 
 	cmd.RunE = c.run
 
@@ -857,7 +865,7 @@ func (c *cmdRemoteGetClientCertificate) run(cmd *cobra.Command, args []string) e
 			return err
 		}
 
-		defer func() { _ = w.Close() }()
+		defer logger.WarnOnError(w.Close, "Failed to close file")
 
 		switch c.flagFormat {
 		case "pem":
@@ -919,7 +927,8 @@ func (c *cmdRemoteGetClientToken) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Generate a client trust token derived from the existing client certificate and private key.
 
-This is useful for remote authentication workflows where a token is passed to another Incus server.`))
+This is useful for remote authentication workflows where a token is passed to another Incus server.`,
+	))
 	cmd.RunE = c.run
 	return cmd
 }
@@ -1024,7 +1033,8 @@ Pre-defined column shorthand chars:
   a - Auth Type
   P - Public
   s - Static
-  g - Global`))
+  g - Global`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
@@ -1243,6 +1253,26 @@ func (c *cmdRemoteRename) run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Rename the OIDC token file.
+	oldOIDCPath := conf.OIDCTokenPath(remoteName)
+	newOIDCPath := conf.OIDCTokenPath(newRemoteName)
+	if util.PathExists(oldOIDCPath) {
+		err := os.Rename(oldOIDCPath, newOIDCPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Rename the cookie jar.
+	oldCookiesPath := conf.CookiesPath(remoteName)
+	newCookiesPath := conf.CookiesPath(newRemoteName)
+	if util.PathExists(oldCookiesPath) {
+		err := os.Rename(oldCookiesPath, newCookiesPath)
+		if err != nil {
+			return err
+		}
+	}
+
 	rc.Global = false
 	conf.Remotes[newRemoteName] = rc
 	delete(conf.Remotes, remoteName)
@@ -1435,6 +1465,65 @@ func (c *cmdRemoteSetURL) run(cmd *cobra.Command, args []string) error {
 
 	remote.Addrs = normalizedAddrs
 	conf.Remotes[remoteName] = remote
+
+	return conf.SaveConfig(c.global.confPath)
+}
+
+// Set keepalive timeout.
+type cmdRemoteSetKeepalive struct {
+	global *cmdGlobal
+	remote *cmdRemote
+}
+
+var cmdRemoteSetKeepaliveUsage = u.Usage{u.Remote, u.KeepaliveTimeout}
+
+func (c *cmdRemoteSetKeepalive) command() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Use = cli.U("set-keepalive", cmdRemoteSetKeepaliveUsage...)
+	cmd.Short = i18n.G("Set a keepalive timeout for a remote")
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Set a keepalive timeout for a remote`))
+	cmd.Example = cli.FormatSection("", i18n.G(
+		`incus remote set-keepalive my-remote 30
+    Set a keepalive with 30 seconds timeout for my-remote
+
+incus remote set-keepalive my-remote 0
+    Disable keeplive for my-remote`,
+	))
+	cmd.RunE = c.run
+
+	return cmd
+}
+
+func (c *cmdRemoteSetKeepalive) run(cmd *cobra.Command, args []string) error {
+	conf := c.global.conf
+
+	parsed, err := c.global.Parse(cmdRemoteSetKeepaliveUsage, cmd, args)
+	if err != nil {
+		return err
+	}
+
+	remoteName := parsed[0].String
+
+	// Validate keepalive
+	timeoutStr := parsed[1].String
+	timeout, err := strconv.Atoi(timeoutStr)
+	if err != nil {
+		return errors.New(i18n.G("Keepalive timeouts must be positive integers"))
+	}
+
+	if timeout < 0 {
+		return errors.New(i18n.G("Keepalive timeouts must be positive integers"))
+	}
+
+	// Look for the remote
+	rc, ok := conf.Remotes[remoteName]
+	if !ok {
+		return fmt.Errorf(i18n.G("Remote %s doesn't exist"), remoteName)
+	}
+
+	// Update timeout value
+	rc.KeepAlive = timeout
+	conf.Remotes[remoteName] = rc
 
 	return conf.SaveConfig(c.global.confPath)
 }

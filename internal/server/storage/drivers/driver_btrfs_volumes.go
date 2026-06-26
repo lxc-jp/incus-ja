@@ -33,6 +33,7 @@ import (
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/units"
 	"github.com/lxc/incus/v7/shared/util"
+	"github.com/lxc/incus/v7/shared/validate"
 )
 
 // CreateVolume creates an empty volume and can optionally fill it by executing the supplied filler function.
@@ -54,6 +55,20 @@ func (d *btrfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Op
 		_ = os.Remove(volPath)
 	})
 
+	// Apply the per-volume compression property if set, so that the files created inside the
+	// subvolume (including the root disk file for block volumes) inherit it. For block volumes
+	// "none" is applied as nodatacow below, which also disables compression; setting the
+	// nocompress property would leave an inode flag that the chattr +C is rejected on, so it is
+	// skipped here.
+	compression := vol.ExpandedConfig("btrfs.compression")
+	compressionNone := compression == "none" || compression == "no"
+	if compression != "" && (!compressionNone || !IsContentBlock(vol.contentType)) {
+		_, err = subprocess.RunCommand("btrfs", "property", "set", volPath, "compression", compression)
+		if err != nil {
+			return fmt.Errorf("Failed setting compression on %q: %w", volPath, err)
+		}
+	}
+
 	// Create sparse loopback file if volume is block.
 	rootBlockPath := ""
 	if IsContentBlock(vol.contentType) {
@@ -71,6 +86,14 @@ func (d *btrfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Op
 
 		mountOptions := strings.Split(d.getMountOptions(), ",")
 
+		// Work out whether the volume ends up compressed. The "btrfs.compression" property takes
+		// precedence over the pool's mount options, so "none" disables compression for this volume
+		// even on a compressed pool, and any other value enables it.
+		compressed := strings.Contains(mountinfo[len(mountinfo)-1], "compress")
+		if compression != "" {
+			compressed = !compressionNone
+		}
+
 		// Enable nodatacow on the parent directory so that when the root disk file is created the setting
 		// is inherited and random writes don't cause fragmentation and old extents to be kept.
 		// BTRFS extents are immutable so when blocks are written they end up in new extents and the old
@@ -81,8 +104,14 @@ func (d *btrfs) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Op
 		// in order to track the difference between original and snapshot. This will increase the size of
 		// data being referenced.
 		//
-		// An exception is made for when compression is enabled on the underlying storage.
-		if !slices.Contains(mountOptions, "datacow") && !strings.Contains(mountinfo[len(mountinfo)-1], "compress") {
+		// nodatacow and compression are mutually exclusive, so this is skipped when the volume is
+		// compressed. Setting "btrfs.compression=none" disables compression for the volume and so
+		// allows nodatacow to be applied on a pool that is otherwise compressed. A compression flag
+		// inherited from the parent subvolume is cleared first, as the chattr +C is rejected on an
+		// inode that still carries it.
+		if !slices.Contains(mountOptions, "datacow") && !compressed {
+			_, _ = subprocess.RunCommand("chattr", "-c", volPath)
+
 			_, err = subprocess.RunCommand("chattr", "+C", volPath)
 			if err != nil {
 				return fmt.Errorf("Failed setting nodatacow on %q: %w", volPath, err)
@@ -231,7 +260,7 @@ func (d *btrfs) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcDat
 		return nil, nil, fmt.Errorf("Failed to create temporary directory %q: %w", tmpUnpackDir, err)
 	}
 
-	defer func() { _ = os.RemoveAll(tmpUnpackDir) }()
+	defer logger.WarnOnError(func() error { return os.RemoveAll(tmpUnpackDir) }, "Failed to remove temporary directory")
 
 	err = os.Chmod(tmpUnpackDir, 0o100)
 	if err != nil {
@@ -688,7 +717,7 @@ func (d *btrfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWrite
 		return fmt.Errorf("Failed to create temporary directory under %q: %w", instancesPath, err)
 	}
 
-	defer func() { _ = os.RemoveAll(tmpVolumesMountPoint) }()
+	defer logger.WarnOnError(func() error { return os.RemoveAll(tmpVolumesMountPoint) }, "Failed to remove temporary directory")
 
 	err = os.Chmod(tmpVolumesMountPoint, 0o100)
 	if err != nil {
@@ -1000,6 +1029,27 @@ func (d *btrfs) HasVolume(vol Volume) (bool, error) {
 	return genericVFSHasVolume(vol)
 }
 
+// commonVolumeRules returns validation rules which are common for pool and volume.
+func (d *btrfs) commonVolumeRules() map[string]func(value string) error {
+	return map[string]func(value string) error{
+		// gendoc:generate(entity=storage_volume_btrfs, group=common, key=btrfs.compression)
+		//
+		// ---
+		//  type: string
+		//  condition: appropriate driver
+		//  default: same as `volume.btrfs.compression`
+		//  shortdesc: Compression algorithm to set on the volume, mapping to the Btrfs `compression` property (for example `zstd`, `lzo`, `zlib` or `none`)
+		"btrfs.compression": validate.Optional(func(value string) error {
+			algo, _, _ := strings.Cut(value, ":")
+			if !slices.Contains([]string{"none", "no", "zlib", "lzo", "zstd"}, algo) {
+				return fmt.Errorf("Unsupported compression algorithm %q", value)
+			}
+
+			return nil
+		}),
+	}
+}
+
 // ValidateVolume validates the supplied volume config.
 func (d *btrfs) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=initial.gid)
@@ -1098,7 +1148,7 @@ func (d *btrfs) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  default: same as `volume.size`
 	//  shortdesc: Size/quota of the storage bucket
 
-	return d.validateVolume(vol, nil, removeUnknownKeys)
+	return d.validateVolume(vol, d.commonVolumeRules(), removeUnknownKeys)
 }
 
 // UpdateVolume applies config changes to the volume.
@@ -1108,6 +1158,16 @@ func (d *btrfs) UpdateVolume(vol Volume, changedConfig map[string]string) error 
 		err := d.SetVolumeQuota(vol, newSize, false, nil)
 		if err != nil {
 			return err
+		}
+	}
+
+	// Apply a changed compression property to the volume. This affects newly written data; the
+	// existing contents keep whatever compression they were written with.
+	compression, compressionChanged := changedConfig["btrfs.compression"]
+	if compressionChanged && compression != "" {
+		_, err := subprocess.RunCommand("btrfs", "property", "set", vol.MountPath(), "compression", compression)
+		if err != nil {
+			return fmt.Errorf("Failed setting compression on %q: %w", vol.MountPath(), err)
 		}
 	}
 
@@ -1613,7 +1673,7 @@ func (d *btrfs) migrateVolumeOptimized(vol Volume, conn io.ReadWriteCloser, volS
 		return fmt.Errorf("Failed to create temporary directory under %q: %w", instancesPath, err)
 	}
 
-	defer func() { _ = os.RemoveAll(tmpVolumesMountPoint) }()
+	defer logger.WarnOnError(func() error { return os.RemoveAll(tmpVolumesMountPoint) }, "Failed to remove temporary directory")
 
 	err = os.Chmod(tmpVolumesMountPoint, 0o100)
 	if err != nil {
@@ -1627,7 +1687,7 @@ func (d *btrfs) migrateVolumeOptimized(vol Volume, conn io.ReadWriteCloser, volS
 		return err
 	}
 
-	defer func() { _ = d.deleteSubvolume(migrationSendSnapshotPrefix, true) }()
+	defer logger.WarnOnError(func() error { return d.deleteSubvolume(migrationSendSnapshotPrefix, true) }, "Failed to delete subvolume")
 
 	// Send main volume (and any subvolumes if supported) to target.
 	return sendVolume(vol, migrationSendSnapshotPrefix, lastVolPath)
@@ -1674,7 +1734,7 @@ func (d *btrfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, b
 	}
 
 	// Convert to YAML.
-	optimizedHeaderYAML, err := yaml.Dump(&optimizedHeader, yaml.V2)
+	optimizedHeaderYAML, err := yaml.Dump(&optimizedHeader, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -1711,8 +1771,8 @@ func (d *btrfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, b
 			return fmt.Errorf("Failed to open temporary file for BTRFS backup: %w", err)
 		}
 
-		defer func() { _ = tmpFile.Close() }()
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
+		defer logger.WarnOnError(tmpFile.Close, "Failed to close temporary file")
+		defer logger.WarnOnError(func() error { return os.Remove(tmpFile.Name()) }, "Failed to remove temporary file")
 
 		// Write the subvolume to the file.
 		d.logger.Debug("Generating optimized volume file", logger.Ctx{"sourcePath": path, "parent": parent, "file": tmpFile.Name(), "name": fileName})
@@ -1852,7 +1912,7 @@ func (d *btrfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, b
 		return fmt.Errorf("Failed to create temporary directory under %q: %w", instancesPath, err)
 	}
 
-	defer func() { _ = os.RemoveAll(tmpInstanceMntPoint) }()
+	defer logger.WarnOnError(func() error { return os.RemoveAll(tmpInstanceMntPoint) }, "Failed to remove temporary directory")
 
 	err = os.Chmod(tmpInstanceMntPoint, 0o100)
 	if err != nil {
@@ -1866,7 +1926,7 @@ func (d *btrfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, b
 		return err
 	}
 
-	defer func() { _ = d.deleteSubvolume(targetVolume, true) }()
+	defer logger.WarnOnError(func() error { return d.deleteSubvolume(targetVolume, true) }, "Failed to delete subvolume")
 
 	err = d.setSubvolumeReadonlyProperty(targetVolume, true)
 	if err != nil {

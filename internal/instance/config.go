@@ -319,6 +319,54 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//  shortdesc: Prevents the instance from being deleted
 	"security.protection.delete": validate.Optional(validate.IsBool),
 
+	// gendoc:generate(entity=instance, group=security, key=security.selinux.type)
+	// Override the SELinux file type used for labeling instance storage.
+	// ---
+	//	type: string
+	//	defaultdesc: auto-detected (`container_file_t` for containers, `qemu_image_t` for VMs)
+	//	liveupdate: no
+	//	condition: container or virtual machine
+	//	shortdesc: SELinux file type override
+	"security.selinux.type": validate.Optional(validate.IsSELinuxType),
+
+	// gendoc:generate(entity=instance, group=security, key=security.selinux.domain)
+	// Override the SELinux process domain for the instance.
+	// ---
+	//	type: string
+	//	defaultdesc: auto-detected (`container_init_t` for containers, `qemu_t` for VMs)
+	//	liveupdate: no
+	//	condition: container or virtual machine
+	//	shortdesc: SELinux process domain override
+	"security.selinux.domain": validate.Optional(validate.IsSELinuxType),
+
+	// gendoc:generate(entity=instance, group=security, key=security.selinux.label_rootfs)
+	// Control SELinux rootfs labeling behavior.
+	// The default (`auto`) will label rootfs files if it is required. Labeling will be skipped
+	// only if `security.selinux.level` is explicitly set for the instance, it is not started for
+	// the first time and the persisted SELinux context is still valid.
+	// Setting to `always` will label rootfs files on every start and `never` will never touch any
+	// file labels in the rootfs.
+	// ---
+	//	type: string
+	//	defaultdesc: `auto`
+	//	liveupdate: no
+	//	condition: container
+	//	shortdesc: SELinux rootfs labeling mode (auto, always, never)
+	"security.selinux.label_rootfs": validate.Optional(validate.IsOneOf("auto", "always", "never")),
+
+	// gendoc:generate(entity=instance, group=security, key=security.selinux.level)
+	// Override the SELinux MCS level for the instance.
+	// This key must only be set on individual instances, never on profiles,
+	// since using the same MCS level across instances breaks isolation.
+	// Values set via profiles are ignored.
+	// ---
+	//	type: string
+	//	defaultdesc: auto-generated
+	//	liveupdate: no
+	//	condition: container or virtual machine
+	//	shortdesc: SELinux MCS level override
+	"security.selinux.level": validate.Optional(validate.IsSELinuxLevel),
+
 	// gendoc:generate(entity=instance, group=snapshots, key=snapshots.schedule)
 	// Specify either a cron expression (`<minute> <hour> <dom> <month> <dow>`), a comma-and-space-separated list of schedule aliases (`@startup`, `@hourly`, `@daily`, `@midnight`, `@weekly`, `@monthly`, `@annually`, `@yearly`), or leave empty to disable automatic snapshots.
 	//
@@ -475,6 +523,12 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//  type: string
 	//  shortdesc: Instance generation UUID
 	"volatile.uuid.generation": validate.Optional(validate.IsUUID),
+
+	// Persisted SELinux context for this instance.
+	// ---
+	//  type: string
+	//  shortdesc: Full SELinux context
+	"volatile.selinux.context": validate.Optional(validate.IsAny),
 }
 
 // InstanceConfigKeysContainer is a map of config key to validator. (keys applying to containers only).
@@ -713,7 +767,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  type: string
 	//  liveupdate: no
 	//  condition: OCI container
-	//  shortdesc: OCI container entry point
+	//  shortdesc: Entry point
 	"oci.entrypoint": validate.IsAny,
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.cwd)
@@ -722,7 +776,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  type: string
 	//  liveupdate: no
 	//  condition: OCI container
-	//  shortdesc: OCI container working directory
+	//  shortdesc: Working directory
 	"oci.cwd": validate.Optional(validate.IsAbsFilePath),
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.gid)
@@ -731,7 +785,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  type: string
 	//  liveupdate: no
 	//  condition: OCI container
-	//  shortdesc: OCI container GID
+	//  shortdesc: Process GID
 	"oci.gid": validate.Optional(validate.IsUint32),
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.uid)
@@ -740,8 +794,35 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  type: string
 	//  liveupdate: no
 	//  condition: OCI container
-	//  shortdesc: OCI container UID
+	//  shortdesc: Process UID
 	"oci.uid": validate.Optional(validate.IsUint32),
+
+	// gendoc:generate(entity=instance, group=oci, key=oci.dns.nameservers)
+	// Comma-separated list of name server addresses for the initial `resolv.conf`.
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: OCI container
+	//  shortdesc: DNS name servers
+	"oci.dns.nameservers": validate.Optional(validate.IsListOf(validate.IsNetworkAddress)),
+
+	// gendoc:generate(entity=instance, group=oci, key=oci.dns.domain)
+	// Domain name for the initial `resolv.conf`.
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: OCI container
+	//  shortdesc: DNS domain
+	"oci.dns.domain": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=oci, key=oci.dns.search)
+	// Comma-separated list of search domains for the initial `resolv.conf`.
+	// ---
+	//  type: string
+	//  liveupdate: no
+	//  condition: OCI container
+	//  shortdesc: DNS search domains
+	"oci.dns.search": validate.IsAny,
 
 	// Caller is responsible for full validation of any raw.* value.
 

@@ -38,7 +38,7 @@ func instanceSaveCache() error {
 		return nil
 	}
 
-	data, err := yaml.Dump(&instanceTypes, yaml.V2)
+	data, err := yaml.Dump(&instanceTypes, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func instanceRefreshTypes(ctx context.Context, s *state.State) error {
 			return ctx.Err()
 		}
 
-		defer func() { _ = resp.Body.Close() }()
+		defer logger.WarnOnError(resp.Body.Close, "Failed to close response body")
 
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("Failed to get %s", url)

@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
-
-	"github.com/gorilla/mux"
 
 	internalInstance "github.com/lxc/incus/v7/internal/instance"
 	"github.com/lxc/incus/v7/internal/server/instance"
@@ -22,6 +19,7 @@ import (
 	storagePools "github.com/lxc/incus/v7/internal/server/storage"
 	storageDrivers "github.com/lxc/incus/v7/internal/server/storage/drivers"
 	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/util"
 )
@@ -72,7 +70,7 @@ func instanceDebugMemoryGet(d *Daemon, r *http.Request) response.Response {
 	format := request.QueryParam(r, "format")
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -122,8 +120,8 @@ func instanceDebugMemoryGet(d *Daemon, r *http.Request) response.Response {
 			return err
 		}
 
-		defer reader.Close()
-		defer writer.Close()
+		defer logger.WarnOnError(reader.Close, "Failed to close pipe reader")
+		defer logger.WarnOnError(writer.Close, "Failed to close pipe writer")
 
 		chCopy := make(chan error)
 
@@ -186,7 +184,7 @@ func instanceDebugRepairPost(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}

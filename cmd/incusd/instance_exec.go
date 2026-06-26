@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"golang.org/x/sys/unix"
 
@@ -572,7 +570,7 @@ func instanceExecPost(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -750,20 +748,26 @@ func instanceExecPost(d *Daemon, r *http.Request) response.Response {
 				return err
 			}
 
+			// Reject a symlink which could redirect writes to the host filesystem.
+			execOutputInfo, err := os.Lstat(execOutputDir)
+			if err != nil || !execOutputInfo.IsDir() {
+				return errors.New("Exec output directory isn't a regular directory")
+			}
+
 			// Prepare stdout and stderr recording.
 			stdout, err = os.OpenFile(filepath.Join(execOutputDir, fmt.Sprintf("exec_%s.stdout", op.ID())), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 			if err != nil {
 				return err
 			}
 
-			defer func() { _ = stdout.Close() }()
+			defer logger.WarnOnError(stdout.Close, "Failed to close stdout file")
 
 			stderr, err = os.OpenFile(filepath.Join(execOutputDir, fmt.Sprintf("exec_%s.stderr", op.ID())), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 			if err != nil {
 				return err
 			}
 
-			defer func() { _ = stderr.Close() }()
+			defer logger.WarnOnError(stderr.Close, "Failed to close stderr file")
 
 			// Update metadata with the right URLs.
 			metadata["output"] = jmap.Map{

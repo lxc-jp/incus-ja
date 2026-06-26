@@ -480,23 +480,24 @@ func (n *ovn) Validate(config map[string]string, clientType request.ClientType) 
 		// ---
 		//  type: string
 		//  shortdesc: MAC address for the virtual bridge interface
-
 		"bridge.hwaddr": validate.Optional(validate.IsNetworkMAC),
+
 		// gendoc:generate(entity=network_ovn, group=common, key=bridge.mtu)
 		//
 		// ---
 		//  type: integer
 		//  shortdesc: Bridge MTU (default allows host to host Geneve tunnels)
 		//  default: `1442`
-
 		"bridge.mtu": validate.Optional(validate.IsNetworkMTU),
+
 		// gendoc:generate(entity=network_ovn, group=common, key=bridge.external_interfaces)
 		//
 		// ---
 		//  type: string
+		//  scope: local
 		//  shortdesc: Comma-separated list of unconfigured network interfaces to include in the bridge
-
 		"bridge.external_interfaces": validate.Optional(validateExternalInterfaces),
+
 		// gendoc:generate(entity=network_ovn, group=common, key=ipv4.address)
 		//
 		// ---
@@ -3245,11 +3246,11 @@ func (n *ovn) setup(update bool) error {
 			dnsIPv6 = uplinkNet.dnsIPv6
 		}
 
-		if len(dnsIPv4) == 0 {
+		if len(dnsIPv4) == 0 && routerIntPortIPv4 != nil {
 			dnsIPv4 = []net.IP{routerIntPortIPv4}
 		}
 
-		if len(dnsIPv6) == 0 {
+		if len(dnsIPv6) == 0 && routerIntPortIPv6 != nil {
 			dnsIPv6 = []net.IP{routerIntPortIPv6}
 		}
 	}
@@ -3854,7 +3855,7 @@ func (n *ovn) Start() error {
 	reverter.Add(func() { n.setUnavailable() })
 
 	// Check that uplink network is available.
-	if n.config["network"] != "" && n.config["network"] != "none" && !IsAvailable(api.ProjectDefaultName, n.config["network"]) {
+	if !util.IsNoneOrEmpty(n.config["network"]) && !IsAvailable(api.ProjectDefaultName, n.config["network"]) {
 		return fmt.Errorf("Uplink network %q is unavailable", n.config["network"])
 	}
 
@@ -4878,7 +4879,7 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 
 	// Populate DNS IP variables with any static IPs first before checking if we need to extract dynamic IPs.
 	for _, staticIP := range []string{ipv4, ipv6} {
-		if staticIP == "" || staticIP == "none" {
+		if util.IsNoneOrEmpty(staticIP) {
 			continue
 		}
 
@@ -8357,6 +8358,18 @@ func (n *ovn) updateTunnels(newConfig map[string]string, changedKeys []string, r
 	err := n.deleteTunnels(changedKeys, false, reinitialize)
 	if err != nil {
 		return err
+	}
+
+	// Work out whether there are any tunnels to create or remove from OVN.
+	hasTunnels := len(n.getTunnels(newConfig)) > 0
+	if reinitialize {
+		hasTunnels = hasTunnels || len(n.getTunnels(n.config)) > 0
+	} else {
+		hasTunnels = hasTunnels || len(n.getTunnelsFromChangedKeys(changedKeys)) > 0
+	}
+
+	if !hasTunnels {
+		return nil
 	}
 
 	chassisName, err := n.getActiveChassisName()

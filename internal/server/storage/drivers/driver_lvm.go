@@ -51,11 +51,7 @@ type lvm struct {
 func (d *lvm) load() error {
 	// Register the patches.
 	d.patches = map[string]func() error{
-		"storage_lvm_skipactivation":                         d.patchStorageSkipActivation,
-		"storage_missing_snapshot_records":                   nil,
-		"storage_delete_old_snapshot_records":                nil,
-		"storage_zfs_drop_block_volume_filesystem_extension": nil,
-		"storage_prefix_bucket_names_with_project":           nil,
+		"storage_lvm_skipactivation": d.patchStorageSkipActivation,
 	}
 
 	// Done if previously loaded.
@@ -270,7 +266,7 @@ func (d *lvm) Create() error {
 			return err
 		}
 
-		defer func() { _ = loopDeviceAutoDetach(loopDevPath) }()
+		defer logger.WarnOnError(func() error { return loopDeviceAutoDetach(loopDevPath) }, "Failed to detach loop device")
 
 		// Check if the physical volume already exists.
 		pvName = loopDevPath
@@ -532,7 +528,7 @@ func (d *lvm) Delete(op *operations.Operation) error {
 			return err
 		}
 
-		defer func() { _ = loopDeviceAutoDetach(loopDevPath) }()
+		defer logger.WarnOnError(func() error { return loopDeviceAutoDetach(loopDevPath) }, "Failed to detach loop device")
 	}
 
 	vgExists, vgTags, err := d.volumeGroupExists(d.config["lvm.vg_name"])
@@ -905,7 +901,7 @@ func (d *lvm) Update(changedConfig map[string]string) error {
 			return err
 		}
 
-		defer func() { _ = f.Close() }()
+		defer logger.WarnOnError(f.Close, "Failed to close file")
 
 		sizeBytes, _ := units.ParseByteSizeString(size)
 

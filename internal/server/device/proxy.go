@@ -123,7 +123,7 @@ func (d *proxy) validateConfig(instConf instance.ConfigReader, partialValidation
 		// type: bool
 		// required: no
 		// default: `false`
-		// shortdesc: Whether to optimize proxying via NAT (requires that the instance NIC has a static IP address)
+		// shortdesc: Whether to optimize proxying via NAT
 		"nat": validate.Optional(validate.IsBool),
 
 		// gendoc:generate(entity=devices, group=proxy, key=gid)
@@ -233,10 +233,6 @@ func (d *proxy) validateConfig(instConf instance.ConfigReader, partialValidation
 		}
 
 		listenAddress := net.ParseIP(listenAddr.Address)
-
-		if listenAddress.Equal(net.IPv4zero) || listenAddress.Equal(net.IPv6zero) {
-			return fmt.Errorf("Cannot listen on wildcard address %q when in nat mode", listenAddress.String())
-		}
 
 		// Records which listen address IP version, as these cannot be mixed in NAT mode.
 		listenIPVersion := uint(4)
@@ -436,7 +432,7 @@ func (d *proxy) checkProcStarted(logPath string) (bool, error) {
 		return false, err
 	}
 
-	defer func() { _ = file.Close() }()
+	defer logger.WarnOnError(file.Close, "Failed to close file")
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -461,6 +457,9 @@ func (d *proxy) checkProcStarted(logPath string) (bool, error) {
 
 // Stop is run when the device is removed from the instance.
 func (d *proxy) Stop() (*deviceConfig.RunConfig, error) {
+	// Stop any background NAT address monitor before clearing the firewall entries.
+	d.stopNATMonitor()
+
 	// Remove possible firewall entries.
 	err := d.state.Firewall.InstanceClearProxyNAT(d.inst.Project().Name, d.inst.Name(), d.name)
 	if err != nil {
@@ -505,8 +504,12 @@ func (d *proxy) setupNAT() error {
 		ipVersion = 6
 	}
 
+	connectWildcard := connectAddr.Address == "0.0.0.0" || connectAddr.Address == "::"
+
 	var connectIP net.IP
 	var hostName string
+	var dynamicNICName string
+	var dynamicNICConfig deviceConfig.Device
 
 	for devName, devConfig := range d.inst.ExpandedDevices() {
 		if devConfig["type"] != "nic" {
@@ -518,7 +521,7 @@ func (d *proxy) setupNAT() error {
 			return err
 		}
 
-		// Check if the instance has a NIC with a static IP that is reachable from the host.
+		// Check if the instance has a NIC that is reachable from the host.
 		if !slices.Contains([]string{"bridged", "routed"}, nicType) {
 			continue
 		}
@@ -527,13 +530,18 @@ func (d *proxy) setupNAT() error {
 		// instance's network traffic. If the wildcard address is supplied as the connect host then the
 		// first bridged NIC which has a static IP address defined is selected as the connect host IP.
 		if ipVersion == 4 && devConfig["ipv4.address"] != "" {
-			if connectAddr.Address == devConfig["ipv4.address"] || connectAddr.Address == "0.0.0.0" {
+			if connectAddr.Address == devConfig["ipv4.address"] || connectWildcard {
 				connectIP = net.ParseIP(devConfig["ipv4.address"])
 			}
 		} else if ipVersion == 6 && devConfig["ipv6.address"] != "" {
-			if connectAddr.Address == devConfig["ipv6.address"] || connectAddr.Address == "::" {
+			if connectAddr.Address == devConfig["ipv6.address"] || connectWildcard {
 				connectIP = net.ParseIP(devConfig["ipv6.address"])
 			}
+		} else if nicType == "bridged" && connectWildcard && dynamicNICName == "" {
+			// No static IP defined on a bridged NIC. Remember it as a candidate for dynamic
+			// (DHCP) address detection from the neighbor table (ARP/NDP).
+			dynamicNICName = devName
+			dynamicNICConfig = devConfig
 		}
 
 		if connectIP != nil {
@@ -543,62 +551,121 @@ func (d *proxy) setupNAT() error {
 		}
 	}
 
-	if connectIP == nil {
-		if connectAddr.Address == "0.0.0.0" || connectAddr.Address == "::" {
-			return fmt.Errorf("Instance has no static IPv%d address assigned to be used as the connect IP", ipVersion)
+	// When no static IP was found, fall back to detecting the instance's dynamic address.
+	dynamic := connectIP == nil && dynamicNICName != ""
+	if dynamic {
+		hostName = d.inst.ExpandedConfig()[fmt.Sprintf("volatile.%s.host_name", dynamicNICName)]
+	}
+
+	if connectIP == nil && !dynamic {
+		if connectWildcard {
+			return fmt.Errorf("Instance has no IPv%d address assigned to be used as the connect IP", ipVersion)
 		}
 
 		return fmt.Errorf("Connect IP %q must be one of the instance's static IPv%d addresses", connectAddr.Address, ipVersion)
 	}
 
-	// Override the host part of the connectAddr.Addr to the chosen connect IP.
-	connectAddr.Address = connectIP.String()
-
-	err = network.BridgeNetfilterEnabled(ipVersion)
-	if err != nil {
-		msg := fmt.Sprintf("IPv%d bridge netfilter not enabled. Instances using the bridge will not be able to connect to the proxy listen IP", ipVersion)
-		d.logger.Warn(msg, logger.Ctx{"err": err})
-		err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-			return tx.UpsertWarningLocalNode(ctx, d.inst.Project().Name, cluster.TypeInstance, d.inst.ID(), warningtype.ProxyBridgeNetfilterNotEnabled, fmt.Sprintf("%s: %v", msg, err))
-		})
+	// IncusOS doesn't load br_netfilter as it breaks routed proxy traffic, so skip the related
+	// hairpin handling and warning there.
+	if d.state.OS.IncusOS == nil {
+		err = network.BridgeNetfilterEnabled(ipVersion)
 		if err != nil {
-			logger.Warn("Failed to create warning", logger.Ctx{"err": err})
-		}
-	} else {
-		err = warnings.ResolveWarningsByLocalNodeAndProjectAndTypeAndEntity(d.state.DB.Cluster, d.inst.Project().Name, warningtype.ProxyBridgeNetfilterNotEnabled, cluster.TypeInstance, d.inst.ID())
-		if err != nil {
-			logger.Warn("Failed to resolve warning", logger.Ctx{"err": err})
-		}
+			msg := fmt.Sprintf("IPv%d bridge netfilter not enabled. Instances using the bridge will not be able to connect to the proxy listen IP", ipVersion)
+			d.logger.Warn(msg, logger.Ctx{"err": err})
+			err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+				return tx.UpsertWarningLocalNode(ctx, d.inst.Project().Name, cluster.TypeInstance, d.inst.ID(), warningtype.ProxyBridgeNetfilterNotEnabled, fmt.Sprintf("%s: %v", msg, err))
+			})
+			if err != nil {
+				logger.Warn("Failed to create warning", logger.Ctx{"err": err})
+			}
+		} else {
+			err = warnings.ResolveWarningsByLocalNodeAndProjectAndTypeAndEntity(d.state.DB.Cluster, d.inst.Project().Name, warningtype.ProxyBridgeNetfilterNotEnabled, cluster.TypeInstance, d.inst.ID())
+			if err != nil {
+				logger.Warn("Failed to resolve warning", logger.Ctx{"err": err})
+			}
 
-		if hostName == "" {
-			return errors.New("Proxy cannot find bridge port host_name to enable hairpin mode")
-		}
+			if hostName == "" {
+				return errors.New("Proxy cannot find bridge port host_name to enable hairpin mode")
+			}
 
-		// br_netfilter is enabled, so we need to enable hairpin mode on instance's bridge port otherwise
-		// the instances on the bridge will not be able to connect to the proxy device's listen IP and the
-		// NAT rule added by the firewall below to allow instance <-> instance traffic will also not work.
-		link := &ip.Link{Name: hostName}
-		err = link.BridgeLinkSetHairpin(true)
-		if err != nil {
-			return fmt.Errorf("Error enabling hairpin mode on bridge port %q: %w", hostName, err)
+			// br_netfilter is enabled, so we need to enable hairpin mode on instance's bridge port otherwise
+			// the instances on the bridge will not be able to connect to the proxy device's listen IP and the
+			// NAT rule added by the firewall below to allow instance <-> instance traffic will also not work.
+			link := &ip.Link{Name: hostName}
+			err = link.BridgeLinkSetHairpin(true)
+			if err != nil {
+				return fmt.Errorf("Error enabling hairpin mode on bridge port %q: %w", hostName, err)
+			}
 		}
 	}
 
-	// Convert proxy listen & connect addresses for firewall AddressForward.
+	// For a dynamically addressed NIC, start a background monitor that detects the instance's
+	// address from the neighbor table and (re)applies the NAT rule whenever it changes.
+	if dynamic {
+		bridgeName := dynamicNICConfig["network"]
+		if bridgeName == "" {
+			bridgeName = dynamicNICConfig["parent"]
+		}
+
+		hwaddrStr := dynamicNICConfig["hwaddr"]
+		if hwaddrStr == "" {
+			hwaddrStr = d.inst.ExpandedConfig()[fmt.Sprintf("volatile.%s.hwaddr", dynamicNICName)]
+		}
+
+		hwAddr, err := net.ParseMAC(hwaddrStr)
+		if err != nil {
+			return fmt.Errorf("Invalid hardware address for NIC %q: %w", dynamicNICName, err)
+		}
+
+		d.startNATMonitor(bridgeName, hwAddr, ipVersion, listenAddr, connectAddr)
+
+		return nil
+	}
+
+	return d.applyNAT(listenAddr, connectAddr, connectIP)
+}
+
+func (d *proxy) natMonitorOwner() string {
+	return fmt.Sprintf("proxy_%d_%s", d.inst.ID(), d.name)
+}
+
+// applyNAT installs the proxy NAT rules using connectIP as the target address.
+func (d *proxy) applyNAT(listenAddr *deviceConfig.ProxyAddress, connectAddr *deviceConfig.ProxyAddress, connectIP net.IP) error {
 	addressForward := firewallDrivers.AddressForward{
 		Protocol:      listenAddr.ConnType,
 		ListenAddress: net.ParseIP(listenAddr.Address),
 		ListenPorts:   listenAddr.Ports,
-		TargetAddress: net.ParseIP(connectAddr.Address),
+		TargetAddress: connectIP,
 		TargetPorts:   connectAddr.Ports,
 	}
 
-	err = d.state.Firewall.InstanceSetupProxyNAT(d.inst.Project().Name, d.inst.Name(), d.name, &addressForward)
-	if err != nil {
-		return err
-	}
+	return d.state.Firewall.InstanceSetupProxyNAT(d.inst.Project().Name, d.inst.Name(), d.name, &addressForward)
+}
 
-	return nil
+// startNATMonitor runs a background neighbor scan that applies the proxy NAT rules once the
+// instance's dynamic address is detected and re-applies them whenever the address changes.
+func (d *proxy) startNATMonitor(bridgeName string, hwAddr net.HardwareAddr, ipVersion uint, listenAddr *deviceConfig.ProxyAddress, connectAddr *deviceConfig.ProxyAddress) {
+	var lastIP net.IP
+
+	startInstanceNeighborScan(d.natMonitorOwner(), bridgeName, hwAddr, []uint{ipVersion}, 5*time.Second, 0, func(addrs []net.IP) {
+		connectIP := addrs[0]
+		if connectIP.Equal(lastIP) {
+			return
+		}
+
+		err := d.applyNAT(listenAddr, connectAddr, connectIP)
+		if err != nil {
+			d.logger.Warn("Failed to setup proxy NAT for detected instance address", logger.Ctx{"address": connectIP.String(), "err": err})
+			return
+		}
+
+		lastIP = connectIP
+	})
+}
+
+// stopNATMonitor cancels and deregisters any running NAT monitor for the device.
+func (d *proxy) stopNATMonitor() {
+	stopInstanceNeighborScan(d.natMonitorOwner())
 }
 
 func (d *proxy) setupProxyProcInfo() (*proxyProcInfo, error) {
@@ -608,7 +675,7 @@ func (d *proxy) setupProxyProcInfo() (*proxyProcInfo, error) {
 		return nil, err
 	}
 
-	defer func() { _ = cc.Release() }()
+	defer logger.WarnOnError(cc.Release, "Failed to release container")
 
 	containerPid := strconv.Itoa(cc.InitPid())
 	daemonPid := strconv.Itoa(os.Getpid())

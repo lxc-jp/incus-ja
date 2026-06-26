@@ -523,9 +523,9 @@ func shiftACLType(path string, aclType int, shiftIDs func(uid int64, gid int64) 
 		// Shift the value
 		newID := int64(-1)
 		if tag == C.ACL_USER {
-			newID, _ = shiftIDs((int64)(*idp), -1)
+			newID, _ = shiftIDs(int64(*idp), -1)
 		} else {
-			_, newID = shiftIDs(-1, (int64)(*idp))
+			_, newID = shiftIDs(-1, int64(*idp))
 		}
 
 		// Skip values that are out of range.
@@ -560,8 +560,8 @@ func SupportsVFS3FSCaps(prefix string) bool {
 		return false
 	}
 
-	defer func() { _ = tmpfile.Close() }()
-	defer func() { _ = os.Remove(tmpfile.Name()) }()
+	defer logger.WarnOnError(tmpfile.Close, "Failed to close temporary file")
+	defer logger.WarnOnError(func() error { return os.Remove(tmpfile.Name()) }, "Failed to remove temporary file")
 
 	err = os.Chmod(tmpfile.Name(), 0o001)
 	if err != nil {

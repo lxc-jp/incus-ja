@@ -60,11 +60,7 @@ type zfs struct {
 func (d *zfs) load() error {
 	// Register the patches.
 	d.patches = map[string]func() error{
-		"storage_lvm_skipactivation":                         nil,
-		"storage_missing_snapshot_records":                   nil,
-		"storage_delete_old_snapshot_records":                nil,
 		"storage_zfs_drop_block_volume_filesystem_extension": d.patchDropBlockVolumeFilesystemExtension,
-		"storage_prefix_bucket_names_with_project":           nil,
 	}
 
 	// Done if previously loaded.
@@ -605,7 +601,7 @@ func (d *zfs) Update(changedConfig map[string]string) error {
 			return err
 		}
 
-		defer func() { _ = f.Close() }()
+		defer logger.WarnOnError(f.Close, "Failed to close file")
 
 		sizeBytes, _ := units.ParseByteSizeString(size)
 

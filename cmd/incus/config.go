@@ -30,7 +30,8 @@ func (c *cmdConfig) command() *cobra.Command {
 	cmd.Use = cli.U("config")
 	cmd.Short = i18n.G("Manage instance and server configuration options")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Manage instance and server configuration options`))
+		`Manage instance and server configuration options`,
+	))
 
 	// Device
 	configDeviceCmd := cmdConfigDevice{global: c.global, config: c}
@@ -94,10 +95,12 @@ func (c *cmdConfigEdit) command() *cobra.Command {
 	cmd.Use = cli.U("edit", cmdConfigEditUsage...)
 	cmd.Short = i18n.G("Edit instance or server configurations as YAML")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Edit instance or server configurations as YAML`))
+		`Edit instance or server configurations as YAML`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus config edit <instance> < instance.yaml
-    Update the instance configuration from instance.yaml.`))
+    Update the instance configuration from instance.yaml.`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.config.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cmd.RunE = c.run
@@ -132,7 +135,8 @@ func (c *cmdConfigEdit) helpTemplate() string {
 ###     type: disk
 ### ephemeral: false
 ###
-### Note that the name is shown but cannot be changed`)
+### Note that the name is shown but cannot be changed`,
+	)
 }
 
 func (c *cmdConfigEdit) run(cmd *cobra.Command, args []string) error {
@@ -207,7 +211,7 @@ func (c *cmdConfigEdit) run(cmd *cobra.Command, args []string) error {
 			inst.ExpandedConfig = nil
 			inst.ExpandedDevices = nil
 
-			data, err = yaml.Dump(&inst, yaml.V2)
+			data, err = yaml.Dump(&inst, yaml.WithV2Defaults())
 			if err != nil {
 				return err
 			}
@@ -223,7 +227,7 @@ func (c *cmdConfigEdit) run(cmd *cobra.Command, args []string) error {
 			inst.ExpandedConfig = nil
 			inst.ExpandedDevices = nil
 
-			data, err = yaml.Dump(&inst, yaml.V2)
+			data, err = yaml.Dump(&inst, yaml.WithV2Defaults())
 			if err != nil {
 				return err
 			}
@@ -316,7 +320,7 @@ func (c *cmdConfigEdit) run(cmd *cobra.Command, args []string) error {
 	}
 
 	brief := server.Writable()
-	data, err := yaml.Dump(&brief, yaml.V2)
+	data, err := yaml.Dump(&brief, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -375,7 +379,8 @@ func (c *cmdConfigGet) command() *cobra.Command {
 	cmd.Use = cli.U("get", cmdConfigGetUsage...)
 	cmd.Short = i18n.G("Get values for instance or server configuration keys")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Get values for instance or server configuration keys`))
+		`Get values for instance or server configuration keys`,
+	))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagExpanded, "expanded|e", i18n.G("Access the expanded configuration"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Get the key as an instance property"))
@@ -508,7 +513,8 @@ func (c *cmdConfigSet) command() *cobra.Command {
 		`Set instance or server configuration keys
 
 For backward compatibility, a single configuration key may still be set with:
-    incus config set [<remote>:][<instance>] <key> <value>`))
+    incus config set [<remote>:][<instance>] <key> <value>`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus config set [<remote>:]<instance> limits.cpu=2
     Will set a CPU limit of "2" for the instance.
@@ -517,7 +523,8 @@ incus config set my-instance cloud-init.user-data - < cloud-init.yaml
     Sets the cloud-init user-data for instance "my-instance" by reading "cloud-init.yaml" through stdin.
 
 incus config set core.https_address=[::]:8443
-    Will have the server listen on IPv4 and IPv6 port 8443.`))
+    Will have the server listen on IPv4 and IPv6 port 8443.`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.config.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Set the key as an instance property"))
@@ -683,7 +690,8 @@ func (c *cmdConfigShow) command() *cobra.Command {
 	cmd.Use = cli.U("show", cmdConfigShowUsage...)
 	cmd.Short = i18n.G("Show instance or server configurations")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Show instance or server configurations`))
+		`Show instance or server configurations`,
+	))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagExpanded, "expanded|e", i18n.G("Show the expanded configuration"))
 	cli.AddStringFlag(cmd.Flags(), &c.config.flagTarget, "target", "", "", i18n.G("Cluster member name"))
@@ -734,7 +742,7 @@ func (c *cmdConfigShow) run(cmd *cobra.Command, args []string) error {
 		}
 
 		brief := server.Writable()
-		data, err = yaml.Dump(&brief, yaml.V2)
+		data, err = yaml.Dump(&brief, yaml.WithV2Defaults())
 		if err != nil {
 			return err
 		}
@@ -777,7 +785,7 @@ func (c *cmdConfigShow) run(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		data, err = yaml.Dump(&brief, yaml.V2)
+		data, err = yaml.Dump(&brief, yaml.WithV2Defaults())
 		if err != nil {
 			return err
 		}
@@ -797,17 +805,21 @@ type cmdConfigUnset struct {
 	flagIsProperty bool
 }
 
-var cmdConfigUnsetUsage = u.Usage{u.MakePath(u.Instance, u.Snapshot.Optional()).Optional().Remote(), u.Key}
+var cmdConfigUnsetUsage = u.Usage{u.MakePath(u.Instance, u.Snapshot.Optional()).Optional().Remote(), u.Key.List(1)}
 
 func (c *cmdConfigUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("unset", cmdConfigUnsetUsage...)
 	cmd.Short = i18n.G("Unset instance or server configuration keys")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Unset instance or server configuration keys`))
+		`Unset instance or server configuration keys
+
+Unsetting several keys in one go is only supported for instance configuration.
+`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.config.flagTarget, "target", "", "", i18n.G("Cluster member name"))
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as an instance property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as instance properties"))
 	cmd.RunE = c.run
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -826,9 +838,8 @@ func (c *cmdConfigUnset) command() *cobra.Command {
 }
 
 func (c *cmdConfigUnset) run(cmd *cobra.Command, args []string) error {
-	// Do NOT blindly copy the following parsing line; it performs right-to-left parsing, which in
-	// most cases is NOT what you want.
-	parsed, err := c.global.Parse(cmdConfigUnsetUsage, cmd, args, true)
+	// Do NOT blindly copy the following parsing line; it is a dirty hack to disambiguate the parser.
+	parsed, err := c.global.Parse(cmdConfigUnsetUsage, cmd, args, len(args) == 1)
 	if err != nil {
 		return err
 	}

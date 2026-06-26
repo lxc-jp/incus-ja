@@ -55,6 +55,16 @@ func (d *deviceCommon) Config() deviceConfig.Device {
 	return d.config
 }
 
+// configOrVolatile returns a device config value, falling back to the volatile state when unset.
+func (d *deviceCommon) configOrVolatile(key string) string {
+	value := d.config[key]
+	if value == "" {
+		value = d.volatileGet()[key]
+	}
+
+	return value
+}
+
 // Add returns nil error as majority of devices don't need to do any host-side setup.
 func (d *deviceCommon) Add() error {
 	return nil
@@ -117,6 +127,33 @@ func (d *deviceCommon) generateHostName(prefix string, hwaddr string) (string, e
 
 	// Handle instances.nic.host_name random mode or where no MAC address supplied.
 	return network.RandomDevName(prefix), nil
+}
+
+// generateAndPersistHostName sets and persists saveData["host_name"] before the interface is
+// created, so an unclean shutdown can't leak an interface whose name was never recorded.
+// Any stale interface of that name from a previous such event is removed for reuse.
+func (d *deviceCommon) generateAndPersistHostName(saveData map[string]string, prefix string) error {
+	if saveData["host_name"] == "" {
+		var err error
+		saveData["host_name"], err = d.generateHostName(prefix, d.config["hwaddr"])
+		if err != nil {
+			return err
+		}
+	}
+
+	err := d.volatileSet(map[string]string{"host_name": saveData["host_name"]})
+	if err != nil {
+		return err
+	}
+
+	if network.InterfaceExists(saveData["host_name"]) {
+		err = network.InterfaceRemove(saveData["host_name"])
+		if err != nil {
+			return fmt.Errorf("Failed to remove stale interface %q: %w", saveData["host_name"], err)
+		}
+	}
+
+	return nil
 }
 
 // setNICLink sets the link status (connected/disconnected) for the given NIC.

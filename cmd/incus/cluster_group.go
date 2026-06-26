@@ -102,13 +102,15 @@ func (c *cmdClusterGroupAssign) command() *cobra.Command {
 	cmd.Aliases = []string{"apply"}
 	cmd.Short = i18n.G("Assign sets of groups to cluster members")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Assign sets of groups to cluster members`))
+		`Assign sets of groups to cluster members`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus cluster group assign foo default,bar
     Set the groups for "foo" to "default" and "bar".
 
 incus cluster group assign foo default
-    Reset "foo" to only using the "default" cluster group.`))
+    Reset "foo" to only using the "default" cluster group.`,
+	))
 
 	cmd.RunE = c.run
 
@@ -349,7 +351,7 @@ func (c *cmdClusterGroupEdit) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(group, yaml.V2)
+	data, err := yaml.Dump(group, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -397,7 +399,8 @@ func (c *cmdClusterGroupEdit) run(cmd *cobra.Command, args []string) error {
 func (c *cmdClusterGroupEdit) helpTemplate() string {
 	return i18n.G(
 		`### This is a YAML representation of the cluster group.
-### Any line starting with a '# will be ignored.`)
+### Any line starting with a '# will be ignored.`,
+	)
 }
 
 // List.
@@ -434,7 +437,8 @@ Commas between consecutive shorthand chars are optional.
 Pre-defined column shorthand chars:
   n - Name
   d - Description
-  m - Member`))
+  m - Member`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultClusterGroupColumns, "", i18n.G("Columns"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
@@ -561,7 +565,8 @@ func (c *cmdClusterGroupRemove) command() *cobra.Command {
 	cmd.Use = cli.U("remove", cmdClusterGroupRemoveUsage...)
 	cmd.Short = i18n.G("Remove member from group")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Remove a cluster member from a cluster group`))
+		`Remove a cluster member from a cluster group`,
+	))
 
 	cmd.RunE = c.run
 
@@ -716,7 +721,7 @@ func (c *cmdClusterGroupShow) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&group, yaml.V2)
+	data, err := yaml.Dump(&group, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -738,7 +743,8 @@ func (c *cmdClusterGroupAdd) command() *cobra.Command {
 	cmd.Use = cli.U("add", cmdClusterGroupAddUsage...)
 	cmd.Short = i18n.G("Add member to group")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Add a cluster member to a cluster group`))
+		`Add a cluster member to a cluster group`,
+	))
 
 	cmd.RunE = c.run
 
@@ -948,7 +954,7 @@ type cmdClusterGroupUnset struct {
 	flagIsProperty bool
 }
 
-var cmdClusterGroupUnsetUsage = u.Usage{u.Group.Remote(), u.Key}
+var cmdClusterGroupUnsetUsage = u.Usage{u.Group.Remote(), u.Key.List(1)}
 
 func (c *cmdClusterGroupUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
@@ -956,7 +962,7 @@ func (c *cmdClusterGroupUnset) command() *cobra.Command {
 	cmd.Short = i18n.G("Unset a cluster group's configuration keys")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, cmd.Short)
 
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as a cluster group property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as cluster group properties"))
 	cmd.RunE = c.run
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

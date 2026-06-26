@@ -182,7 +182,8 @@ func (c *cmdProfileAssign) command() *cobra.Command {
 	cmd.Aliases = []string{"apply"}
 	cmd.Short = i18n.G("Assign sets of profiles to instances")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Assign sets of profiles to instances`))
+		`Assign sets of profiles to instances`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus profile assign foo default,bar
     Set the profiles for "foo" to "default" and "bar".
@@ -191,7 +192,8 @@ incus profile assign foo default
     Reset "foo" to only using the "default" profile.
 
 incus profile assign foo --no-profiles
-    Remove all profile assigned to "foo"`))
+    Remove all profile assigned to "foo"`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagNoProfiles, "no-profiles", i18n.G("Remove all profiles from the instance"))
@@ -475,10 +477,12 @@ func (c *cmdProfileEdit) command() *cobra.Command {
 	cmd.Use = cli.U("edit", cmdProfileEditUsage...)
 	cmd.Short = i18n.G("Edit profile configurations as YAML")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Edit profile configurations as YAML`))
+		`Edit profile configurations as YAML`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus profile edit <profile> < profile.yaml
-    Update a profile using the content of profile.yaml`))
+    Update a profile using the content of profile.yaml`,
+	))
 
 	cmd.RunE = c.run
 
@@ -511,7 +515,8 @@ func (c *cmdProfileEdit) helpTemplate() string {
 ###     parent: mybr0
 ###     type: nic
 ###
-### Note that the name is shown but cannot be changed`)
+### Note that the name is shown but cannot be changed`,
+	)
 }
 
 func (c *cmdProfileEdit) run(cmd *cobra.Command, args []string) error {
@@ -545,7 +550,7 @@ func (c *cmdProfileEdit) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&profile, yaml.V2)
+	data, err := yaml.Dump(&profile, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -603,7 +608,8 @@ func (c *cmdProfileGet) command() *cobra.Command {
 	cmd.Use = cli.U("get", cmdProfileGetUsage...)
 	cmd.Short = i18n.G("Get values for profile configuration keys")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Get values for profile configuration keys`))
+		`Get values for profile configuration keys`,
+	))
 
 	cmd.RunE = c.run
 
@@ -691,7 +697,8 @@ Default column layout is: ndu
 Column shorthand chars:
 n - Profile Name
 d - Description
-u - Used By`))
+u - Used By`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultProfileColumns, "", i18n.G("Columns"))
@@ -981,7 +988,8 @@ func (c *cmdProfileSet) command() *cobra.Command {
 		`Set profile configuration keys
 
 For backward compatibility, a single configuration key may still be set with:
-    incus profile set [<remote>:]<profile> <key> <value>`))
+    incus profile set [<remote>:]<profile> <key> <value>`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Set the key as a profile property"))
@@ -1089,7 +1097,7 @@ func (c *cmdProfileShow) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&profile, yaml.V2)
+	data, err := yaml.Dump(&profile, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -1108,7 +1116,7 @@ type cmdProfileUnset struct {
 	flagIsProperty bool
 }
 
-var cmdProfileUnsetUsage = u.Usage{u.Profile.Remote(), u.Key}
+var cmdProfileUnsetUsage = u.Usage{u.Profile.Remote(), u.Key.List(1)}
 
 func (c *cmdProfileUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
@@ -1117,7 +1125,7 @@ func (c *cmdProfileUnset) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Unset profile configuration keys`))
 
 	cmd.RunE = c.run
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as a profile property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as profile properties"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {

@@ -93,10 +93,7 @@ func (d *ceph) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Ope
 				return err
 			}
 
-			// If the cached volume size is different than the pool volume size, then we can't use the
-			// deleted cached image volume and instead we will rename it to a random UUID so it can't
-			// be restored in the future and a new cached image volume will be created instead.
-			if volSizeBytes != poolVolSizeBytes {
+			if volSizeBytes > poolVolSizeBytes {
 				d.logger.Debug("Renaming deleted cached image volume so that regeneration is used", logger.Ctx{"fingerprint": vol.Name()})
 				randomVol := NewVolume(d, d.name, deletedVol.volType, deletedVol.contentType, strings.ReplaceAll(uuid.New().String(), "-", ""), deletedVol.config, deletedVol.poolConfig)
 				err = renameVolume(d.getRBDVolumeName(deletedVol, "", true), d.getRBDVolumeName(randomVol, "", true))
@@ -212,6 +209,20 @@ func (d *ceph) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Ope
 			err = genericRunFiller(d, vol, devPath, filler, allowUnsafeResize)
 			if err != nil {
 				return err
+			}
+
+			if vol.volType == VolumeTypeImage && IsContentBlock(vol.contentType) && filler.Size > 0 {
+				currentSizeBytes, err := BlockDiskSizeBytes(devPath)
+				if err != nil {
+					return err
+				}
+
+				if currentSizeBytes > filler.Size {
+					err = d.resizeVolume(vol, filler.Size, true)
+					if err != nil {
+						return err
+					}
+				}
 			}
 
 			// Move the GPT alt header to end of disk if needed.
@@ -339,7 +350,7 @@ func (d *ceph) CreateVolumeFromCopy(vol Volume, srcVol Volume, copySnapshots boo
 			return err
 		}
 
-		defer func() { _ = d.rbdUnmapVolume(v, true) }()
+		defer logger.WarnOnError(func() error { return d.rbdUnmapVolume(v, true) }, "Failed to unmap volume")
 
 		if vol.contentType == ContentTypeFS {
 			// Re-generate the UUID. Do this first as ensuring permissions and setting quota can
@@ -636,7 +647,7 @@ func (d *ceph) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, vo
 		return err
 	}
 
-	defer func() { _ = d.rbdUnmapVolume(vol, true) }()
+	defer logger.WarnOnError(func() error { return d.rbdUnmapVolume(vol, true) }, "Failed to unmap volume")
 
 	// Re-generate the UUID.
 	err = d.generateUUID(vol.ConfigBlockFilesystem(), devPath)
@@ -711,7 +722,8 @@ func (d *ceph) DeleteVolume(vol Volume, op *operations.Operation) error {
 				"--pool", d.config["ceph.osd.pool_name"],
 				"snap",
 				"purge",
-				d.getRBDVolumeName(vol, "", false))
+				d.getRBDVolumeName(vol, "", false),
+			)
 			if err != nil {
 				return err
 			}
@@ -766,7 +778,8 @@ func (d *ceph) hasVolume(rbdVolumeName string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
 	defer cancel()
 
-	_, err := subprocess.RunCommandContext(ctx,
+	_, err := subprocess.RunCommandContext(
+		ctx,
 		"rbd",
 		"--id", d.config["ceph.user.name"],
 		"--cluster", d.config["ceph.cluster_name"],
@@ -1031,7 +1044,8 @@ func (d *ceph) GetVolumeUsage(vol Volume) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
 	defer cancel()
 
-	jsonInfo, err := subprocess.RunCommandContext(ctx,
+	jsonInfo, err := subprocess.RunCommandContext(
+		ctx,
 		"rbd",
 		"du",
 		"--format", "json",
@@ -1094,7 +1108,7 @@ func (d *ceph) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, o
 	}
 
 	if ourMap {
-		defer func() { _ = d.rbdUnmapVolume(vol, true) }()
+		defer logger.WarnOnError(func() error { return d.rbdUnmapVolume(vol, true) }, "Failed to unmap volume")
 	}
 
 	oldSizeBytes, err := BlockDiskSizeBytes(devPath)
@@ -1107,10 +1121,21 @@ func (d *ceph) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, o
 		return nil
 	}
 
-	// Block image volumes cannot be resized because they have a readonly snapshot that doesn't get
-	// updated when the volume's size is changed, and this is what instances are created from.
-	// During initial volume fill allowUnsafeResize is enabled because snapshot hasn't been taken yet.
+	// Image volumes carry a readonly snapshot (the clone source for instances) that doesn't get
+	// updated when the volume's size is changed, so they cannot be resized in place.
+	// During initial volume fill allowUnsafeResize is enabled because the snapshot hasn't been taken
+	// yet. Otherwise: a cached image is only ever a clone source and instances are sized independently
+	// after cloning, so a request to *grow* the image is unnecessary and treated as a no-op. This is
+	// important because the image is also intentionally shrunk to its minimal content size after
+	// unpacking, so the size policy will routinely ask to grow it; regenerating instead would delete
+	// the readonly snapshot and race with concurrent clones during parallel instance creation. A
+	// request to *shrink* the image (e.g. the pool's volume.size was lowered) is reported as
+	// unsupported so EnsureImage regenerates the image at the smaller size.
 	if !allowUnsafeResize && vol.volType == VolumeTypeImage {
+		if sizeBytes > oldSizeBytes {
+			return nil
+		}
+
 		return ErrNotSupported
 	}
 
@@ -1200,7 +1225,8 @@ func (d *ceph) GetVolumeDiskPath(vol Volume) (string, error) {
 func (d *ceph) ListVolumes() ([]Volume, error) {
 	vols := make(map[string]Volume)
 
-	cmd := exec.Command("rbd",
+	cmd := exec.Command(
+		"rbd",
 		"--id", d.config["ceph.user.name"],
 		"--cluster", d.config["ceph.cluster_name"],
 		"--pool", d.config["ceph.osd.pool_name"],
@@ -1578,7 +1604,7 @@ func (d *ceph) MigrateVolume(vol Volume, conn io.ReadWriteCloser, volSrcArgs *lo
 		return err
 	}
 
-	defer func() { _ = d.rbdDeleteVolumeSnapshot(vol, runningSnapName) }()
+	defer logger.WarnOnError(func() error { return d.rbdDeleteVolumeSnapshot(vol, runningSnapName) }, "Failed to delete volume snapshot")
 
 	cur := d.getRBDVolumeName(vol, runningSnapName, true)
 
@@ -1611,7 +1637,7 @@ func (d *ceph) CreateVolumeSnapshot(snapVol Volume, op *operations.Operation) er
 		// of the underlying filesystem can be inconsistent or, in the worst case, empty.
 		unfreezeFS, err := d.filesystemFreeze(sourcePath)
 		if err == nil {
-			defer func() { _ = unfreezeFS() }()
+			defer logger.WarnOnError(unfreezeFS, "Failed to unfreeze filesystem")
 		}
 	}
 
@@ -1659,7 +1685,8 @@ func (d *ceph) DeleteVolumeSnapshot(snapVol Volume, op *operations.Operation) er
 		"--cluster", d.config["ceph.cluster_name"],
 		"--pool", d.config["ceph.osd.pool_name"],
 		"info",
-		d.getRBDVolumeName(snapVol, "", false))
+		d.getRBDVolumeName(snapVol, "", false),
+	)
 	if err != nil {
 		return nil
 	}
@@ -1917,7 +1944,7 @@ func (d *ceph) RestoreVolume(vol Volume, snapshotName string, op *operations.Ope
 	}
 
 	if ourUnmount {
-		defer func() { _ = d.MountVolume(vol, op) }()
+		defer logger.WarnOnError(func() error { return d.MountVolume(vol, op) }, "Failed to mount volume")
 	}
 
 	_, err = subprocess.RunCommand(
@@ -1928,7 +1955,8 @@ func (d *ceph) RestoreVolume(vol Volume, snapshotName string, op *operations.Ope
 		"snap",
 		"rollback",
 		"--snap", fmt.Sprintf("snapshot_%s", snapshotName),
-		d.getRBDVolumeName(vol, "", false))
+		d.getRBDVolumeName(vol, "", false),
+	)
 	if err != nil {
 		return err
 	}
@@ -1944,7 +1972,7 @@ func (d *ceph) RestoreVolume(vol Volume, snapshotName string, op *operations.Ope
 		return err
 	}
 
-	defer func() { _ = d.rbdUnmapVolume(snapVol, true) }()
+	defer logger.WarnOnError(func() error { return d.rbdUnmapVolume(snapVol, true) }, "Failed to unmap volume")
 
 	// Re-generate the UUID.
 	err = d.generateUUID(snapVol.ConfigBlockFilesystem(), devPath)

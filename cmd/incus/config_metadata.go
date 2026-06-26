@@ -91,7 +91,8 @@ func (c *cmdConfigMetadataEdit) helpTemplate() string {
 ###     - ""
 ###     create_only: false
 ###     template: template.tpl
-###     properties: {}`)
+###     properties: {}`,
+	)
 }
 
 func (c *cmdConfigMetadataEdit) run(cmd *cobra.Command, args []string) error {
@@ -124,7 +125,7 @@ func (c *cmdConfigMetadataEdit) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	origContent, err := yaml.Dump(metadata, yaml.V2)
+	origContent, err := yaml.Dump(metadata, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -209,7 +210,7 @@ func (c *cmdConfigMetadataShow) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	content, err := yaml.Dump(metadata, yaml.V2)
+	content, err := yaml.Dump(metadata, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
