@@ -109,8 +109,10 @@ GIDs
 Github
 Golang
 goroutines
+GPG
 GPUs
 Grafana
+GUID
 HAProxy
 hardcoded
 HDDs
@@ -178,6 +180,7 @@ MiB
 Mibit
 MicroCeph
 MicroCloud
+MCS
 MII
 MITM
 MTU
@@ -193,6 +196,7 @@ NDP
 netmask
 NFS
 NIC
+NIC's
 NICs
 NixOS
 NUMA

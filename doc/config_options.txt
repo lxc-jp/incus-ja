@@ -443,10 +443,26 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} node_guid devices-infiniband
+:defaultdesc: "カーネルが割り当て"
+:required: "no"
+:shortdesc: "仮想ファンクションに割り当てるノードのGUID（コロン区切りの8バイトの16進数）"
+:type: "string"
+
+```
+
 ```{config:option} parent devices-infiniband
 :defaultdesc: "カーネルが割り当て"
 :required: "no"
 :shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} port_guid devices-infiniband
+:defaultdesc: "カーネルが割り当て"
+:required: "no"
+:shortdesc: "仮想ファンクションに割り当てるポートのGUID（コロン区切りの8バイトの16進数）"
 :type: "string"
 
 ```
@@ -510,7 +526,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv4.address devices-nic_bridged
 :managed: "no"
-:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能）"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能、またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv4.gateway devices-nic_bridged
+:managed: "no"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv4デフォルトゲートウェイ"
 :type: "string"
 
 ```
@@ -531,7 +554,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv6.address devices-nic_bridged
 :managed: "no"
-:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にすべてのIPv6トラフィックを制限するには`none`と設定可能）"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にすべてのIPv6トラフィックを制限するには`none`と設定可能、またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
+:type: "string"
+
+```
+
+```{config:option} ipv6.gateway devices-nic_bridged
+:managed: "no"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv6デフォルトゲートウェイ"
 :type: "string"
 
 ```
@@ -940,7 +970,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv4.address devices-nic_ovn
 :managed: "no"
-:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス、IP割り当てを無効にするには`none`が使える"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス、IP割り当てを無効にするには`none`が使える（またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
 :type: "string"
 
 ```
@@ -948,6 +978,13 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```{config:option} ipv4.address.external devices-nic_ovn
 :managed: "no"
 :shortdesc: "（典型的にはネットワークフォワードから）特定の外部アドレスを選択"
+:type: "string"
+
+```
+
+```{config:option} ipv4.gateway devices-nic_ovn
+:managed: "no"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv4デフォルトゲートウェイ"
 :type: "string"
 
 ```
@@ -968,7 +1005,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv6.address devices-nic_ovn
 :managed: "no"
-:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス、IP割り当てを無効にするには`none`が使える"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス、IP割り当てを無効にするには`none`が使える（またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
 :type: "string"
 
 ```
@@ -976,6 +1013,13 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```{config:option} ipv6.address.external devices-nic_ovn
 :managed: "no"
 :shortdesc: "（典型的にはネットワークフォワードから）特定の外部アドレスを選択"
+:type: "string"
+
+```
+
+```{config:option} ipv6.gateway devices-nic_ovn
+:managed: "no"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv6デフォルトゲートウェイ"
 :type: "string"
 
 ```
@@ -1653,7 +1697,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```{config:option} nat devices-proxy
 :default: "`false`"
 :required: "no"
-:shortdesc: "NAT経由でプロキシを最適化するかどうか（インスタンスのNICが静的IPを持つ必要あり）"
+:shortdesc: "NAT経由でプロキシを最適化するかどうか"
 :type: "bool"
 
 ```
@@ -2194,15 +2238,39 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```{config:option} oci.cwd instance-oci
 :condition: "OCIコンテナ"
 :liveupdate: "no"
-:shortdesc: "OCIコンテナのワーキングディレクトリ"
+:shortdesc: "ワーキングディレクトリ"
 :type: "string"
 OCIコンテナのワーキングディレクトリを上書きします。
+```
+
+```{config:option} oci.dns.domain instance-oci
+:condition: "OCIコンテナ"
+:liveupdate: "no"
+:shortdesc: "DNSドメイン"
+:type: "string"
+初期の`resolv.conf`のドメイン名。
+```
+
+```{config:option} oci.dns.nameservers instance-oci
+:condition: "OCIコンテナ"
+:liveupdate: "no"
+:shortdesc: "DNSネームサーバー"
+:type: "string"
+初期の`resolv.conf`のネームサーバーアドレスのカンマ区切りリスト。
+```
+
+```{config:option} oci.dns.search instance-oci
+:condition: "OCIコンテナ"
+:liveupdate: "no"
+:shortdesc: "DNSサーチドメイン"
+:type: "string"
+初期の`resolv.conf`のサーチドメインのカンマ区切りリスト。
 ```
 
 ```{config:option} oci.entrypoint instance-oci
 :condition: "OCIコンテナ"
 :liveupdate: "no"
-:shortdesc: "OCIコンテナのエントリポイント"
+:shortdesc: "エントリポイント"
 :type: "string"
 OCIコンテナのエントリポイントを上書きします。
 ```
@@ -2210,7 +2278,7 @@ OCIコンテナのエントリポイントを上書きします。
 ```{config:option} oci.gid instance-oci
 :condition: "OCIコンテナ"
 :liveupdate: "no"
-:shortdesc: "OCIコンテナのGID"
+:shortdesc: "プロセスのGID"
 :type: "string"
 OCIコンテナ内で稼働するプロセスのGIDを上書きします。
 ```
@@ -2218,7 +2286,7 @@ OCIコンテナ内で稼働するプロセスのGIDを上書きします。
 ```{config:option} oci.uid instance-oci
 :condition: "OCIコンテナ"
 :liveupdate: "no"
-:shortdesc: "OCIコンテナのUID"
+:shortdesc: "プロセスのUID"
 :type: "string"
 OCIコンテナ内で稼働するプロセスのUIDを上書きします。
 ```
@@ -2638,6 +2706,47 @@ BPFファイルシステムはいずれかの`security.bpffs.delegate_*`オプ�
 :shortdesc: "UEFIセキュアブートをデフォルトのMicorsoftのキーで有効化するかどうか"
 :type: "bool"
 このオプションを無効にする場合、{config:option}`instance-security:security.csm`を有効にすることを検討してください。
+```
+
+```{config:option} security.selinux.domain instance-security
+:condition: "container or virtual machine"
+:defaultdesc: "自動検出（コンテナは`container_init_t`、VMは`qemu_t`）"
+:liveupdate: "no"
+:shortdesc: "SELinuxプロセスドメインのオーバーライド"
+:type: "string"
+インスタンスのSELinuxプロセスドメインをオーバーライドします。
+```
+
+```{config:option} security.selinux.label_rootfs instance-security
+:condition: "container"
+:defaultdesc: "`auto`"
+:liveupdate: "no"
+:shortdesc: "SELinux rootfsのラベリングモード（auto、always、never）"
+:type: "string"
+SELinux rootfsラベリングの振る舞いを制御します。
+デフォルト（`auto`）は必要であればrootfsのファイルをラベル付けします。
+`security.selinux.level`がインスタンスの初回起動時に明示的に設定されている場合にのみラベル付けがスキップされます。永続化されたSELinuxコンテキストはその後の起動ではそのまま有効です。
+`always`に設定すると毎回の起動でrootfsファイルをラベル付けし、`never`はrootfs内のファイルラベルは一切触りません。
+```
+
+```{config:option} security.selinux.level instance-security
+:condition: "container or virtual machine"
+:defaultdesc: "自動生成"
+:liveupdate: "no"
+:shortdesc: "SELinux MCSレベルのオーバーライド"
+:type: "string"
+インスタンスのSELinux MCSレベルをオーバーライドします。
+インスタンス間で同じMCSレベルを使うと分離ができないので、このキーは個々のインスタンスにのみ設定可能で、プロファイルには設定できません。
+プロファイル経由で設定された値は無視されます。
+```
+
+```{config:option} security.selinux.type instance-security
+:condition: "container or virtual machine"
+:defaultdesc: "自動検出（コンテナは`container_init_t`、VMは`qemu_t`）"
+:liveupdate: "no"
+:shortdesc: "SELinuxファイルタイプのオーバーライド"
+:type: "string"
+インスタンスのストレージのラベリングに使うSELinuxファイルタイプをオーバーライドします。
 ```
 
 ```{config:option} security.sev instance-security
@@ -3276,17 +3385,35 @@ NVIDIA仮想GPUインスタンスUUID。
 
 <!-- config group network_bridge-bgp end -->
 <!-- config group network_bridge-common start -->
+```{config:option} bgp.ipv4.instances network_bridge-common
+:condition: "BGP server"
+:default: "`false`"
+:shortdesc: "それぞれの稼働中のインスタンスのIPv4アドレスの/32ルートを広告するかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} bgp.ipv4.nexthop network_bridge-common
 :condition: "BGPサーバー"
 :default: "ローカルアドレス"
+:scope: "local"
 :shortdesc: "広告されたプリフィクスのnext-hopをオーバーライド"
 :type: "string"
+
+```
+
+```{config:option} bgp.ipv6.instances network_bridge-common
+:condition: "BGP server"
+:default: "`false`"
+:shortdesc: "それぞれの稼働中のインスタンスのIPv6アドレスの/128ルートを広告するかどうか"
+:type: "bool"
 
 ```
 
 ```{config:option} bgp.ipv6.nexthop network_bridge-common
 :condition: "BGPサーバー"
 :default: "ローカルアドレス"
+:scope: "local"
 :shortdesc: "広告されたプリフィクスのnext-hopをオーバーライド"
 :type: "string"
 
@@ -3463,7 +3590,7 @@ NVIDIA仮想GPUインスタンスUUID。
 ```{config:option} ipv4.nat.order network_bridge-common
 :condition: "IPv4アドレス"
 :default: "`before`"
-:shortdesc: "必要なNATのルールを既存のルールの前に追加するか後に追加するか"
+:shortdesc: "必要なNATのルールを既存のルールの前に追加するか後に追加するか（`nftables`ファイアウォールドライバーでは効果なし）"
 :type: "string"
 
 ```
@@ -3559,7 +3686,7 @@ NVIDIA仮想GPUインスタンスUUID。
 ```{config:option} ipv6.nat.order network_bridge-common
 :condition: "IPv6アドレス"
 :default: "`before`"
-:shortdesc: "必要なNATのルールを既存のルールの前に追加するか後に追加するか"
+:shortdesc: "必要なNATのルールを既存のルールの前に追加するか後に追加するか（`nftables`ファイアウォールドライバーでは効果なし）"
 :type: "string"
 
 ```
@@ -3838,6 +3965,7 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```{config:option} parent network_macvlan-common
 :condition: "-"
+:scope: "local"
 :shortdesc: "macvlan NICを作成する親インタフェース"
 :type: "string"
 
@@ -3859,6 +3987,7 @@ NVIDIA仮想GPUインスタンスUUID。
 <!-- config group network_macvlan-common end -->
 <!-- config group network_ovn-common start -->
 ```{config:option} bridge.external_interfaces network_ovn-common
+:scope: "local"
 :shortdesc: "ブリッジに含める未設定のネットワークインターフェースのカンマ区切りリスト"
 :type: "string"
 
@@ -4207,6 +4336,7 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```{config:option} parent network_physical-common
 :condition: "-"
+:scope: "local"
 :shortdesc: "ネットワークに使用する既存のインタフェース"
 :type: "string"
 
@@ -4330,6 +4460,7 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```{config:option} parent network_sriov-common
 :condition: "-"
+:scope: "local"
 :shortdesc: "`sriov` NICを作成する親インタフェース"
 :type: "string"
 
@@ -4562,7 +4693,7 @@ NVIDIA仮想GPUインスタンスUUID。
 設定できる値は`unprivileged`、`isolated`、`allow`です。
 
 - `unprivileged`に設定すると、このオプションは{config:option}`instance-security:security.privileged`を`true`に設定するのを禁止します。
-- `isolated`に設定すると、このオプションは{config:option}`instance-security:security.privileged`と{config:option}`instance-security:security.idmap.isolated`を`true`に設定するのを禁止します。
+- `isolated`に設定すると、このオプションは{config:option}`instance-security:security.privileged`と{config:option}`instance-security:security.idmap.isolated`を`false`に設定するのを禁止します。
 - `allow`に設定すると、制限はありません。
 ```
 
@@ -5017,6 +5148,13 @@ See {ref}`cluster-https-address`.
 ```{config:option} core.https_allowed_origin server-core
 :scope: "global"
 :shortdesc: "`Access-Control-Allow-Origin` HTTPヘッダーの値"
+:type: "string"
+
+```
+
+```{config:option} core.https_allowed_websocket_origin server-core
+:scope: "global"
+:shortdesc: "WebSocket接続で許可される`Origin`の値"
 :type: "string"
 
 ```
@@ -6131,6 +6269,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 <!-- config group storage_truenas-common end -->
 <!-- config group storage_volume_btrfs-common start -->
+```{config:option} btrfs.compression storage_volume_btrfs-common
+:condition: "適切なドライバー"
+:default: "`volume.btrfs.compression`と同じ"
+:shortdesc: "ボリュームに設定する圧縮アルゴリズム、Btrfsの`compression`プロパティーに対応（例：`zstd`、`lzo`、`zlib`、`none`）"
+:type: "string"
+
+```
+
 ```{config:option} initial.gid storage_volume_btrfs-common
 :condition: "コンテントタイプ`filesystem`のカスタムボリューム"
 :default: "`volume.initial.gid`と同じか`0`"

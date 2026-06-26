@@ -40,6 +40,19 @@ relatedlinks: https://cloudinit.readthedocs.org/
 
     incus config device add INSTANCE cloud-init disk source=cloud-init:config
 
+```{note}
+`cloud-init`設定を適用するのに`incus-agent`を使う場合、インスタンスは以下の場所にファイルテンプレートの組を持つ必要があります：
+
+* `/var/lib/cloud/seed/nocloud-net/meta-data`
+* `/var/lib/cloud/seed/nocloud-net/network-config`
+* `/var/lib/cloud/seed/nocloud-net/user-data`
+* `/var/lib/cloud/seed/nocloud-net/vendor-data`
+
+新しいイメージを作るとき、Incusが提供する`cloud-init`を有効にしたイメージに含まれる上記のファイルを複製するのがもっとも簡単です。
+
+これらのファイルテンプレートは初回起動時に`incus-agent`により適用されます。その後agentは再起動を開始し、`cloud-init`がクリーンに実行され、設定を仮想マシンに適用するようにします。
+```
+
 ## 設定オプション
 
 Incus は、`cloud-init`の設定に対して`cloud-init.*`と`user.*`の 2 つの異なる設定オプションセットをサポートしています。
@@ -52,7 +65,7 @@ Incus は、`cloud-init`の設定に対して`cloud-init.*`と`user.*`の 2 つ�
 * `cloud-init.user-data`または`user.user-data` （{ref}`cloud-init:user_data_formats`を参照）
 * `cloud-init.network-config`または`user.network-config` （{ref}`cloud-init:network_config`を参照）
 
-設定オプションの詳細については、[`cloud-init`インスタンスオプション](instance-options-cloud-init)と、`cloud-init`ドキュメント内の{ref}`LXD データソース <cloud-init:datasource_lxd>`を参照してください。
+設定オプションの詳細については、[`cloud-init`インスタンスオプション](instance-options-cloud-init)を参照してください。
 
 ### ベンダーデータとユーザーデータ
 
@@ -77,7 +90,7 @@ Incus はこの方法を強制しませんが、プロファイルとインス�
 
 ### `cloud-init`設定のYAMLフォーマット
 
-`cloud-init`のオプションでは、YAML の[literalスタイルフォーマット](https://yaml.org/spec/1.2.2/#812-literal-style)が必要です。
+`cloud-init`のオプションでは、YAML の[literalスタイルフォーマット](https://spec.yaml.io/main/spec/1.2.2/#812-literal-style)が必要です。
 パイプ記号（`|`）を使用して、パイプの後にインデントされたテキスト全体を、改行とインデントを保持したまま`cloud-init`に単一の文字列として渡すことを示します。
 
 `vendor-data`および`user-data`のオプションは通常、`#cloud-config`で始まります。

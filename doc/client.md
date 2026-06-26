@@ -6,5 +6,6 @@
 
 リモートサーバーの追加 <remotes>
 コマンドエイリアスを追加 <howto/incus_alias>
+CLI設定ファイル <client-config>
 /reference/manpages
 ```

@@ -41,7 +41,6 @@
 - `incus-benchmark`
 - `incus-migrate`
 - `lxc-to-incus`
-- `lxd-to-incus`（root のみに限定するべき）
 
 ## Incus agent バイナリ
 

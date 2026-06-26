@@ -44,9 +44,7 @@ OpenFGA では、特定の API リソースへのアクセスはユーザーと�
 Incus の OpenFGA 認可モデルは API リソースを他のリソースとの関連とユーザーやグループのそのリソースへの関連に基づいて記述します。
 
 ```{literalinclude} ../internal/server/auth/driver_openfga_model.openfga
----
-language: none
----
+:language: none
 ```
 
 ```{important}

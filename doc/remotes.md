@@ -89,16 +89,16 @@ remotes:
 有効にすると、Incus はターゲットサーバーとの接続を設定されたタイムアウトまで維持します。
 これにより多くの `incus` コマンドを実行する際に遅延をかなり減らせます。
 
-有効にするには（たいていは `~/.config/incus` にある）`config.yml`を編集し、リモートを以下のように変更します:
+有効にするには、`incus remote set-keepalive`を使ってリモートにタイムアウトを設定してください。
 
-```
-  my-remote:
-    addr: https://192.0.2.5:8443
-    auth_type: tls
-    project: default
-    protocol: incus
-    public: false
-    keepalive: 30
-```
+    incus remote set-keepalive my-remote 30
 
 この例では、30 秒のタイムアウトが使われます。
+
+あるいは、`--keepalive`フラグでこの機能を有効にしたリモートを追加できます。
+
+    incus remote add my-remote 192.0.2.10 --keepalive 30
+
+`keepalive`を無効にするには、`incus remote set-keepalive`でタイムアウトの値を0にしてください。
+
+    incus remote set-keepalive my-remote 0

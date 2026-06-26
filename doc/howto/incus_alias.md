@@ -16,7 +16,7 @@ Incus コマンドラインクライアント`incus`では良く使うコマン�
 すべての利用可能なサブコマンドとパラメーターを見るには[`incus alias --help`](incus_alias.md)を実行してください。
 
 ```{note}
-_コマンドエイリアス_ は{ref}`_イメージエイリアス_ <images>`とは異なります。
+_コマンドエイリアス_ は _{ref}`イメージエイリアス <images>`_ とは異なります。
 イメージエイリアスはイメージの別名で、通常はそのイメージのより短い名前や別の覚えやすい名前です。
 
 イメージエイリアスはサーバーサイドの概念でIncus APIの一部ですが、コマンドエイリアスは純粋にコマンドラインツールの設定の一部です。
@@ -24,32 +24,80 @@ _コマンドエイリアス_ は{ref}`_イメージエイリアス_ <images>`�
 
 ## コマンドエイリアスを追加するには
 
-インスタンスを削除する際に必ず確認を求めるようにするには、[`incus delete`](incus_delete.md)に常に`incus delete --interactive`を実行するようにエイリアスを作成します。
+エイリアスを作成するには、[`incus alias add`](incus_alias_add.md)を実行し、エイリアス名と（クォートで囲んだ）エイリアスコマンドを指定します。
 
-以下のコマンドは`delete`という名前でコマンドエイリアスを_追加_し同じIncusのコマンドを`--interactive`フラグつきで実行します。
+```
+$ incus alias add my-alias "image list"
+$ incus my-alias
++-------+--------------+--------+----------------------------------------+--------------+-----------+-----------+----------------------+
+| ALIAS | FINGERPRINT  | PUBLIC |              DESCRIPTION               | ARCHITECTURE |   TYPE    |   SIZE    |     UPLOAD DATE      |
++-------+--------------+--------+----------------------------------------+--------------+-----------+-----------+----------------------+
+|       | 3b3bd7f47fca | no     | Debian bookworm amd64 (20260608_05:24) | x86_64       | CONTAINER | 106.22MiB | 2026/06/08 22:01 -03 |
++-------+--------------+--------+----------------------------------------+--------------+-----------+-----------+----------------------+
+```
 
-    incus alias add delete "delete --interactive"
-
-`myinstance`と呼ばれるインスタンスを削除するために、`incus delete mycontainer`を実行した際に、Incusのコマンドラインクライアントは`incus delete`を`incus delete --interactive`に置き換えて、代わりに`incus delete --interactive myinstance`を実行することに注意してください。
-
-コマンドエイリアスをIncusコマンドと同じ名前で登録すると、コマンドエイリアスはIncusコマンドを隠します。
-
-文字通りに同じ名前のIncusコマンドを実行したい場合は、まずコマンドエイリアスを削除する必要があります。
-さらに、パラメータ（上の例ではコンテナの名前）つきのコマンドエイリアスを使う場合、`@ARGS`という文字列でパラメータを別の場所に手動で置かない限り、Incusのコマンドラインクライアントはパラメータをエイリアスされたコマンドの最後に置きます。
-
-最後に、コマンドエイリアス内のコマンドはクォートで囲むべきです。
+コマンドエイリアスがIncusコマンドと同じ名前の場合、コマンドエイリアスはIncusコマンドを隠します。同じ名前の元のIncusコマンドを実行するには、まずコマンドエイリアスを削除する必要があります。
 
 ## すべてのコマンドエイリアスを一覧表示するには
 
 設定されたすべてのエイリアスを見るには、[`incus alias list`](incus_alias_list.md)を実行します。
 
+```
+$ incus alias list
++----------+---------------------------+
+|  ALIAS   |          TARGET           |
++----------+---------------------------+
+| my-alias | image list                |
++----------+---------------------------+
+```
+
 ## コマンドエイリアスを削除するには
 
 既存のコマンドエイリアスを削除するには[`incus alias remove`](incus_alias_remove.md)にコマンドエイリアスの名前を追加して入力します。
 
+```
+$ incus alias remove my-alias
+$ incus alias list
++----------+---------------------------+
+|  ALIAS   |          TARGET           |
++----------+---------------------------+
+```
+
 ## コマンドエイリアスをリネームするには
 
 既存のコマンドエイリアスをリネームするには、[`incus alias rename`](incus_alias_rename.md)に既存のコマンドエイリアスの名前と新しいコマンドエイリアスの名前を指定して入力します。
+
+```
+$ incus alias rename my-alias my-new-alias
+$ incus alias list
++--------------+---------------------------+
+|    ALIAS     |          TARGET           |
++--------------+---------------------------+
+| my-new-alias | image list                |
++--------------+---------------------------+
+```
+
+## エイリアスコマンド内の引数
+コマンドエイリアスを引数とともに使う場合、Incusコマンドラインクライアントはそれらの引数をエイリアスコマンドの最後に渡します。`incus alias add del "delete"`のエイリアスの場合、以下のコマンドはどちらも同じ結果になります。
+
+```
+incus delete c1 --force
+incus del c1 --force
+```
+
+この挙動は`@ARGS@`という特別な文字列で変更できます。これはエイリアスの文字列内で定義された場所にすべての引数を配置します。`incus alias add create-foo "create @ARGS@ foo"`というエイリアスであれば、以下のコマンドはどちらも同じ結果になります。
+
+```
+incus create images:debian/12 foo
+incus create-foo images:debian/12
+```
+
+番号付きの引数（`@ARG1@`、`@ARG2@`、…）を使うこともでき、これはエイリアスの文字列内のこれらの位置に指定した順に配置します。`incus alias add cat "exec @ARG1@ -- cat @ARG2@"`というエイリアスであれば、以下のコマンドはどちらも同じ結果になります。
+
+```
+incus exec u1 -- cat /etc/hosts
+incus cat u1 /etc/hosts
+```
 
 ## ビルトインの`shell`エイリアス
 
@@ -78,13 +126,23 @@ $ incus alias list
 ```
 $ incus alias remove shell
 Error: Alias shell doesn't exist
-$
 ```
 
 `shell`という名前でエイリアスを登録すると、新しいコマンドはビルトインのコマンドエイリアスを隠すことになります。
 つまり、Incusコマンドラインクライアントは新しく追加されたエイリアスを使い、代わりにビルトインのコマンドエイリアスは隠されます。追加した`shell`エイリアスを削除すると、ビルトインのエイリアスが再び現れます。
 
-## インスタンス内で非rootのシェルを起動するコマンドエイリアスを使うには
+## 使い方の例
+### インスタンスを削除する際に確認するようにするには
+インスタンスを削除する際に必ず確認を求めるようにするには、[`incus delete`](incus_delete.md)に
+常に`incus delete --interactive`を実行するようにエイリアスを作成します。
+
+以下のコマンドは`delete`という名前でコマンドエイリアスを_追加_し同じIncusのコマンドを`--interactive`フラグつきで実行します。
+
+    incus alias add delete "delete --interactive"
+
+`myinstance`と呼ばれるインスタンスを削除するために、`incus delete mycontainer`を実行した際にIncusのコマンドラインクライアントは`incus delete`を`incus delete --interactive`に置き換えて、代わりに`incus delete --interactive myinstance`を実行することに注意してください。
+
+### インスタンス内で非rootのシェルを起動するコマンドエイリアスを使うには
 
 いくつかのIncusイメージは以下の表に示すように非rootのユーザー名を作成するように設定されています。
 
@@ -108,8 +166,7 @@ Incusコマンドエイリアスを使うことで、そのインスタンスへ
 次のコマンドエイリアスでは、`debian`というユーザー名に`su -l`するように指定しています。
 
 ```
-$ incus alias add debian 'exec @ARGS@ -- su -l debian'
-$
+incus alias add debian 'exec @ARGS@ -- su -l debian'
 ```
 
 これで、以下の便利なコマンドでインスタンス内にシェルを起動できます:
