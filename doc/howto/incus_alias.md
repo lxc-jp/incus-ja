@@ -136,7 +136,7 @@ Error: Alias shell doesn't exist
 インスタンスを削除する際に必ず確認を求めるようにするには、[`incus delete`](incus_delete.md)に
 常に`incus delete --interactive`を実行するようにエイリアスを作成します。
 
-以下のコマンドは`delete`という名前でコマンドエイリアスを_追加_し同じIncusのコマンドを`--interactive`フラグつきで実行します。
+以下のコマンドは`delete`という名前でコマンドエイリアスを _追加_ し同じIncusのコマンドを`--interactive`フラグつきで実行します。
 
     incus alias add delete "delete --interactive"
 
@@ -194,7 +194,7 @@ debian@mycontainer:~$
 
 ## その他
 
-_コマンドエイリアス_は_イメージエイリアス_とは違うことに注意してください。
+_コマンドエイリアス_ は _イメージエイリアス_ とは違うことに注意してください。
 イメージエイリアスはイメージの別名で、通常はより短いな目やそのイメージの別の一般的なニーモニックです。
 
 イメージエイリアスはIncus APIの一部でサーバーサイドの概念ですが、コマンドエイリアスは純粋にコマンドラインツールの設定です。
