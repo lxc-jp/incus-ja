@@ -4,13 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"github.com/gorilla/mux"
 
 	internalInstance "github.com/lxc/incus/v7/internal/instance"
 	"github.com/lxc/incus/v7/internal/server/auth"
@@ -20,6 +17,7 @@ import (
 	"github.com/lxc/incus/v7/internal/server/response"
 	"github.com/lxc/incus/v7/internal/server/storage"
 	"github.com/lxc/incus/v7/internal/version"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/revert"
 )
 
@@ -111,7 +109,7 @@ func instanceLogsGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -200,7 +198,7 @@ func instanceLogGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -225,7 +223,7 @@ func instanceLogGet(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	file, err := url.PathUnescape(mux.Vars(r)["file"])
+	file, err := pathVar(r, "file")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -284,7 +282,7 @@ func instanceLogDelete(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -309,7 +307,7 @@ func instanceLogDelete(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	file, err := url.PathUnescape(mux.Vars(r)["file"])
+	file, err := pathVar(r, "file")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -391,7 +389,7 @@ func instanceExecOutputsGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -427,7 +425,7 @@ func instanceExecOutputsGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	defer func() { _ = pool.UnmountInstance(inst, nil) }()
+	defer logger.WarnOnError(func() error { return pool.UnmountInstance(inst, nil) }, "Failed to unmount instance")
 
 	// Read exec record-output files
 	dents, err := os.ReadDir(inst.ExecOutputPath())
@@ -496,7 +494,7 @@ func instanceExecOutputGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -521,7 +519,7 @@ func instanceExecOutputGet(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	file, err := url.PathUnescape(mux.Vars(r)["file"])
+	file, err := pathVar(r, "file")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -596,7 +594,7 @@ func instanceExecOutputDelete(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -621,7 +619,7 @@ func instanceExecOutputDelete(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	file, err := url.PathUnescape(mux.Vars(r)["file"])
+	file, err := pathVar(r, "file")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -641,7 +639,7 @@ func instanceExecOutputDelete(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
-	defer func() { _ = pool.UnmountInstance(inst, nil) }()
+	defer logger.WarnOnError(func() error { return pool.UnmountInstance(inst, nil) }, "Failed to unmount instance")
 
 	err = os.Remove(filepath.Join(inst.ExecOutputPath(), file))
 	if err != nil {

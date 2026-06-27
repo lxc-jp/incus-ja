@@ -13,8 +13,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/gorilla/mux"
-
 	incus "github.com/lxc/incus/v7/client"
 	"github.com/lxc/incus/v7/internal/filter"
 	"github.com/lxc/incus/v7/internal/jmap"
@@ -482,7 +480,7 @@ func projectCreateDefaultProfile(ctx context.Context, tx *db.ClusterTx, project 
 func projectGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -552,7 +550,7 @@ func projectGet(d *Daemon, r *http.Request) response.Response {
 func projectPut(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -643,7 +641,7 @@ func projectPut(d *Daemon, r *http.Request) response.Response {
 func projectPatch(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -864,7 +862,7 @@ func projectChange(ctx context.Context, s *state.State, project *api.Project, re
 func projectPost(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -980,7 +978,7 @@ func projectPost(d *Daemon, r *http.Request) response.Response {
 func projectDelete(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1343,7 +1341,7 @@ func projectDelete(d *Daemon, r *http.Request) response.Response {
 func projectStateGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1662,7 +1660,7 @@ func projectValidateConfig(s *state.State, config map[string]string) error {
 		// Possible values are `unprivileged`, `isolated`, and `allow`.
 		//
 		// - When set to `unprivileged`, this option prevents setting {config:option}`instance-security:security.privileged` to `true`.
-		// - When set to `isolated`, this option prevents setting {config:option}`instance-security:security.privileged` and {config:option}`instance-security:security.idmap.isolated` to `true`.
+		// - When set to `isolated`, this option prevents setting {config:option}`instance-security:security.privileged` and {config:option}`instance-security:security.idmap.isolated` to `false`.
 		// - When set to `allow`, there is no restriction.
 		// ---
 		//  type: string
@@ -2050,7 +2048,7 @@ func projectValidateRestrictedSubnets(s *state.State, value string) error {
 func projectAccess(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}

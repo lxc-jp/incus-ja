@@ -25,10 +25,11 @@ import (
 type cmdInfo struct {
 	global *cmdGlobal
 
-	flagShowAccess bool
-	flagShowLog    string
-	flagResources  bool
-	flagTarget     string
+	flagShowAccess    bool
+	flagShowLog       string
+	flagResources     bool
+	flagShowSensitive bool
+	flagTarget        string
 }
 
 var cmdInfoUsage = u.Usage{u.Instance.Optional().Remote()}
@@ -38,18 +39,21 @@ func (c *cmdInfo) command() *cobra.Command {
 	cmd.Use = cli.U("info", cmdInfoUsage...)
 	cmd.Short = i18n.G("Show instance or server information")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Show instance or server information`))
+		`Show instance or server information`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus info [<remote>:]<instance> [--show-log]
     For instance information.
 
 incus info [<remote>:] [--resources]
-    For server information.`))
+    For server information.`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagShowAccess, "show-access", i18n.G("Show the instance's access list"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagShowLog, "show-log", "", "default", i18n.G("Show the instance's recent log entries"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagResources, "resources", i18n.G("Show the resources available to the server"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagShowSensitive, "show-sensitive", i18n.G("Show the server's sensitive information (full certificates, private keys and the API extension list)"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -83,7 +87,7 @@ func (c *cmdInfo) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		data, err := yaml.Dump(access, yaml.V2)
+		data, err := yaml.Dump(access, yaml.WithV2Defaults())
 		if err != nil {
 			return err
 		}
@@ -619,7 +623,13 @@ func (c *cmdInfo) remoteInfo(d incus.InstanceServer) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&serverStatus, yaml.V2)
+	// Show the filtered output unless --show-sensitive is passed by the user.
+	var out any = &serverStatus
+	if !c.flagShowSensitive {
+		out = serverStatus.Filtered()
+	}
+
+	data, err := yaml.Dump(out, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}

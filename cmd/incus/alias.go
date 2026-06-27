@@ -62,7 +62,14 @@ func (c *cmdAliasAdd) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Add new aliases`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus alias add list "list -c ns46S"
-    Overwrite the "list" command to pass -c ns46S.`))
+    Overwrite the "list" command to pass -c ns46S.
+
+incus alias add volume "storage volume @ARGS@"
+    Create a short command for managing volumes
+
+incus alias add cat "exec @ARG1@ -- cat @ARG2@"
+    Create a command for displaying file content of instances`,
+	))
 
 	cmd.RunE = c.run
 
@@ -168,7 +175,8 @@ func (c *cmdAliasRename) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Rename aliases`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus alias rename list my-list
-    Rename existing alias "list" to "my-list".`))
+    Rename existing alias "list" to "my-list".`,
+	))
 
 	cmd.RunE = c.run
 
@@ -222,7 +230,8 @@ func (c *cmdAliasRemove) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Remove aliases`))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus alias remove my-list
-    Remove the "my-list" alias.`))
+    Remove the "my-list" alias.`,
+	))
 
 	cmd.RunE = c.run
 

@@ -110,7 +110,8 @@ Pre-defined column shorthand chars:
   d - description
   p - Peer
   t - Type
-  s - State`))
+  s - State`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
@@ -277,7 +278,7 @@ func (c *cmdNetworkPeerShow) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&peer, yaml.V2)
+	data, err := yaml.Dump(&peer, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -505,7 +506,8 @@ func (c *cmdNetworkPeerSet) command() *cobra.Command {
 		`Set network peer keys
 
 For backward compatibility, a single configuration key may still be set with:
-    incus network set [<remote>:]<network> <peer_name> <key> <value>`))
+    incus network set [<remote>:]<network> <peer_name> <key> <value>`,
+	))
 	cmd.RunE = c.run
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Set the key as a network peer property"))
@@ -585,7 +587,7 @@ type cmdNetworkPeerUnset struct {
 	flagIsProperty bool
 }
 
-var cmdNetworkPeerUnsetUsage = u.Usage{u.Network.Remote(), u.Peer, u.Key}
+var cmdNetworkPeerUnsetUsage = u.Usage{u.Network.Remote(), u.Peer, u.Key.List(1)}
 
 func (c *cmdNetworkPeerUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
@@ -594,7 +596,7 @@ func (c *cmdNetworkPeerUnset) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G("Unset network peer keys"))
 	cmd.RunE = c.run
 
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as a network peer property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as network peer properties"))
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -668,7 +670,8 @@ func (c *cmdNetworkPeerEdit) helpTemplate() string {
 ### target_network: mynet
 ### status: Pending
 ###
-### Note that the name, target_project, target_network and status fields cannot be changed.`)
+### Note that the name, target_project, target_network and status fields cannot be changed.`,
+	)
 }
 
 func (c *cmdNetworkPeerEdit) run(cmd *cobra.Command, args []string) error {
@@ -705,7 +708,7 @@ func (c *cmdNetworkPeerEdit) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := yaml.Dump(&peer, yaml.V2)
+	data, err := yaml.Dump(&peer, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}

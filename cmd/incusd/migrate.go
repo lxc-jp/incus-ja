@@ -22,6 +22,7 @@ import (
 	"github.com/lxc/incus/v7/internal/server/operations"
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/idmap"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 type migrationFields struct {
@@ -60,7 +61,7 @@ func (c *migrationFields) send(m proto.Message) error {
 		return fmt.Errorf("Control connection not initialized: %w", err)
 	}
 
-	_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Minute))
 
 	err = migration.ProtoSend(conn, m)
 	if err != nil {
@@ -82,10 +83,14 @@ func (c *migrationFields) recv(m proto.Message, handshake bool) error {
 	// Later calls are done during migration as migration barrier and
 	// can potentially take multiple hours.
 	if handshake {
-		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 
 		// Remove the deadline after the request.
-		defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+		defer logger.WarnOnError(func() error { return conn.SetReadDeadline(time.Time{}) }, "Failed to clear read deadline")
+
+		// When handling a handshake, parse the header to make sure we
+		// didn't get a remote side failure.
+		return migration.ProtoRecvHeader(conn, m)
 	}
 
 	return migration.ProtoRecv(conn, m)

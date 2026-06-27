@@ -101,7 +101,6 @@ Debianユーザーには現在2つの選択肢があります。
 
     Debianシステムで、コンテナと仮想マシンを動かすために必要なすべての依存ライブラリを含めてIncusをインストールするには`apt install incus`を実行します。
     Incusでコンテナを動かしたいだけであれば、単に`apt install incus-base`と実行すればよいです。
-    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
 
 1. Zabbly パッケージレポジトリ
 
@@ -189,8 +188,6 @@ Incus を以下のコマンドでインストールします:
 
     zypper in incus
 
-LXDからマイグレートする場合は、`lxd-to-incus`コマンドのために`incus-tools`もインストールしてください。
-
 ほとんどのユーザーにはデフォルトの設定で大丈夫ですが、システム上で多数のコンテナを稼働させる場合は、[プロダクション・デプロイメント・ガイドで推奨される](./reference/server_settings.md)いくつかのカスタムの`sysctl`設定を適用するのが良いかもしれません。
 
 パッケージの問題は[こちら](https://bugzilla.opensuse.org/)に報告してください。
@@ -233,7 +230,6 @@ Ubuntu ユーザーには現在 2 つの選択肢があります。
     ネイティブの `incus` パッケージは現在 Ubuntu 24.04 LTS 以降で利用できます。
     それらのシステムでは、単に`apt install incus`と実行すれば Incus がインストールされます。
     仮想マシンを動かすには、さらに`apt install qemu-system`を実行します。
-    LXDからマイグレートする場合は、`lxd-to-incus`コマンドを取得するため`apt install incus-tools`も実行します。
 
 1. Zabbly パッケージレポジトリ
 

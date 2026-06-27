@@ -608,6 +608,16 @@ func IsUUID(value string) error {
 	return nil
 }
 
+// IsSHA256 validates whether a value is a SHA-256 hash in hex form.
+func IsSHA256(value string) error {
+	match, _ := regexp.MatchString(`^[0-9a-f]{64}$`, value)
+	if !match {
+		return errors.New("Invalid SHA-256 hash")
+	}
+
+	return nil
+}
+
 // IsPCIAddress validates whether a value is a PCI address.
 func IsPCIAddress(value string) error {
 	match, _ := regexp.MatchString(`^(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]$`, value)
@@ -638,6 +648,14 @@ func IsCompressionAlgorithm(value string) error {
 
 	if len(fields) == 0 {
 		return errors.New("Invalid compressor provided")
+	}
+
+	// Only allow known-safe arguments (compression levels) to avoid argument injection.
+	allowedArgs := []string{"-1", "-2", "-3", "-4", "-5", "-6", "-7", "-8", "-9", "--rsyncable"}
+	for _, arg := range fields[1:] {
+		if !slices.Contains(allowedArgs, arg) {
+			return fmt.Errorf("Compression algorithm argument %q isn't allowed", arg)
+		}
 	}
 
 	// Check that we're dealing with a supported option.
@@ -1033,6 +1051,26 @@ func IsBase64(value string) error {
 	_, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(value, "="))
 	if err != nil {
 		return fmt.Errorf("Invalid value for a base64 string %q: %w", value, err)
+	}
+
+	return nil
+}
+
+// IsSELinuxType validates whether the string is valid as SELinux type.
+func IsSELinuxType(value string) error {
+	match, _ := regexp.MatchString(`^[a-z]+[0-9a-z_]*_t$`, value)
+	if !match {
+		return errors.New("Invalid value, must be SELinux type string (e.g. container_init_t)")
+	}
+
+	return nil
+}
+
+// IsSELinuxLevel validates whether the string is valid as SELinux MLS/MCS level.
+func IsSELinuxLevel(value string) error {
+	match, _ := regexp.MatchString(`^s\d+(-s\d+)?(:c\d+(\.c\d+)?(,c\d+(\.c\d+)?)*)?$`, value)
+	if !match {
+		return errors.New("Invalid value, must be SELinux level (e.g. s0:c1,c2)")
 	}
 
 	return nil

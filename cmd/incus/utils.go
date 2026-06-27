@@ -25,6 +25,7 @@ import (
 	"github.com/lxc/incus/v7/internal/i18n"
 	"github.com/lxc/incus/v7/shared/api"
 	config "github.com/lxc/incus/v7/shared/cliconfig"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/termios"
 	localtls "github.com/lxc/incus/v7/shared/tls"
 	"github.com/lxc/incus/v7/shared/util"
@@ -325,8 +326,13 @@ type settable interface {
 // unsetKey reparses the last argument passed to an `unset` command to make it suitable for `set`
 // commands.
 func unsetKey(s settable, cmd *cobra.Command, parsed []*u.Parsed) error {
-	i := len(parsed) - 1
-	parsed[i], _ = u.KV.List(0).Parse(u.Config{}, nil, &[]string{parsed[i].String + "="})
+	last := len(parsed) - 1
+	args := make([]string, len(parsed[last].StringList))
+	for i, arg := range parsed[last].StringList {
+		args[i] = arg + "="
+	}
+
+	parsed[last], _ = u.KV.List(1).Parse(u.Config{}, nil, &args)
 	return s.set(cmd, parsed)
 }
 
@@ -638,7 +644,7 @@ func sshSFTPServer(ctx context.Context, sftpConn func() (net.Conn, error), authN
 		go func() {
 			fmt.Printf(i18n.G("SSH client connected %q")+"\n", nConn.RemoteAddr())
 			defer fmt.Printf(i18n.G("SSH client disconnected %q")+"\n", nConn.RemoteAddr())
-			defer func() { _ = nConn.Close() }()
+			defer logger.WarnOnError(nConn.Close, "Failed to close connection")
 
 			// Before use, a handshake must be performed on the incoming net.Conn.
 			_, chans, reqs, err := ssh.NewServerConn(nConn, sshConfig)
@@ -688,7 +694,7 @@ func sshSFTPServer(ctx context.Context, sftpConn func() (net.Conn, error), authN
 
 				// Handle each channel in its own go routine.
 				go func() {
-					defer func() { _ = channel.Close() }()
+					defer logger.WarnOnError(channel.Close, "Failed to close channel")
 
 					// Connect to the instance's SFTP server.
 					sftpConn, err := sftpConn()
@@ -697,7 +703,7 @@ func sshSFTPServer(ctx context.Context, sftpConn func() (net.Conn, error), authN
 						return
 					}
 
-					defer func() { _ = sftpConn.Close() }()
+					defer logger.WarnOnError(sftpConn.Close, "Failed to close SFTP connection")
 
 					// Copy SFTP data between client and remote instance.
 					ctx, cancel := context.WithCancel(ctx)

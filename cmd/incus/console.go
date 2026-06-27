@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"os"
 	"os/exec"
@@ -48,7 +49,8 @@ func (c *cmdConsole) command() *cobra.Command {
 		`Attach to instance consoles
 
 This command allows you to interact with the boot console of an instance
-as well as retrieve past log entries from it.`))
+as well as retrieve past log entries from it.`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagForce, "force|f", i18n.G("Forces a connection to the console, even if there is already an active session"))
@@ -173,7 +175,7 @@ func (c *cmdConsole) text(d incus.InstanceServer, name string) error {
 		return err
 	}
 
-	defer func() { _ = termios.Restore(cfd, oldTTYstate) }()
+	defer logger.WarnOnError(func() error { return termios.Restore(cfd, oldTTYstate) }, "Failed to restore terminal")
 
 	handler := c.controlSocketHandler
 
@@ -328,7 +330,15 @@ func (c *cmdConsole) vga(d incus.InstanceServer, name string) error {
 			return err
 		}
 
-		defer func() { _ = os.Remove(path.Name()) }()
+		// The socket file is usually already removed by listener.Close(), so ignore not-exist errors.
+		defer logger.WarnOnError(func() error {
+			err := os.Remove(path.Name())
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+
+			return err
+		}, "Failed to remove temporary file")
 
 		socket = fmt.Sprintf("spice+unix://%s", path.Name())
 	} else {

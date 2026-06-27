@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/kballard/go-shellquote"
 	"go.yaml.in/yaml/v4"
 
@@ -77,25 +76,27 @@ var imageCmd = APIEndpoint{
 	Get:    APIEndpointAction{Handler: imageGet, AllowUntrusted: true},
 	Patch:  APIEndpointAction{Handler: imagePatch, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
 	Put:    APIEndpointAction{Handler: imagePut, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
-}
 
-var imageExportCmd = APIEndpoint{
-	Path: "images/{fingerprint}/export",
-
-	Get:  APIEndpointAction{Handler: imageExport, AllowUntrusted: true},
-	Post: APIEndpointAction{Handler: imageExportPost, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
-}
-
-var imageSecretCmd = APIEndpoint{
-	Path: "images/{fingerprint}/secret",
-
-	Post: APIEndpointAction{Handler: imageSecret, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
-}
-
-var imageRefreshCmd = APIEndpoint{
-	Path: "images/{fingerprint}/refresh",
-
-	Post: APIEndpointAction{Handler: imageRefresh, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
+	// The export/secret/refresh sub-paths are handled as suffix actions rather
+	// than dedicated routes. Under http.ServeMux a route such as
+	// "images/{fingerprint}/export" would conflict with the multi-segment
+	// "images/aliases/{name...}" route, so the image endpoint is registered as
+	// a subtree and the suffix is matched at dispatch time.
+	SuffixActions: []APIEndpointSuffixAction{
+		{
+			Name: "/export",
+			Get:  APIEndpointAction{Handler: imageExport, AllowUntrusted: true},
+			Post: APIEndpointAction{Handler: imageExportPost, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
+		},
+		{
+			Name: "/secret",
+			Post: APIEndpointAction{Handler: imageSecret, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
+		},
+		{
+			Name: "/refresh",
+			Post: APIEndpointAction{Handler: imageRefresh, AccessHandler: allowPermission(auth.ObjectTypeImage, auth.EntitlementCanEdit, "fingerprint")},
+		},
+	},
 }
 
 var imageAliasesCmd = APIEndpoint{
@@ -106,7 +107,7 @@ var imageAliasesCmd = APIEndpoint{
 }
 
 var imageAliasCmd = APIEndpoint{
-	Path: "images/aliases/{name:.*}",
+	Path: "images/aliases/{name...}",
 
 	Delete: APIEndpointAction{Handler: imageAliasDelete, AccessHandler: allowPermission(auth.ObjectTypeImageAlias, auth.EntitlementCanEdit, "name")},
 	Get:    APIEndpointAction{Handler: imageAliasGet, AllowUntrusted: true},
@@ -149,8 +150,8 @@ func compressFile(compress string, infile io.Reader, outfile io.Writer) error {
 			return err
 		}
 
-		defer func() { _ = tempfile.Close() }()
-		defer func() { _ = os.Remove(tempfile.Name()) }()
+		defer logger.WarnOnError(tempfile.Close, "Failed to close temporary file")
+		defer logger.WarnOnError(func() error { return os.Remove(tempfile.Name()) }, "Failed to remove temporary file")
 
 		// Prepare 'tar2sqfs' arguments
 		args := []string{"tar2sqfs"}
@@ -259,8 +260,8 @@ func imgPostInstanceInfo(ctx context.Context, s *state.State, r *http.Request, r
 		return nil, err
 	}
 
-	defer func() { _ = os.Remove(metaFile.Name()) }()
-	defer func() { _ = os.Remove(rootfsFile.Name()) }()
+	defer logger.WarnOnError(func() error { return os.Remove(metaFile.Name()) }, "Failed to remove metadata file")
+	defer logger.WarnOnError(func() error { return os.Remove(rootfsFile.Name()) }, "Failed to remove rootfs file")
 
 	// Calculate (close estimate of) total size of input to image
 	totalSize := int64(0)
@@ -738,7 +739,7 @@ func getImgPostInfo(ctx context.Context, s *state.State, r *http.Request, buildd
 			return nil, err
 		}
 
-		defer func() { _ = os.Remove(imageTarf.Name()) }()
+		defer logger.WarnOnError(func() error { return os.Remove(imageTarf.Name()) }, "Failed to remove image tarball")
 
 		// Parse the POST data
 		_, err = post.Seek(0, io.SeekStart)
@@ -789,7 +790,7 @@ func getImgPostInfo(ctx context.Context, s *state.State, r *http.Request, buildd
 			return nil, err
 		}
 
-		defer func() { _ = os.Remove(rootfsTarf.Name()) }()
+		defer logger.WarnOnError(func() error { return os.Remove(rootfsTarf.Name()) }, "Failed to remove rootfs tarball")
 
 		size, err = util.SafeCopy(io.MultiWriter(rootfsTarf, hash256), part)
 		info.Size += size
@@ -1439,7 +1440,7 @@ func getImageMetadata(fname string) (*api.ImageMetadata, string, error) {
 		return nil, "unknown", err
 	}
 
-	defer func() { _ = r.Close() }()
+	defer logger.WarnOnError(r.Close, "Failed to close file")
 
 	// Decompress if needed
 	_, algo, unpacker, err := archive.DetectCompressionFile(r)
@@ -1471,17 +1472,17 @@ func getImageMetadata(fname string) (*api.ImageMetadata, string, error) {
 			return nil, "unknown", err
 		}
 
-		defer func() { _ = stdout.Close() }()
+		defer logger.WarnOnError(stdout.Close, "Failed to close stdout pipe")
 
 		err = cmd.Start()
 		if err != nil {
 			return nil, "unknown", err
 		}
 
-		defer func() { _ = cmd.Wait() }()
+		defer logger.WarnOnError(cmd.Wait, "Failed to wait for command")
 
 		// Double close stdout, this is to avoid blocks in Wait()
-		defer func() { _ = stdout.Close() }()
+		defer logger.WarnOnError(stdout.Close, "Failed to close stdout pipe")
 
 		tr = tar.NewReader(stdout)
 	} else {
@@ -2139,7 +2140,7 @@ func distributeImage(ctx context.Context, s *state.State, nodes []string, oldFin
 				return err
 			}
 
-			defer func() { _ = metaFile.Close() }()
+			defer logger.WarnOnError(metaFile.Close, "Failed to close metadata file")
 
 			createArgs.MetaFile = metaFile
 			createArgs.MetaName = filepath.Base(imageMetaPath)
@@ -2151,7 +2152,7 @@ func distributeImage(ctx context.Context, s *state.State, nodes []string, oldFin
 					return err
 				}
 
-				defer func() { _ = rootfsFile.Close() }()
+				defer logger.WarnOnError(rootfsFile.Close, "Failed to close rootfs file")
 
 				createArgs.RootfsFile = rootfsFile
 				createArgs.RootfsName = filepath.Base(imageRootfsPath)
@@ -2790,7 +2791,7 @@ func imageDelete(d *Daemon, r *http.Request) response.Response {
 
 	projectName := request.ProjectParam(r)
 
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -3151,7 +3152,7 @@ func imageGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -3244,7 +3245,7 @@ func imagePut(d *Daemon, r *http.Request) response.Response {
 
 	// Get current value
 	projectName := request.ProjectParam(r)
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -3358,7 +3359,7 @@ func imagePatch(d *Daemon, r *http.Request) response.Response {
 
 	// Get current value
 	projectName := request.ProjectParam(r)
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -3772,7 +3773,7 @@ func imageAliasesGet(d *Daemon, r *http.Request) response.Response {
 //	    $ref: "#/responses/InternalServerError"
 func imageAliasGet(d *Daemon, r *http.Request) response.Response {
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -3835,7 +3836,7 @@ func imageAliasDelete(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -3913,7 +3914,7 @@ func imageAliasPut(d *Daemon, r *http.Request) response.Response {
 
 	// Get current value
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -4009,7 +4010,7 @@ func imageAliasPatch(d *Daemon, r *http.Request) response.Response {
 
 	// Get current value
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -4117,7 +4118,7 @@ func imageAliasPost(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	name, err := url.PathUnescape(mux.Vars(r)["name"])
+	name, err := pathVar(r, "name")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -4237,7 +4238,7 @@ func imageExport(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -4408,7 +4409,7 @@ func imageExportPost(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -4459,7 +4460,7 @@ func imageExportPost(d *Daemon, r *http.Request) response.Response {
 			return err
 		}
 
-		defer func() { _ = metaFile.Close() }()
+		defer logger.WarnOnError(metaFile.Close, "Failed to close metadata file")
 
 		createArgs.MetaFile = metaFile
 		createArgs.MetaName = filepath.Base(imageMetaPath)
@@ -4470,7 +4471,7 @@ func imageExportPost(d *Daemon, r *http.Request) response.Response {
 				return err
 			}
 
-			defer func() { _ = rootfsFile.Close() }()
+			defer logger.WarnOnError(rootfsFile.Close, "Failed to close rootfs file")
 
 			createArgs.RootfsFile = rootfsFile
 			createArgs.RootfsName = filepath.Base(imageRootfsPath)
@@ -4564,7 +4565,7 @@ func imageSecret(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -4590,21 +4591,21 @@ func imageImportFromNode(imagesDir string, client incus.InstanceServer, fingerpr
 		return fmt.Errorf("failed to create temporary directory for download: %w", err)
 	}
 
-	defer func() { _ = os.RemoveAll(buildDir) }()
+	defer logger.WarnOnError(func() error { return os.RemoveAll(buildDir) }, "Failed to remove build directory")
 
 	metaFile, err := os.CreateTemp(buildDir, "incus_tar_")
 	if err != nil {
 		return err
 	}
 
-	defer func() { _ = metaFile.Close() }()
+	defer logger.WarnOnError(metaFile.Close, "Failed to close metadata file")
 
 	rootfsFile, err := os.CreateTemp(buildDir, "incus_tar_")
 	if err != nil {
 		return err
 	}
 
-	defer func() { _ = rootfsFile.Close() }()
+	defer logger.WarnOnError(rootfsFile.Close, "Failed to close rootfs file")
 
 	getReq := incus.ImageFileRequest{
 		MetaFile:   io.ReadWriteSeeker(metaFile),
@@ -4688,7 +4689,7 @@ func imageRefresh(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
 	projectName := request.ProjectParam(r)
-	fingerprint, err := url.PathUnescape(mux.Vars(r)["fingerprint"])
+	fingerprint, err := pathVar(r, "fingerprint")
 	if err != nil {
 		return response.SmartError(err)
 	}

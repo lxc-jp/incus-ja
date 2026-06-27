@@ -16,6 +16,7 @@ import (
 	"github.com/lxc/incus/v7/internal/server/migration"
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/units"
 	"github.com/lxc/incus/v7/shared/util"
@@ -196,6 +197,31 @@ func (d *zfs) getDatasets(dataset string, types string) ([]string, error) {
 	return children, nil
 }
 
+// getSnapshotGUIDs returns a map of snapshot dataset name to guid for all snapshots of the dataset in a single call.
+func (d *zfs) getSnapshotGUIDs(dataset string) (map[string]string, error) {
+	out, err := subprocess.RunCommand("zfs", "get", "-H", "-p", "-r", "-o", "name,value", "-t", "snapshot", "guid", dataset)
+	if err != nil {
+		return nil, err
+	}
+
+	guids := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+
+		guids[fields[0]] = fields[1]
+	}
+
+	return guids, nil
+}
+
 func (d *zfs) setDatasetProperties(dataset string, options ...string) error {
 	args := []string{"set"}
 	args = append(args, options...)
@@ -330,7 +356,7 @@ func (d *zfs) needsRecursion(dataset string) bool {
 }
 
 func (d *zfs) sendDataset(dataset string, parent string, volSrcArgs *migration.VolumeSourceArgs, conn io.ReadWriteCloser, tracker *ioprogress.ProgressTracker) error {
-	defer func() { _ = conn.Close() }()
+	defer logger.WarnOnError(conn.Close, "Failed to close connection")
 
 	// Assemble zfs send command.
 	args := []string{"send"}
@@ -438,6 +464,11 @@ type ZFSMetaDataHeader struct {
 }
 
 func (d *zfs) datasetHeader(vol Volume, snapshots []string) (*ZFSMetaDataHeader, error) {
+	guids, err := d.getSnapshotGUIDs(d.dataset(vol, false))
+	if err != nil {
+		return nil, err
+	}
+
 	migrationHeader := ZFSMetaDataHeader{
 		SnapshotDatasets: make([]ZFSDataset, len(snapshots)),
 	}
@@ -445,13 +476,8 @@ func (d *zfs) datasetHeader(vol Volume, snapshots []string) (*ZFSMetaDataHeader,
 	for i, snapName := range snapshots {
 		snapVol, _ := vol.NewSnapshot(snapName)
 
-		guid, err := d.getDatasetProperty(d.dataset(snapVol, false), "guid")
-		if err != nil {
-			return nil, err
-		}
-
 		migrationHeader.SnapshotDatasets[i].Name = snapName
-		migrationHeader.SnapshotDatasets[i].GUID = guid
+		migrationHeader.SnapshotDatasets[i].GUID = guids[d.dataset(snapVol, false)]
 	}
 
 	return &migrationHeader, nil

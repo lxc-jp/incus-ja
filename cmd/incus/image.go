@@ -30,6 +30,7 @@ import (
 	"github.com/lxc/incus/v7/shared/archive"
 	"github.com/lxc/incus/v7/shared/ask"
 	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/osarch"
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/termios"
@@ -64,7 +65,8 @@ as a compressed tarball (or for split images, the concatenation of the
 metadata and rootfs tarballs).
 
 Images can be referenced by their full hash, shortest unique partial
-hash or alias name (if one is set).`))
+hash or alias name (if one is set).`,
+	))
 
 	// Alias
 	imageAliasCmd := cmdImageAlias{global: c.global, image: c}
@@ -168,7 +170,8 @@ func (c *cmdImageCopy) command() *cobra.Command {
 		`Copy images between servers
 
 The auto-update flag instructs the server to keep this image up to date.
-It requires the source to be an alias and for it to be public.`))
+It requires the source to be an alias and for it to be public.`,
+	))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagPublic, "public", i18n.G("Make image public"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagCopyAliases, "copy-aliases", i18n.G("Copy aliases from source"))
@@ -395,7 +398,8 @@ func (c *cmdImageEdit) command() *cobra.Command {
     Launch a text editor to edit the properties
 
 incus image edit <image> < image.yaml
-    Load the image properties from a YAML file`))
+    Load the image properties from a YAML file`,
+	))
 
 	cmd.RunE = c.run
 
@@ -417,7 +421,8 @@ func (c *cmdImageEdit) helpTemplate() string {
 ###
 ### Each property is represented by a single line:
 ### An example would be:
-###  description: My custom image`)
+###  description: My custom image`,
+	)
 }
 
 func (c *cmdImageEdit) run(cmd *cobra.Command, args []string) error {
@@ -458,7 +463,7 @@ func (c *cmdImageEdit) run(cmd *cobra.Command, args []string) error {
 	}
 
 	brief := imgInfo.Writable()
-	data, err := yaml.Dump(&brief, yaml.V2)
+	data, err := yaml.Dump(&brief, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -518,7 +523,8 @@ func (c *cmdImageExport) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Export and download images
 
-The output target is optional and defaults to the working directory.`))
+The output target is optional and defaults to the working directory.`,
+	))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagVM, "vm", i18n.G("Query virtual machine images"))
 	cmd.RunE = c.run
@@ -575,14 +581,14 @@ func (c *cmdImageExport) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	defer func() { _ = dest.Close() }()
+	defer logger.WarnOnError(dest.Close, "Failed to close file")
 
 	destRootfs, err := os.Create(targetRootfs)
 	if err != nil {
 		return err
 	}
 
-	defer func() { _ = destRootfs.Close() }()
+	defer logger.WarnOnError(destRootfs.Close, "Failed to close file")
 
 	// Prepare the download request
 	progress := cli.ProgressRenderer{
@@ -690,7 +696,8 @@ func (c *cmdImageImport) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
 		`Import image into the image store
 
-Directory import is only available on Linux and must be performed as root.`))
+Directory import is only available on Linux and must be performed as root.`,
+	))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagPublic, "public", i18n.G("Make image public"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagReuse, "reuse", i18n.G("If the image alias already exists, delete and create a new one"))
@@ -725,7 +732,7 @@ func (c *cmdImageImport) packImageDir(path string) (string, error) {
 		return "", err
 	}
 
-	defer func() { _ = outFile.Close() }()
+	defer logger.WarnOnError(outFile.Close, "Failed to close file")
 
 	outFileName := outFile.Name()
 	_, err = subprocess.RunCommand("tar", "-C", path, "--numeric-owner", "--restrict", "--force-local", "--xattrs", "-cJf", outFileName, "rootfs", "templates", "metadata.yaml")
@@ -788,7 +795,7 @@ func (c *cmdImageImport) run(cmd *cobra.Command, args []string) error {
 				return err
 			}
 			// remove temp file
-			defer func() { _ = os.Remove(imageFile) }()
+			defer logger.WarnOnError(func() error { return os.Remove(imageFile) }, "Failed to remove temporary file")
 		}
 
 		meta, err = os.Open(imageFile)
@@ -796,7 +803,7 @@ func (c *cmdImageImport) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		defer func() { _ = meta.Close() }()
+		defer logger.WarnOnError(meta.Close, "Failed to close file")
 
 		// Open rootfs
 		if hasRootfsFile {
@@ -805,7 +812,7 @@ func (c *cmdImageImport) run(cmd *cobra.Command, args []string) error {
 				return err
 			}
 
-			defer func() { _ = rootfs.Close() }()
+			defer logger.WarnOnError(rootfs.Close, "Failed to close file")
 
 			_, ext, _, err := archive.DetectCompressionFile(rootfs)
 			if err != nil {
@@ -900,7 +907,8 @@ func (c *cmdImageInfo) command() *cobra.Command {
 	cmd.Use = cli.U("info", cmdImageInfoUsage...)
 	cmd.Short = i18n.G("Show useful information about images")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Show useful information about images`))
+		`Show useful information about images`,
+	))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagVM, "vm", i18n.G("Query virtual machine images"))
 	cmd.RunE = c.run
@@ -1063,7 +1071,8 @@ Column shorthand chars:
     a - Architecture
     s - Size
     u - Upload date
-    t - Type`))
+    t - Type`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultImagesColumns, "", i18n.G("Columns"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
@@ -1500,7 +1509,7 @@ func (c *cmdImageShow) run(cmd *cobra.Command, args []string) error {
 	}
 
 	properties := info.Writable()
-	data, err := yaml.Dump(&properties, yaml.V2)
+	data, err := yaml.Dump(&properties, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -1760,7 +1769,7 @@ func (c *cmdImageGenerateMetadata) run(cmd *cobra.Command, args []string) error 
 		return err
 	}
 
-	defer metaFile.Close()
+	defer logger.WarnOnError(metaFile.Close, "Failed to close file")
 
 	// Generate the metadata.
 	timestamp := time.Now().UTC()
@@ -1825,7 +1834,7 @@ func (c *cmdImageGenerateMetadata) run(cmd *cobra.Command, args []string) error 
 	metadata.Properties["description"] = metaDescription
 
 	// Generate YAML.
-	body, err := yaml.Dump(&metadata, yaml.V2)
+	body, err := yaml.Dump(&metadata, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}

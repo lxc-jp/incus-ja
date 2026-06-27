@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/lxc/incus/v7/shared/subprocess"
@@ -34,6 +35,23 @@ func CertificateNeedsUpdate(domain string, cert *x509.Certificate, threshold tim
 // RunACMEChallenge runs an ACME challenge to fetch updated certificates with `lego`.
 func RunACMEChallenge(ctx context.Context, dir, caURL, domain, email, challengeType, provider, port, proxy string, resolvers, environment []string) ([]byte, []byte, error) {
 	env := os.Environ()
+
+	// Detect the installed lego command line interface as it changed in lego v5.
+	//
+	// Lego v5 broke its CLI backward compatibility by moving some flags
+	// from the root to the "run" sub-command as well as renaming other
+	// options.
+	//
+	// Unfortunately because "lego --version" is often overridden by
+	// packagers and other distributors, parsing the version string doesn't
+	// really work (Debian reports "dev" for example). Instead, we need to look
+	// at the help message...
+	stdout, _, err := subprocess.RunCommandSplit(ctx, env, nil, "lego", "run", "--help")
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to determine lego version: %w", err)
+	}
+
+	legoV5 := strings.Contains(stdout, "--http.address")
 
 	args := []string{
 		"--accept-tos",
@@ -64,16 +82,28 @@ func RunACMEChallenge(ctx context.Context, dir, caURL, domain, email, challengeT
 	case "HTTP-01":
 		args = append(args, "--http")
 		if port != "" {
-			args = append(args, "--http.port", port)
+			// The "--http.port" flag was renamed to "--http.address" in lego v5.
+			if legoV5 {
+				args = append(args, "--http.address", port)
+			} else {
+				args = append(args, "--http.port", port)
+			}
 		}
 	}
 
-	args = append(args, "run")
+	// In lego v5 the "run" command must precede its flags, whereas in earlier
+	// versions the flags were global and had to come before the "run" command.
+	if legoV5 {
+		args = append([]string{"run"}, args...)
+	} else {
+		args = append(args, "run")
+	}
+
 	if proxy != "" {
 		env = append(env, "https_proxy="+proxy)
 	}
 
-	_, _, err := subprocess.RunCommandSplit(ctx, env, nil, "lego", args...)
+	_, _, err = subprocess.RunCommandSplit(ctx, env, nil, "lego", args...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to run lego command: %w", err)
 	}

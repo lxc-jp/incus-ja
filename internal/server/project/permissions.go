@@ -145,7 +145,8 @@ func AllowInstanceCreation(tx *db.ClusterTx, projectName string, req api.Instanc
 	}
 
 	err = checkRestrictionsOnVolatileConfig(
-		info.Project, instanceType, req.Name, req.Config, map[string]string{}, strip)
+		info.Project, instanceType, req.Name, req.Config, map[string]string{}, strip,
+	)
 	if err != nil {
 		return err
 	}
@@ -252,6 +253,10 @@ func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instanc
 	// Checker for safe volatile keys.
 	isSafeKey := func(key string) bool {
 		if slices.Contains([]string{"volatile.apply_template", "volatile.base_image", "volatile.last_state.power"}, key) {
+			return true
+		}
+
+		if key == "volatile.selinux.context" {
 			return true
 		}
 
@@ -1002,6 +1007,10 @@ func isContainerLowLevelOptionForbidden(key string) bool {
 		"security.guestapi.images",
 		"security.idmap.base",
 		"security.idmap.size",
+		"security.selinux.domain",
+		"security.selinux.label_rootfs",
+		"security.selinux.level",
+		"security.selinux.type",
 	},
 		key) {
 		return true
@@ -1025,6 +1034,10 @@ func isVMLowLevelOptionForbidden(key string) bool {
 		"raw.qemu.qmp.post-start",
 		"raw.qemu.qmp.pre-start",
 		"raw.qemu.scriptlet",
+		"security.selinux.domain",
+		"security.selinux.label_rootfs",
+		"security.selinux.level",
+		"security.selinux.type",
 	},
 		key)
 }
@@ -1062,7 +1075,8 @@ func AllowInstanceUpdate(tx *db.ClusterTx, projectName, instanceName string, req
 	// Special case restriction checks on volatile.* keys, since we want to
 	// detect if they were changed or added.
 	err = checkRestrictionsOnVolatileConfig(
-		info.Project, instType, updatedInstance.Name, req.Config, currentConfig, false)
+		info.Project, instType, updatedInstance.Name, req.Config, currentConfig, false,
+	)
 	if err != nil {
 		return err
 	}

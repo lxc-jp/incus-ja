@@ -4,7 +4,6 @@
 ```{toctree}
 :maxdepth: 1
 
-LXDからの移行 </howto/server_migrate_lxd>
 サーバーを設定するには <howto/server_configure>
 /server_config
 システム設定 <reference/server_settings>

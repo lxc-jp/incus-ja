@@ -21,6 +21,7 @@ import (
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/cancel"
 	"github.com/lxc/incus/v7/shared/ioprogress"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/tcp"
 	localtls "github.com/lxc/incus/v7/shared/tls"
 	"github.com/lxc/incus/v7/shared/units"
@@ -583,7 +584,7 @@ func (r *ProtocolIncus) CreateInstanceFromBackup(args InstanceBackupArgs) (Opera
 		return nil, err
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer logger.WarnOnError(resp.Body.Close, "Failed to close response body")
 
 	// Handle errors
 	response, _, err := incusParseResponse(resp)
@@ -1452,7 +1453,8 @@ func (r *ProtocolIncus) GetInstanceFile(instanceName string, filePath string) (i
 	if r.IsAgent() {
 		requestURL, err = urlEncode(
 			fmt.Sprintf("%s/1.0/files", r.httpBaseURL.String()),
-			map[string]string{"path": filePath})
+			map[string]string{"path": filePath},
+		)
 	} else {
 		var path string
 
@@ -1464,7 +1466,8 @@ func (r *ProtocolIncus) GetInstanceFile(instanceName string, filePath string) (i
 		// Prepare the HTTP request
 		requestURL, err = urlEncode(
 			fmt.Sprintf("%s/1.0%s/%s/files", r.httpBaseURL.String(), path, url.PathEscape(instanceName)),
-			map[string]string{"path": filePath})
+			map[string]string{"path": filePath},
+		)
 	}
 
 	if err != nil {
@@ -1675,13 +1678,19 @@ func (r *ProtocolIncus) rawConn(apiURL *url.URL, protocol string) (net.Conn, err
 
 	r.addClientHeaders(req)
 
+	// Add the default port if missing as the raw dialers don't apply it.
+	addr := apiURL.Host
+	if apiURL.Port() == "" {
+		addr = net.JoinHostPort(apiURL.Hostname(), "443")
+	}
+
 	// Establish the connection.
 	var conn net.Conn
 
 	if httpTransport.TLSClientConfig != nil {
-		conn, err = httpTransport.DialTLSContext(context.Background(), "tcp", apiURL.Host)
+		conn, err = httpTransport.DialTLSContext(context.Background(), "tcp", addr)
 	} else {
-		conn, err = httpTransport.DialContext(context.Background(), "tcp", apiURL.Host)
+		conn, err = httpTransport.DialContext(context.Background(), "tcp", addr)
 	}
 
 	if err != nil {
@@ -1718,6 +1727,28 @@ func (r *ProtocolIncus) rawConn(apiURL *url.URL, protocol string) (net.Conn, err
 	}
 
 	return conn, nil
+}
+
+// GetInstanceNBDConn returns a connection to the instance's NBD endpoint exposing all of its disks.
+func (r *ProtocolIncus) GetInstanceNBDConn(instanceName string, args InstanceNBDArgs) (net.Conn, error) {
+	if !r.HasExtension("instance_nbd") {
+		return nil, errors.New(`The server is missing the required "instance_nbd" API extension`)
+	}
+
+	apiURL := api.NewURL()
+	apiURL.URL = r.httpBaseURL // Preload the URL with the client base URL.
+	apiURL.Path("1.0", "instances", instanceName, "nbd")
+
+	values := apiURL.Query()
+	if args.Reuse {
+		values.Set("reuse", "1")
+	}
+
+	apiURL.RawQuery = values.Encode()
+
+	r.setURLQueryAttributes(&apiURL.URL)
+
+	return r.rawConn(&apiURL.URL, "nbd")
 }
 
 // GetInstanceFileSFTPConn returns a connection to the instance's SFTP endpoint.
@@ -2973,7 +3004,7 @@ func (r *ProtocolIncus) GetInstanceBackupFile(instanceName string, name string, 
 		return nil, err
 	}
 
-	defer func() { _ = response.Body.Close() }()
+	defer logger.WarnOnError(response.Body.Close, "Failed to close response body")
 	defer close(doneCh)
 
 	if response.StatusCode != http.StatusOK {
@@ -3050,7 +3081,7 @@ func (r *ProtocolIncus) CreateInstanceBackupStream(instanceName string, backup a
 		return err
 	}
 
-	defer func() { _ = response.Body.Close() }()
+	defer logger.WarnOnError(response.Body.Close, "Failed to close response body")
 	defer close(doneCh)
 
 	if response.StatusCode != http.StatusOK {

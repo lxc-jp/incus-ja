@@ -17,6 +17,7 @@ import (
 
 	internalInstance "github.com/lxc/incus/v7/internal/instance"
 	internalIO "github.com/lxc/incus/v7/internal/io"
+	"github.com/lxc/incus/v7/internal/server/auth"
 	"github.com/lxc/incus/v7/internal/server/backup"
 	"github.com/lxc/incus/v7/internal/server/cluster"
 	"github.com/lxc/incus/v7/internal/server/db"
@@ -311,6 +312,11 @@ func createFromMigration(ctx context.Context, s *state.State, r *http.Request, p
 
 			req.Source.Refresh = false
 		}
+	}
+
+	// Refuse to migrate onto an existing instance of a different type.
+	if inst != nil && inst.Type() != dbType {
+		return response.Conflict(fmt.Errorf("Instance %q already exists with a different type", req.Name))
 	}
 
 	reverter := revert.New()
@@ -775,7 +781,7 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 		return response.InternalError(err)
 	}
 
-	defer func() { _ = os.Remove(backupFile.Name()) }()
+	defer logger.WarnOnError(func() error { return os.Remove(backupFile.Name()) }, "Failed to remove backup file")
 	reverter.Add(func() { _ = backupFile.Close() })
 
 	// Get disk budget for the project if any.
@@ -820,7 +826,7 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 			return response.InternalError(err)
 		}
 
-		defer func() { _ = os.Remove(tarFile.Name()) }()
+		defer logger.WarnOnError(func() error { return os.Remove(tarFile.Name()) }, "Failed to remove tarball file")
 
 		// Decompress to tarFile temporary file.
 		err = archive.ExtractWithFds(decomArgs[0], decomArgs[1:], nil, nil, tarFile)
@@ -965,7 +971,7 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 	runReverter := reverter.Clone()
 
 	run := func(op *operations.Operation) error {
-		defer func() { _ = backupFile.Close() }()
+		defer logger.WarnOnError(backupFile.Close, "Failed to close backup file")
 		defer runReverter.Fail()
 
 		pool, err := storagePools.LoadByName(s, bInfo.Pool)
@@ -1221,6 +1227,20 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 	target := request.QueryParam(r, "target")
 	if !s.ServerClustered && target != "" {
 		return response.BadRequest(errors.New("Target only allowed when clustered"))
+	}
+
+	// For a copy, check that the caller is allowed to view the source instance before any of its details are loaded.
+	if req.Source.Type == "copy" && req.Source.Source != "" {
+		sourceProject := req.Source.Project
+		if sourceProject == "" {
+			sourceProject = targetProjectName
+		}
+
+		sourceName, _, _ := api.GetParentAndSnapshotName(req.Source.Source)
+		err = s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectInstance(sourceProject, sourceName), auth.EntitlementCanView)
+		if err != nil {
+			return response.SmartError(err)
+		}
 	}
 
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {

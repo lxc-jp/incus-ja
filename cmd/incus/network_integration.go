@@ -221,10 +221,12 @@ func (c *cmdNetworkIntegrationEdit) command() *cobra.Command {
 	cmd.Use = cli.U("edit", cmdNetworkIntegrationEditUsage...)
 	cmd.Short = i18n.G("Edit network integration configurations as YAML")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Edit network integration configurations as YAML`))
+		`Edit network integration configurations as YAML`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus network integration edit <network integration> < network-integration.yaml
-    Update a network integration using the content of network-integration.yaml`))
+    Update a network integration using the content of network-integration.yaml`,
+	))
 
 	cmd.RunE = c.run
 
@@ -236,7 +238,8 @@ func (c *cmdNetworkIntegrationEdit) helpTemplate() string {
 		`### This is a YAML representation of the network integration.
 ### Any line starting with a '# will be ignored.
 ###
-### Note that the name is shown but cannot be changed`)
+### Note that the name is shown but cannot be changed`,
+	)
 }
 
 func (c *cmdNetworkIntegrationEdit) run(cmd *cobra.Command, args []string) error {
@@ -270,7 +273,7 @@ func (c *cmdNetworkIntegrationEdit) run(cmd *cobra.Command, args []string) error
 		return err
 	}
 
-	data, err := yaml.Dump(&networkIntegration, yaml.V2)
+	data, err := yaml.Dump(&networkIntegration, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -333,7 +336,8 @@ func (c *cmdNetworkIntegrationGet) command() *cobra.Command {
 	cmd.Use = cli.U("get", cmdNetworkIntegrationGetUsage...)
 	cmd.Short = i18n.G("Get values for network integration configuration keys")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Get values for network integration configuration keys`))
+		`Get values for network integration configuration keys`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Get the key as a network integration property"))
@@ -406,7 +410,8 @@ Pre-defined column shorthand chars:
 	n - Name
 	d - Description
 	t - Type
-	u - Used by`))
+	u - Used by`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultNetworkIntegrationColumns, "", i18n.G("Columns"))
@@ -568,7 +573,8 @@ func (c *cmdNetworkIntegrationSet) command() *cobra.Command {
 		`Set network integration configuration keys
 
 For backward compatibility, a single configuration key may still be set with:
-    incus network integration set [<remote>:]<network integration> <key> <value>`))
+    incus network integration set [<remote>:]<network integration> <key> <value>`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Set the key as a network integration property"))
@@ -630,17 +636,18 @@ type cmdNetworkIntegrationUnset struct {
 	flagIsProperty bool
 }
 
-var cmdNetworkIntegrationUnsetUsage = u.Usage{u.NetworkIntegration.Remote(), u.Key}
+var cmdNetworkIntegrationUnsetUsage = u.Usage{u.NetworkIntegration.Remote(), u.Key.List(1)}
 
 func (c *cmdNetworkIntegrationUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("unset", cmdNetworkIntegrationUnsetUsage...)
 	cmd.Short = i18n.G("Unset network integration configuration keys")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Unset network integration configuration keys`))
+		`Unset network integration configuration keys`,
+	))
 
 	cmd.RunE = c.run
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as a network integration property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as network integration properties"))
 	return cmd
 }
 
@@ -688,7 +695,7 @@ func (c *cmdNetworkIntegrationShow) run(cmd *cobra.Command, args []string) error
 		return err
 	}
 
-	data, err := yaml.Dump(&networkIntegration, yaml.V2)
+	data, err := yaml.Dump(&networkIntegration, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}

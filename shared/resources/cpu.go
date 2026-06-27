@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/lxc/incus/v7/shared/api"
+	"github.com/lxc/incus/v7/shared/logger"
 )
 
 var sysDevicesCPU = "/sys/devices/system/cpu"
@@ -153,7 +154,7 @@ func getCPUCache(path string) ([]api.ResourcesCPUCache, error) {
 				cacheSizeStr = strings.TrimSuffix(cacheSizeStr, "K")
 			}
 
-			cacheSize, err := strconv.ParseUint((cacheSizeStr), 10, 64)
+			cacheSize, err := strconv.ParseUint(cacheSizeStr, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to parse cache size: %w", err)
 			}
@@ -185,7 +186,7 @@ func getCPUdmi() (string, string, error) {
 		return "", "", err
 	}
 
-	defer func() { _ = stream.Close() }()
+	defer logger.WarnOnError(stream.Close, "Failed to close stream")
 
 	// Decode SMBIOS structures.
 	d := smbios.NewDecoder(stream)
@@ -230,7 +231,7 @@ func GetCPU() (*api.ResourcesCPU, error) {
 		return nil, fmt.Errorf("Failed to open /proc/cpuinfo: %w", err)
 	}
 
-	defer func() { _ = f.Close() }()
+	defer logger.WarnOnError(f.Close, "Failed to close file")
 	cpuInfo := bufio.NewScanner(f)
 
 	// List all the CPUs

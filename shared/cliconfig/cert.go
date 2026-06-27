@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/lxc/incus/v7/shared/logger"
 	localtls "github.com/lxc/incus/v7/shared/tls"
 	"github.com/lxc/incus/v7/shared/util"
 )
@@ -113,8 +114,8 @@ func (c *Config) GetClientCertificate(name string) (string, string, string, erro
 					return "", "", "", err
 				}
 
-				ecdsaKey, okEcdsa := (sshKey).(*ecdsa.PrivateKey)
-				rsaKey, okRsa := (sshKey).(*rsa.PrivateKey)
+				ecdsaKey, okEcdsa := sshKey.(*ecdsa.PrivateKey)
+				rsaKey, okRsa := sshKey.(*rsa.PrivateKey)
 				if okEcdsa {
 					derKey, err := x509.MarshalECPrivateKey(ecdsaKey)
 					if err != nil {
@@ -175,7 +176,7 @@ func (c *Config) CopyGlobalCert(src string, dst string) error {
 			return err
 		}
 
-		defer sourceFile.Close()
+		defer logger.WarnOnError(sourceFile.Close, "Failed to close file")
 
 		// Get the mode from the source file if not specified.
 		if mode == 0 {
@@ -193,7 +194,7 @@ func (c *Config) CopyGlobalCert(src string, dst string) error {
 			return err
 		}
 
-		defer newFile.Close()
+		defer logger.WarnOnError(newFile.Close, "Failed to close file")
 
 		// Apply the file mode.
 		err = newFile.Chmod(mode)

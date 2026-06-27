@@ -3091,3 +3091,52 @@ APIパスのURLフラグメントがパスが指すオブジェクトの設定�
 ## `instance_limits_cpu_topology`
 
 これは仮想マシンの`limits.cpu`設定キーを拡張し、明示的なCPUトポロジーを`sockets=2,cores=4,threads=2`の形式で指定できるようにします。
+
+## `instance_nbd`
+
+`GET /1.0/instances/{name}/nbd`エンドポイントを追加します。これはストレージボリュームエンドポイントと同様ですが、VMに接続されたすべてのディスクに同時にアクセスできます。
+
+## `network_bridge_bgp_instances`
+
+マネージドのブリッジネットワークに`bgp.ipv4.instances`と`bgp.ipv6.instances`設定キーを追加します。
+
+有効にすると、Incusはネットワークに接続した稼働中の各インスタンスについて`/32`（IPv4）あるいは`/128`（IPv6）のルートをBGPで公開し、インスタンスが停止した際は取り下げます。
+
+## `core_https_allowed_websocket_origin`
+
+`core.https_allowed_websocket_origin`サーバー設定キーを追加します。
+許可するオリジンのカンマ区切りリストあるいは`*`のワイルドカードを設定できます。
+
+## `storage_btrfs_compression`
+
+`btrfs`ドライバーに`btrfs.compression`ストレージボリューム設定キーを追加します。
+Btrfsの`compression`プロパティーに対応し、同じ値（例：`zstd`、`lzo`、`zlib`、 `none`）を指定します。
+
+## `oci_network_config`
+
+OCIアプリケーションコンテナに静的なネットワーク設定をできるようにします。
+
+コンテナ内部のアドレスを静的に設定するためにNICに`ipv4.address`と`ipv6.address`キーにCIDRの値を設定できるようになり、デフォルトゲートウェイを設定するために`ipv4.gateway`と`ipv6.gateway`キーが使えます。いずれかのアドレスを`none`に設定すると、そのアドレスファミリーのアドレスは設定せず、インスタンスで稼働しているビルトインのDHCPクライアントを停止します。
+
+DNSについては、コンテナの`resolv.conf`の初期の内容を設定するために`oci.dns.nameservers`、`oci.dns.domain`、`oci.dns.search`インスタンス設定キーが使えます。その後`resolv.conf`の設定はDHCPで受け取った値で拡張されます。
+
+これらのすべてのキーはOCIコンテナでのみ有効です。
+
+## `infiniband_sriov_guid`
+
+`sriov` `nictype`を使っている`infiniband`デバイスに`node_guid`と`port_guid`という2つの設定キーを追加します。
+
+設定すると、インスタンス起動時に割り当てられた仮想ファンクションの対応するGUIDが指定された値に変更され、インスタンスが停止すると元の値に戻ります。
+
+## `instance_selinux`
+
+コンテナと仮想マシンにインスタンス毎のSELinuxのインテグレーションを追加します。これは同じホスト上のインスタンス間で自動的なMCSレベルの割り当てを分離します。
+
+以下のインスタンス設定キーが追加されます：
+
+* `security.selinux.domain`: SELinuxプロセスドメインをオーバーライド。
+* `security.selinux.type`: インスタンスストレージに使用するSELinuxファイルタイプをオーバーライド。
+* `security.selinux.level`: SELinux MCSレベルをオーバーライド。
+* `security.selinux.label_rootfs`: rootfsのラベリングの挙動を制御（`auto`、`always`、`never`）。
+
+算出されたコンテキストは`volatile.selinux.context`キーに保管されますので、再起動してもMCSの範囲は同じままになります。

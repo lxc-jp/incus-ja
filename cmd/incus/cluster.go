@@ -166,7 +166,8 @@ func (c *cmdClusterList) command() *cobra.Command {
     f - Failure Domain
     d - Description
     s - Status
-    m - Message`))
+    m - Message`,
+	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultClusterColumns, "", i18n.G("Columns"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable it if missing, e.g. csv,header`))
@@ -363,7 +364,7 @@ func (c *cmdClusterShow) run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Render as YAML
-	data, err := yaml.Dump(&member, yaml.V2)
+	data, err := yaml.Dump(&member, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -385,7 +386,8 @@ func (c *cmdClusterInfo) command() *cobra.Command {
 	cmd.Use = cli.U("info", cmdClusterInfoUsage...)
 	cmd.Short = i18n.G("Show useful information about a cluster member")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Show useful information about a cluster member`))
+		`Show useful information about a cluster member`,
+	))
 
 	cmd.RunE = c.run
 
@@ -416,7 +418,7 @@ func (c *cmdClusterInfo) run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Render as YAML.
-	data, err := yaml.Dump(&member, yaml.V2)
+	data, err := yaml.Dump(&member, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -582,7 +584,7 @@ type cmdClusterUnset struct {
 	flagIsProperty bool
 }
 
-var cmdClusterUnsetUsage = u.Usage{u.Member.Remote(), u.Key}
+var cmdClusterUnsetUsage = u.Usage{u.Member.Remote(), u.Key.List(1)}
 
 func (c *cmdClusterUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
@@ -590,7 +592,7 @@ func (c *cmdClusterUnset) command() *cobra.Command {
 	cmd.Short = i18n.G("Unset a cluster member's configuration keys")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, cmd.Short)
 
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as a cluster property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as cluster properties"))
 	cmd.RunE = c.run
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -779,7 +781,8 @@ func (c *cmdClusterEnable) command() *cobra.Command {
 
   It's required that the server is already available on the network. You can check
   that by running 'incus config get core.https_address', and possibly set a value
-  for the address if not yet set.`))
+  for the address if not yet set.`,
+	))
 
 	cmd.RunE = c.run
 
@@ -854,10 +857,12 @@ func (c *cmdClusterEdit) command() *cobra.Command {
 	cmd.Use = cli.U("edit", cmdClusterEditUsage...)
 	cmd.Short = i18n.G("Edit cluster member configurations as YAML")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Edit cluster member configurations as YAML`))
+		`Edit cluster member configurations as YAML`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus cluster edit <cluster member> < member.yaml
-    Update a cluster member using the content of member.yaml`))
+    Update a cluster member using the content of member.yaml`,
+	))
 
 	cmd.RunE = c.run
 
@@ -875,7 +880,8 @@ func (c *cmdClusterEdit) command() *cobra.Command {
 func (c *cmdClusterEdit) helpTemplate() string {
 	return i18n.G(
 		`### This is a YAML representation of the cluster member.
-### Any line starting with a '# will be ignored.`)
+### Any line starting with a '# will be ignored.`,
+	)
 }
 
 func (c *cmdClusterEdit) run(cmd *cobra.Command, args []string) error {
@@ -911,7 +917,7 @@ func (c *cmdClusterEdit) run(cmd *cobra.Command, args []string) error {
 
 	memberWritable := member.Writable()
 
-	data, err := yaml.Dump(&memberWritable, yaml.V2)
+	data, err := yaml.Dump(&memberWritable, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -1118,7 +1124,8 @@ Commas between consecutive shorthand chars are optional.
 Pre-defined column shorthand chars:
   n - Name
   t - Token
-  E - Expires At`))
+  E - Expires At`,
+	))
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", c.global.defaultListFormat(), "", i18n.G(`Format (csv|json|table|yaml|compact|markdown), use suffix ",noheader" to disable headers and ",header" to enable if demanded, e.g. csv,header`))
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultclusterTokensColumns, "", i18n.G("Columns"))
 
@@ -1453,7 +1460,9 @@ func (c *cmdClusterEvacuate) command() *cobra.Command {
 	cmd.Aliases = []string{"evac"}
 	cmd.Use = cli.U("evacuate", cmdClusterEvacuateRestoreUsage...)
 	cmd.Short = i18n.G("Evacuate cluster member")
-	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Evacuate cluster member`))
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Evacuate cluster member
+
+The action flag allows overriding the default server-side action ("cluster.evacuate" instance configuration option)`))
 
 	cli.AddStringFlag(cmd.Flags(), &c.action.flagAction, "action", "", "", i18n.G(`Force a particular evacuation action`))
 
@@ -1482,7 +1491,10 @@ func (c *cmdClusterRestore) command() *cobra.Command {
 	cmd := c.action.command()
 	cmd.Use = cli.U("restore", cmdClusterEvacuateRestoreUsage...)
 	cmd.Short = i18n.G("Restore cluster member")
-	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Restore cluster member`))
+	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(`Restore cluster member
+
+The action flag allows overriding the default behavior of moving and starting back all instances.
+The only supported value at the moment is "skip" which brings the cluster member online without relocating any instances.`))
 
 	cli.AddStringFlag(cmd.Flags(), &c.action.flagAction, "action", "", "", i18n.G(`Force a particular restoration action`))
 

@@ -915,7 +915,7 @@ func OVNApplyNetworkBaselineRules(client *ovn.NB, switchName ovn.OVNSwitch, rout
 			Direction: "to-lport",
 			Action:    "allow",
 			Priority:  ovnACLPrioritySwitchAllow,
-			Match:     "(arp || nd)", // Neighbour discovery.  // codespell:ignore nd
+			Match:     "(arp || nd)", // Neighbor discovery.  // codespell:ignore nd
 		},
 		{
 			Direction: "to-lport",
@@ -982,7 +982,8 @@ func OVNApplyNetworkBaselineRules(client *ovn.NB, switchName ovn.OVNSwitch, rout
 			icmpPingReplyType = 129
 		}
 
-		rules = append(rules,
+		rules = append(
+			rules,
 			ovn.OVNACLRule{
 				Direction: "to-lport",
 				Action:    "allow",
@@ -1005,7 +1006,8 @@ func OVNApplyNetworkBaselineRules(client *ovn.NB, switchName ovn.OVNSwitch, rout
 			ipVersion = 6
 		}
 
-		rules = append(rules,
+		rules = append(
+			rules,
 			ovn.OVNACLRule{
 				Direction: "to-lport",
 				Action:    "allow",

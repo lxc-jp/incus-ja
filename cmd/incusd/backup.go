@@ -141,7 +141,7 @@ func backupCreate(s *state.State, args db.InstanceBackup, sourceInst instance.In
 		tarFileWriter = writer
 	}
 
-	defer func() { _ = tarFileWriter.Close() }()
+	defer logger.WarnOnError(tarFileWriter.Close, "Failed to close tarball file writer")
 
 	// Get IDMap to unshift container as the tarball is created.
 	var idmapSet *idmap.Set
@@ -159,7 +159,7 @@ func backupCreate(s *state.State, args db.InstanceBackup, sourceInst instance.In
 
 	// Create the tarball.
 	tarPipeReader, tarPipeWriter := io.Pipe()
-	defer func() { _ = tarPipeWriter.Close() }() // Ensure that go routine below always ends.
+	defer logger.WarnOnError(tarPipeWriter.Close, "Failed to close tarball pipe writer") // Ensure that go routine below always ends.
 	tarWriter := instancewriter.NewInstanceTarWriter(tarPipeWriter, idmapSet)
 
 	// Setup tar writer go routine, with optional compression.
@@ -286,7 +286,7 @@ func backupWriteIndex(sourceInst instance.Instance, pool storagePools.Pool, opti
 	}
 
 	// Convert to YAML.
-	indexData, err := yaml.Dump(&indexInfo, yaml.V2)
+	indexData, err := yaml.Dump(&indexInfo, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -506,7 +506,7 @@ func volumeBackupCreate(s *state.State, args db.StoragePoolVolumeBackup, project
 		fileWriter = writer
 	}
 
-	defer func() { _ = fileWriter.Close() }()
+	defer logger.WarnOnError(fileWriter.Close, "Failed to close backup file writer")
 
 	// If dealing with an ISO volume, we want to return it unaltered.
 	if contentType == drivers.ContentTypeISO {
@@ -517,7 +517,7 @@ func volumeBackupCreate(s *state.State, args db.StoragePoolVolumeBackup, project
 	} else {
 		// Create the tarball.
 		tarPipeReader, tarPipeWriter := io.Pipe()
-		defer func() { _ = tarPipeWriter.Close() }() // Ensure that go routine below always ends.
+		defer logger.WarnOnError(tarPipeWriter.Close, "Failed to close tarball pipe writer") // Ensure that go routine below always ends.
 
 		tarWriter := instancewriter.NewInstanceTarWriter(tarPipeWriter, nil)
 
@@ -619,7 +619,7 @@ func volumeBackupWriteIndex(projectName string, volumeName string, pool storageP
 	}
 
 	// Convert to YAML.
-	indexData, err := yaml.Dump(indexInfo, yaml.V2)
+	indexData, err := yaml.Dump(indexInfo, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -773,11 +773,11 @@ func bucketBackupCreate(s *state.State, args db.StoragePoolBucketBackup, project
 		tarFileWriter = writer
 	}
 
-	defer func() { _ = tarFileWriter.Close() }()
+	defer logger.WarnOnError(tarFileWriter.Close, "Failed to close tarball file writer")
 
 	// Create the tarball.
 	tarPipeReader, tarPipeWriter := io.Pipe()
-	defer func() { _ = tarPipeWriter.Close() }() // Ensure that go routine below always ends.
+	defer logger.WarnOnError(tarPipeWriter.Close, "Failed to close tarball pipe writer") // Ensure that go routine below always ends.
 	tarWriter := instancewriter.NewInstanceTarWriter(tarPipeWriter, nil)
 
 	// Setup tar writer go routine, with optional compression.
@@ -862,7 +862,7 @@ func bucketBackupWriteIndex(projectName string, bucketName string, pool storageP
 	}
 
 	// Convert to YAML.
-	indexData, err := yaml.Dump(indexInfo, yaml.V2)
+	indexData, err := yaml.Dump(indexInfo, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}

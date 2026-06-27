@@ -280,7 +280,7 @@ func (g *Gateway) HandlerFuncs(heartbeatHandler HeartbeatHandler, trustedCerts f
 				return
 			}
 
-			defer func() { _ = cowsqlClient.Close() }()
+			defer logger.WarnOnError(cowsqlClient.Close, "Failed to close client")
 			ctx, cancel := context.WithTimeout(g.ctx, 3*time.Second)
 			defer cancel()
 			leader, err := cowsqlClient.Leader(ctx)
@@ -468,7 +468,7 @@ func (g *Gateway) TransferLeadership() error {
 		return err
 	}
 
-	defer func() { _ = cowsqlClient.Close() }()
+	defer logger.WarnOnError(cowsqlClient.Close, "Failed to close client")
 
 	// Try to find a voter that is also online.
 	servers, err := cowsqlClient.Cluster(context.Background())
@@ -564,7 +564,7 @@ func (g *Gateway) Sync() {
 		return
 	}
 
-	defer func() { _ = cowsqlClient.Close() }()
+	defer logger.WarnOnError(cowsqlClient.Close, "Failed to close client")
 
 	files, err := cowsqlClient.Dump(context.Background(), "db.bin")
 	if err != nil {
@@ -772,7 +772,7 @@ func (g *Gateway) init(bootstrap bool) error {
 
 	dir := filepath.Join(g.db.Dir(), "global")
 	if util.PathExists(filepath.Join(dir, "logs.db")) {
-		return errors.New("Unsupported upgrade path, please first upgrade to LXD 4.0")
+		return errors.New("Unsupported upgrade path, please reinstall")
 	}
 
 	// If the resulting raft instance is not nil, it means that this node
@@ -855,7 +855,8 @@ func (g *Gateway) init(bootstrap bool) error {
 
 	g.lock.Lock()
 	g.store.onDisk = client.NewNodeStore(
-		g.db.DB(), "main", "raft_nodes", "address")
+		g.db.DB(), "main", "raft_nodes", "address",
+	)
 	g.lock.Unlock()
 
 	return nil
@@ -896,7 +897,7 @@ func (g *Gateway) isLeader() (bool, error) {
 		return false, fmt.Errorf("Failed to get cowsql client: %w", err)
 	}
 
-	defer func() { _ = cowsqlClient.Close() }()
+	defer logger.WarnOnError(cowsqlClient.Close, "Failed to close client")
 	ctx, cancel := context.WithTimeout(g.ctx, 3*time.Second)
 	defer cancel()
 	leader, err := cowsqlClient.Leader(ctx)
@@ -935,7 +936,7 @@ func (g *Gateway) currentRaftNodes() ([]db.RaftNode, error) {
 		return nil, err
 	}
 
-	defer func() { _ = cowsqlClient.Close() }()
+	defer logger.WarnOnError(cowsqlClient.Close, "Failed to close client")
 
 	servers, err := cowsqlClient.Cluster(context.Background())
 	if err != nil {

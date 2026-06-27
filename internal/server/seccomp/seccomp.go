@@ -1227,7 +1227,7 @@ func CallForkmknod(c Instance, dev deviceConfig.Device, requestPID int, s *state
 		return int(-C.EPERM)
 	}
 
-	defer func() { _ = pidFd.Close() }()
+	defer logger.WarnOnError(pidFd.Close, "Failed to close pidfd")
 
 	_, stderr, err := subprocess.RunCommandSplit(
 		context.TODO(),
@@ -1244,7 +1244,8 @@ func CallForkmknod(c Instance, dev deviceConfig.Device, requestPID int, s *state
 		fmt.Sprintf("%d", uid),
 		fmt.Sprintf("%d", gid),
 		fmt.Sprintf("%d", fsuid),
-		fmt.Sprintf("%d", fsgid))
+		fmt.Sprintf("%d", fsgid),
+	)
 	if err != nil {
 		errno, err := strconv.Atoi(stderr)
 		if err != nil || errno == C.ENOANO {
@@ -1443,7 +1444,7 @@ func (srv *Server) HandleSetxattrSyscall(c Instance, siov *Iovec) int {
 		return 0
 	}
 
-	defer func() { _ = pidFd.Close() }()
+	defer logger.WarnOnError(pidFd.Close, "Failed to close pidfd")
 
 	uid, gid, fsuid, fsgid, err := TaskIDs(args.pid)
 	if err != nil {
@@ -1529,7 +1530,8 @@ func (srv *Server) HandleSetxattrSyscall(c Instance, siov *Iovec) int {
 		fmt.Sprintf("%d", args.flags),
 		fmt.Sprintf("%d", whiteout),
 		fmt.Sprintf("%d", args.size),
-		string(args.value))
+		string(args.value),
+	)
 	if err != nil {
 		errno, err := strconv.Atoi(stderr)
 		if err != nil || errno == C.ENOANO {
@@ -1580,7 +1582,7 @@ func (srv *Server) HandleSchedSetschedulerSyscall(c Instance, siov *Iovec) int {
 		return 0
 	}
 
-	defer func() { _ = pidFd.Close() }()
+	defer logger.WarnOnError(pidFd.Close, "Failed to close pidfd")
 
 	uid, gid, _, _, err := TaskIDs(args.pidCaller)
 	if err != nil {
@@ -2012,7 +2014,7 @@ func (srv *Server) HandleMountSyscall(c Instance, siov *Iovec) int {
 		return 0
 	}
 
-	defer func() { _ = pidFd.Close() }()
+	defer logger.WarnOnError(pidFd.Close, "Failed to close pidfd")
 
 	mntSource := [unix.PathMax]C.char{}
 	mntTarget := [unix.PathMax]C.char{}
@@ -2166,7 +2168,8 @@ func (srv *Server) HandleMountSyscall(c Instance, siov *Iovec) int {
 			fmt.Sprintf("%d", args.fsgid),
 			fuseSource,
 			args.target,
-			fuseOpts)
+			fuseOpts,
+		)
 	} else {
 		_, _, err = subprocess.RunCommandSplit(
 			context.TODO(),
@@ -2191,7 +2194,8 @@ func (srv *Server) HandleMountSyscall(c Instance, siov *Iovec) int {
 			fmt.Sprintf("%d", args.nsgid),
 			fmt.Sprintf("%d", args.nsfsuid),
 			fmt.Sprintf("%d", args.nsfsgid),
-			args.data)
+			args.data,
+		)
 	}
 
 	if err != nil {
@@ -2244,7 +2248,8 @@ func (srv *Server) HandleBpfSyscall(c Instance, siov *Iovec) int {
 		siov.resp,
 		&bpfCmd,
 		&bpfProgType,
-		&bpfAttachType, flags)
+		&bpfAttachType, flags,
+	)
 	runtime.UnlockOSThread()
 	ctx["bpf_cmd"] = fmt.Sprintf("%d", bpfCmd)
 	ctx["bpf_prog_type"] = fmt.Sprintf("%d", bpfProgType)

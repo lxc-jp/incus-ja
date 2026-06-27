@@ -835,6 +835,14 @@ func (b *backend) CreateInstanceFromBackup(srcBackup backup.Info, srcData io.Rea
 
 	// Update information in the backup.yaml file.
 	err = vol.MountTask(func(mountPath string, op *operations.Operation) error {
+		// Reject a rootfs symlink which could redirect access to the host filesystem.
+		if volType == drivers.VolumeTypeContainer {
+			rootfsInfo, err := os.Lstat(filepath.Join(mountPath, "rootfs"))
+			if err == nil && !rootfsInfo.IsDir() {
+				return errors.New("Backup rootfs isn't a regular directory")
+			}
+		}
+
 		return backup.UpdateInstanceConfig(b.state.DB.Cluster, srcBackup, mountPath)
 	}, op)
 	if err != nil {
@@ -1094,7 +1102,7 @@ func (b *backend) CreateInstanceFromCopy(inst instance.Instance, src instance.In
 			return err
 		}
 
-		defer func() { _ = src.Unfreeze() }()
+		defer logger.WarnOnError(src.Unfreeze, "Failed to unfreeze instance")
 
 		// Attempt to sync the filesystem.
 		_ = linux.SyncFS(src.RootfsPath())
@@ -1656,7 +1664,7 @@ func (b *backend) RefreshInstance(inst instance.Instance, src instance.Instance,
 			return err
 		}
 
-		defer func() { _ = src.Unfreeze() }()
+		defer logger.WarnOnError(src.Unfreeze, "Failed to unfreeze instance")
 
 		// Attempt to sync the filesystem.
 		_ = linux.SyncFS(src.RootfsPath())
@@ -1805,7 +1813,7 @@ func (b *backend) isoFiller(data io.Reader) func(vol drivers.Volume, rootBlockPa
 			return -1, err
 		}
 
-		defer func() { _ = f.Close() }()
+		defer logger.WarnOnError(f.Close, "Failed to close file")
 
 		return util.SafeCopy(f, data)
 	}
@@ -2677,7 +2685,7 @@ func (b *backend) MigrateInstance(inst instance.Instance, conn io.ReadWriteClose
 			return err
 		}
 
-		defer func() { _ = inst.Unfreeze() }()
+		defer logger.WarnOnError(inst.Unfreeze, "Failed to unfreeze instance")
 
 		// Attempt to sync the filesystem.
 		_ = linux.SyncFS(inst.RootfsPath())
@@ -3222,7 +3230,7 @@ func (b *backend) CreateInstanceSnapshot(inst instance.Instance, src instance.In
 			return err
 		}
 
-		defer func() { _ = src.Unfreeze() }()
+		defer logger.WarnOnError(src.Unfreeze, "Failed to unfreeze instance")
 
 		// Attempt to sync the filesystem.
 		_ = linux.SyncFS(src.RootfsPath())
@@ -4389,7 +4397,7 @@ func (b *backend) initLocalBucketLayout(projectName, bucketName string, op *oper
 		return err
 	}
 
-	defer func() { _ = unmount() }()
+	defer logger.WarnOnError(unmount, "Failed to unmount bucket")
 
 	return os.MkdirAll(filepath.Join(mountPath, "data"), 0o700)
 }
@@ -6932,7 +6940,7 @@ func (b *backend) UpdateInstanceBackupFile(inst instance.Instance, snapshots boo
 		return err
 	}
 
-	data, err := yaml.Dump(config, yaml.V2)
+	data, err := yaml.Dump(config, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -8749,7 +8757,7 @@ func (b *backend) qcow2MigrateVolume(s *state.State, vol drivers.Volume, project
 	// Define function to send a block volume.
 	sendBlockVol := func(vol drivers.Volume, conn io.ReadWriteCloser, blockIndex int) error {
 		// Close when done to indicate to target side we are finished sending this volume.
-		defer func() { _ = conn.Close() }()
+		defer logger.WarnOnError(conn.Close, "Failed to close connection")
 
 		var wrapper *ioprogress.ProgressTracker
 		if volSrcArgs.TrackProgress {
@@ -8793,7 +8801,7 @@ func (b *backend) qcow2MigrateVolume(s *state.State, vol drivers.Volume, project
 			return fmt.Errorf("Error opening file for reading %q: %w", nbdPath, err)
 		}
 
-		defer func() { _ = from.Close() }()
+		defer logger.WarnOnError(from.Close, "Failed to close source file")
 
 		// Setup progress tracker.
 		fromPipe := io.ReadCloser(from)
@@ -8964,7 +8972,7 @@ func (b *backend) qcow2CreateVolumeFromMigration(vol drivers.Volume, projectName
 			return fmt.Errorf("Error opening file for writing %q: %w", path, err)
 		}
 
-		defer func() { _ = to.Close() }()
+		defer logger.WarnOnError(to.Close, "Failed to close destination file")
 
 		// Setup progress tracker.
 		fromPipe := io.ReadCloser(conn)
@@ -9123,8 +9131,8 @@ func (b *backend) qcow2BackupVolume(vol drivers.Volume, dbVol *db.StorageVolume,
 		return err
 	}
 
-	inst, deviceName, err := InstanceByVolumeName(b.state, b.name, projectName, vol.Name(), volumeDBType)
-	if err != nil {
+	inst, deviceName, err := InstanceByVolumeName(b.state, b.name, projectName, dbVol.Name, volumeDBType)
+	if err != nil && !errors.Is(err, ErrVolumeNotAttachedToRunningInstance) {
 		return err
 	}
 
@@ -9684,6 +9692,42 @@ func (b *backend) GetInstanceNBD(inst instance.Instance, writable bool) (net.Con
 		disconnect()
 		unlock()
 	}
+
+	return conn, cleanup, nil
+}
+
+// GetInstanceAllDisksNBD returns a single NBD connection exporting all of the instance's disks.
+func (b *backend) GetInstanceAllDisksNBD(inst instance.Instance, reuse bool) (net.Conn, func(), error) {
+	if !inst.IsRunning() {
+		return nil, nil, errors.New("Exporting all disks over NBD is only available on running instances")
+	}
+
+	// Additional connections don't hold the NBD lock, the initial connection does.
+	if reuse {
+		return inst.ConnectNBDAllDisks(true)
+	}
+
+	unlock, err := nbdOperationLock(inst.Project().Name, inst.Name())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	reverter.Add(func() { unlock() })
+
+	conn, disconnect, err := inst.ConnectNBDAllDisks(false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cleanup := func() {
+		disconnect()
+		unlock()
+	}
+
+	reverter.Success()
 
 	return conn, cleanup, nil
 }

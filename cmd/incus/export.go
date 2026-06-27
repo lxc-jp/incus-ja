@@ -17,6 +17,7 @@ import (
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/archive"
 	cli "github.com/lxc/incus/v7/shared/cmd"
+	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/util"
 )
 
@@ -37,13 +38,15 @@ func (c *cmdExport) command() *cobra.Command {
 	cmd.Use = cli.U("export", cmdExportUsage...)
 	cmd.Short = i18n.G("Export instance backups")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Export instances as backup tarballs.`))
+		`Export instances as backup tarballs.`,
+	))
 	cmd.Example = cli.FormatSection("", i18n.G(
 		`incus export u1 backup0.tar.gz
 	Download a backup tarball of the u1 instance.
 
 incus export u1 -
-	Download a backup tarball with it written to the standard output.`))
+	Download a backup tarball with it written to the standard output.`,
+	))
 
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagInstanceOnly, "instance-only", i18n.G("Whether or not to only backup the instance (without snapshots)"))
@@ -159,7 +162,7 @@ func (c *cmdExport) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		defer func() { _ = target.Close() }()
+		defer logger.WarnOnError(target.Close, "Failed to close target file")
 	}
 
 	// Prepare the download request.

@@ -206,7 +206,7 @@ func (c *cmdNetworkAddressSetShow) run(cmd *cobra.Command, args []string) error 
 
 	sort.Strings(addrSet.UsedBy)
 
-	data, err := yaml.Dump(&addrSet, yaml.V2)
+	data, err := yaml.Dump(&addrSet, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}
@@ -393,7 +393,7 @@ type cmdNetworkAddressSetUnset struct {
 	flagIsProperty bool
 }
 
-var cmdNetworkAddressSetUnsetUsage = u.Usage{u.AddressSet.Remote(), u.Key}
+var cmdNetworkAddressSetUnsetUsage = u.Usage{u.AddressSet.Remote(), u.Key.List(1)}
 
 func (c *cmdNetworkAddressSetUnset) command() *cobra.Command {
 	cmd := &cobra.Command{}
@@ -402,7 +402,7 @@ func (c *cmdNetworkAddressSetUnset) command() *cobra.Command {
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G("Unset network address set configuration keys"))
 	cmd.RunE = c.run
 
-	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the key as a network address set property"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagIsProperty, "property|p", i18n.G("Unset the keys as network address set properties"))
 
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -469,7 +469,8 @@ func (c *cmdNetworkAddressSetEdit) helpTemplate() string {
 ###  - 2001:db8::1
 ### external_ids:
 ###  user.foo: bar
-`)
+`,
+	)
 }
 
 func (c *cmdNetworkAddressSetEdit) run(cmd *cobra.Command, args []string) error {
@@ -503,7 +504,7 @@ func (c *cmdNetworkAddressSetEdit) run(cmd *cobra.Command, args []string) error 
 		return err
 	}
 
-	data, err := yaml.Dump(&addrSet, yaml.V2)
+	data, err := yaml.Dump(&addrSet, yaml.WithV2Defaults())
 	if err != nil {
 		return err
 	}

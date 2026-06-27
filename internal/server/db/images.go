@@ -408,7 +408,8 @@ func (c *ClusterTx) GetImageByFingerprintPrefix(ctx context.Context, fingerprint
 	err = c.imageFill(
 		ctx, object.ID, &image,
 		&object.CreationDate.Time, &object.ExpiryDate.Time, &object.LastUseDate.Time,
-		&object.UploadDate, object.Architecture, object.Type)
+		&object.UploadDate, object.Architecture, object.Type,
+	)
 	if err != nil {
 		return -1, nil, fmt.Errorf("Fill image details: %w", err)
 	}
@@ -449,7 +450,8 @@ func (c *ClusterTx) GetImageFromAnyProject(ctx context.Context, fingerprint stri
 	err = c.imageFill(
 		ctx, object.ID, &image,
 		&object.CreationDate.Time, &object.ExpiryDate.Time, &object.LastUseDate.Time,
-		&object.UploadDate, object.Architecture, object.Type)
+		&object.UploadDate, object.Architecture, object.Type,
+	)
 	if err != nil {
 		return -1, nil, fmt.Errorf("Get image %q: Fill image details: %w", fingerprint, err)
 	}
@@ -900,6 +902,11 @@ func (c *ClusterTx) CreateImage(ctx context.Context, project string, fp string, 
 	stmt := `INSERT INTO images (project_id, fingerprint, filename, size, public, auto_update, architecture, creation_date, expiry_date, upload_date, type) VALUES ((SELECT id FROM projects WHERE name = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	result, err := c.tx.ExecContext(ctx, stmt, imageProject, fp, fname, sz, publicInt, autoUpdateInt, arch, createdAt, expiresAt, time.Now().UTC(), imageType)
 	if err != nil {
+		// Another cluster member may have created the same record concurrently.
+		if strings.HasPrefix(err.Error(), "UNIQUE constraint failed:") {
+			return api.StatusErrorf(http.StatusConflict, "Image record already exists")
+		}
+
 		return fmt.Errorf("Failed saving main image record: %w", err)
 	}
 

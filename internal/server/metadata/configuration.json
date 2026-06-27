@@ -481,11 +481,29 @@
 						}
 					},
 					{
+						"node_guid": {
+							"defaultdesc": "kernel assigned",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "The node GUID to assign to the virtual function (8 bytes of hex separated by colons)",
+							"type": "string"
+						}
+					},
+					{
 						"parent": {
 							"defaultdesc": "kernel assigned",
 							"longdesc": "",
 							"required": "no",
 							"shortdesc": "The name of the interface inside the instance",
+							"type": "string"
+						}
+					},
+					{
+						"port_guid": {
+							"defaultdesc": "kernel assigned",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "The port GUID to assign to the virtual function (8 bytes of hex separated by colons)",
 							"type": "string"
 						}
 					}
@@ -550,7 +568,15 @@
 						"ipv4.address": {
 							"longdesc": "",
 							"managed": "no",
-							"shortdesc": "An IPv4 address to assign to the instance through DHCP (can be `none` to restrict all IPv4 traffic when `security.ipv4_filtering` is set)",
+							"shortdesc": "An IPv4 address to assign to the instance through DHCP (can be `none` to restrict all IPv4 traffic when `security.ipv4_filtering` is set, or a CIDR value to statically configure the address inside an OCI container)",
+							"type": "string"
+						}
+					},
+					{
+						"ipv4.gateway": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "IPv4 default gateway to statically configure inside an OCI container",
 							"type": "string"
 						}
 					},
@@ -574,7 +600,15 @@
 						"ipv6.address": {
 							"longdesc": "",
 							"managed": "no",
-							"shortdesc": "An IPv6 address to assign to the instance through DHCP (can be `none` to restrict all IPv6 traffic when `security.ipv6_filtering` is set)",
+							"shortdesc": "An IPv6 address to assign to the instance through DHCP (can be `none` to restrict all IPv6 traffic when `security.ipv6_filtering` is set, or a CIDR value to statically configure the address inside an OCI container)",
+							"type": "string"
+						}
+					},
+					{
+						"ipv6.gateway": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "IPv6 default gateway to statically configure inside an OCI container",
 							"type": "string"
 						}
 					},
@@ -1053,7 +1087,7 @@
 						"ipv4.address": {
 							"longdesc": "",
 							"managed": "no",
-							"shortdesc": "An IPv4 address to assign to the instance through DHCP, `none` can be used to disable IP allocation",
+							"shortdesc": "An IPv4 address to assign to the instance through DHCP, `none` can be used to disable IP allocation (or a CIDR value to statically configure the address inside an OCI container)",
 							"type": "string"
 						}
 					},
@@ -1062,6 +1096,14 @@
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "Select a specific external address (typically from a network forward)",
+							"type": "string"
+						}
+					},
+					{
+						"ipv4.gateway": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "IPv4 default gateway to statically configure inside an OCI container",
 							"type": "string"
 						}
 					},
@@ -1085,7 +1127,7 @@
 						"ipv6.address": {
 							"longdesc": "",
 							"managed": "no",
-							"shortdesc": "An IPv6 address to assign to the instance through DHCP, `none` can be used to disable IP allocation",
+							"shortdesc": "An IPv6 address to assign to the instance through DHCP, `none` can be used to disable IP allocation (or a CIDR value to statically configure the address inside an OCI container)",
 							"type": "string"
 						}
 					},
@@ -1094,6 +1136,14 @@
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "Select a specific external address (typically from a network forward)",
+							"type": "string"
+						}
+					},
+					{
+						"ipv6.gateway": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "IPv6 default gateway to statically configure inside an OCI container",
 							"type": "string"
 						}
 					},
@@ -1872,7 +1922,7 @@
 							"default": "`false`",
 							"longdesc": "",
 							"required": "no",
-							"shortdesc": "Whether to optimize proxying via NAT (requires that the instance NIC has a static IP address)",
+							"shortdesc": "Whether to optimize proxying via NAT",
 							"type": "bool"
 						}
 					},
@@ -2490,7 +2540,34 @@
 							"condition": "OCI container",
 							"liveupdate": "no",
 							"longdesc": "Override the working directory of an OCI container.",
-							"shortdesc": "OCI container working directory",
+							"shortdesc": "Working directory",
+							"type": "string"
+						}
+					},
+					{
+						"oci.dns.domain": {
+							"condition": "OCI container",
+							"liveupdate": "no",
+							"longdesc": "Domain name for the initial `resolv.conf`.",
+							"shortdesc": "DNS domain",
+							"type": "string"
+						}
+					},
+					{
+						"oci.dns.nameservers": {
+							"condition": "OCI container",
+							"liveupdate": "no",
+							"longdesc": "Comma-separated list of name server addresses for the initial `resolv.conf`.",
+							"shortdesc": "DNS name servers",
+							"type": "string"
+						}
+					},
+					{
+						"oci.dns.search": {
+							"condition": "OCI container",
+							"liveupdate": "no",
+							"longdesc": "Comma-separated list of search domains for the initial `resolv.conf`.",
+							"shortdesc": "DNS search domains",
 							"type": "string"
 						}
 					},
@@ -2499,7 +2576,7 @@
 							"condition": "OCI container",
 							"liveupdate": "no",
 							"longdesc": "Override the entry point of an OCI container.",
-							"shortdesc": "OCI container entry point",
+							"shortdesc": "Entry point",
 							"type": "string"
 						}
 					},
@@ -2508,7 +2585,7 @@
 							"condition": "OCI container",
 							"liveupdate": "no",
 							"longdesc": "Override the GID of the process run in an OCI container.",
-							"shortdesc": "OCI container GID",
+							"shortdesc": "Process GID",
 							"type": "string"
 						}
 					},
@@ -2517,7 +2594,7 @@
 							"condition": "OCI container",
 							"liveupdate": "no",
 							"longdesc": "Override the UID of the process run in an OCI container.",
-							"shortdesc": "OCI container UID",
+							"shortdesc": "Process UID",
 							"type": "string"
 						}
 					}
@@ -2952,6 +3029,46 @@
 							"longdesc": "When disabling this option, consider enabling {config:option}`instance-security:security.csm`.",
 							"shortdesc": "Whether UEFI secure boot is enforced with the default Microsoft keys",
 							"type": "bool"
+						}
+					},
+					{
+						"security.selinux.domain": {
+							"condition": "container or virtual machine",
+							"defaultdesc": "auto-detected (`container_init_t` for containers, `qemu_t` for VMs)",
+							"liveupdate": "no",
+							"longdesc": "Override the SELinux process domain for the instance.",
+							"shortdesc": "SELinux process domain override",
+							"type": "string"
+						}
+					},
+					{
+						"security.selinux.label_rootfs": {
+							"condition": "container",
+							"defaultdesc": "`auto`",
+							"liveupdate": "no",
+							"longdesc": "Control SELinux rootfs labeling behavior.\nThe default (`auto`) will label rootfs files if it is required. Labeling will be skipped\nonly if `security.selinux.level` is explicitly set for the instance, it is not started for\nthe first time and the persisted SELinux context is still valid.\nSetting to `always` will label rootfs files on every start and `never` will never touch any\nfile labels in the rootfs.",
+							"shortdesc": "SELinux rootfs labeling mode (auto, always, never)",
+							"type": "string"
+						}
+					},
+					{
+						"security.selinux.level": {
+							"condition": "container or virtual machine",
+							"defaultdesc": "auto-generated",
+							"liveupdate": "no",
+							"longdesc": "Override the SELinux MCS level for the instance.\nThis key must only be set on individual instances, never on profiles,\nsince using the same MCS level across instances breaks isolation.\nValues set via profiles are ignored.",
+							"shortdesc": "SELinux MCS level override",
+							"type": "string"
+						}
+					},
+					{
+						"security.selinux.type": {
+							"condition": "container or virtual machine",
+							"defaultdesc": "auto-detected (`container_file_t` for containers, `qemu_image_t` for VMs)",
+							"liveupdate": "no",
+							"longdesc": "Override the SELinux file type used for labeling instance storage.",
+							"shortdesc": "SELinux file type override",
+							"type": "string"
 						}
 					},
 					{
@@ -3673,12 +3790,31 @@
 			"common": {
 				"keys": [
 					{
+						"bgp.ipv4.instances": {
+							"condition": "BGP server",
+							"default": "`false`",
+							"longdesc": "",
+							"shortdesc": "Whether to advertise a /32 route for the IPv4 address of each running instance",
+							"type": "bool"
+						}
+					},
+					{
 						"bgp.ipv4.nexthop": {
 							"condition": "BGP server",
 							"default": "local address",
 							"longdesc": "",
+							"scope": "local",
 							"shortdesc": "Override the next-hop for advertised prefixes",
 							"type": "string"
+						}
+					},
+					{
+						"bgp.ipv6.instances": {
+							"condition": "BGP server",
+							"default": "`false`",
+							"longdesc": "",
+							"shortdesc": "Whether to advertise a /128 route for the IPv6 address of each running instance",
+							"type": "bool"
 						}
 					},
 					{
@@ -3686,6 +3822,7 @@
 							"condition": "BGP server",
 							"default": "local address",
 							"longdesc": "",
+							"scope": "local",
 							"shortdesc": "Override the next-hop for advertised prefixes",
 							"type": "string"
 						}
@@ -3884,7 +4021,7 @@
 							"condition": "IPv4 address",
 							"default": "`before`",
 							"longdesc": "",
-							"shortdesc": "Whether to add the required NAT rules before or after any pre-existing rules",
+							"shortdesc": "Whether to add the required NAT rules before or after any pre-existing rules (no effect with the `nftables` firewall driver)",
 							"type": "string"
 						}
 					},
@@ -3992,7 +4129,7 @@
 							"condition": "IPv6 address",
 							"default": "`before`",
 							"longdesc": "",
-							"shortdesc": "Whether to add the required NAT rules before or after any pre-existing rules",
+							"shortdesc": "Whether to add the required NAT rules before or after any pre-existing rules (no effect with the `nftables` firewall driver)",
 							"type": "string"
 						}
 					},
@@ -4323,6 +4460,7 @@
 						"parent": {
 							"condition": "-",
 							"longdesc": "",
+							"scope": "local",
 							"shortdesc": "Parent interface to create macvlan NICs on",
 							"type": "string"
 						}
@@ -4351,6 +4489,7 @@
 					{
 						"bridge.external_interfaces": {
 							"longdesc": "",
+							"scope": "local",
 							"shortdesc": "Comma-separated list of unconfigured network interfaces to include in the bridge",
 							"type": "string"
 						}
@@ -4751,6 +4890,7 @@
 						"parent": {
 							"condition": "-",
 							"longdesc": "",
+							"scope": "local",
 							"shortdesc": "Existing interface to use for network",
 							"type": "string"
 						}
@@ -4902,6 +5042,7 @@
 						"parent": {
 							"condition": "-",
 							"longdesc": "",
+							"scope": "local",
 							"shortdesc": "Parent interface to create `sriov` NICs on",
 							"type": "string"
 						}
@@ -5166,7 +5307,7 @@
 					{
 						"restricted.containers.privilege": {
 							"defaultdesc": "`unprivileged`",
-							"longdesc": "Possible values are `unprivileged`, `isolated`, and `allow`.\n\n- When set to `unprivileged`, this option prevents setting {config:option}`instance-security:security.privileged` to `true`.\n- When set to `isolated`, this option prevents setting {config:option}`instance-security:security.privileged` and {config:option}`instance-security:security.idmap.isolated` to `true`.\n- When set to `allow`, there is no restriction.",
+							"longdesc": "Possible values are `unprivileged`, `isolated`, and `allow`.\n\n- When set to `unprivileged`, this option prevents setting {config:option}`instance-security:security.privileged` to `true`.\n- When set to `isolated`, this option prevents setting {config:option}`instance-security:security.privileged` and {config:option}`instance-security:security.idmap.isolated` to `false`.\n- When set to `allow`, there is no restriction.",
 							"shortdesc": "Which settings for privileged containers to prevent",
 							"type": "string"
 						}
@@ -5669,6 +5810,14 @@
 							"longdesc": "",
 							"scope": "global",
 							"shortdesc": "`Access-Control-Allow-Origin` HTTP header value",
+							"type": "string"
+						}
+					},
+					{
+						"core.https_allowed_websocket_origin": {
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "Allowed `Origin` values for WebSocket connections",
 							"type": "string"
 						}
 					},
@@ -6965,6 +7114,15 @@
 		"storage_volume_btrfs": {
 			"common": {
 				"keys": [
+					{
+						"btrfs.compression": {
+							"condition": "appropriate driver",
+							"default": "same as `volume.btrfs.compression`",
+							"longdesc": "",
+							"shortdesc": "Compression algorithm to set on the volume, mapping to the Btrfs `compression` property (for example `zstd`, `lzo`, `zlib` or `none`)",
+							"type": "string"
+						}
+					},
 					{
 						"initial.gid": {
 							"condition": "custom volume with content type `filesystem`",

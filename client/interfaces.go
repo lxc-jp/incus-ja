@@ -136,6 +136,8 @@ type InstanceServer interface {
 	GetInstanceFileSFTPConn(instanceName string) (net.Conn, error)
 	GetInstanceFileSFTP(instanceName string) (*sftp.Client, error)
 
+	GetInstanceNBDConn(instanceName string, args InstanceNBDArgs) (net.Conn, error)
+
 	GetInstanceSnapshotNames(instanceName string) (names []string, err error)
 	GetInstanceSnapshots(instanceName string) (snapshots []api.InstanceSnapshot, err error)
 	GetInstanceSnapshot(instanceName string, name string) (snapshot *api.InstanceSnapshot, ETag string, err error)
@@ -719,6 +721,13 @@ type InstanceFileArgs struct {
 
 	// File write mode (overwrite or append)
 	WriteMode string
+}
+
+// The InstanceNBDArgs struct is used when connecting to an instance's disks over NBD.
+// API extension: instance_nbd.
+type InstanceNBDArgs struct {
+	// Whether to connect to an already running NBD session
+	Reuse bool
 }
 
 // The InstanceFileResponse struct is used as part of the response for a instance file download.
