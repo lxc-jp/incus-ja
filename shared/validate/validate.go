@@ -367,7 +367,7 @@ func IsNetworkAddressV4(value string) error {
 }
 
 // IsNetworkAddressCIDRV4 validates an IPv4 address string in CIDR format.
-func IsNetworkAddressCIDRV4(value string) error {
+func IsNetworkAddressCIDRV4(value string, allowSingle bool) error {
 	ip, subnet, err := net.ParseCIDR(value)
 	if err != nil {
 		return err
@@ -375,6 +375,12 @@ func IsNetworkAddressCIDRV4(value string) error {
 
 	if ip.To4() == nil {
 		return fmt.Errorf("Not an IPv4 address %q", value)
+	}
+
+	subnetSize, _ := subnet.Mask.Size()
+	if allowSingle && subnetSize == 32 {
+		// Single addresses are allowed through.
+		return nil
 	}
 
 	if ip.String() == subnet.IP.String() {
@@ -430,7 +436,7 @@ func IsNetworkAddressV6(value string) error {
 }
 
 // IsNetworkAddressCIDRV6 validates an IPv6 address string in CIDR format.
-func IsNetworkAddressCIDRV6(value string) error {
+func IsNetworkAddressCIDRV6(value string, allowSingle bool) error {
 	ip, subnet, err := net.ParseCIDR(value)
 	if err != nil {
 		return err
@@ -438,6 +444,12 @@ func IsNetworkAddressCIDRV6(value string) error {
 
 	if ip.To4() != nil {
 		return fmt.Errorf("Not an IPv6 address %q", value)
+	}
+
+	subnetSize, _ := subnet.Mask.Size()
+	if allowSingle && subnetSize == 128 {
+		// Single addresses are allowed through.
+		return nil
 	}
 
 	if ip.String() == subnet.IP.String() {
@@ -836,29 +848,6 @@ func IsHostname(name string) error {
 
 	if !match {
 		return errors.New("Name can only contain alphanumeric and hyphen characters")
-	}
-
-	return nil
-}
-
-// IsDeviceName checks name is 1-63 characters long, doesn't start with a full stop and contains only alphanumeric,
-// forward slash, hyphen, colon, underscore and full stop characters.
-func IsDeviceName(name string) error {
-	if len(name) < 1 || len(name) > 63 {
-		return errors.New("Name must be 1-63 characters long")
-	}
-
-	if string(name[0]) == "." {
-		return errors.New(`Name must not start with "." character`)
-	}
-
-	match, err := regexp.MatchString(`^[\/\.\-:_a-zA-Z0-9]+$`, name)
-	if err != nil {
-		return err
-	}
-
-	if !match {
-		return errors.New("Name can only contain alphanumeric, forward slash, hyphen, colon, underscore and full stop characters")
 	}
 
 	return nil

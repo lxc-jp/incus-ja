@@ -185,7 +185,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 		// ---
 		//  type: string
 		//  managed: no
-		//  shortdesc: IPv4 default gateway to statically configure inside an OCI container
+		//  shortdesc: IPv4 default gateway to statically configure inside an OCI container (`none` to prevent a default gateway from being applied)
 		"ipv4.gateway",
 
 		// gendoc:generate(entity=devices, group=nic_bridged, key=ipv6.gateway)
@@ -193,7 +193,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 		// ---
 		//  type: string
 		//  managed: no
-		//  shortdesc: IPv6 default gateway to statically configure inside an OCI container
+		//  shortdesc: IPv6 default gateway to statically configure inside an OCI container (`none` to prevent a default gateway from being applied)
 		"ipv6.gateway",
 
 		// gendoc:generate(entity=devices, group=nic_bridged, key=ipv4.routes)
@@ -506,12 +506,13 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 			}
 		} else {
 			// Check that static IPs are only specified with IP filtering when using an unmanaged
-			// parent bridge.
+			// parent bridge. A CIDR address is configured inside the instance rather than through
+			// DHCP, so it's allowed regardless.
 			if util.IsTrue(d.config["security.ipv4_filtering"]) {
 				if d.config["ipv4.address"] == "" {
 					return errors.New("IPv4 filtering requires a manually specified ipv4.address when using an unmanaged parent bridge")
 				}
-			} else if d.config["ipv4.address"] != "" {
+			} else if d.config["ipv4.address"] != "" && !strings.Contains(d.config["ipv4.address"], "/") {
 				// Static IP cannot be used with unmanaged parent.
 				return errors.New("Cannot use manually specified ipv4.address when using unmanaged parent bridge")
 			}
@@ -520,7 +521,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 				if d.config["ipv6.address"] == "" {
 					return errors.New("IPv6 filtering requires a manually specified ipv6.address when using an unmanaged parent bridge")
 				}
-			} else if d.config["ipv6.address"] != "" {
+			} else if d.config["ipv6.address"] != "" && !strings.Contains(d.config["ipv6.address"], "/") {
 				// Static IP cannot be used with unmanaged parent.
 				return errors.New("Cannot use manually specified ipv6.address when using unmanaged parent bridge")
 			}
@@ -607,7 +608,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 		}
 
 		if strings.Contains(value, "/") {
-			return validate.IsNetworkAddressCIDRV4(value)
+			return validate.IsNetworkAddressCIDRV4(value, true)
 		}
 
 		return validate.IsNetworkAddressV4(value)
@@ -619,7 +620,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 		}
 
 		if strings.Contains(value, "/") {
-			return validate.IsNetworkAddressCIDRV6(value)
+			return validate.IsNetworkAddressCIDRV6(value, true)
 		}
 
 		return validate.IsNetworkAddressV6(value)
@@ -644,8 +645,8 @@ func (d *nicBridged) checkAddressConflict() error {
 	node := d.inst.Location()
 
 	ourNICIPs := make(map[string]net.IP, 2)
-	ourNICIPs["ipv4.address"] = net.ParseIP(d.config["ipv4.address"])
-	ourNICIPs["ipv6.address"] = net.ParseIP(d.config["ipv6.address"])
+	ourNICIPs["ipv4.address"] = net.ParseIP(nicAddressIP(d.config["ipv4.address"]))
+	ourNICIPs["ipv6.address"] = net.ParseIP(nicAddressIP(d.config["ipv6.address"]))
 
 	ourNICMAC, _ := net.ParseMAC(d.configOrVolatile("hwaddr"))
 
@@ -703,7 +704,7 @@ func (d *nicBridged) checkAddressConflict() error {
 			}
 
 			// Parse IPs to avoid being tripped up by presentation differences.
-			devNICIP := net.ParseIP(nicConfig[key])
+			devNICIP := net.ParseIP(nicAddressIP(nicConfig[key]))
 
 			if ourNICIPs[key] != nil && devNICIP != nil && ourNICIPs[key].Equal(devNICIP) {
 				return api.StatusErrorf(http.StatusConflict, "IP address %q already defined on another NIC", devNICIP.String())
@@ -1037,7 +1038,7 @@ func (d *nicBridged) Update(oldDevices deviceConfig.Devices, isRunning bool) err
 		oldRoutes = append(oldRoutes, util.SplitNTrimSpace(oldConfig["ipv6.routes"], ",", -1, true)...)
 		oldRoutes = append(oldRoutes, util.SplitNTrimSpace(oldConfig["ipv4.routes.external"], ",", -1, true)...)
 		oldRoutes = append(oldRoutes, util.SplitNTrimSpace(oldConfig["ipv6.routes.external"], ",", -1, true)...)
-		networkNICRouteDelete(oldConfig["parent"], oldConfig["ipv4.address"], oldConfig["ipv6.address"], oldRoutes...)
+		networkNICRouteDelete(oldConfig["parent"], nicAddressIP(oldConfig["ipv4.address"]), nicAddressIP(oldConfig["ipv6.address"]), oldRoutes...)
 
 		// Apply host-side routes to bridge interface.
 		routes := []string{}
@@ -1045,7 +1046,7 @@ func (d *nicBridged) Update(oldDevices deviceConfig.Devices, isRunning bool) err
 		routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes"], ",", -1, true)...)
 		routes = append(routes, util.SplitNTrimSpace(d.config["ipv4.routes.external"], ",", -1, true)...)
 		routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes.external"], ",", -1, true)...)
-		err = networkNICRouteAdd(d.config["parent"], d.config["ipv4.address"], d.config["ipv6.address"], routes...)
+		err = networkNICRouteAdd(d.config["parent"], nicAddressIP(d.config["ipv4.address"]), nicAddressIP(d.config["ipv6.address"]), routes...)
 		if err != nil {
 			return err
 		}
@@ -1172,7 +1173,7 @@ func (d *nicBridged) postStop() error {
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes"], ",", -1, true)...)
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv4.routes.external"], ",", -1, true)...)
 	routes = append(routes, util.SplitNTrimSpace(d.config["ipv6.routes.external"], ",", -1, true)...)
-	networkNICRouteDelete(bridgeName, d.config["ipv4.address"], d.config["ipv6.address"], routes...)
+	networkNICRouteDelete(bridgeName, nicAddressIP(d.config["ipv4.address"]), nicAddressIP(d.config["ipv6.address"]), routes...)
 
 	if util.IsTrue(d.config["security.mac_filtering"]) || util.IsTrue(d.config["security.ipv4_filtering"]) || util.IsTrue(d.config["security.ipv6_filtering"]) || d.config["security.acls"] != "" {
 		d.removeFilters(d.config)
@@ -1419,8 +1420,8 @@ func (d *nicBridged) setFilters() (err error) {
 	}
 
 	// Parse static IPs, relies on invalid IPs being set to nil.
-	IPv4 := net.ParseIP(d.config["ipv4.address"])
-	IPv6 := net.ParseIP(d.config["ipv6.address"])
+	IPv4 := net.ParseIP(nicAddressIP(d.config["ipv4.address"]))
+	IPv6 := net.ParseIP(nicAddressIP(d.config["ipv6.address"]))
 
 	// If parent bridge is unmanaged check that a manually specified IP is available if IP filtering enabled.
 	if d.network == nil {
@@ -1570,7 +1571,7 @@ func allowedIPNets(config deviceConfig.Device) (IPv4Nets []*net.IPNet, IPv6Nets 
 			return nil, nil
 		}
 
-		ipAddr := config[fmt.Sprintf("ipv%d.address", ipVersion)]
+		ipAddr := nicAddressIP(config[fmt.Sprintf("ipv%d.address", ipVersion)])
 		if ipAddr == "none" {
 			// Return an empty slice to block all traffic.
 			return []*net.IPNet{}, nil

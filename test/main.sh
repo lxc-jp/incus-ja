@@ -330,6 +330,7 @@ run_standalone_network() {
     run_test test_remote_admin "remote administration"
     run_test test_remote_url "remote url handling"
     run_test test_remote_usage "remote usage"
+    run_test test_list_all_remotes "list all remotes"
     run_test test_syslog_socket "Syslog socket"
 }
 
@@ -362,6 +363,7 @@ run_standalone_container() {
     run_test test_filemanip "file manipulations"
     run_test test_idmap "id mapping"
     run_test test_lxc_to_incus "LXC to Incus"
+    run_test test_port_forward "port forward"
     run_test test_property "container property"
 }
 

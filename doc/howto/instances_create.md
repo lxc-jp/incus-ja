@@ -105,7 +105,7 @@ Incus ではクラウドのシンプルなインスタンスタイプが使え�
 
     incus launch images:debian/12 my-instance --type t2.micro
 
-使えるクラウドとインスタンスタイプのリストは [`https://github.com/dustinkirkland/instance-type`](https://github.com/dustinkirkland/instance-type) で確認できます。
+使えるクラウドとインスタンスタイプのリストは[`https://images.linuxcontainers.org/meta/instance-types/`](https://images.linuxcontainers.org/meta/instance-types/)で確認できます。
 
 ### ISOからブートする仮想マシンを起動する
 
@@ -269,6 +269,7 @@ FreeBSDシステムでは、**rootで**以下のコマンドを実行し`9p`の�
 - `guestapi`はエージェントがゲスト内で`/dev/incus` APIを公開するかどうかを制御します
 - `exec`はエージェントを経由してコマンドを実行できるかどうかを制御します
 - `files`はファイル転送APIを利用できるかどうかを制御します
+- `port-forward`はTCP接続をゲスト内のポートにフォワードするかどうかを制御します
 - `mounts`は共有ディスクデバイスにファイルシステムのマウントをセットアップするかどうかを制御します
 - `metrics`は詳細なOpenMetricsデータへのアクセスを制御します
 - `state`は基本的なOSの状態を示す情報（OSバージョン、ネットワークインターフェースの詳細、…）へのアクセスを制御します

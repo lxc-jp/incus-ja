@@ -140,7 +140,7 @@ func (d *common) Description() string {
 	return d.description
 }
 
-// IsEphemeral returns whether the instanc is ephemeral or not.
+// IsEphemeral returns whether the instance is ephemeral or not.
 func (d *common) IsEphemeral() bool {
 	return d.ephemeral
 }
@@ -1353,6 +1353,17 @@ func (d *common) devicesUpdate(inst instance.Instance, removeDevices deviceConfi
 	dm, ok := inst.(deviceManager)
 	if !ok {
 		return errors.New("Instance is not compatible with deviceManager interface")
+	}
+
+	// The root disk device can't be detached from a running instance, so reject any change
+	// that would require it to be removed and re-created.
+	if instanceRunning {
+		for name, devConfig := range removeDevices {
+			_, recreated := addDevices[name]
+			if recreated && internalInstance.IsRootDiskDevice(devConfig) {
+				return fmt.Errorf("Cannot apply changes to root disk device %q while the instance is running", name)
+			}
+		}
 	}
 
 	// Remove devices in reverse order to how they were added.

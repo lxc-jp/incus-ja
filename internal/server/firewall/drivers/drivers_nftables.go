@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/lxc/incus/v7/internal/server/project"
-	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/subprocess"
 	"github.com/lxc/incus/v7/shared/util"
 	"github.com/lxc/incus/v7/shared/validate"
@@ -98,8 +97,6 @@ func (d Nftables) nftParseRuleset() ([]nftGenericItem, error) {
 		return nil, err
 	}
 
-	defer logger.WarnOnError(cmd.Wait, "Failed to wait for command")
-
 	// This only extracts certain generic parts of the ruleset, see man libnftables-json for more info.
 	v := &struct {
 		Nftables []map[string]nftGenericItem `json:"nftables"`
@@ -107,6 +104,7 @@ func (d Nftables) nftParseRuleset() ([]nftGenericItem, error) {
 
 	err = json.NewDecoder(stdout).Decode(v)
 	if err != nil {
+		_ = cmd.Wait()
 		return nil, err
 	}
 
@@ -172,10 +170,10 @@ func (d Nftables) networkSetupForwardingPolicy(networkName string, ip4Allow *boo
 	return nil
 }
 
-// networkSetupOutboundNAT configures outbound NAT.
+// NetworkSetupOutboundNAT configures outbound NAT.
 // If srcIP is non-nil then SNAT is used with the specified address, otherwise MASQUERADE mode is used.
 // Append mode is always on and so the append argument is ignored.
-func (d Nftables) networkSetupOutboundNAT(networkName string, SNATV4 *SNATOpts, SNATV6 *SNATOpts) error {
+func (d Nftables) NetworkSetupOutboundNAT(networkName string, SNATV4 *SNATOpts, SNATV6 *SNATOpts) error {
 	rules := make(map[string]*SNATOpts)
 
 	tplFields := map[string]any{
@@ -264,8 +262,20 @@ func (d Nftables) NetworkSetup(networkName string, opts Opts) error {
 		}
 	}
 
+	// Add the network to the managed bridges set, traffic between those isn't NAT-ed.
+	tplFields := map[string]any{
+		"namespace":   nftablesNamespace,
+		"family":      "inet",
+		"networkName": networkName,
+	}
+
+	err := d.applyNftConfig(nftablesNetBridgesSet, tplFields)
+	if err != nil {
+		return fmt.Errorf("Failed adding network %q to the managed bridges set: %w", networkName, err)
+	}
+
 	if opts.SNATV4 != nil || opts.SNATV6 != nil {
-		err := d.networkSetupOutboundNAT(networkName, opts.SNATV4, opts.SNATV6)
+		err := d.NetworkSetupOutboundNAT(networkName, opts.SNATV4, opts.SNATV6)
 		if err != nil {
 			return err
 		}
@@ -321,6 +331,10 @@ func (d Nftables) NetworkClear(networkName string, _ bool, _ []uint) error {
 	if err != nil {
 		return fmt.Errorf("Failed clearing nftables rules for network %q: %w", networkName, err)
 	}
+
+	// Remove the network from the managed bridges set.
+	// This will fail if the set doesn't exist or the network was never added to it.
+	_, _ = subprocess.RunCommand("nft", "delete", "element", "inet", nftablesNamespace, "bridges", fmt.Sprintf("{ %q }", networkName))
 
 	// Attempt to delete our address sets.
 	// This will fail so long as there are still rules referencing them (other networks).
@@ -740,15 +754,21 @@ func (d Nftables) aclRuleToNftRules(hostNameQuoted string, rule ACLRule) ([]stri
 // applyNftConfig loads the specified config template and then applies it to the common template before sending to
 // the nft command to be atomically applied to the system.
 func (d Nftables) applyNftConfig(tpl *template.Template, tplFields map[string]any) error {
+	// Clone the common table template so concurrent callers don't share parse trees.
+	tables, err := nftablesCommonTable.Clone()
+	if err != nil {
+		return fmt.Errorf("Failed cloning common table template: %w", err)
+	}
+
 	// Load the specified template into the common template's parse tree under the nftableContentTemplate
 	// name so that the nftableContentTemplate template can use it with the generic name.
-	_, err := nftablesCommonTable.AddParseTree(nftablesContentTemplate, tpl.Tree)
+	_, err = tables.AddParseTree(nftablesContentTemplate, tpl.Tree)
 	if err != nil {
 		return fmt.Errorf("Failed loading %q template: %w", tpl.Name(), err)
 	}
 
 	config := &strings.Builder{}
-	err = nftablesCommonTable.Execute(config, tplFields)
+	err = tables.Execute(config, tplFields)
 	if err != nil {
 		return fmt.Errorf("Failed running %q template: %w", tpl.Name(), err)
 	}

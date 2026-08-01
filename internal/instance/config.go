@@ -18,6 +18,24 @@ func IsUserConfig(key string) bool {
 	return strings.HasPrefix(key, "user.")
 }
 
+// isNvidiaConfigValue rejects line breaks that would allow injecting arbitrary directives into the generated LXC configuration.
+func isNvidiaConfigValue(value string) error {
+	if strings.ContainsAny(value, "\r\n") {
+		return errors.New("NVIDIA configuration values cannot contain line breaks")
+	}
+
+	return nil
+}
+
+// isResolvConfValue rejects line breaks that would allow injecting arbitrary lines into the generated resolv.conf.
+func isResolvConfValue(value string) error {
+	if strings.ContainsAny(value, "\r\n") {
+		return errors.New("Value cannot contain line breaks")
+	}
+
+	return nil
+}
+
 // ConfigVolatilePrefix indicates the prefix used for volatile config keys.
 const ConfigVolatilePrefix = "volatile."
 
@@ -309,6 +327,16 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//  liveupdate: no
 	//  shortdesc: Whether `/dev/incus` is present in the instance
 	"security.guestapi": validate.Optional(validate.IsBool),
+
+	// gendoc:generate(entity=instance, group=security, key=security.nesting)
+	// For containers, this controls whether Incus (nested) can be run inside of the instance.
+	// For virtual machines, setting this to `false` disables nested virtualization (turns off the `svm` and `vmx` CPU flags).
+	// ---
+	//  type: bool
+	//  defaultdesc: `false` (containers), `true` (VMs)
+	//  liveupdate: yes (containers only)
+	//  shortdesc: Whether to allow nesting inside of the instance
+	"security.nesting": validate.Optional(validate.IsBool),
 
 	// gendoc:generate(entity=instance, group=security, key=security.protection.delete)
 	//
@@ -655,6 +683,8 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	// When set to `true` or `false`, it controls whether the container is likely to get some of
 	// its memory swapped by the kernel. Alternatively, it can be set to a bytes value which will
 	// then allow the container to make use of additional memory through swap.
+	//
+	// Support for this is limited on cgroup2 systems due to lack of swap priority control.
 	// ---
 	//  type: string
 	//  defaultdesc: `true`
@@ -666,6 +696,8 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	// gendoc:generate(entity=instance, group=resource-limits, key=limits.memory.swap.priority)
 	// Specify an integer between 0 and 10.
 	// The higher the value, the less likely the instance is to be swapped to disk.
+	//
+	// This currently doesn't have any effect on cgroup2 systems.
 	// ---
 	//  type: integer
 	//  defaultdesc: `10` (maximum)
@@ -741,7 +773,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  liveupdate: no
 	//  condition: container
 	//  shortdesc: What driver capabilities the instance needs
-	"nvidia.driver.capabilities": validate.IsAny,
+	"nvidia.driver.capabilities": isNvidiaConfigValue,
 
 	// gendoc:generate(entity=instance, group=nvidia, key=nvidia.require.cuda)
 	// The specified version expression is used to set `libnvidia-container NVIDIA_REQUIRE_CUDA`.
@@ -750,7 +782,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  liveupdate: no
 	//  condition: container
 	//  shortdesc: Required CUDA version
-	"nvidia.require.cuda": validate.IsAny,
+	"nvidia.require.cuda": isNvidiaConfigValue,
 
 	// gendoc:generate(entity=instance, group=nvidia, key=nvidia.require.driver)
 	// The specified version expression is used to set `libnvidia-container NVIDIA_REQUIRE_DRIVER`.
@@ -759,7 +791,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  liveupdate: no
 	//  condition: container
 	//  shortdesc: Required driver version
-	"nvidia.require.driver": validate.IsAny,
+	"nvidia.require.driver": isNvidiaConfigValue,
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.entrypoint)
 	// Override the entry point of an OCI container.
@@ -813,7 +845,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  liveupdate: no
 	//  condition: OCI container
 	//  shortdesc: DNS domain
-	"oci.dns.domain": validate.IsAny,
+	"oci.dns.domain": validate.Optional(isResolvConfValue),
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.dns.search)
 	// Comma-separated list of search domains for the initial `resolv.conf`.
@@ -822,7 +854,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  liveupdate: no
 	//  condition: OCI container
 	//  shortdesc: DNS search domains
-	"oci.dns.search": validate.IsAny,
+	"oci.dns.search": validate.Optional(validate.IsListOf(isResolvConfValue)),
 
 	// Caller is responsible for full validation of any raw.* value.
 
@@ -934,16 +966,6 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  condition: unprivileged container
 	//  shortdesc: The size of the idmap to use
 	"security.idmap.size": validate.Optional(validate.IsUint32),
-
-	// gendoc:generate(entity=instance, group=security, key=security.nesting)
-	//
-	// ---
-	//  type: bool
-	//  defaultdesc: `false`
-	//  liveupdate: yes
-	//  condition: container
-	//  shortdesc: Whether to support running Incus (nested) inside the instance
-	"security.nesting": validate.Optional(validate.IsBool),
 
 	// gendoc:generate(entity=instance, group=security, key=security.privileged)
 	//

@@ -318,6 +318,19 @@ func AllowVolumeCreation(tx *db.ClusterTx, projectName string, poolName string, 
 		return errors.New("Restricted projects aren't allowed to use pull mode migration")
 	}
 
+	// Restricted projects can't override low-level volume options that are passed to
+	// filesystem tooling running as root; they may only use the pool's configured default.
+	if util.IsTrue(info.Project.Config["restricted"]) {
+		_, pool, _, err := tx.GetStoragePool(context.Background(), poolName)
+		if err != nil {
+			return err
+		}
+
+		if req.Config["block.create_options"] != "" && req.Config["block.create_options"] != pool.Config["volume.block.create_options"] {
+			return errors.New(`Storage volume option "block.create_options" cannot be set in a restricted project`)
+		}
+	}
+
 	// Add the volume being created.
 	info.Volumes = append(info.Volumes, db.StorageVolumeArgs{
 		Name:     req.Name,
@@ -584,6 +597,8 @@ func checkRestrictions(project api.Project, instances []api.Instance, profiles [
 
 	allowContainerLowLevel := false
 	allowVMLowLevel := false
+	blockVMNesting := false
+	requireIsolated := false
 	var allowedIDMapHostUIDs, allowedIDMapHostGIDs []idmap.Entry
 
 	for i := range allRestrictions {
@@ -632,6 +647,8 @@ func checkRestrictions(project api.Project, instances []api.Instance, profiles [
 				return nil
 			}
 
+			requireIsolated = restrictionValue == "isolated"
+
 			containerConfigChecks["security.idmap.isolated"] = func(instanceValue string) error {
 				if restrictionValue == "isolated" && util.IsFalseOrEmpty(instanceValue) {
 					return errors.New("Non-isolated containers are forbidden")
@@ -643,6 +660,11 @@ func checkRestrictions(project api.Project, instances []api.Instance, profiles [
 		case "restricted.virtual-machines.lowlevel":
 			if restrictionValue == "allow" {
 				allowVMLowLevel = true
+			}
+
+		case "restricted.virtual-machines.nesting":
+			if restrictionValue == "block" {
+				blockVMNesting = true
 			}
 
 		case "restricted.devices.unix-char":
@@ -816,6 +838,16 @@ func checkRestrictions(project api.Project, instances []api.Instance, profiles [
 		isContainerOrProfile := instType == instancetype.Container || instType == instancetype.Any
 		isVMOrProfile := instType == instancetype.VM || instType == instancetype.Any
 
+		// VM nesting is on by default, so when blocked, require it to be explicitly disabled.
+		if blockVMNesting && instType == instancetype.VM && !util.IsFalse(config["security.nesting"]) {
+			return fmt.Errorf(`Virtual machine nesting is forbidden on %s %q of project %q ("security.nesting" must be set to "false")`, entityTypeLabel, entityName, project.Name)
+		}
+
+		// Non-isolation is the default, so when isolation is required, the container must explicitly enable it.
+		if requireIsolated && instType == instancetype.Container && util.IsFalseOrEmpty(config["security.idmap.isolated"]) {
+			return fmt.Errorf(`Non-isolated containers are forbidden on %s %q of project %q ("security.idmap.isolated" must be set to "true")`, entityTypeLabel, entityName, project.Name)
+		}
+
 		for key, value := range config {
 			if ((isContainerOrProfile && !allowContainerLowLevel) || (isVMOrProfile && !allowVMLowLevel)) && key == "raw.idmap" {
 				// If the low-level raw.idmap is used check whether the raw.idmap host IDs
@@ -954,6 +986,7 @@ var allRestrictions = map[string]string{
 	"restricted.containers.lowlevel":       "block",
 	"restricted.containers.privilege":      "unprivileged",
 	"restricted.virtual-machines.lowlevel": "block",
+	"restricted.virtual-machines.nesting":  "allow",
 	"restricted.devices.unix-char":         "block",
 	"restricted.devices.unix-block":        "block",
 	"restricted.devices.unix-hotplug":      "block",
@@ -1386,12 +1419,12 @@ func fetchProject(tx *db.ClusterTx, projectName string, skipIfNoLimits bool) (*p
 		return nil, fmt.Errorf("Fetch profiles from database: %w", err)
 	}
 
-	dbProfileConfigs, err := cluster.GetAllProfileConfigs(ctx, tx.Tx())
+	dbProfileConfigs, err := cluster.GetReferencedProfileConfigs(ctx, tx.Tx(), dbProfiles)
 	if err != nil {
 		return nil, fmt.Errorf("Fetch profile configs from database: %w", err)
 	}
 
-	dbProfileDevices, err := cluster.GetAllProfileDevices(ctx, tx.Tx())
+	dbProfileDevices, err := cluster.GetReferencedProfileDevices(ctx, tx.Tx(), dbProfiles)
 	if err != nil {
 		return nil, fmt.Errorf("Fetch profile devices from database: %w", err)
 	}
@@ -1411,7 +1444,12 @@ func fetchProject(tx *db.ClusterTx, projectName string, skipIfNoLimits bool) (*p
 		return nil, fmt.Errorf("Fetch project instances from database: %w", err)
 	}
 
-	dbInstanceDevices, err := cluster.GetAllInstanceDevices(ctx, tx.Tx())
+	dbInstanceIDs := make([]int, 0, len(dbInstances))
+	for _, dbInstance := range dbInstances {
+		dbInstanceIDs = append(dbInstanceIDs, dbInstance.ID)
+	}
+
+	dbInstanceDevices, err := cluster.GetDevices(ctx, tx.Tx(), "instances", "instance", cluster.DeviceFilter{ReferenceID: dbInstanceIDs})
 	if err != nil {
 		return nil, fmt.Errorf("Fetch instance devices from database: %w", err)
 	}

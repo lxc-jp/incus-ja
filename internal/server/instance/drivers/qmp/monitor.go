@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lxc/incus/v7/internal/linux"
+	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/util"
 )
@@ -22,7 +23,7 @@ var (
 )
 
 // RingbufSize is the size of the agent serial ringbuffer in bytes.
-var RingbufSize = 16
+var RingbufSize = 1024 * 16
 
 // EventAgentStarted is the event sent once the agent has started.
 var EventAgentStarted = "AGENT-STARTED"
@@ -51,20 +52,8 @@ var EventDiskEjected = "DEVICE_TRAY_MOVED"
 // EventRTCChange is used to get RTC adjustment.
 var EventRTCChange = "RTC_CHANGE"
 
-// EventBlockJobCompleted is emitted when a block job has completed.
-var EventBlockJobCompleted = "BLOCK_JOB_COMPLETED"
-
-// EventBlockJobError is emitted when a block job has errored.
-var EventBlockJobError = "BLOCK_JOB_ERROR"
-
 // ExcludedCommands is used to filter verbose commands from the QMP logs.
 var ExcludedCommands = []string{"ringbuf-read"}
-
-// Event represents a QMP event.
-type Event struct {
-	Name string
-	Data map[string]any
-}
 
 // Monitor represents a QMP monitor.
 type Monitor struct {
@@ -81,8 +70,7 @@ type Monitor struct {
 	expectingReset bool
 	stateMu        sync.Mutex
 	detachDisk     func(name string) error
-	eventMap       map[string]chan Event
-	eventMapLock   sync.Mutex
+	instanceState  *api.InstanceState
 }
 
 // TransactionAction represents a single action within a QMP transaction.
@@ -115,7 +103,21 @@ func (m *Monitor) start() error {
 		// Extract the last entry.
 		entries := strings.Split(resp.Return, "\n")
 		if len(entries) > 1 {
-			m.processAgentStatus(entries[len(entries)-2])
+			status := entries[len(entries)-2]
+			var instanceState *api.InstanceState
+			if len(entries) > 2 {
+				var s api.InstanceState
+				err := json.Unmarshal([]byte(status), &s)
+
+				if err == nil && s.Pid == 1 {
+					instanceState = &s
+				}
+
+				status = entries[len(entries)-3]
+			}
+
+			m.SetInstanceState(instanceState)
+			m.processAgentStatus(status)
 		}
 	}
 
@@ -262,6 +264,11 @@ func (m *Monitor) RunJSON(request []byte, resp any, logCommand bool, id uint32) 
 
 	out, err := m.qmp.run(request, id)
 	if err != nil {
+		// Keep the monitor cached on timeout so retries fail fast.
+		if errors.Is(err, ErrMonitorTimeout) {
+			return err
+		}
+
 		// Confirm the daemon didn't die.
 		errPing := m.ping()
 		if errPing != nil {
@@ -389,7 +396,6 @@ func Connect(path string, serialCharDev string, eventHandler func(name string, d
 	monitor.eventHandler = eventHandler
 	monitor.serialCharDev = serialCharDev
 	monitor.detachDisk = detachDisk
-	monitor.eventMap = make(map[string]chan Event)
 
 	// Default to generating a shutdown event when the monitor disconnects so that devices can be
 	// cleaned up. This will be disabled after a shutdown event is received from QEMU itself to avoid
@@ -440,6 +446,22 @@ func (m *Monitor) Wait() (chan struct{}, error) {
 	}
 
 	return m.chDisconnect, nil
+}
+
+// GetInstanceState fetches the recorded instance state.
+func (m *Monitor) GetInstanceState() *api.InstanceState {
+	m.stateMu.Lock()
+	defer m.stateMu.Unlock()
+
+	return m.instanceState
+}
+
+// SetInstanceState updates the recorded instance state.
+func (m *Monitor) SetInstanceState(s *api.InstanceState) {
+	m.stateMu.Lock()
+	defer m.stateMu.Unlock()
+
+	m.instanceState = s
 }
 
 // SetInitialized enables or disables the on disconnect event.
@@ -496,45 +518,4 @@ func (m *Monitor) HandleReset() bool {
 
 	m.expectingReset = false
 	return true
-}
-
-// CreateEventChannel creates and registers a new event channel for the given device.
-func (m *Monitor) CreateEventChannel(deviceName string) (chan Event, error) {
-	m.eventMapLock.Lock()
-	defer m.eventMapLock.Unlock()
-
-	_, ok := m.eventMap[deviceName]
-	if ok {
-		return nil, fmt.Errorf("Event channel already exists for %s", deviceName)
-	}
-
-	ch := make(chan Event)
-	m.eventMap[deviceName] = ch
-	return ch, nil
-}
-
-// CleanupEventChannel removes the event channel associated with the given device.
-func (m *Monitor) CleanupEventChannel(deviceName string) {
-	m.eventMapLock.Lock()
-	defer m.eventMapLock.Unlock()
-
-	ch, ok := m.eventMap[deviceName]
-	if ok {
-		delete(m.eventMap, deviceName)
-	}
-
-	if ok {
-		close(ch)
-	}
-}
-
-// PushEvent publishes an event to the registered channel for the given device.
-func (m *Monitor) PushEvent(event string, data map[string]any) {
-	m.eventMapLock.Lock()
-	defer m.eventMapLock.Unlock()
-
-	ch, ok := m.eventMap[data["device"].(string)]
-	if ok {
-		ch <- Event{Name: event, Data: data}
-	}
 }

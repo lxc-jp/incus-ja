@@ -1330,7 +1330,7 @@ func (r *ProtocolIncus) GetStoragePoolVolumeBlockNBDConn(pool string, volType st
 
 	r.setURLQueryAttributes(&u.URL)
 
-	return r.rawConn(&u.URL, "nbd")
+	return r.rawConn(http.MethodGet, &u.URL, "nbd", nil)
 }
 
 // GetStoragePoolVolumeFileSFTPConn returns a connection to the volume's SFTP endpoint.
@@ -1344,7 +1344,7 @@ func (r *ProtocolIncus) GetStoragePoolVolumeFileSFTPConn(pool string, volType st
 	u.Path("1.0", "storage-pools", pool, "volumes", volType, volName, "sftp")
 	r.setURLQueryAttributes(&u.URL)
 
-	return r.rawConn(&u.URL, "sftp")
+	return r.rawConn(http.MethodGet, &u.URL, "sftp", nil)
 }
 
 // GetStoragePoolVolumeFileSFTP returns an SFTP connection to the volume.
@@ -1564,6 +1564,26 @@ func (r *ProtocolIncus) GetStorageVolumeBitmaps(pool string, volumeType string, 
 	}
 
 	return bitmaps, nil
+}
+
+// GetStorageVolumeBitmap returns information about a volume bitmap.
+func (r *ProtocolIncus) GetStorageVolumeBitmap(pool string, volumeType string, volumeName string, bitmapName string) (*api.StorageVolumeBitmap, error) {
+	if !r.HasExtension("storage_volume_nbd") {
+		return nil, errors.New("The server is missing the required \"storage_volume_nbd\" API extension")
+	}
+
+	bitmap := api.StorageVolumeBitmap{}
+
+	path := fmt.Sprintf(
+		"/storage-pools/%s/volumes/%s/%s/bitmaps/%s",
+		url.PathEscape(pool), url.PathEscape(volumeType), url.PathEscape(volumeName), url.PathEscape(bitmapName),
+	)
+	_, err := r.queryStruct("GET", path, nil, "", &bitmap)
+	if err != nil {
+		return nil, err
+	}
+
+	return &bitmap, nil
 }
 
 // CreateStorageVolumeBitmap creates a new volume bitmap.

@@ -15,6 +15,7 @@ VM では、各デバイスは1つの GPU にしかマッチできません。
 - [`mdev`](#gpu-mdev)（VM のみ）: 仮想 GPU を作成しインスタンスにパススルーします。
 - [`mig`](#gpu-mig)（コンテナのみ）: MIG（Multi-Instance GPU）を作成しインスタンスにパススルーします。
 - [`sriov`](#gpu-sriov)（VM のみ）: SR-IOV を有効にした GPU の仮想ファンクション（virtual function）をインスタンスに与えます。
+- [`native-context`](gpu-native-context)（VMのみ）：GPUをパススルーせずに、`virtio-gpu` DRMネイティブコンテキストを通してVMにGPUアクセラレーションを与えます。
 
 利用可能なデバイスオプションは GPU タイプごとに異なり、以下のセクションの表に一覧表示されます。
 
@@ -100,4 +101,33 @@ VM では、各デバイスは1つの GPU にしかマッチできません。
 ```{include} ../config_options.txt
     :start-after: <!-- config group devices-gpu_sriov start -->
     :end-before: <!-- config group devices-gpu_sriov end -->
+```
+
+(gpu-native-context)=
+## `gputype`: `native-context`
+
+```{note}
+`native-context` GPUタイプはVMでのみサポートされます。
+ホットプラグはサポートしていません。
+```
+
+`native-context` GPUデバイスは`virtio-gpu` DRMネイティブコンテキストを通してGPUアクセラレーションをVMに与えます。
+ホストのGPUはパススルーや`vfio-pci`に再バインドはされません。GPUはホストで引き続き管理され、ゲストと共有されます。そのため、ホストも同時にGPUを使い続けられます。
+
+これはQEMU 11.0.0以降と、DRMネイティブコンテキストのサポートありでビルドされたホスト上の`virglrenderer`が必要です。
+DRMネイティブコンテキストは`virglrenderer` 1.0.0で導入されましたが、実際に必要なバージョンはGPUとカーネルに依存します（例えば、AMDのサポートは1.1のころに使えるようになり、Intelは1.3のころでした）。
+また、ホストのGPUとゲストのドライバーがDRMネイティブコンテキストをサポートしていることと、それに対応する`virtio-gpu` DRMドライバーを持つゲストが必要です。
+
+以下のセレクターオプションは任意です。
+GPUが選択されている場合、DRMレンダーノードはQEMU `egl-headless` ディスプレイのレンダーノードとして使われます。
+GPUが選択されていない場合、QEMUはデフォルトのレンダーノードを使います。
+
+### デバイスオプション
+
+`native-context`タイプのGPUデバイスは以下のデバイスオプションを持ちます：
+
+% Include content from [config_options.txt](../config_options.txt)
+```{include} ../config_options.txt
+    :start-after: <!-- config group devices-gpu_native_context start -->
+    :end-before: <!-- config group devices-gpu_native_context end -->
 ```

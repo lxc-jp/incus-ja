@@ -194,6 +194,10 @@ func OperationCreate(s *state.State, projectName string, opClass OperationClass,
 
 	err = registerDBOperation(&op, opType)
 	if err != nil {
+		operationsLock.Lock()
+		delete(operations, op.id)
+		operationsLock.Unlock()
+
 		return nil, err
 	}
 
@@ -366,13 +370,22 @@ func (op *Operation) Cancel() (chan error, error) {
 
 	oldStatus := op.status
 	op.status = api.Cancelling
-	op.lock.Unlock()
-
 	hasOnCancel := op.onCancel != nil
+	op.lock.Unlock()
 
 	if hasOnCancel {
 		go func(op *Operation, oldStatus api.StatusCode, chanCancel chan error) {
-			err := op.onCancel(op)
+			op.lock.Lock()
+			onCancel := op.onCancel
+			op.lock.Unlock()
+
+			// The operation completed on its own before it could be cancelled.
+			if onCancel == nil {
+				chanCancel <- nil
+				return
+			}
+
+			err := onCancel(op)
 			if err != nil {
 				op.lock.Lock()
 				op.status = oldStatus

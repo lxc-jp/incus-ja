@@ -178,6 +178,8 @@ Incusは`HTTP-01`と`DNS-01`チャレンジの両方をサポートしていま�
 `HTTP-01`では、Incusは`lego`に一時的に`80`番ポートをリッスンさせ、HTTPチャレンジが通るようにします。
 もしIncusサーバーがリバースプロキシの後ろにいる場合は、リバースプロキシがHTTPのトラフィックをHTTPSにリダイレクトするようにする必要があります。
 
+External Account Binding （EAB）が必要なACMEサービスでは{config:option}`server-acme:acme.eab.kid`と{config:option}`server-acme:acme.eab.hmac`の両方をACMEサービスで指定された値に設定してください。
+
 ## 失敗のシナリオ
 
 以下のシナリオでは認証は失敗します。

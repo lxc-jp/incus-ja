@@ -5,6 +5,7 @@ package main
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sched.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -62,11 +63,23 @@ static void forkdonetdetach(char *file) {
 	// Jump back to Go for the rest
 }
 
+static void forkdonetconnect(char *file) {
+	// Attach to the network namespace.
+	if (dosetns_file(file, "net") < 0) {
+		fprintf(stderr, "Failed setns to container network namespace: %s\n", strerror(errno));
+		_exit(1);
+	}
+
+	// Jump back to Go for the rest
+}
+
 int forknet_dhcp_logfile = -1;
+int forknet_dhcp_readyfd = -1;
 
 static void forkdonetdhcp(char *logfilestr) {
 	char *pidstr;
 	char path[PATH_MAX];
+	int pipefd[2];
 	pid_t pid;
 
 	pidstr = getenv("LXC_PID");
@@ -89,6 +102,12 @@ static void forkdonetdhcp(char *logfilestr) {
 		fprintf(stderr, "Execution will continue but log output will be lost after daemonize\n");
 	}
 
+	// Setup a pipe to wait for the initial network configuration.
+	if (pipe(pipefd) < 0) {
+		fprintf(stderr, "%s - Failed to create pipe\n", strerror(errno));
+		_exit(EXIT_FAILURE);
+	}
+
 	// Run in the background.
 	pid = fork();
 	if (pid < 0) {
@@ -98,8 +117,19 @@ static void forkdonetdhcp(char *logfilestr) {
 	}
 
 	if (pid > 0) {
+		struct pollfd pfd = {0};
+
+		// Wait up to 5s for the initial network configuration.
+		close(pipefd[1]);
+		pfd.fd = pipefd[0];
+		pfd.events = POLLIN;
+		(void)poll(&pfd, 1, 5000);
+
 		_exit(EXIT_SUCCESS);
 	}
+
+	close(pipefd[0]);
+	forknet_dhcp_readyfd = pipefd[1];
 
 	if (!freopen("/dev/null", "r", stdin)) {
 		fprintf(stderr, "Failed to reconfigure stdin: %s\n", strerror(errno));
@@ -181,12 +211,15 @@ void forknet(void)
 
 	if (strcmp(command, "detach") == 0)
 		forkdonetdetach(cur);
+	else if (strcmp(command, "connect") == 0)
+		forkdonetconnect(cur);
 }
 */
 import "C"
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -209,6 +242,8 @@ import (
 	"golang.org/x/net/bpf"
 	"golang.org/x/sys/unix"
 
+	"github.com/lxc/incus/v7/internal/netutils"
+	instanceDrivers "github.com/lxc/incus/v7/internal/server/instance/drivers"
 	"github.com/lxc/incus/v7/internal/server/ip"
 	_ "github.com/lxc/incus/v7/shared/cgo" // Used by cgo
 	"github.com/lxc/incus/v7/shared/logger"
@@ -257,6 +292,13 @@ func (c *cmdForknet) command() *cobra.Command {
 	cmdDHCP.RunE = c.runDHCP
 	cmd.AddCommand(cmdDHCP)
 
+	// connect
+	cmdConnect := &cobra.Command{}
+	cmdConnect.Use = "connect <netns file> <address> <port>"
+	cmdConnect.Args = cobra.ExactArgs(3)
+	cmdConnect.RunE = c.runConnect
+	cmd.AddCommand(cmdConnect)
+
 	// Workaround for subcommand usage errors. See: https://github.com/spf13/cobra/issues/706
 	cmd.Args = cobra.NoArgs
 	cmd.Run = func(cmd *cobra.Command, args []string) { _ = cmd.Usage() }
@@ -276,6 +318,20 @@ func (c *cmdForknet) runDHCP(_ *cobra.Command, args []string) error {
 		l.SetOutput(io.Discard)
 	}
 
+	// Prepare to signal the parent that the initial configuration is complete.
+	var readyFile *os.File
+	if C.forknet_dhcp_readyfd >= 0 {
+		readyFile = os.NewFile(uintptr(C.forknet_dhcp_readyfd), "incus-dhcp-ready")
+	}
+
+	notifyReady := sync.OnceFunc(func() {
+		if readyFile != nil {
+			_ = readyFile.Close()
+		}
+	})
+
+	defer notifyReady()
+
 	// Read the hostname.
 	bb, err := os.ReadFile(filepath.Join(c.instNetworkPath, "hostname"))
 	if err != nil {
@@ -287,8 +343,8 @@ func (c *cmdForknet) runDHCP(_ *cobra.Command, args []string) error {
 	// Parse any pre-existing resolv.conf so its values are preserved alongside DHCP provided ones.
 	c.parseInitialResolvConf()
 
-	// Load the list of interface/family combinations to skip (statically configured).
-	dhcpSkip := c.loadDHCPSkip(l)
+	// Load the expected per-interface network configuration.
+	ifaceConfigs := c.loadInterfaces(l)
 
 	// Create PID file.
 	err = os.WriteFile(filepath.Join(c.instNetworkPath, "dhcp.pid"), []byte(fmt.Sprintf("%d", os.Getpid())), 0o644)
@@ -335,15 +391,27 @@ func (c *cmdForknet) runDHCP(_ *cobra.Command, args []string) error {
 	errorChannel := make(chan error, len(names)*2)
 
 	// Launch DHCP clients for each iface.
+	readyWg := sync.WaitGroup{}
 	launched := 0
 	for _, iface := range names {
 		l := l.WithField("interface", iface).Logger
 
-		runV4 := !dhcpSkip[iface]["ipv4"]
-		runV6 := !dhcpSkip[iface]["ipv6"]
+		// Get the expected interface configuration, defaulting to a fully dynamic one.
+		config, ok := ifaceConfigs[iface]
+		if !ok {
+			config = instanceDrivers.OCINetworkInterface{DHCP4: true, DHCP6: true, Route4: true, Route6: true}
+		}
+
+		// Prevent router advertisements from providing a default gateway.
+		if !config.Route6 {
+			err := c.disableIPv6Gateway(iface)
+			if err != nil {
+				l.WithError(err).Warning("Couldn't disable the IPv6 default gateway")
+			}
+		}
 
 		// Skip interfaces that are fully statically configured.
-		if !runV4 && !runV6 {
+		if !config.DHCP4 && !config.DHCP6 {
 			l.Info("skipping dhcp on statically configured interface")
 			continue
 		}
@@ -362,16 +430,24 @@ func (c *cmdForknet) runDHCP(_ *cobra.Command, args []string) error {
 			continue
 		}
 
-		if runV4 {
-			go c.dhcpRunV4(errorChannel, iface, hostname, l)
+		if config.DHCP4 {
+			readyWg.Add(1)
+			go c.dhcpRunV4(errorChannel, sync.OnceFunc(readyWg.Done), iface, hostname, config, l)
 			launched++
 		}
 
-		if runV6 {
-			go c.dhcpRunV6(errorChannel, iface, hostname, duid, l)
+		if config.DHCP6 {
+			readyWg.Add(1)
+			go c.dhcpRunV6(errorChannel, sync.OnceFunc(readyWg.Done), iface, hostname, duid, l)
 			launched++
 		}
 	}
+
+	// Notify the parent once all interfaces have completed their initial configuration.
+	go func() {
+		readyWg.Wait()
+		notifyReady()
+	}()
 
 	// Wait for all launched goroutines to return.
 	var finalErr error
@@ -434,8 +510,10 @@ func newDHCPv4Conn(iface string) (net.PacketConn, net.HardwareAddr, error) {
 	return nclient4.NewBroadcastUDPConn(conn, &net.UDPAddr{Port: nclient4.ClientPort}), ifc.HardwareAddr, nil
 }
 
-func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname string, l *logrus.Logger) {
+func (c *cmdForknet) dhcpRunV4(errorChannel chan error, ready func(), iface string, hostname string, config instanceDrivers.OCINetworkInterface, l *logrus.Logger) {
 	var client *nclient4.Client
+
+	defer ready()
 
 	// Try to open a raw socket with a kernel-level BPF filter attached.
 	conn, hwAddr, err := newDHCPv4Conn(iface)
@@ -499,7 +577,7 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 		return
 	}
 
-	if lease.Offer.YourIPAddr == nil || lease.Offer.YourIPAddr.Equal(net.IPv4zero) || lease.Offer.SubnetMask() == nil || len(lease.Offer.Router()) != 1 {
+	if lease.Offer.YourIPAddr == nil || lease.Offer.YourIPAddr.Equal(net.IPv4zero) || lease.Offer.SubnetMask() == nil || (config.Route4 && len(lease.Offer.Router()) != 1) {
 		l.Error("Giving up on DHCPv4, lease didn't contain required fields")
 		errorChannel <- errors.New("Giving up on DHCPv4, lease didn't contain required fields")
 		return
@@ -535,6 +613,18 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 
 	if lease.Offer.Options.Has(dhcpv4.OptionClasslessStaticRoute) {
 		for _, staticRoute := range lease.Offer.ClasslessStaticRoute() {
+			// Skip any default route when the gateway is disabled.
+			if !config.Route4 {
+				if staticRoute.Dest == nil {
+					continue
+				}
+
+				ones, _ := staticRoute.Dest.Mask.Size()
+				if ones == 0 {
+					continue
+				}
+			}
+
 			route := &ip.Route{
 				DevName: iface,
 				Route:   staticRoute.Dest,
@@ -555,7 +645,9 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 	} else {
 		gws := lease.Offer.Router()
 
-		if len(gws) == 0 || gws[0] == nil || gws[0].IsUnspecified() {
+		if !config.Route4 {
+			l.WithField("interface", iface).Info("Default gateway disabled on interface; skipping default route")
+		} else if len(gws) == 0 || gws[0] == nil || gws[0].IsUnspecified() {
 			l.WithField("interface", iface).Info("No default gateway provided by DHCPv4; skipping default route")
 		} else {
 			err := c.installDefaultRouteV4(iface, gws[0])
@@ -566,6 +658,9 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 			}
 		}
 	}
+
+	// Initial configuration is complete.
+	ready()
 
 	// Handle DHCP renewal.
 	for {
@@ -617,7 +712,9 @@ func (c *cmdForknet) dhcpRunV4(errorChannel chan error, iface string, hostname s
 	}
 }
 
-func (c *cmdForknet) dhcpRunV6(errorChannel chan error, iface string, hostname string, duid dhcpv6.DUID, l *logrus.Logger) {
+func (c *cmdForknet) dhcpRunV6(errorChannel chan error, ready func(), iface string, hostname string, duid dhcpv6.DUID, l *logrus.Logger) {
+	defer ready()
+
 	// Wait a couple of seconds for IPv6 link-local.
 	time.Sleep(2 * time.Second)
 
@@ -754,6 +851,9 @@ func (c *cmdForknet) dhcpRunV6(errorChannel chan error, iface string, hostname s
 			return
 		}
 	}
+
+	// Initial configuration is complete.
+	ready()
 
 	// Handle DHCP Renewal.
 	for {
@@ -914,33 +1014,27 @@ func (c *cmdForknet) parseInitialResolvConf() {
 	}
 }
 
-// loadDHCPSkip reads the interface/family combinations to skip (statically configured).
-func (c *cmdForknet) loadDHCPSkip(l *logrus.Logger) map[string]map[string]bool {
-	skip := map[string]map[string]bool{}
+// loadInterfaces reads the expected per-interface network configuration.
+func (c *cmdForknet) loadInterfaces(l *logrus.Logger) map[string]instanceDrivers.OCINetworkInterface {
+	ifaces := map[string]instanceDrivers.OCINetworkInterface{}
 
-	content, err := os.ReadFile(filepath.Join(c.instNetworkPath, "dhcp.skip"))
+	content, err := os.ReadFile(filepath.Join(c.instNetworkPath, "interfaces.json"))
 	if err != nil {
 		if !os.IsNotExist(err) {
-			l.WithError(err).Warning("Unable to read dhcp.skip file")
+			l.WithError(err).Warning("Unable to read interfaces.json file")
 		}
 
-		return skip
+		return ifaces
 	}
 
-	for _, line := range strings.Split(string(content), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			continue
-		}
+	err = json.Unmarshal(content, &ifaces)
+	if err != nil {
+		l.WithError(err).Warning("Unable to parse interfaces.json file")
 
-		if skip[fields[0]] == nil {
-			skip[fields[0]] = map[string]bool{}
-		}
-
-		skip[fields[0]][fields[1]] = true
+		return map[string]instanceDrivers.OCINetworkInterface{}
 	}
 
-	return skip
+	return ifaces
 }
 
 func (c *cmdForknet) dhcpApplyDNS(l *logrus.Logger) error {
@@ -1053,6 +1147,38 @@ func (c *cmdForknet) dhcpApplyDNS(l *logrus.Logger) error {
 		_, err = fmt.Fprintf(f, "domain %s\n", domainNames[0])
 		if err != nil {
 			l.WithError(err).Error("Giving up on DHCP, couldn't write resolv.conf")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// disableIPv6Gateway prevents router advertisements from providing a default gateway on the interface.
+func (c *cmdForknet) disableIPv6Gateway(iface string) error {
+	// Don't accept default routes from router advertisements.
+	err := os.WriteFile(filepath.Join("/proc/sys/net/ipv6/conf", iface, "accept_ra_defrtr"), []byte("0"), 0o644)
+	if err != nil {
+		return err
+	}
+
+	// Remove any existing default route on the interface.
+	routes, err := (&ip.Route{
+		DevName: iface,
+		Family:  ip.FamilyV6,
+		Table:   "main",
+	}).List()
+	if err != nil {
+		return err
+	}
+
+	for _, route := range routes {
+		if route.Route != nil {
+			continue
+		}
+
+		err = route.Delete()
+		if err != nil {
 			return err
 		}
 	}
@@ -1199,6 +1325,38 @@ func (c *cmdForknet) runDetach(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (c *cmdForknet) runConnect(_ *cobra.Command, args []string) error {
+	addr := net.JoinHostPort(args[1], args[2])
+
+	// Establish the connection (we're inside the instance's network namespace).
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("Failed connecting to %q: %w", addr, err)
+	}
+
+	defer func() { _ = conn.Close() }()
+
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return fmt.Errorf("Unexpected connection type %T", conn)
+	}
+
+	file, err := tcpConn.File()
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = file.Close() }()
+
+	// Pass the connection to the daemon.
+	err = netutils.AbstractUnixSendFd(3, int(file.Fd()))
+	if err != nil {
+		return fmt.Errorf("Failed passing the connection to the daemon: %w", err)
 	}
 
 	return nil

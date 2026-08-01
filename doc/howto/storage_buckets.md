@@ -9,7 +9,7 @@ S3 アドレスを設定することにより、ローカルストレージ（`d
 
 S3 アドレスを設定するには、{config:option}`server-core:core.storage_buckets_address` サーバー設定オプションを設定します。たとえば:
 
-    incus config set core.storage_buckets_address :8555
+    incus config set core.storage_buckets_address=:8555
 
 ## ストレージバケットを管理する
 

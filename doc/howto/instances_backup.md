@@ -87,11 +87,11 @@ CRIU の制限のためコンテナではこの機能は完全にはサポート
 
 たとえば、日次のスナップショットを設定するには、以下のコマンドを使います:
 
-    incus config set <instance_name> snapshots.schedule @daily
+    incus config set <instance_name> snapshots.schedule=@daily
 
 毎日 AM 6 時にスナップショットを作成するよう設定するには、以下のコマンドを使います:
 
-    incus config set <instance_name> snapshots.schedule "0 6 * * *"
+    incus config set <instance_name> snapshots.schedule="0 6 * * *"
 
 定期的にスナップショットをスケジュールする際、自動破棄（{config:option}`instance-snapshots:snapshots.expiry`）とスナップショットの命名規則（{config:option}`instance-snapshots:snapshots.pattern`）の設定も検討してください。
 また、稼働していないインスタンスのスナップショットを作成するかどうかの設定（{config:option}`instance-snapshots:snapshots.schedule.stopped`）もすると良いでしょう。

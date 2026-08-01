@@ -313,7 +313,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 		// ---
 		//  type: string
 		//  required: no
-		//  shortdesc: I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) or in IOPS (must be suffixed with `iops`) - see also {ref}`storage-configure-IO`
+		//  shortdesc: I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) and/or in IOPS (must be suffixed with `iops`), comma separated when specifying both - see also {ref}`storage-configure-IO`
 		"limits.read": validate.IsAny,
 
 		// gendoc:generate(entity=devices, group=disk, key=limits.write)
@@ -321,7 +321,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 		// ---
 		//  type: string
 		//  required: no
-		//  shortdesc: I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) or in IOPS (must be suffixed with `iops`) - see also {ref}`storage-configure-IO`
+		//  shortdesc: I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) and/or in IOPS (must be suffixed with `iops`), comma separated when specifying both - see also {ref}`storage-configure-IO`
 		"limits.write": validate.IsAny,
 
 		// gendoc:generate(entity=devices, group=disk, key=limits.max)
@@ -329,7 +329,7 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 		// ---
 		//  type: string
 		//  required: no
-		//  shortdesc: I/O limit in byte/s or IOPS for both read and write (same as setting both `limits.read` and `limits.write`)
+		//  shortdesc: I/O limit in byte/s and/or IOPS for both read and write (same as setting both `limits.read` and `limits.write`)
 		"limits.max": validate.IsAny,
 
 		// gendoc:generate(entity=devices, group=disk, key=size)
@@ -1364,7 +1364,7 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 	var diskLimits *deviceConfig.DiskLimits
 	if d.config["limits.read"] != "" || d.config["limits.write"] != "" || d.config["limits.max"] != "" {
 		// Parse the limits into usable values.
-		readBps, readIops, writeBps, writeIops, err := d.parseLimit(d.config)
+		readBps, readIops, writeBps, writeIops, err := diskParseLimits(d.config)
 		if err != nil {
 			return nil, err
 		}
@@ -1481,6 +1481,10 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 				Limits:  diskLimits,
 			}
 
+			if strings.HasSuffix(fields[1], ".iso") {
+				mount.FSType = "iso9660"
+			}
+
 			err := d.setBus(&mount)
 			if err != nil {
 				return nil, err
@@ -1552,8 +1556,17 @@ func (d *disk) startVM() (*deviceConfig.RunConfig, error) {
 						clusterName = storageDrivers.CephDefaultUser
 					}
 
+					driverContentType, err := storagePools.VolumeDBContentTypeToContentType(contentType)
+					if err != nil {
+						return nil, err
+					}
+
+					volStorageName := project.StorageVolume(storageProjectName, volName)
+					vol := d.pool.GetVolume(storageDrivers.VolumeTypeCustom, driverContentType, volStorageName, dbVolume.Config)
+					rbdImageName := storageDrivers.CephGetRBDImageName(vol, "", false)
+
 					mount := deviceConfig.MountEntryItem{
-						DevPath: DiskGetRBDFormat(clusterName, userName, poolName, d.config["source"]),
+						DevPath: DiskGetRBDFormat(clusterName, userName, poolName, rbdImageName),
 						DevName: d.name,
 						Opts:    opts,
 						Limits:  diskLimits,
@@ -1875,28 +1888,22 @@ func (d *disk) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 
 		if d.inst.Type() == instancetype.VM {
-			var diskLimits *deviceConfig.DiskLimits
-			runConf.Mounts = []deviceConfig.MountEntryItem{}
-			if d.config["limits.read"] != "" || d.config["limits.write"] != "" || d.config["limits.max"] != "" {
-				// Parse the limits into usable values.
-				readBps, readIops, writeBps, writeIops, err := d.parseLimit(d.config)
-				if err != nil {
-					return err
-				}
+			// Parse the limits into usable values (zero when unset, which clears any existing throttle).
+			readBps, readIops, writeBps, writeIops, err := diskParseLimits(d.config)
+			if err != nil {
+				return err
+			}
 
-				// Apply the limits to a minimal mount entry.
-				diskLimits = &deviceConfig.DiskLimits{
+			// Always apply the limits so unsetting the config keys resets the throttle.
+			runConf.Mounts = []deviceConfig.MountEntryItem{{
+				DevName: d.name,
+				Limits: &deviceConfig.DiskLimits{
 					ReadBytes:  readBps,
 					ReadIOps:   readIops,
 					WriteBytes: writeBps,
 					WriteIOps:  writeIops,
-				}
-
-				runConf.Mounts = append(runConf.Mounts, deviceConfig.MountEntryItem{
-					DevName: d.name,
-					Limits:  diskLimits,
-				})
-			}
+				},
+			}}
 		}
 
 		err := d.inst.DeviceEventHandler(&runConf)
@@ -2823,7 +2830,7 @@ func (d *disk) getDiskLimits() (map[string]diskBlockLimit, error) {
 		}
 
 		// Parse the user input
-		readBps, readIops, writeBps, writeIops, err := d.parseLimit(dev)
+		readBps, readIops, writeBps, writeIops, err := diskParseLimits(dev)
 		if err != nil {
 			return nil, err
 		}
@@ -2935,8 +2942,8 @@ func (d *disk) getDiskLimits() (map[string]diskBlockLimit, error) {
 	return result, nil
 }
 
-// parseLimit parses the disk configuration for its I/O limits and returns the I/O bytes/iops limits.
-func (d *disk) parseLimit(dev deviceConfig.Device) (int64, int64, int64, int64, error) {
+// diskParseLimits parses a device configuration for its I/O limits and returns the I/O bytes/iops limits.
+func diskParseLimits(dev deviceConfig.Device) (int64, int64, int64, int64, error) {
 	readSpeed := dev["limits.read"]
 	writeSpeed := dev["limits.write"]
 
@@ -2946,7 +2953,7 @@ func (d *disk) parseLimit(dev deviceConfig.Device) (int64, int64, int64, int64, 
 		writeSpeed = dev["limits.max"]
 	}
 
-	// parseValue parses a single value to either a B/s limit or iops limit.
+	// parseValue parses a comma separated list of B/s and iops limits.
 	parseValue := func(value string) (int64, int64, error) {
 		var err error
 
@@ -2957,16 +2964,33 @@ func (d *disk) parseLimit(dev deviceConfig.Device) (int64, int64, int64, int64, 
 			return bps, iops, nil
 		}
 
-		before, ok := strings.CutSuffix(value, "iops")
-		if ok {
-			iops, err = strconv.ParseInt(before, 10, 64)
-			if err != nil {
-				return -1, -1, err
-			}
-		} else {
-			bps, err = units.ParseByteSizeString(value)
-			if err != nil {
-				return -1, -1, err
+		hasBps := false
+		hasIops := false
+
+		for _, field := range util.SplitNTrimSpace(value, ",", -1, true) {
+			before, ok := strings.CutSuffix(field, "iops")
+			if ok {
+				if hasIops {
+					return -1, -1, fmt.Errorf("More than one IOPS limit in %q", value)
+				}
+
+				hasIops = true
+
+				iops, err = strconv.ParseInt(before, 10, 64)
+				if err != nil {
+					return -1, -1, err
+				}
+			} else {
+				if hasBps {
+					return -1, -1, fmt.Errorf("More than one byte/s limit in %q", value)
+				}
+
+				hasBps = true
+
+				bps, err = units.ParseByteSizeString(field)
+				if err != nil {
+					return -1, -1, err
+				}
 			}
 		}
 

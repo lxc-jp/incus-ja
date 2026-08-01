@@ -24,6 +24,7 @@ import (
 	"github.com/lxc/incus/v7/shared/idmap"
 	"github.com/lxc/incus/v7/shared/ioprogress"
 	"github.com/lxc/incus/v7/shared/osinfo"
+	"github.com/lxc/incus/v7/shared/uefi"
 )
 
 // HookStart hook used when instance has started.
@@ -131,6 +132,9 @@ type Instance interface {
 	FileSFTPConn() (net.Conn, error)
 	FileSFTP() (*sftp.Client, error)
 
+	// Network connectivity.
+	PortForwardConn(address string, port int) (net.Conn, error)
+
 	// Console - Allocate and run a console tty or a spice Unix socket.
 	Console(protocol string) (*os.File, chan error, error)
 	Exec(req api.InstanceExecPost, stdin *os.File, stdout *os.File, stderr *os.File) (Cmd, error)
@@ -223,6 +227,9 @@ type VM interface {
 	ConsoleLog() (string, error)
 	ConsoleScreenshot(screenshotFile *os.File) error
 	DumpGuestMemory(w *os.File, format string) error
+	GetNVRAM() (*uefi.Store, error)
+	SetNVRAM(store *uefi.Store) error
+	ResetNVRAM() error
 }
 
 // CriuMigrationArgs arguments for CRIU migration.

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -105,8 +106,8 @@ incus file create --type=symlink foo bar/baz qux
 
 	cli.AddBoolFlag(cmd.Flags(), &c.storageVolumeFile.flagMkdir, "create-dirs|p", i18n.G("Create any directories necessary"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagForce, "force|f", i18n.G("Force creating files or directories"))
-	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagGID, "gid", -1, i18n.G("Set the file's gid on create"))
-	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagUID, "uid", -1, i18n.G("Set the file's uid on create"))
+	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagGID, "gid", i18n.G("Set the file's gid on create"), -1)
+	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagUID, "uid", i18n.G("Set the file's uid on create"), -1)
 	cli.AddStringFlag(cmd.Flags(), &c.storageVolumeFile.flagMode, "mode", "", "", i18n.G("Set the file's perms on create"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagType, "type|t", "file", "", i18n.G("The type to create (file, symlink, or directory)"))
 
@@ -134,7 +135,7 @@ func (c *cmdStorageVolumeFileCreate) run(cmd *cobra.Command, args []string) erro
 	volName := parsed[1].List[0].String
 	targetPath, isDir := normalizePath(parsed[1].List[1].String)
 	isSymlink := !parsed[2].Skipped
-	symlinkTargetPath := filepath.Clean(parsed[2].String)
+	symlinkTargetPath := path.Clean(parsed[2].String)
 
 	if !slices.Contains([]string{"file", "symlink", "directory"}, c.flagType) {
 		return fmt.Errorf(i18n.G("Invalid type %q"), c.flagType)
@@ -187,7 +188,7 @@ func (c *cmdStorageVolumeFileCreate) run(cmd *cobra.Command, args []string) erro
 
 	// Create needed paths if requested
 	if c.storageVolumeFile.flagMkdir {
-		err := sftpRecursiveMkdir(sftpConn, filepath.Dir(targetPath), nil, int64(uid), int64(gid))
+		err := sftpRecursiveMkdir(sftpConn, path.Dir(targetPath), nil, int64(uid), int64(gid))
 		if err != nil {
 			return err
 		}
@@ -466,7 +467,7 @@ func (c *cmdStorageVolumeFileEdit) run(cmd *cobra.Command, args []string) error 
 	}
 
 	// Create temp file
-	f, err := os.CreateTemp("", fmt.Sprintf("incus_file_edit_*%s", filepath.Ext(fPath)))
+	f, err := os.CreateTemp("", fmt.Sprintf("incus_file_edit_*%s", path.Ext(fPath)))
 	if err != nil {
 		return fmt.Errorf(i18n.G("Unable to create a temporary file: %v"), err)
 	}
@@ -609,7 +610,7 @@ func (c *cmdStorageVolumeFilePull) pull(parsedPool *u.Parsed, parsedPath *u.Pars
 
 	var targetPath string
 	if targetIsDir {
-		targetPath = filepath.Join(target, filepath.Base(normalizedPath))
+		targetPath = filepath.Join(target, path.Base(normalizedPath))
 	} else {
 		targetPath = target
 	}
@@ -724,8 +725,8 @@ echo "Hello world" | incus storage volume file push - local v1 test
 	))
 
 	cli.AddBoolFlag(cmd.Flags(), &c.storageVolumeFile.flagMkdir, "create-dirs|p", i18n.G("Create any directories necessary"))
-	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagUID, "uid", -1, i18n.G("Set the file's uid on push"))
-	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagGID, "gid", -1, i18n.G("Set the file's gid on push"))
+	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagUID, "uid", i18n.G("Set the file's uid on push"), -1)
+	cli.AddIntFlag(cmd.Flags(), &c.storageVolumeFile.flagGID, "gid", i18n.G("Set the file's gid on push"), -1)
 	cli.AddStringFlag(cmd.Flags(), &c.storageVolumeFile.flagMode, "mode", "", "", i18n.G("Set the file's perms on push"))
 	cli.AddBoolFlag(cmd.Flags(), &c.pusher.flagRecursive, "recursive|r", i18n.G("Recursively transfer files"))
 	cli.AddBoolFlag(cmd.Flags(), &c.pusher.flagNoDereference, "no-dereference|P", i18n.G("Never follow symbolic links in source path"))
@@ -791,6 +792,7 @@ func (c *cmdStorageVolumeFilePush) push(srcFile string, parsedPool *u.Parsed, pa
 	var f *os.File
 	var linkTarget string
 	var size int64
+	usePercentage := true
 	args := incus.InstanceFileArgs{
 		UID:  int64(c.storageVolumeFile.flagUID),
 		GID:  int64(c.storageVolumeFile.flagGID),
@@ -803,6 +805,7 @@ func (c *cmdStorageVolumeFilePush) push(srcFile string, parsedPool *u.Parsed, pa
 		}
 
 		f = os.Stdin
+		usePercentage = false
 	} else {
 		srcInfo, wPath, err := c.pusher.statFile(srcFile)
 		if err != nil {
@@ -847,7 +850,7 @@ func (c *cmdStorageVolumeFilePush) push(srcFile string, parsedPool *u.Parsed, pa
 	// Determine the target path.
 	var targetPath string
 	if targetIsDir {
-		targetPath = filepath.Join(target, filepath.Base(srcFile))
+		targetPath = path.Join(target, filepath.Base(srcFile))
 	} else {
 		targetPath = target
 	}
@@ -855,7 +858,7 @@ func (c *cmdStorageVolumeFilePush) push(srcFile string, parsedPool *u.Parsed, pa
 	// Create needed paths if requested
 	if c.storageVolumeFile.flagMkdir {
 		mode := os.FileMode(DirMode)
-		err = sftpRecursiveMkdir(sftpConn, filepath.Dir(targetPath), &mode, int64(args.UID), int64(args.GID))
+		err = sftpRecursiveMkdir(sftpConn, path.Dir(targetPath), &mode, int64(args.UID), int64(args.GID))
 		if err != nil {
 			return err
 		}
@@ -884,10 +887,12 @@ func (c *cmdStorageVolumeFilePush) push(srcFile string, parsedPool *u.Parsed, pa
 			ReadCloser: f,
 			Tracker: &ioprogress.ProgressTracker{
 				Length: size,
-				Handler: func(percent int64, speed int64) {
-					progress.UpdateProgress(ioprogress.ProgressData{
-						Text: fmt.Sprintf("%d%% (%s/s)", percent, units.GetByteSizeString(speed, 2)),
-					})
+				Handler: func(v int64, speed int64) {
+					if usePercentage {
+						progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%d%% (%s/s)", v, units.GetByteSizeString(speed, 2))})
+					} else {
+						progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%s (%s/s)", units.GetByteSizeString(v, 2), units.GetByteSizeString(speed, 2))})
+					}
 				},
 			},
 		}, f)

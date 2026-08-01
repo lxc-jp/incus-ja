@@ -151,7 +151,7 @@ The remote name can be ignored if a single target is provided.
 	cli.AddStringFlag(cmd.Flags(), &c.flagAuthType, "auth-type", "", "", i18n.G("Server authentication type (tls or oidc)"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagPublic, "public", i18n.G("Public image server"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagProject, "project", "", "", i18n.G("Project to use for the remote"))
-	cli.AddIntFlag(cmd.Flags(), &c.flagKeepAlive, "keepalive", 0, i18n.G("Maintain remote connection for faster commands"))
+	cli.AddIntFlag(cmd.Flags(), &c.flagKeepAlive, "keepalive", i18n.G("Maintain remote connection for faster commands"), 0)
 	cli.AddStringFlag(cmd.Flags(), &c.flagCredHelper, "credentials-helper", "", "", i18n.G("Binary helper for retrieving credentials"))
 
 	return cmd
@@ -882,7 +882,7 @@ func (c *cmdRemoteGetClientCertificate) run(cmd *cobra.Command, args []string) e
 			}
 
 			// Get a password.
-			password := c.global.asker.AskPasswordOnce(fmt.Sprintf(i18n.G("Password for %s: "), targetFile))
+			password, err := c.global.asker.AskPasswordOnce(fmt.Sprintf(i18n.G("Password for %s: "), targetFile))
 			if err != nil {
 				return err
 			}
@@ -1391,7 +1391,7 @@ func (c *cmdRemoteSwitch) run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(i18n.G("Remote %s doesn't exist"), remoteName)
 	}
 
-	conf.DefaultRemote = remoteName
+	conf.SetDefaultRemote(remoteName)
 
 	return conf.SaveConfig(c.global.confPath)
 }

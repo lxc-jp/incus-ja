@@ -359,6 +359,9 @@ func (s *execWs) do(op *operations.Operation) error {
 			return // No connection, command has ended, being asked to end.
 		}
 
+		// Bound control message size to avoid unbounded reads.
+		conn.SetReadLimit(ws.ControlMessageMaxSize)
+
 		l.Debug("Exec control handler started")
 		defer l.Debug("Exec control handler finished")
 
@@ -564,6 +567,10 @@ func (s *execWs) do(op *operations.Operation) error {
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func instanceExecPost(d *Daemon, r *http.Request) response.Response {

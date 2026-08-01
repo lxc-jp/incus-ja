@@ -61,7 +61,7 @@ Would you like a YAML "incus admin init" preseed to be printed? (yes/no) [defaul
 
 インスタンスを持つ既存のIncusサーバーを新しいクラスタのブートストラップサーバーに変換したい場合は、少し異なる手順があります。
 
-まず、`incus config set core.https_address [IP_OR_DNS]:8443`を使って、`core.https_address`（または`cluster.https_address`）が指定のIPまたはDNSアドレスになるように設定してください。デフォルトのワイルドカードの値はクラスタモードでは使えません。
+まず、`incus config set core.https_address=[IP_OR_DNS]:8443`を使って、`core.https_address`（または`cluster.https_address`）が指定のIPまたはDNSアドレスになるように設定してください。デフォルトのワイルドカードの値はクラスタモードでは使えません。
 
 次に、`incus cluster enable memberName`を実行して、追加のクラスタメンバーを参加させるステップを続行させることができます。
 

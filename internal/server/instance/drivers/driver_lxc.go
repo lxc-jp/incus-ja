@@ -90,6 +90,15 @@ import (
 	"github.com/lxc/incus/v7/shared/ws"
 )
 
+// OCINetworkInterface is the expected network configuration for an OCI container interface.
+// It is consumed by the forknet dhcp process through the container's interfaces.json file.
+type OCINetworkInterface struct {
+	DHCP4  bool `json:"dhcp4"`
+	DHCP6  bool `json:"dhcp6"`
+	Route4 bool `json:"route4"`
+	Route6 bool `json:"route6"`
+}
+
 // Helper functions.
 func lxcSetConfigItem(c *liblxc.Container, key string, value string) error {
 	if c == nil {
@@ -153,6 +162,32 @@ func lxcSetConfigItem(c *liblxc.Container, key string, value string) error {
 	}
 
 	return nil
+}
+
+// lxcEncodeCmd encodes a command for lxc.init.cmd/lxc.execute.cmd, whose
+// parser only supports whole-word quoting with no escape sequences.
+func lxcEncodeCmd(args []string) (string, error) {
+	words := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg != "" && !strings.ContainsAny(arg, " \t\n\v\f\r") && !strings.HasPrefix(arg, "'") && !strings.HasPrefix(arg, "\"") {
+			words = append(words, arg)
+			continue
+		}
+
+		if !strings.Contains(arg, "\"") {
+			words = append(words, "\""+arg+"\"")
+			continue
+		}
+
+		if !strings.Contains(arg, "'") {
+			words = append(words, "'"+arg+"'")
+			continue
+		}
+
+		return "", fmt.Errorf("Unable to encode command argument: %q", arg)
+	}
+
+	return strings.Join(words, " "), nil
 }
 
 func lxcStatusCode(lxcState liblxc.State) api.StatusCode {
@@ -1108,7 +1143,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		}
 
 		nvidiaRequireCuda := d.expandedConfig["nvidia.require.cuda"]
-		if nvidiaRequireCuda == "" {
+		if nvidiaRequireCuda != "" {
 			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("\"NVIDIA_REQUIRE_CUDA=%s\"", nvidiaRequireCuda))
 			if err != nil {
 				return nil, err
@@ -1116,7 +1151,7 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		}
 
 		nvidiaRequireDriver := d.expandedConfig["nvidia.require.driver"]
-		if nvidiaRequireDriver == "" {
+		if nvidiaRequireDriver != "" {
 			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("\"NVIDIA_REQUIRE_DRIVER=%s\"", nvidiaRequireDriver))
 			if err != nil {
 				return nil, err
@@ -1157,7 +1192,10 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 				if util.IsTrueOrEmpty(memorySwap) || util.IsFalse(memorySwap) {
 					err = cg.SetMemorySwapLimit(0)
 					if err != nil {
-						return nil, err
+						// Ignore missing swap accounting unless explicitly configured.
+						if memorySwap != "" || !errors.Is(err, cgroup.ErrControllerMissing) {
+							return nil, err
+						}
 					}
 				} else {
 					// Additional memory as swap.
@@ -2480,12 +2518,11 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			}
 		}
 
-		// Compute the entrypoint string.
-		initCmd := shellquote.Join(entrypoint...)
-
-		// As we feed this to execve and not to a real shell, un-escape some sequences.
-		initCmd = strings.ReplaceAll(initCmd, "\\(", "(")
-		initCmd = strings.ReplaceAll(initCmd, "\\)", ")")
+		// Compute the entrypoint string using LXC's own quoting rules.
+		initCmd, err := lxcEncodeCmd(entrypoint)
+		if err != nil {
+			return "", nil, err
+		}
 
 		if len(entrypoint) > 0 && slices.Contains([]string{"/init", "/sbin/init", "/s6-init", "/usr/bin/init"}, entrypoint[0]) {
 			// For regular init systems, call them directly as PID1.
@@ -2580,8 +2617,16 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 		}
 
 		// Configure network handling.
-		err = os.MkdirAll(filepath.Join(d.Path(), "network"), 0o711)
+		// Confine all writes to the instance directory to avoid following image-planted symlinks.
+		instRoot, err := os.OpenRoot(d.Path())
 		if err != nil {
+			return "", nil, err
+		}
+
+		defer logger.WarnOnError(instRoot.Close, "Failed to close instance root")
+
+		err = instRoot.Mkdir("network", 0o711)
+		if err != nil && !errors.Is(err, fs.ErrExist) {
 			return "", nil, err
 		}
 
@@ -2590,7 +2635,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			return "", nil, err
 		}
 
-		err = os.WriteFile(filepath.Join(d.Path(), "network", "hosts"), fmt.Appendf(nil, `127.0.0.1   localhost
+		err = instRoot.WriteFile("network/hosts", fmt.Appendf(nil, `127.0.0.1   localhost
 127.0.1.1   %s
 
 ::1     localhost ip6-localhost ip6-loopback
@@ -2608,7 +2653,7 @@ ff02::2 ip6-allrouters
 			return "", nil, err
 		}
 
-		err = os.WriteFile(filepath.Join(d.Path(), "network", "hostname"), fmt.Appendf(nil, "%s\n", d.name), 0o644)
+		err = instRoot.WriteFile("network/hostname", fmt.Appendf(nil, "%s\n", d.name), 0o644)
 		if err != nil {
 			return "", nil, err
 		}
@@ -2632,7 +2677,7 @@ ff02::2 ip6-allrouters
 			fmt.Fprintf(&resolvConf, "domain %s\n", d.expandedConfig["oci.dns.domain"])
 		}
 
-		err = os.WriteFile(filepath.Join(d.Path(), "network", "resolv.conf"), []byte(resolvConf.String()), 0o644)
+		err = instRoot.WriteFile("network/resolv.conf", []byte(resolvConf.String()), 0o644)
 		if err != nil {
 			return "", nil, err
 		}
@@ -2642,23 +2687,27 @@ ff02::2 ip6-allrouters
 			return "", nil, err
 		}
 
-		// Record interface/family combinations the DHCP client should skip (static or disabled).
-		var dhcpSkip strings.Builder
+		// Record the expected network configuration for each interface.
+		ifaces := map[string]OCINetworkInterface{}
 		for _, dev := range d.expandedDevices.Sorted() {
 			if dev.Config["type"] != "nic" || dev.Config["name"] == "" {
 				continue
 			}
 
-			if dev.Config["ipv4.address"] == "none" || strings.Contains(dev.Config["ipv4.address"], "/") {
-				fmt.Fprintf(&dhcpSkip, "%s ipv4\n", dev.Config["name"])
-			}
-
-			if dev.Config["ipv6.address"] == "none" || strings.Contains(dev.Config["ipv6.address"], "/") {
-				fmt.Fprintf(&dhcpSkip, "%s ipv6\n", dev.Config["name"])
+			ifaces[dev.Config["name"]] = OCINetworkInterface{
+				DHCP4:  dev.Config["ipv4.address"] != "none" && !strings.Contains(dev.Config["ipv4.address"], "/"),
+				DHCP6:  dev.Config["ipv6.address"] != "none" && !strings.Contains(dev.Config["ipv6.address"], "/"),
+				Route4: dev.Config["ipv4.gateway"] != "none",
+				Route6: dev.Config["ipv6.gateway"] != "none",
 			}
 		}
 
-		err = os.WriteFile(filepath.Join(d.Path(), "network", "dhcp.skip"), []byte(dhcpSkip.String()), 0o644)
+		ifacesData, err := json.Marshal(ifaces)
+		if err != nil {
+			return "", nil, err
+		}
+
+		err = instRoot.WriteFile("network/interfaces.json", ifacesData, 0o644)
 		if err != nil {
 			return "", nil, err
 		}
@@ -3509,6 +3558,46 @@ func (d *lxc) Rebuild(img *api.Image, op *operations.Operation) error {
 	return d.rebuildCommon(d, img, op)
 }
 
+// stopDHCPClient kills the forknet dhcp process if any and waits for it to
+// exit so the container's cgroup can be fully cleaned up.
+func (d *lxc) stopDHCPClient() {
+	pidPath := filepath.Join(d.Path(), "network", "dhcp.pid")
+
+	dhcpPIDStr, err := os.ReadFile(pidPath)
+	if err != nil {
+		return
+	}
+
+	dhcpPID, err := strconv.Atoi(strings.TrimSpace(string(dhcpPIDStr)))
+	if err != nil {
+		return
+	}
+
+	pidFd, err := linux.PidFdOpen(dhcpPID, 0)
+	if err != nil {
+		return
+	}
+
+	defer func() { _ = pidFd.Close() }()
+
+	// Guard against PID reuse.
+	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", dhcpPID))
+	if err != nil || (!strings.HasPrefix(string(cmdline), "[incus dhcp]") && !strings.Contains(string(cmdline), "forknet\x00dhcp")) {
+		return
+	}
+
+	err = linux.PidfdSendSignal(int(pidFd.Fd()), int(unix.SIGTERM), 0)
+	if err != nil {
+		return
+	}
+
+	// Wait for the process to exit.
+	fds := []unix.PollFd{{Fd: int32(pidFd.Fd()), Events: unix.POLLIN}}
+	_, _ = unix.Poll(fds, 5000)
+
+	_ = os.Remove(pidPath)
+}
+
 // onStopNS is triggered by LXC's stop hook once a container is shutdown but before the container's
 // namespaces have been closed. The netns path of the stopped container is provided.
 func (d *lxc) onStopNS(args map[string]string) error {
@@ -3526,6 +3615,9 @@ func (d *lxc) onStopNS(args map[string]string) error {
 	if err != nil {
 		return err
 	}
+
+	// Stop the DHCP client if any.
+	d.stopDHCPClient()
 
 	// Clean up devices.
 	d.cleanupDevices(false, netns)
@@ -3584,16 +3676,8 @@ func (d *lxc) onStop(args map[string]string) error {
 		// Clean up devices.
 		d.cleanupDevices(false, "")
 
-		// Stop DHCP client if any.
-		if util.PathExists(filepath.Join(d.Path(), "network", "dhcp.pid")) {
-			dhcpPIDStr, err := os.ReadFile(filepath.Join(d.Path(), "network", "dhcp.pid"))
-			if err == nil {
-				dhcpPID, err := strconv.Atoi(strings.TrimSpace(string(dhcpPIDStr)))
-				if err == nil {
-					_ = unix.Kill(dhcpPID, unix.SIGTERM)
-				}
-			}
-		}
+		// Stop the DHCP client if it's somehow still around.
+		d.stopDHCPClient()
 
 		// Remove directory ownership (to avoid issue if uidmap is reused)
 		err := os.Chown(d.Path(), 0, 0)
@@ -3748,6 +3832,21 @@ func (d *lxc) cleanupDevices(instanceRunning bool, stopHookNetnsPath string) {
 				d.logger.Error("Failed to stop device", logger.Ctx{"device": dev.Name(), "err": err})
 			}
 		}
+	}
+}
+
+// cleanupFailedMigrationRestore removes devices prepared by startCommon when CRIU restore fails before the stop hooks can run.
+func (d *lxc) cleanupFailedMigrationRestore() {
+	d.cleanupDevices(false, "")
+
+	err := d.removeUnixDevices()
+	if err != nil {
+		d.logger.Error("Failed to remove Unix devices after migration restore failure", logger.Ctx{"err": err})
+	}
+
+	err = d.removeDiskDevices()
+	if err != nil {
+		d.logger.Error("Failed to remove disk devices after migration restore failure", logger.Ctx{"err": err})
 	}
 }
 
@@ -4488,7 +4587,8 @@ func (d *lxc) delete(force bool, cleanupDependencies bool) error {
 						return fmt.Errorf("Failed loading storage pool: %w", err)
 					}
 
-					err = diskPool.DeleteCustomVolume(d.Project().Name, dev.Config["source"], nil)
+					volName, _ := internalInstance.SplitVolumeSource(dev.Config["source"])
+					err = diskPool.DeleteCustomVolume(d.Project().Name, volName, nil)
 					if err != nil {
 						return err
 					}
@@ -5244,7 +5344,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 				// Store the old values for revert
 				oldMemswLimit := int64(-1)
-				if cgroup.Supports(cgroup.Memory) {
+				if cgroup.Supports(cgroup.MemorySwap) {
 					oldMemswLimit, err = cg.GetMemorySwapLimit()
 					if err != nil {
 						oldMemswLimit = -1
@@ -5275,7 +5375,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 				}
 
 				// Reset everything
-				if cgroup.Supports(cgroup.Memory) {
+				if cgroup.Supports(cgroup.MemorySwap) {
 					err = cg.SetMemorySwapLimit(-1)
 					if err != nil {
 						revertMemory()
@@ -5310,26 +5410,27 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 						return err
 					}
 
-					if cgroup.Supports(cgroup.Memory) {
-						if util.IsTrueOrEmpty(memorySwap) || util.IsFalse(memorySwap) {
-							err = cg.SetMemorySwapLimit(0)
-							if err != nil {
+					if util.IsTrueOrEmpty(memorySwap) || util.IsFalse(memorySwap) {
+						err = cg.SetMemorySwapLimit(0)
+						if err != nil {
+							// Ignore missing swap accounting unless explicitly configured.
+							if memorySwap != "" || !errors.Is(err, cgroup.ErrControllerMissing) {
 								revertMemory()
 								return err
 							}
-						} else {
-							// Additional memory as swap.
-							swapInt, err := units.ParseByteSizeString(memorySwap)
-							if err != nil {
-								revertMemory()
-								return err
-							}
+						}
+					} else {
+						// Additional memory as swap.
+						swapInt, err := units.ParseByteSizeString(memorySwap)
+						if err != nil {
+							revertMemory()
+							return err
+						}
 
-							err = cg.SetMemorySwapLimit(swapInt)
-							if err != nil {
-								revertMemory()
-								return err
-							}
+						err = cg.SetMemorySwapLimit(swapInt)
+						if err != nil {
+							revertMemory()
+							return err
 						}
 					}
 				}
@@ -5353,8 +5454,11 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 
 						// Maximum priority (10) should be default swappiness (60).
 						err = cg.SetMemorySwappiness(int64(70 - priority))
-						if err != nil && !errors.Is(err, cgroup.ErrControllerMissing) {
-							return err
+						if err != nil {
+							// Ignore missing swappiness support unless explicitly configured.
+							if memorySwapPriority != "" || !errors.Is(err, cgroup.ErrControllerMissing) {
+								return err
+							}
 						}
 					}
 				}
@@ -7112,6 +7216,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 			// here since we know that "final" is the folder for CRIU's final dump.
 			err = d.migrate(&criuMigrationArgs)
 			if err != nil {
+				d.cleanupFailedMigrationRestore()
 				return err
 			}
 
@@ -7279,7 +7384,7 @@ func (d *lxc) migrate(args *instance.CriuMigrationArgs) error {
 		_, migrateErr = subprocess.RunCommand(
 			d.state.OS.ExecPath,
 			"forkmigrate",
-			d.name,
+			project.Instance(d.Project().Name, d.Name()),
 			d.state.OS.LxcPath,
 			configPath,
 			finalStateDir,
@@ -7689,9 +7794,23 @@ func (d *lxc) FileSFTPConn() (net.Conn, error) {
 		return nil, err
 	}
 
+	// Record the socket file identity so cleanup doesn't remove a newer socket.
+	forkfileInfo, err := os.Stat(forkfilePath)
+	if err != nil {
+		_ = forkfileListener.Close()
+		return nil, err
+	}
+
+	removeForkfileSocket := func() {
+		info, err := os.Stat(forkfilePath)
+		if err == nil && os.SameFile(info, forkfileInfo) {
+			_ = os.Remove(forkfilePath)
+		}
+	}
+
 	reverter.Add(func() {
 		_ = forkfileListener.Close()
-		_ = os.Remove(forkfilePath)
+		removeForkfileSocket()
 	})
 
 	// Spawn forkfile in a Go routine.
@@ -7819,7 +7938,7 @@ func (d *lxc) FileSFTPConn() (net.Conn, error) {
 		// thinking a listener is available while other deferred calls are being processed.
 		defer func() {
 			_ = forkfileListener.Close()
-			_ = os.Remove(forkfilePath)
+			removeForkfileSocket()
 			_ = os.Remove(pidFile)
 		}()
 
@@ -7874,6 +7993,58 @@ func (d *lxc) FileSFTP() (*sftp.Client, error) {
 	}()
 
 	return client, nil
+}
+
+// PortForwardConn connects to the given address and TCP port from within the instance's network namespace.
+func (d *lxc) PortForwardConn(address string, port int) (net.Conn, error) {
+	if !d.IsRunning() {
+		return nil, errors.New("Instance is not running")
+	}
+
+	// Create a socket pair to pass the connection around.
+	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	parentFile := os.NewFile(uintptr(fds[0]), "forknet-parent")
+	defer func() { _ = parentFile.Close() }()
+
+	childFile := os.NewFile(uintptr(fds[1]), "forknet-child")
+	defer func() { _ = childFile.Close() }()
+
+	// Spawn forknet to establish the connection from within the network namespace.
+	var stderr bytes.Buffer
+
+	forknet := exec.Cmd{
+		Path:       d.state.OS.ExecPath,
+		Args:       []string{d.state.OS.ExecPath, "forknet", "connect", "--", fmt.Sprintf("/proc/%d/ns/net", d.InitPID()), address, strconv.Itoa(port)},
+		ExtraFiles: []*os.File{childFile},
+		Stderr:     &stderr,
+	}
+
+	err = forknet.Run()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to run forknet connect: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+
+	// Close our copy of the child end so the receive below can't block forever.
+	_ = childFile.Close()
+
+	// Retrieve the connection from forknet.
+	file, err := netutils.AbstractUnixReceiveFd(int(parentFile.Fd()), netutils.UnixFdsAcceptExact)
+	if err != nil {
+		return nil, fmt.Errorf("Failed getting the connection: %w", err)
+	}
+
+	defer func() { _ = file.Close() }()
+
+	conn, err := net.FileConn(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 // stopForkFile attempts to send SIGTERM (if force is true) or SIGINT to forkfile then waits for it to exit.
@@ -9215,7 +9386,7 @@ func (d *lxc) Metrics(hostInterfaces []net.Interface) (*metrics.MetricSet, error
 	out.AddSamples(metrics.MemoryOOMKillsTotal, metrics.Sample{Value: float64(oomKills)})
 
 	// Handle swap.
-	if cgroup.Supports(cgroup.Memory) {
+	if cgroup.Supports(cgroup.MemorySwap) {
 		swapUsage, err := cg.GetMemorySwapUsage()
 		if err != nil {
 			d.logger.Warn("Failed to get swap usage", logger.Ctx{"err": err})

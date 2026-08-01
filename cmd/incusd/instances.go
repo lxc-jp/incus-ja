@@ -80,6 +80,13 @@ var instanceNBDCmd = APIEndpoint{
 	Get: APIEndpointAction{Handler: instanceNBDHandler, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanConnectNBD, "name")},
 }
 
+var instancePortForwardCmd = APIEndpoint{
+	Name: "instancePortForward",
+	Path: "instances/{name}/port-forward",
+
+	Post: APIEndpointAction{Handler: instancePortForwardHandler, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanConnectTCP, "name")},
+}
+
 var instanceFileCmd = APIEndpoint{
 	Name: "instanceFile",
 	Path: "instances/{name}/files",
@@ -193,6 +200,29 @@ var instanceDebugRepairCmd = APIEndpoint{
 	Path: "instances/{name}/debug/repair",
 
 	Post: APIEndpointAction{Handler: instanceDebugRepairPost, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanEdit, "name")},
+}
+
+var instanceNVRAMCmd = APIEndpoint{
+	Name: "instanceNVRAM",
+	Path: "instances/{name}/nvram",
+
+	Get: APIEndpointAction{Handler: instanceNVRAMGet, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanView, "name")},
+}
+
+var instanceNVRAMGUIDCmd = APIEndpoint{
+	Name: "instanceNVRAM",
+	Path: "instances/{name}/nvram/{guid}",
+
+	Get: APIEndpointAction{Handler: instanceNVRAMGUIDGet, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanView, "name")},
+}
+
+var instanceNVRAMGUIDVarCmd = APIEndpoint{
+	Name: "instanceNVRAM",
+	Path: "instances/{name}/nvram/{guid}/{var}",
+
+	Delete: APIEndpointAction{Handler: instanceNVRAMGUIDVarDelete, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanEdit, "name")},
+	Get:    APIEndpointAction{Handler: instanceNVRAMGUIDVarGet, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanView, "name")},
+	Put:    APIEndpointAction{Handler: instanceNVRAMGUIDVarPut, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanEdit, "name")},
 }
 
 type instanceAutostartList []instance.Instance

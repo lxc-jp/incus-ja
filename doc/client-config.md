@@ -7,7 +7,7 @@ Incusクライアントは環境データを保管し振る舞いを調整する
 ```
 
 ## 設定ファイル
-デフォルトでは、Incus CLIは`$HOME/.config/incus/config.yml`を使いますが、`INCUS_CONF`環境変数で指定される任意のファイルを使うこともできます。
+デフォルトでは、Incus CLIは`$HOME/.config/incus/config.yml`を使いますが、`INCUS_CONF`環境変数で指定される任意のディレクトリー内の`config.yml`ファイルを使うこともできます。
 
 ファイルやパスが存在しない場合は、以下のデフォルトを使います：
 

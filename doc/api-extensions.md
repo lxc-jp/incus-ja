@@ -3140,3 +3140,94 @@ DNSについては、コンテナの`resolv.conf`の初期の内容を設定す�
 * `security.selinux.label_rootfs`: rootfsのラベリングの挙動を制御（`auto`、`always`、`never`）。
 
 算出されたコンテキストは`volatile.selinux.context`キーに保管されますので、再起動してもMCSの範囲は同じままになります。
+
+## `network_bgp_peer_interface`
+
+`bridge`と`physical`ネットワークに`bgp.peers.NAME.address`の代わりとして`bgp.peers.NAME.interface`設定キーを追加します。
+
+設定すると、BGP unnumberedを使って指定のインターフェースにBGPセッションが確立されます（ピアのIPv6リンクローカルアドレスが自動で検出され、拡張されたネクストホップを使ってIPv4のルーティングが交換されます）。
+
+## `projects_restricted_virtual_machines_nesting`
+
+プロジェクトに`restricted.virtual-machines.nesting`設定キーを追加します。
+
+`block`に設定すると、プロジェクト内のすべての仮想マシンは`security.nesting`を`false`に設定する必要があり、ネストした仮想化を使えなくします。
+
+## `authorization_config`
+
+認可設定キーを一般的な`authorization.*`名前空間の配下に移動します。
+
+以下のサーバー設定キーは以前の`openfga.*`キーを置き換えます：
+
+* `authorization.openfga.api.url`: OpenFGAサーバーのURL
+* `authorization.openfga.api.token`: OpenFGAサーバーのAPIトークン
+* `authorization.openfga.store.id`: OpenFGAパーミッションストアーのID
+
+既存の`openfga.*`の値はアップグレード時に新しいキーに自動で移行されます。
+
+## `network_allocations_network`
+ネットワーク割り当てAPIのレスポンスに`network`フィールドを追加します。
+
+## `gpu_native_context`
+
+仮想マシンの`gpu`デバイスの`gputype`に`native-context`を追加します。
+PCIデバイスをパススルーする代わりに、DRMネイティブコンテキストを使いアクセラレーションが有効な`virtio-gpu`をVMに与えます。これによりゲストは自身のドライバーでホストのGPUをグラフィックスとビデオのアクセラレーションありで直接制御します。ホストの1つのGPUを複数のVMで共有しホストも使い続けることができます。`blob.size`デバイスオプションはホストで見えるblobウィンドウ（デフォルト2GiB）を設定します。QEMU 11.0.0以降が必要です。
+
+## `instance_port_forward`
+
+`POST /1.0/instances/NAME/port-forward` APIエンドポイントを追加します。これは接続をインスタンス内の指定のアドレスとポートへの生のTCP接続にアップグレードします。
+
+コンテナでは、接続はコンテナのネットワークスペース内からサーバーにより直接確立されます。仮想マシンでは、リクエストが`incus-agent`にフォワードされ、それが接続をハンドリングします。これは新しく追加された`port-forward`という機能で制御されます。
+
+これに対応する`incus port-forward`コマンドがクライアントに追加されます。これはインスタンスへのあらゆる接続をフォワードするローカルのTCPリスナーを提供します。
+
+## `unix_block_limits`
+
+`unix-block`デバイスに`limits.read`と`limits.write`設定キーを追加します。これらは`disk`デバイスの同じ設定キーと同様に振る舞い、byte/sの値かIOPSの値を受け付けます。
+
+## `authorization_client_routing`
+
+複数の認可ドライバーを一度にロードし、クライアントの認証クラスに応じて、それらのうちの1つにリクエストをルーティングできるようにします。
+
+以下のサーバー設定キーが追加されます：
+
+* `authorization.client.default`: より詳細なクラスルートを持たないクライアント用のドライバー
+* `authorization.client.unix`: ローカル（`unix`ソケット）クライアント用のドライバー
+* `authorization.client.tls`: 非制限のTLSクライアント用のドライバー
+* `authorization.client.tls-restricted`: 制限付き（プロジェクト限定）TLSクライアント用のドライバー
+* `authorization.client.oidc`: OIDCで認証されたクライアント用のドライバー
+
+それぞれのキーは`allow`、`deny`、`openfga`、`scriptlet`のいずれかを指定できます。クラスごとのキーは未設定の場合は`authorization.client.default`にフォールバックします。
+
+`authorization.client.tls-restricted`は上記の値に加えて`tls`も設定できます。制限付きの証明書のみに適用される証明書毎のプロジェクトの制限を強制するためのTLS認証方法が存在するからです。
+
+さらに以下のサーバー設定キーが追加されます：
+
+* `authorization.openfga.tls.identifier`: TLSクライアントがOpenFGAで認証される際にOpenFGAのユーザーとして使われる証明書の属性（`fingerprint`か`name`で、デフォルトは`name`）。
+
+## `instance_nvram`
+
+仮想マシンのUEFI変数を管理する以下のエンドポイントを追加します：
+
+* `GET /1.0/instances/{name}/nvram` すべてのUEFI変数を取得する
+* `GET /1.0/instances/{name}/nvram/{guid}` 指定のGUID配下のUEFI変数を取得する
+* `GET /1.0/instances/{name}/nvram/{guid}/{var}` 指定のUEFI変数を取得する
+* `DELETE /1.0/instances/{name}/nvram/{guid}/{var}` 指定のUEFI変数を削除する
+* `PUT /1.0/instances/{name}/nvram/{guid}/{var}` 指定のUEFI変数を設定／削除する
+
+さらに`rebuild-nvram`をインスタンスのデバッグアクションとして追加します。
+
+## `disk_io_limits_combined`
+
+`disk`と`unix-block`デバイスでI/O制限のキーにカンマ区切りの値（例えば`limits.read=30MiB,1000iops`）を使うことでbyte/sの制限値とIOPSの制限値の両方を設定できるようにします。
+
+## `resources_cpu_cluster`
+
+リソースAPI内のCPUコアーエントリーに`cluster`フィールドを追加します。これはコアー識別子がCPUクラスター（ARM big.LITTLE）内でしかユニークではないシステム上で同一の識別子のコアーを区別します。
+
+## `acme_eab`
+
+ACME External Account Binding （EAB）をサポートするために以下の2つのサーバー設定キーを追加します：
+
+* `acme.eab.kid`
+* `acme.eab.hmac`

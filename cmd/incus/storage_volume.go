@@ -78,6 +78,10 @@ Unless specified through a prefix, all volume operations affect "custom" (user c
 	storageVolumeAttachProfileCmd := cmdStorageVolumeAttachProfile{global: c.global, storage: c.storage, storageVolume: c}
 	cmd.AddCommand(storageVolumeAttachProfileCmd.command())
 
+	// Bitmap
+	storageVolumeBitmapCmd := cmdStorageVolumeBitmap{global: c.global, storage: c.storage, storageVolume: c}
+	cmd.AddCommand(storageVolumeBitmapCmd.command())
+
 	// Copy
 	storageVolumeCopyCmd := cmdStorageVolumeCopy{global: c.global, storage: c.storage, storageVolume: c}
 	cmd.AddCommand(storageVolumeCopyCmd.command())
@@ -2395,7 +2399,7 @@ func (c *cmdStorageVolumeExport) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		defer logger.WarnOnError(target.Close, "Failed to close target file")
+		defer logger.WarnOnErrorExcept(target.Close, []error{os.ErrClosed}, "Failed to close target file")
 	}
 
 	// Prepare the download request.
@@ -2498,15 +2502,18 @@ func (c *cmdStorageVolumeImport) run(cmd *cobra.Command, args []string) error {
 	}
 
 	var file *os.File
+	usePercentage := true
 	if isStdin(backupFile) {
 		file = os.Stdin
+		usePercentage = false
 	} else {
 		file, err = os.Open(backupFile)
 		if err != nil {
 			return err
 		}
 
-		defer logger.WarnOnError(file.Close, "Failed to close file")
+		// The HTTP transport closes the request body, so only warn on unexpected errors.
+		defer logger.WarnOnErrorExcept(file.Close, []error{os.ErrClosed}, "Failed to close file")
 	}
 
 	fstat, err := file.Stat()
@@ -2542,8 +2549,12 @@ func (c *cmdStorageVolumeImport) run(cmd *cobra.Command, args []string) error {
 			ReadCloser: file,
 			Tracker: &ioprogress.ProgressTracker{
 				Length: fstat.Size(),
-				Handler: func(percent int64, speed int64) {
-					progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%d%% (%s/s)", percent, units.GetByteSizeString(speed, 2))})
+				Handler: func(v int64, speed int64) {
+					if usePercentage {
+						progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%d%% (%s/s)", v, units.GetByteSizeString(speed, 2))})
+					} else {
+						progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%s (%s/s)", units.GetByteSizeString(v, 2), units.GetByteSizeString(speed, 2))})
+					}
 				},
 			},
 		},
