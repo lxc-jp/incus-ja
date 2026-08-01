@@ -94,8 +94,14 @@ var storagePoolVolumeTypeBitmapCmd = APIEndpoint{
 //	              "/1.0/storage-pools/shared/volumes/custom/foo/bitmaps/bitmap0",
 //	              "/1.0/storage-pools/shared/volumes/custom/foo/bitmaps/bitmap1"
 //	            ]
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 
@@ -158,8 +164,14 @@ var storagePoolVolumeTypeBitmapCmd = APIEndpoint{
 //	          description: List of storage volume bitmaps
 //	          items:
 //	            $ref: "#/definitions/StorageVolumeBitmap"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumeTypeBitmapsGet(d *Daemon, r *http.Request) response.Response {
@@ -194,7 +206,13 @@ func storagePoolVolumeTypeBitmapsGet(d *Daemon, r *http.Request) response.Respon
 		return response.BadRequest(fmt.Errorf("Unsupported storage volume type %q", volumeTypeName))
 	}
 
-	resp := forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
+	// Forward if needed.
+	resp := forwardedResponseIfTargetIsRemote(s, r)
+	if resp != nil {
+		return resp
+	}
+
+	resp = forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
 	if resp != nil {
 		return resp
 	}
@@ -298,12 +316,16 @@ func storagePoolVolumeTypeBitmapsGet(d *Daemon, r *http.Request) response.Respon
 //	    schema:
 //	      $ref: "#/definitions/StorageVolumeBitmapsPost"
 //	responses:
-//	  "202":
-//	    $ref: "#/responses/Operation"
+//	  "200":
+//	    $ref: "#/responses/EmptySyncResponse"
 //	  "400":
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumeTypeBitmapsPost(d *Daemon, r *http.Request) response.Response {
@@ -338,7 +360,13 @@ func storagePoolVolumeTypeBitmapsPost(d *Daemon, r *http.Request) response.Respo
 		return response.BadRequest(fmt.Errorf("Unsupported storage volume type %q", volumeTypeName))
 	}
 
-	resp := forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
+	// Forward if needed.
+	resp := forwardedResponseIfTargetIsRemote(s, r)
+	if resp != nil {
+		return resp
+	}
+
+	resp = forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
 	if resp != nil {
 		return resp
 	}
@@ -452,8 +480,14 @@ func storagePoolVolumeTypeBitmapsPost(d *Daemon, r *http.Request) response.Respo
 //	          example: 200
 //	        metadata:
 //	          $ref: "#/definitions/StorageVolumeBitmap"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumeTypeBitmapGet(d *Daemon, r *http.Request) response.Response {
@@ -493,7 +527,13 @@ func storagePoolVolumeTypeBitmapGet(d *Daemon, r *http.Request) response.Respons
 		return response.BadRequest(fmt.Errorf("Unsupported storage volume type %q", volumeTypeName))
 	}
 
-	resp := forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
+	// Forward if needed.
+	resp := forwardedResponseIfTargetIsRemote(s, r)
+	if resp != nil {
+		return resp
+	}
+
+	resp = forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
 	if resp != nil {
 		return resp
 	}
@@ -589,12 +629,16 @@ func storagePoolVolumeTypeBitmapGet(d *Daemon, r *http.Request) response.Respons
 //	    type: string
 //	    example: server01
 //	responses:
-//	  "202":
-//	    $ref: "#/responses/Operation"
+//	  "200":
+//	    $ref: "#/responses/EmptySyncResponse"
 //	  "400":
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumeTypeBitmapDelete(d *Daemon, r *http.Request) response.Response {
@@ -634,7 +678,13 @@ func storagePoolVolumeTypeBitmapDelete(d *Daemon, r *http.Request) response.Resp
 		return response.BadRequest(fmt.Errorf("Unsupported storage volume type %q", volumeTypeName))
 	}
 
-	resp := forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
+	// Forward if needed.
+	resp := forwardedResponseIfTargetIsRemote(s, r)
+	if resp != nil {
+		return resp
+	}
+
+	resp = forwardedResponseIfVolumeIsRemote(s, r, poolName, projectName, volumeName, volumeDBType)
 	if resp != nil {
 		return resp
 	}

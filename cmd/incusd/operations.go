@@ -168,8 +168,14 @@ func waitForOperations(ctx context.Context, clusterDB *db.Cluster, consoleShutdo
 //	          example: 200
 //	        metadata:
 //	          $ref: "#/definitions/Operation"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func operationGet(d *Daemon, r *http.Request) response.Response {
@@ -249,6 +255,10 @@ func operationGet(d *Daemon, r *http.Request) response.Response {
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func operationDelete(d *Daemon, r *http.Request) response.Response {
@@ -449,8 +459,14 @@ func operationCancel(s *state.State, r *http.Request, projectName string, op *ap
 //                  "/1.0/operations/6916c8a6-9b7d-4abd-90b3-aedfec7ec7da"
 //                ]
 //              }
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -497,8 +513,14 @@ func operationCancel(s *state.State, r *http.Request, projectName string, op *ap
 //	          description: List of operations
 //	          items:
 //	            $ref: "#/definitions/Operation"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func operationsGet(d *Daemon, r *http.Request) response.Response {
@@ -884,8 +906,14 @@ func operationsGetByType(s *state.State, r *http.Request, projectName string, op
 //            example: 200
 //          metadata:
 //            $ref: "#/definitions/Operation"
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -930,8 +958,14 @@ func operationsGetByType(s *state.State, r *http.Request, projectName string, op
 //	          example: 200
 //	        metadata:
 //	          $ref: "#/definitions/Operation"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func operationWaitGet(d *Daemon, r *http.Request) response.Response {
@@ -960,7 +994,7 @@ func operationWaitGet(d *Daemon, r *http.Request) response.Response {
 	// First check if the query is for a local operation from this node
 	op, err := operations.OperationGetInternal(id)
 	if err == nil {
-		if secret != "" && op.Metadata()["secret"] != secret {
+		if secret != "" && !util.CompareSecret(op.Metadata()["secret"], secret) {
 			return response.Forbidden(nil)
 		}
 
@@ -1094,10 +1128,16 @@ func (r *operationWebSocket) Code() int {
 //      type: string
 //      example: random-string
 //  responses:
-//    "200":
+//    "101":
 //      description: Websocket operation messages (dependent on operation)
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -1125,10 +1165,16 @@ func (r *operationWebSocket) Code() int {
 //	    type: string
 //	    example: random-string
 //	responses:
-//	  "200":
+//	  "101":
 //	    description: Websocket operation messages (dependent on operation)
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func operationWebsocketGet(d *Daemon, r *http.Request) response.Response {

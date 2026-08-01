@@ -510,7 +510,7 @@ func (n *ovn) Validate(config map[string]string, clientType request.ClientType) 
 				return nil
 			}
 
-			return validate.IsNetworkAddressCIDRV4(value)
+			return validate.IsNetworkAddressCIDRV4(value, true)
 		}),
 
 		// gendoc:generate(entity=network_ovn, group=common, key=ipv4.dhcp)
@@ -578,7 +578,7 @@ func (n *ovn) Validate(config map[string]string, clientType request.ClientType) 
 				return nil
 			}
 
-			return validate.IsNetworkAddressCIDRV6(value)
+			return validate.IsNetworkAddressCIDRV6(value, true)
 		}),
 
 		// gendoc:generate(entity=network_ovn, group=common, key=ipv6.dhcp)
@@ -2573,7 +2573,7 @@ func (n *ovn) getDHCPv4Reservations() ([]iprange.Range, error) {
 	}
 
 	err = UsedByInstanceDevices(n.state, n.Project(), n.Name(), n.Type(), func(inst db.InstanceArgs, nicName string, nicConfig map[string]string) error {
-		ip := net.ParseIP(nicConfig["ipv4.address"])
+		ip := net.ParseIP(nicAddressIP(nicConfig["ipv4.address"]))
 		if ip != nil {
 			if !ipInRanges(ip, dhcpReserveIPv4s) {
 				dhcpReserveIPv4s = append(dhcpReserveIPv4s, iprange.Range{Start: ip})
@@ -3673,9 +3673,10 @@ func (n *ovn) deleteChassisGroupEntry() error {
 func (n *ovn) Delete(clientType request.ClientType) error {
 	n.logger.Debug("Delete", logger.Ctx{"clientType": clientType})
 
+	// Don't fail on stop errors as that would prevent the northbound database cleanup below.
 	err := n.Stop()
 	if err != nil {
-		return err
+		n.logger.Warn("Failed stopping network during delete, continuing with deletion", logger.Ctx{"err": err})
 	}
 
 	if clientType == request.ClientTypeNormal {
@@ -4224,7 +4225,7 @@ func (n *ovn) Update(newNetwork api.NetworkPut, targetNode string, clientType re
 		removeChangeSet := map[networkOVN.OVNPortGroup][]networkOVN.OVNSwitchPortUUID{}
 
 		// Get list of active switch ports (avoids repeated querying of OVN NB).
-		activePorts, err := n.ovnnb.GetLogicalSwitchPorts(context.TODO(), n.getIntSwitchName())
+		activePorts, err := n.ovnnb.GetLogicalSwitchActivePorts(context.TODO(), n.getIntSwitchName())
 		if err != nil {
 			return fmt.Errorf("Failed getting active ports: %w", err)
 		}
@@ -4637,9 +4638,82 @@ func (n *ovn) InstanceDevicePortValidateExternalRoutes(deviceInstance instance.I
 	return nil
 }
 
-// InstanceDevicePortAdd adds empty DNS record (to indicate port has been added) and any DHCP reservations for
-// instance device port.
+// instanceDevicePortOpts derives the logical switch port options for an instance NIC device.
+func (n *ovn) instanceDevicePortOpts(instanceUUID string, deviceName string, devConfig deviceConfig.Device, ipv4 string, ipv6 string, enabled bool, location string) (*networkOVN.OVNSwitchPortOpts, error) {
+	mac, err := net.ParseMAC(devConfig["hwaddr"])
+	if err != nil {
+		return nil, err
+	}
+
+	dhcpv4Subnet := n.DHCPv4Subnet()
+	dhcpv6Subnet := n.DHCPv6Subnet()
+	var dhcpV4UUID, dhcpV6UUID networkOVN.OVNDHCPOptionsUUID
+
+	if dhcpv4Subnet != nil || dhcpv6Subnet != nil {
+		dhcpV4UUID, dhcpV6UUID, err = n.getDhcpOptionUUIDs()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if dhcpv4Subnet != nil && dhcpV4UUID == "" {
+		return nil, fmt.Errorf("Could not find DHCPv4 options for instance port for subnet %q", dhcpv4Subnet.String())
+	}
+
+	if dhcpv6Subnet != nil {
+		if dhcpV6UUID == "" {
+			return nil, fmt.Errorf("Could not find DHCPv6 options for instance port for subnet %q", dhcpv6Subnet.String())
+		}
+
+		// If port isn't going to have fully dynamic IPs allocated by OVN, and instead only static
+		// IPv4 addresses have been added, then add an EUI64 static IPv6 address so that the switch
+		// port has an IPv6 address that will be used to generate a DNS record. This works around a
+		// limitation in OVN that prevents us requesting dynamic IPv6 address allocation when
+		// static IPv4 allocation is used.
+		if ipv4 != "" && ipv6 == "" {
+			eui64IP, err := eui64.ParseMAC(dhcpv6Subnet.IP, mac)
+			if err != nil {
+				return nil, fmt.Errorf("Failed generating EUI64 for instance port %q: %w", mac.String(), err)
+			}
+
+			// Add EUI64 as the IPv6 address.
+			ipv6 = eui64IP.String()
+		}
+	}
+
+	var nestedPortParentName networkOVN.OVNSwitchPort
+	var nestedPortVLAN uint16
+	if devConfig["nested"] != "" {
+		nestedPortParentName = n.getInstanceDevicePortName(instanceUUID, devConfig["nested"])
+		nestedPortVLANInt64, err := strconv.ParseUint(devConfig["vlan"], 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("Invalid VLAN ID %q: %w", devConfig["vlan"], err)
+		}
+
+		nestedPortVLAN = uint16(nestedPortVLANInt64)
+	}
+
+	return &networkOVN.OVNSwitchPortOpts{
+		DHCPv4OptsID: dhcpV4UUID,
+		DHCPv6OptsID: dhcpV6UUID,
+		MAC:          mac,
+		IPV4:         ipv4,
+		IPV6:         ipv6,
+		Parent:       nestedPortParentName,
+		VLAN:         nestedPortVLAN,
+		Location:     location,
+		Promiscuous:  util.IsTrue(devConfig["security.promiscuous"]),
+		Enabled:      &enabled,
+	}, nil
+}
+
+// InstanceDevicePortAdd creates the disabled logical switch port, empty DNS record and any DHCP
+// reservations for an instance device port.
 func (n *ovn) InstanceDevicePortAdd(instanceUUID string, deviceName string, devConfig deviceConfig.Device) error {
+	if instanceUUID == "" {
+		return errors.New("Instance UUID is required")
+	}
+
 	instancePortName := n.getInstanceDevicePortName(instanceUUID, deviceName)
 
 	reverter := revert.New()
@@ -4673,6 +4747,21 @@ func (n *ovn) InstanceDevicePortAdd(instanceUUID string, deviceName string, devC
 		}
 	}
 
+	// Create the logical switch port in disabled state.
+	portOpts, err := n.instanceDevicePortOpts(instanceUUID, deviceName, devConfig, devConfig["ipv4.address"], devConfig["ipv6.address"], false, "")
+	if err != nil {
+		return err
+	}
+
+	err = n.ovnnb.CreateLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), instancePortName, portOpts, true)
+	if err != nil {
+		return err
+	}
+
+	reverter.Add(func() {
+		_ = n.ovnnb.DeleteLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), instancePortName)
+	})
+
 	reverter.Success()
 	return nil
 }
@@ -4688,44 +4777,12 @@ func (n *ovn) hasDHCPv4Reservation(dhcpReservations []iprange.Range, ipAddress n
 	return false
 }
 
-// forwardHasDefaultTarget reports whether a network forward exists for the given listen address
-// and has a default target address configured.
-func (n *ovn) forwardHasDefaultTarget(listenAddress string) (bool, error) {
-	var hasDefaultTarget bool
-
-	err := n.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-		dbForward, err := dbCluster.GetNetworkForward(ctx, tx.Tx(), n.ID(), listenAddress)
-		if err != nil {
-			return err
-		}
-
-		forward, err := dbForward.ToAPI(ctx, tx.Tx())
-		if err != nil {
-			return err
-		}
-
-		hasDefaultTarget = forward.Config["target_address"] != ""
-
-		return nil
-	})
-	if err != nil {
-		return false, err
-	}
-
-	return hasDefaultTarget, nil
-}
-
-// InstanceDevicePortStart sets up an instance device port to the internal logical switch.
+// InstanceDevicePortStart sets up and enables an instance device port on the internal logical switch.
 // Accepts a list of ACLs being removed from the NIC device (if called as part of a NIC update).
 // Returns the logical switch port name and a list of IPs that were allocated to the port for DNS.
 func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACLsRemove []string) (networkOVN.OVNSwitchPort, []net.IP, error) {
 	if opts.InstanceUUID == "" {
 		return "", nil, errors.New("Instance UUID is required")
-	}
-
-	mac, err := net.ParseMAC(opts.DeviceConfig["hwaddr"])
-	if err != nil {
-		return "", nil, err
 	}
 
 	ipv4 := opts.DeviceConfig["ipv4.address"]
@@ -4736,8 +4793,18 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 		return "", nil, fmt.Errorf("Failed parsing NIC device routes: %w", err)
 	}
 
+	instancePortName := n.getInstanceDevicePortName(opts.InstanceUUID, opts.DeviceName)
+
 	reverter := revert.New()
 	defer reverter.Fail()
+
+	// Check if the persistent port already exists (may be missing after an upgrade or database restore).
+	existingPortUUID, err := n.ovnnb.GetLogicalSwitchPortUUID(context.TODO(), instancePortName)
+	if err != nil && !errors.Is(err, networkOVN.ErrNotFound) {
+		return "", nil, err
+	}
+
+	portExists := existingPortUUID != ""
 
 	// Get existing DHCPv4 static reservations.
 	// This is used for both checking sticky DHCPv4 allocation availability and for ensuring static DHCP
@@ -4749,19 +4816,9 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 
 	dhcpv4Subnet := n.DHCPv4Subnet()
 	dhcpv6Subnet := n.DHCPv6Subnet()
-	var dhcpV4UUID, dhcpV6UUID networkOVN.OVNDHCPOptionsUUID
 
-	if dhcpv4Subnet != nil || dhcpv6Subnet != nil {
-		dhcpV4UUID, dhcpV6UUID, err = n.getDhcpOptionUUIDs()
-		if err != nil {
-			return "", nil, err
-		}
-	}
-	if dhcpv4Subnet != nil {
-		if dhcpV4UUID == "" {
-			return "", nil, fmt.Errorf("Could not find DHCPv4 options for instance port for subnet %q", dhcpv4Subnet.String())
-		}
-
+	// Sticky IPs are only needed when re-creating the port as an existing port keeps its allocation.
+	if dhcpv4Subnet != nil && !portExists {
 		// If using dynamic IPv4, look for previously used sticky IPs from the NIC's last state.
 		var dhcpV4StickyIP net.IP
 		if opts.DeviceConfig["ipv4.address"] == "" {
@@ -4800,62 +4857,27 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 		}
 	}
 
-	if dhcpv6Subnet != nil {
-		if dhcpV6UUID == "" {
-			return "", nil, fmt.Errorf("Could not find DHCPv6 options for instance port for subnet %q", dhcpv6Subnet.String())
-		}
-
-		// If port isn't going to have fully dynamic IPs allocated by OVN, and instead only static
-		// IPv4 addresses have been added, then add an EUI64 static IPv6 address so that the switch
-		// port has an IPv6 address that will be used to generate a DNS record. This works around a
-		// limitation in OVN that prevents us requesting dynamic IPv6 address allocation when
-		// static IPv4 allocation is used.
-		if ipv4 != "" && ipv6 == "" {
-			eui64IP, err := eui64.ParseMAC(dhcpv6Subnet.IP, mac)
-			if err != nil {
-				return "", nil, fmt.Errorf("Failed generating EUI64 for instance port %q: %w", mac.String(), err)
-			}
-
-			// Add EUI64 as the IPv6 address.
-			ipv6 = eui64IP.String()
-		}
+	portOpts, err := n.instanceDevicePortOpts(opts.InstanceUUID, opts.DeviceName, opts.DeviceConfig, ipv4, ipv6, true, n.state.ServerName)
+	if err != nil {
+		return "", nil, err
 	}
 
-	instancePortName := n.getInstanceDevicePortName(opts.InstanceUUID, opts.DeviceName)
+	// Pick up any address override from the port options (such as the EUI64 IPv6 address).
+	ipv4 = portOpts.IPV4
+	ipv6 = portOpts.IPV6
 
-	var nestedPortParentName networkOVN.OVNSwitchPort
-	var nestedPortVLAN uint16
-	if opts.DeviceConfig["nested"] != "" {
-		nestedPortParentName = n.getInstanceDevicePortName(opts.InstanceUUID, opts.DeviceConfig["nested"])
-		nestedPortVLANInt64, err := strconv.ParseUint(opts.DeviceConfig["vlan"], 10, 16)
-		if err != nil {
-			return "", nil, fmt.Errorf("Invalid VLAN ID %q: %w", opts.DeviceConfig["vlan"], err)
-		}
-
-		nestedPortVLAN = uint16(nestedPortVLANInt64)
-	}
-
-	// Add port with mayExist set to true, so that if instance port exists, we don't fail and continue below
-	// to configure the port as needed. This is required in case the OVN northbound database was unavailable
-	// when the instance NIC was stopped and was unable to remove the port on last stop, which would otherwise
-	// prevent future NIC starts.
-	err = n.ovnnb.CreateLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), instancePortName, &networkOVN.OVNSwitchPortOpts{
-		DHCPv4OptsID: dhcpV4UUID,
-		DHCPv6OptsID: dhcpV6UUID,
-		MAC:          mac,
-		IPV4:         ipv4,
-		IPV6:         ipv6,
-		Parent:       nestedPortParentName,
-		VLAN:         nestedPortVLAN,
-		Location:     n.state.ServerName,
-		Promiscuous:  util.IsTrue(opts.DeviceConfig["security.promiscuous"]),
-	}, true)
+	// Create the port if missing, otherwise update its configuration, and enable it.
+	err = n.ovnnb.CreateLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), instancePortName, portOpts, true)
 	if err != nil {
 		return "", nil, err
 	}
 
 	reverter.Add(func() {
-		_ = n.ovnnb.DeleteLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), instancePortName)
+		if portExists {
+			_ = n.ovnnb.UpdateLogicalSwitchPortEnabled(context.TODO(), instancePortName, false)
+		} else {
+			_ = n.ovnnb.DeleteLogicalSwitchPort(context.TODO(), n.getIntSwitchName(), instancePortName)
+		}
 	})
 
 	// Add DNS records for port's IPs, and retrieve the IP addresses used.
@@ -4923,59 +4945,29 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 			return "", nil, fmt.Errorf("Invalid external address %q", value)
 		}
 
-		// Check if we should setup a full bi-directional NAT for the address.
-		useDNATAndSNAT, err := n.forwardHasDefaultTarget(value)
-		if err != nil {
-			return "", nil, fmt.Errorf("Failed to check network forward for external address %q: %w", value, err)
+		// Egress-only; paired network forward handles inbound (see forwardApplyDefaultTargetNAT).
+		if err := n.ovnnb.CreateLogicalRouterNAT(
+			context.TODO(),
+			n.getRouterName(),
+			"snat",
+			intNet,
+			extIP,
+			nil,
+			false,
+			true,
+		); err != nil {
+			return "", nil, fmt.Errorf("Failed to add SNAT %q: %w", value, err)
 		}
 
-		if useDNATAndSNAT {
-			if err := n.ovnnb.CreateLogicalRouterNAT(
-				context.TODO(),
-				n.getRouterName(),
-				"dnat_and_snat",
-				nil,
-				extIP,
-				intNet.IP,
-				false,
-				true,
-			); err != nil {
-				return "", nil, fmt.Errorf("Failed to add DNAT and SNAT %q: %w", value, err)
-			}
-
-			reverter.Add(func() {
-				_ = n.ovnnb.DeleteLogicalRouterNAT(
-					context.TODO(),
-					n.getRouterName(),
-					"dnat_and_snat",
-					false,
-					extIP,
-				)
-			})
-		} else {
-			if err := n.ovnnb.CreateLogicalRouterNAT(
+		reverter.Add(func() {
+			_ = n.ovnnb.DeleteLogicalRouterNAT(
 				context.TODO(),
 				n.getRouterName(),
 				"snat",
-				intNet,
-				extIP,
-				nil,
 				false,
-				true,
-			); err != nil {
-				return "", nil, fmt.Errorf("Failed to add SNAT %q: %w", value, err)
-			}
-
-			reverter.Add(func() {
-				_ = n.ovnnb.DeleteLogicalRouterNAT(
-					context.TODO(),
-					n.getRouterName(),
-					"snat",
-					false,
-					extIP,
-				)
-			})
-		}
+				extIP,
+			)
+		})
 	}
 
 	// Get dynamic IPs for switch port if any IPs not assigned statically.
@@ -5327,6 +5319,21 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 		}
 	}
 
+	// Remove the persistent port from any port group no longer requested above.
+	currentPortGroups, err := n.ovnnb.GetPortGroupsByPort(context.TODO(), portUUID)
+	if err != nil {
+		return "", nil, fmt.Errorf("Failed getting port groups for instance NIC port: %w", err)
+	}
+
+	for _, portGroup := range currentPortGroups {
+		_, foundAdd := addChangeSet[portGroup]
+		_, foundRemove := removeChangeSet[portGroup]
+		if !foundAdd && !foundRemove {
+			acl.OVNPortGroupInstanceNICSchedule(portUUID, removeChangeSet, portGroup)
+			n.logger.Debug("Scheduled logical port for port group removal", logger.Ctx{"portGroup": portGroup, "port": instancePortName})
+		}
+	}
+
 	// Add instance NIC switch port to port groups required. Always run this as the addChangeSet should always
 	// be populated even if no ACLs being applied, because the NIC port needs to be added to the network level
 	// port group.
@@ -5421,7 +5428,7 @@ func (n *ovn) InstanceDevicePortStart(opts *OVNInstanceNICSetupOpts, securityACL
 		rules = append(rules, ingressRule)
 	}
 
-	err = n.ovnnb.AddLogicalSwitchQoSRules(context.TODO(), n.getIntSwitchName(), instancePortName, rules...)
+	err = n.ovnnb.SetLogicalSwitchQoSRules(context.TODO(), n.getIntSwitchName(), instancePortName, rules...)
 	if err != nil {
 		return "", nil, err
 	}
@@ -5467,7 +5474,7 @@ func (n *ovn) InstanceDevicePortIPs(instanceUUID string, deviceName string) ([]n
 	return devIPs, nil
 }
 
-// InstanceDevicePortStop deletes an instance device port from the internal logical switch.
+// InstanceDevicePortStop disables an instance device port and removes its routes and NAT rules.
 func (n *ovn) InstanceDevicePortStop(ovsExternalOVNPort networkOVN.OVNSwitchPort, opts *OVNInstanceNICStopOpts) error {
 	// Decide whether to use OVS provided OVN port name or internally derived OVN port name.
 	instancePortName := ovsExternalOVNPort
@@ -5486,12 +5493,12 @@ func (n *ovn) InstanceDevicePortStop(ovsExternalOVNPort networkOVN.OVNSwitchPort
 		return fmt.Errorf("Failed getting instance switch port options: %w", err)
 	}
 
-	// Don't delete logical switch port if already active on another chassis (i.e during live cluster move).
+	// Don't disable logical switch port if already active on another chassis (i.e during live cluster move).
 	if portLocation != "" && portLocation != n.state.ServerName {
 		return nil
 	}
 
-	n.logger.Debug("Deleting instance port", logger.Ctx{"port": instancePortName, "source": source})
+	n.logger.Debug("Disabling instance port", logger.Ctx{"port": instancePortName, "source": source})
 
 	internalRoutes, externalRoutes, err := n.instanceDevicePortRoutesParse(opts.DeviceConfig)
 	if err != nil {
@@ -5513,38 +5520,14 @@ func (n *ovn) InstanceDevicePortStop(ovsExternalOVNPort networkOVN.OVNSwitchPort
 	}
 
 	// Get DNS records.
-	dnsUUID, _, dnsIPs, err := n.ovnnb.GetLogicalSwitchPortDNS(context.TODO(), instancePortName)
+	_, _, dnsIPs, err := n.ovnnb.GetLogicalSwitchPortDNS(context.TODO(), instancePortName)
 	if err != nil {
 		return err
 	}
 
-	portUUID, err := n.ovnnb.GetLogicalSwitchPortUUID(context.TODO(), instancePortName)
-	if err != nil {
-		return fmt.Errorf("Failed getting logical port UUID for port group removal: %w", err)
-	}
-
-	if portUUID != "" {
-		portGroups, err := n.ovnnb.GetPortGroupsByPort(context.TODO(), portUUID)
-		if err != nil {
-			return fmt.Errorf("Failed getting port groups for instance NIC port: %w", err)
-		}
-
-		if len(portGroups) > 0 {
-			removeChangeSet := map[networkOVN.OVNPortGroup][]networkOVN.OVNSwitchPortUUID{}
-			for _, pg := range portGroups {
-				acl.OVNPortGroupInstanceNICSchedule(portUUID, removeChangeSet, pg)
-			}
-
-			err = n.ovnnb.UpdatePortGroupMembers(context.TODO(), map[networkOVN.OVNPortGroup][]networkOVN.OVNSwitchPortUUID{}, removeChangeSet)
-			if err != nil {
-				return fmt.Errorf("Failed removing instance NIC port from port groups: %w", err)
-			}
-		}
-	}
-
-	// Cleanup logical switch port and associated config.
-	err = n.ovnnb.CleanupLogicalSwitchPort(context.TODO(), instancePortName, n.getIntSwitchName(), acl.OVNIntSwitchPortGroupName(n.ID()), dnsUUID)
-	if err != nil {
+	// Disable the logical switch port.
+	err = n.ovnnb.UpdateLogicalSwitchPortEnabled(context.TODO(), instancePortName, false)
+	if err != nil && !errors.Is(err, networkOVN.ErrNotFound) {
 		return err
 	}
 
@@ -5647,9 +5630,7 @@ func (n *ovn) InstanceDevicePortStop(ovsExternalOVNPort networkOVN.OVNSwitchPort
 	return nil
 }
 
-// InstanceDevicePortRemove unregisters the NIC device in the OVN database by removing the DNS entry that should
-// have been created during InstanceDevicePortAdd(). If the DNS record exists at remove time then this indicates
-// the NIC device was successfully added and this function also clears any DHCP reservations for the NIC's IPs.
+// InstanceDevicePortRemove deletes an instance device port and all its associated OVN config.
 func (n *ovn) InstanceDevicePortRemove(instanceUUID string, devName string, devConfig deviceConfig.Device, hasDuplicate bool) error {
 	instancePortName := n.getInstanceDevicePortName(instanceUUID, devName)
 
@@ -5687,17 +5668,41 @@ func (n *ovn) InstanceDevicePortRemove(instanceUUID string, devName string, devC
 		}
 	}
 
-	// Remove DNS record if exists.
+	// Remove the port from any port groups it is a member of.
+	portUUID, err := n.ovnnb.GetLogicalSwitchPortUUID(context.TODO(), instancePortName)
+	if err != nil && !errors.Is(err, networkOVN.ErrNotFound) {
+		return fmt.Errorf("Failed getting logical port UUID for port group removal: %w", err)
+	}
+
+	if portUUID != "" {
+		portGroups, err := n.ovnnb.GetPortGroupsByPort(context.TODO(), portUUID)
+		if err != nil {
+			return fmt.Errorf("Failed getting port groups for instance NIC port: %w", err)
+		}
+
+		if len(portGroups) > 0 {
+			removeChangeSet := map[networkOVN.OVNPortGroup][]networkOVN.OVNSwitchPortUUID{}
+			for _, pg := range portGroups {
+				acl.OVNPortGroupInstanceNICSchedule(portUUID, removeChangeSet, pg)
+			}
+
+			err = n.ovnnb.UpdatePortGroupMembers(context.TODO(), map[networkOVN.OVNPortGroup][]networkOVN.OVNSwitchPortUUID{}, removeChangeSet)
+			if err != nil {
+				return fmt.Errorf("Failed removing instance NIC port from port groups: %w", err)
+			}
+		}
+	}
+
+	// Get DNS records.
 	dnsUUID, _, _, err := n.ovnnb.GetLogicalSwitchPortDNS(context.TODO(), instancePortName)
 	if err != nil {
 		return err
 	}
 
-	if dnsUUID != "" {
-		err = n.ovnnb.DeleteLogicalSwitchPortDNS(context.TODO(), n.getIntSwitchName(), dnsUUID, true)
-		if err != nil {
-			return fmt.Errorf("Failed deleting DNS record: %w", err)
-		}
+	// Cleanup logical switch port and associated config.
+	err = n.ovnnb.CleanupLogicalSwitchPort(context.TODO(), instancePortName, n.getIntSwitchName(), acl.OVNIntSwitchPortGroupName(n.ID()), dnsUUID)
+	if err != nil {
+		return err
 	}
 
 	reverter.Success()
@@ -5963,7 +5968,7 @@ func (n *ovn) handleDependencyChange(uplinkName string, uplinkConfig map[string]
 
 		if slices.Contains([]string{"l2proxy", ""}, uplinkConfig["ovn.ingress_mode"]) {
 			// Get list of active switch ports (avoids repeated querying of OVN NB).
-			activePorts, err := n.ovnnb.GetLogicalSwitchPorts(context.TODO(), n.getIntSwitchName())
+			activePorts, err := n.ovnnb.GetLogicalSwitchActivePorts(context.TODO(), n.getIntSwitchName())
 			if err != nil {
 				return fmt.Errorf("Failed getting active ports: %w", err)
 			}
@@ -6038,15 +6043,8 @@ func (n *ovn) handleDependencyChange(uplinkName string, uplinkConfig map[string]
 }
 
 // forwardFlattenVIPs flattens forwards into format compatible with OVN load balancers.
-func (n *ovn) forwardFlattenVIPs(listenAddress net.IP, defaultTargetAddress net.IP, portMaps []*forwardPortMap) []networkOVN.OVNLoadBalancerVIP {
+func (n *ovn) forwardFlattenVIPs(listenAddress net.IP, portMaps []*forwardPortMap) []networkOVN.OVNLoadBalancerVIP {
 	var vips []networkOVN.OVNLoadBalancerVIP
-
-	if defaultTargetAddress != nil {
-		vips = append(vips, networkOVN.OVNLoadBalancerVIP{
-			ListenAddress: listenAddress,
-			Targets:       []networkOVN.OVNLoadBalancerTarget{{Address: defaultTargetAddress}},
-		})
-	}
 
 	for _, portMap := range portMaps {
 		targetPortsLen := len(portMap.target.ports)
@@ -6078,6 +6076,22 @@ func (n *ovn) forwardFlattenVIPs(listenAddress net.IP, defaultTargetAddress net.
 	}
 
 	return vips
+}
+
+// forwardApplyDefaultTargetNAT creates, refreshes or removes the dnat rule for a forward's default
+// target_address. A plain NAT rule is used instead of a portless Load_Balancer VIP so it can't collide
+// with a paired ipv4/ipv6.address.external snat rule on the same address.
+func (n *ovn) forwardApplyDefaultTargetNAT(listenAddress net.IP, targetAddress net.IP) error {
+	err := n.ovnnb.DeleteLogicalRouterNAT(context.TODO(), n.getRouterName(), "dnat", false, listenAddress)
+	if err != nil {
+		return err
+	}
+
+	if targetAddress == nil {
+		return nil
+	}
+
+	return n.ovnnb.CreateLogicalRouterNAT(context.TODO(), n.getRouterName(), "dnat", nil, listenAddress, targetAddress, false, true)
 }
 
 // ForwardCreate creates a network forward.
@@ -6261,14 +6275,20 @@ func (n *ovn) ForwardCreate(forward api.NetworkForwardsPost, clientType request.
 			})
 
 			_ = n.ovnnb.DeleteLoadBalancer(context.TODO(), n.getLoadBalancerName(forward.ListenAddress))
+			_ = n.ovnnb.DeleteLogicalRouterNAT(context.TODO(), n.getRouterName(), "dnat", false, listenAddressNet.IP)
 			_ = n.forwardBGPSetupPrefixes()
 		})
 
-		vips := n.forwardFlattenVIPs(net.ParseIP(forward.ListenAddress), net.ParseIP(forward.Config["target_address"]), portMaps)
+		vips := n.forwardFlattenVIPs(net.ParseIP(forward.ListenAddress), portMaps)
 
 		err = n.ovnnb.CreateLoadBalancer(context.TODO(), n.getLoadBalancerName(forward.ListenAddress), n.getRouterName(), n.getIntSwitchName(), vips...)
 		if err != nil {
 			return fmt.Errorf("Failed applying OVN load balancer: %w", err)
+		}
+
+		err = n.forwardApplyDefaultTargetNAT(listenAddressNet.IP, net.ParseIP(forward.Config["target_address"]))
+		if err != nil {
+			return fmt.Errorf("Failed applying default target NAT rule: %w", err)
 		}
 
 		// Add internal static route to the network forward (helps with OVN IC).
@@ -6374,18 +6394,24 @@ func (n *ovn) ForwardUpdate(listenAddress string, req api.NetworkForwardPut, cli
 			return nil // Nothing has changed.
 		}
 
-		vips := n.forwardFlattenVIPs(net.ParseIP(newForward.ListenAddress), net.ParseIP(newForward.Config["target_address"]), portMaps)
+		vips := n.forwardFlattenVIPs(net.ParseIP(newForward.ListenAddress), portMaps)
 		err = n.ovnnb.CreateLoadBalancer(context.TODO(), n.getLoadBalancerName(newForward.ListenAddress), n.getRouterName(), n.getIntSwitchName(), vips...)
 		if err != nil {
 			return fmt.Errorf("Failed applying OVN load balancer: %w", err)
+		}
+
+		err = n.forwardApplyDefaultTargetNAT(net.ParseIP(newForward.ListenAddress), net.ParseIP(newForward.Config["target_address"]))
+		if err != nil {
+			return fmt.Errorf("Failed applying default target NAT rule: %w", err)
 		}
 
 		reverter.Add(func() {
 			// Apply old settings to OVN on failure.
 			portMaps, err := n.forwardValidate(net.ParseIP(curForward.ListenAddress), &curForward.NetworkForwardPut)
 			if err == nil {
-				vips := n.forwardFlattenVIPs(net.ParseIP(curForward.ListenAddress), net.ParseIP(curForward.Config["target_address"]), portMaps)
+				vips := n.forwardFlattenVIPs(net.ParseIP(curForward.ListenAddress), portMaps)
 				_ = n.ovnnb.CreateLoadBalancer(context.TODO(), n.getLoadBalancerName(curForward.ListenAddress), n.getRouterName(), n.getIntSwitchName(), vips...)
+				_ = n.forwardApplyDefaultTargetNAT(net.ParseIP(curForward.ListenAddress), net.ParseIP(curForward.Config["target_address"]))
 				_ = n.forwardBGPSetupPrefixes()
 			}
 		})
@@ -6492,6 +6518,11 @@ func (n *ovn) ForwardDelete(listenAddress string, clientType request.ClientType)
 		err = n.ovnnb.DeleteLoadBalancer(context.TODO(), n.getLoadBalancerName(forward.ListenAddress))
 		if err != nil {
 			return fmt.Errorf("Failed deleting OVN load balancer: %w", err)
+		}
+
+		err = n.forwardApplyDefaultTargetNAT(net.ParseIP(forward.ListenAddress), nil)
+		if err != nil {
+			return fmt.Errorf("Failed deleting default target NAT rule: %w", err)
 		}
 
 		// Delete static route to network forward if present.
@@ -7209,7 +7240,7 @@ func (n *ovn) Leases(projectName string, clientType request.ClientType) ([]api.N
 		// Add the leases.
 		for _, ip := range devIPs {
 			leaseType := "dynamic"
-			if nicConfig["ipv4.address"] == ip.String() || nicConfig["ipv6.address"] == ip.String() {
+			if nicAddressIP(nicConfig["ipv4.address"]) == ip.String() || nicAddressIP(nicConfig["ipv6.address"]) == ip.String() {
 				leaseType = "static"
 			}
 
@@ -7273,7 +7304,7 @@ func (n *ovn) localPeerCreate(peer api.NetworkPeersPost) error {
 		return fmt.Errorf("Failed applying local router security policy: %w", err)
 	}
 
-	activeLocalNICPorts, err := n.ovnnb.GetLogicalSwitchPorts(context.TODO(), n.getIntSwitchName())
+	activeLocalNICPorts, err := n.ovnnb.GetLogicalSwitchActivePorts(context.TODO(), n.getIntSwitchName())
 	if err != nil {
 		return fmt.Errorf("Failed getting active NIC ports: %w", err)
 	}
@@ -7809,7 +7840,7 @@ func (n *ovn) peerSetup(ovnnb *networkOVN.NB, targetOVNNet *ovn, opts networkOVN
 	}
 
 	// Get list of active switch ports (avoids repeated querying of OVN NB).
-	activeTargetNICPorts, err := n.ovnnb.GetLogicalSwitchPorts(context.TODO(), targetOVNNet.getIntSwitchName())
+	activeTargetNICPorts, err := n.ovnnb.GetLogicalSwitchActivePorts(context.TODO(), targetOVNNet.getIntSwitchName())
 	if err != nil {
 		return fmt.Errorf("Failed getting active NIC ports: %w", err)
 	}

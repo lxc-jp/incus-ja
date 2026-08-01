@@ -155,8 +155,14 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //                "/1.0/storage-pools/local/volumes/custom/backups",
 //                "/1.0/storage-pools/local/volumes/custom/images"
 //              ]
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -214,8 +220,14 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //            description: List of storage volumes
 //            items:
 //              $ref: "#/definitions/StorageVolume"
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -278,8 +290,14 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //                "/1.0/storage-pools/local/volumes/custom/backups",
 //                "/1.0/storage-pools/local/volumes/custom/images"
 //              ]
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -337,8 +355,14 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //	          description: List of storage volumes
 //	          items:
 //	            $ref: "#/definitions/StorageVolume"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 
@@ -396,8 +420,14 @@ var storagePoolVolumeTypeFileCmd = APIEndpoint{
 //	          description: List of storage volumes
 //	          items:
 //	            $ref: "#/definitions/StorageVolumeFull"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumesGet(d *Daemon, r *http.Request) response.Response {
@@ -753,6 +783,10 @@ func filterVolumes(volumes []*db.StorageVolume, clauses *filter.ClauseSet, allPr
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 
@@ -804,6 +838,10 @@ func filterVolumes(volumes []*db.StorageVolume, clauses *filter.ClauseSet, allPr
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumesPost(d *Daemon, r *http.Request) response.Response {
@@ -1252,12 +1290,18 @@ func doVolumeMigration(s *state.State, r *http.Request, requestProjectName strin
 //	    schema:
 //	      $ref: "#/definitions/StorageVolumePost"
 //	responses:
+//	  "201":
+//	    $ref: "#/responses/EmptySyncResponse"
 //	  "202":
 //	    $ref: "#/responses/Operation"
 //	  "400":
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumePost(d *Daemon, r *http.Request) response.Response {
@@ -1930,8 +1974,14 @@ func storagePoolVolumeTypePostMove(s *state.State, r *http.Request, poolName str
 //	          example: 200
 //	        metadata:
 //	          $ref: "#/definitions/StorageVolume"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 
@@ -1991,8 +2041,14 @@ func storagePoolVolumeTypePostMove(s *state.State, r *http.Request, poolName str
 //	          example: 200
 //	        metadata:
 //	          $ref: "#/definitions/StorageVolumeFull"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumeGet(d *Daemon, r *http.Request) response.Response {
@@ -2241,6 +2297,10 @@ func getVolumeFull(ctx context.Context, s *state.State, poolName string, vol api
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "412":
 //	    $ref: "#/responses/PreconditionFailed"
 //	  "500":
@@ -2430,6 +2490,10 @@ func storagePoolVolumePut(d *Daemon, r *http.Request) response.Response {
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "412":
 //	    $ref: "#/responses/PreconditionFailed"
 //	  "500":
@@ -2579,6 +2643,10 @@ func storagePoolVolumePatch(d *Daemon, r *http.Request) response.Response {
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func storagePoolVolumeDelete(d *Daemon, r *http.Request) response.Response {
@@ -2700,6 +2768,12 @@ func createStoragePoolVolumeFromISO(s *state.State, r *http.Request, requestProj
 
 	if volName == "" {
 		return response.BadRequest(errors.New("Missing volume name"))
+	}
+
+	// Validate the volume name to avoid path traversal when used as a path segment.
+	err := validate.IsAPIName(volName, false)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid volume name: %w", err))
 	}
 
 	// Create isos directory if needed.
@@ -2867,6 +2941,19 @@ func createStoragePoolVolumeFromBackup(s *state.State, r *http.Request, requestP
 	// Override volume name.
 	if volName != "" {
 		bInfo.Name = volName
+	}
+
+	// Validate the volume and snapshot names to avoid path traversal when used as path segments.
+	err = validate.IsAPIName(bInfo.Name, false)
+	if err != nil {
+		return response.BadRequest(fmt.Errorf("Invalid volume name: %w", err))
+	}
+
+	for _, snapName := range bInfo.Snapshots {
+		err = validate.IsAPIName(snapName, false)
+		if err != nil {
+			return response.BadRequest(fmt.Errorf("Invalid snapshot name: %w", err))
+		}
 	}
 
 	logger.Debug("Backup file info loaded", logger.Ctx{

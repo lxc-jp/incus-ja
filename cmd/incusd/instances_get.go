@@ -79,8 +79,14 @@ import (
 //                "/1.0/instances/foo",
 //                "/1.0/instances/bar"
 //              ]
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -132,8 +138,14 @@ import (
 //            description: List of instances
 //            items:
 //              $ref: "#/definitions/Instance"
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -189,8 +201,14 @@ import (
 //            description: List of instances
 //            items:
 //              $ref: "#/definitions/InstanceFull"
+//    "400":
+//      $ref: "#/responses/BadRequest"
 //    "403":
 //      $ref: "#/responses/Forbidden"
+//    "404":
+//      $ref: "#/responses/NotFound"
+//    "409":
+//      $ref: "#/responses/Conflict"
 //    "500":
 //      $ref: "#/responses/InternalServerError"
 
@@ -504,7 +522,7 @@ func doInstancesGetFromNode(projects []string, node string, allProjects bool, ne
 	}
 
 	timeout := time.After(30 * time.Second)
-	done := make(chan struct{})
+	done := make(chan struct{}, 1)
 
 	var containers []api.Instance
 	var err error
@@ -553,7 +571,7 @@ func doInstancesFullGetFromNode(projects []string, node string, allProjects bool
 	}
 
 	timeout := time.After(30 * time.Second)
-	done := make(chan struct{})
+	done := make(chan struct{}, 1)
 
 	var instances []api.InstanceFull
 	var err error

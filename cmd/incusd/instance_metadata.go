@@ -67,8 +67,14 @@ import (
 //	          example: 200
 //	        metadata:
 //	          $ref: "#/definitions/ImageMetadata"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func instanceMetadataGet(d *Daemon, r *http.Request) response.Response {
@@ -113,15 +119,21 @@ func instanceMetadataGet(d *Daemon, r *http.Request) response.Response {
 
 	defer logger.WarnOnError(func() error { return storagePools.InstanceUnmount(pool, c, nil) }, "Failed to unmount instance")
 
-	// If missing, just return empty result
-	metadataPath := filepath.Join(c.Path(), "metadata.yaml")
-	if !util.PathExists(metadataPath) {
-		return response.SyncResponse(true, api.ImageMetadata{})
+	// Confine metadata access to the instance directory.
+	root, err := os.OpenRoot(c.Path())
+	if err != nil {
+		return response.SmartError(err)
 	}
 
-	// Read the metadata
-	metadataFile, err := os.Open(metadataPath)
+	defer logger.WarnOnError(root.Close, "Failed to close instance root")
+
+	// Read the metadata (if missing, just return empty result).
+	metadataFile, err := root.Open("metadata.yaml")
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return response.SyncResponse(true, api.ImageMetadata{})
+		}
+
 		return response.InternalError(err)
 	}
 
@@ -179,6 +191,10 @@ func instanceMetadataGet(d *Daemon, r *http.Request) response.Response {
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "412":
 //	    $ref: "#/responses/PreconditionFailed"
 //	  "500":
@@ -225,15 +241,22 @@ func instanceMetadataPatch(d *Daemon, r *http.Request) response.Response {
 
 	defer logger.WarnOnError(func() error { return storagePools.InstanceUnmount(pool, inst, nil) }, "Failed to unmount instance")
 
-	// Read the existing data.
-	metadataPath := filepath.Join(inst.Path(), "metadata.yaml")
-	metadata := api.ImageMetadata{}
-	if util.PathExists(metadataPath) {
-		metadataFile, err := os.Open(metadataPath)
-		if err != nil {
-			return response.InternalError(err)
-		}
+	// Confine metadata access to the instance directory.
+	root, err := os.OpenRoot(inst.Path())
+	if err != nil {
+		return response.SmartError(err)
+	}
 
+	defer logger.WarnOnError(root.Close, "Failed to close instance root")
+
+	// Read the existing data.
+	metadata := api.ImageMetadata{}
+	metadataFile, err := root.Open("metadata.yaml")
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return response.InternalError(err)
+	}
+
+	if err == nil {
 		defer logger.WarnOnError(metadataFile.Close, "Failed to close metadata file")
 
 		data, err := io.ReadAll(metadataFile)
@@ -299,6 +322,10 @@ func instanceMetadataPatch(d *Daemon, r *http.Request) response.Response {
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "412":
 //	    $ref: "#/responses/PreconditionFailed"
 //	  "500":
@@ -362,9 +389,15 @@ func doInstanceMetadataUpdate(s *state.State, inst instance.Instance, metadata a
 		return response.BadRequest(err)
 	}
 
-	// Update the metadata.
-	metadataPath := filepath.Join(inst.Path(), "metadata.yaml")
-	err = os.WriteFile(metadataPath, data, 0o644)
+	// Update the metadata (confined to the instance directory).
+	root, err := os.OpenRoot(inst.Path())
+	if err != nil {
+		return response.InternalError(err)
+	}
+
+	defer logger.WarnOnError(root.Close, "Failed to close instance root")
+
+	err = root.WriteFile("metadata.yaml", data, 0o644)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -425,6 +458,8 @@ func doInstanceMetadataUpdate(s *state.State, inst instance.Instance, metadata a
 //	    $ref: "#/responses/Forbidden"
 //	  "404":
 //	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func instanceMetadataTemplatesGet(d *Daemon, r *http.Request) response.Response {
@@ -585,6 +620,8 @@ func instanceMetadataTemplatesGet(d *Daemon, r *http.Request) response.Response 
 //	    $ref: "#/responses/Forbidden"
 //	  "404":
 //	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func instanceMetadataTemplatesPost(d *Daemon, r *http.Request) response.Response {
@@ -709,6 +746,8 @@ func instanceMetadataTemplatesPost(d *Daemon, r *http.Request) response.Response
 //	    $ref: "#/responses/Forbidden"
 //	  "404":
 //	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func instanceMetadataTemplatesDelete(d *Daemon, r *http.Request) response.Response {

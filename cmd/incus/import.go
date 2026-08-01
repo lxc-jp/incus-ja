@@ -57,15 +57,18 @@ func (c *cmdImport) run(cmd *cobra.Command, args []string) error {
 	instanceName := parsed[2].String
 
 	var file *os.File
+	usePercentage := true
 	if isStdin(backupFile) {
 		file = os.Stdin
+		usePercentage = false
 	} else {
 		file, err = os.Open(backupFile)
 		if err != nil {
 			return err
 		}
 
-		defer logger.WarnOnError(file.Close, "Failed to close file")
+		// The HTTP transport closes the request body, so only warn on unexpected errors.
+		defer logger.WarnOnErrorExcept(file.Close, []error{os.ErrClosed}, "Failed to close file")
 	}
 
 	fstat, err := file.Stat()
@@ -83,8 +86,12 @@ func (c *cmdImport) run(cmd *cobra.Command, args []string) error {
 			ReadCloser: file,
 			Tracker: &ioprogress.ProgressTracker{
 				Length: fstat.Size(),
-				Handler: func(percent int64, speed int64) {
-					progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%d%% (%s/s)", percent, units.GetByteSizeString(speed, 2))})
+				Handler: func(v int64, speed int64) {
+					if usePercentage {
+						progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%d%% (%s/s)", v, units.GetByteSizeString(speed, 2))})
+					} else {
+						progress.UpdateProgress(ioprogress.ProgressData{Text: fmt.Sprintf("%s (%s/s)", units.GetByteSizeString(v, 2), units.GetByteSizeString(speed, 2))})
+					}
 				},
 			},
 		},

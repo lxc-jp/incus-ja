@@ -240,6 +240,17 @@ func (c *Config) AuthorizationScriptlet() string {
 	return c.m.GetString("authorization.scriptlet")
 }
 
+// AuthorizationClientRoutes returns the explicit per-client-class authorization routing configuration.
+func (c *Config) AuthorizationClientRoutes() map[string]string {
+	return map[string]string{
+		"default":        c.m.GetString("authorization.client.default"),
+		"unix":           c.m.GetString("authorization.client.unix"),
+		"tls":            c.m.GetString("authorization.client.tls"),
+		"tls-restricted": c.m.GetString("authorization.client.tls-restricted"),
+		"oidc":           c.m.GetString("authorization.client.oidc"),
+	}
+}
+
 // InstancesLXCFSPerInstance returns whether LXCFS should be run on a per-instance basis.
 func (c *Config) InstancesLXCFSPerInstance() bool {
 	return c.m.GetBool("instances.lxcfs.per_instance")
@@ -271,6 +282,11 @@ func (c *Config) LokiServer() (string, string, string, string, string, string, [
 // ACME returns all ACME settings needed for certificate renewal.
 func (c *Config) ACME() (string, string, string, bool, string) {
 	return c.m.GetString("acme.domain"), c.m.GetString("acme.email"), c.m.GetString("acme.ca_url"), c.m.GetBool("acme.agree_tos"), c.m.GetString("acme.challenge")
+}
+
+// ACMEEAB returns the External Account Binding settings for ACME.
+func (c *Config) ACMEEAB() (string, string) {
+	return c.m.GetString("acme.eab.kid"), c.m.GetString("acme.eab.hmac")
 }
 
 // ACMEDNS returns all ACME DNS settings needed for DNS-01 challenge.
@@ -347,8 +363,8 @@ func (c *Config) ClusterHealingThreshold() time.Duration {
 }
 
 // OpenFGA returns all OpenFGA settings need to interact with an OpenFGA server.
-func (c *Config) OpenFGA() (apiURL string, apiToken string, storeID string) {
-	return c.m.GetString("openfga.api.url"), c.m.GetString("openfga.api.token"), c.m.GetString("openfga.store.id")
+func (c *Config) OpenFGA() (apiURL string, apiToken string, storeID string, tlsIdentifier string) {
+	return c.m.GetString("authorization.openfga.api.url"), c.m.GetString("authorization.openfga.api.token"), c.m.GetString("authorization.openfga.store.id"), c.m.GetString("authorization.openfga.tls.identifier")
 }
 
 // NetworkHWAddrPattern returns the MAC address pattern used in the cluster.
@@ -510,6 +526,22 @@ var ConfigSchema = config.Schema{
 	//  shortdesc: Email address used for the account registration
 	"acme.email": {},
 
+	// gendoc:generate(entity=server, group=acme, key=acme.eab.kid)
+	//
+	// ---
+	//  type: string
+	//  scope: global
+	//  shortdesc: Key identifier for External Account Binding
+	"acme.eab.kid": {},
+
+	// gendoc:generate(entity=server, group=acme, key=acme.eab.hmac)
+	//
+	// ---
+	//  type: string
+	//  scope: global
+	//  shortdesc: HMAC key for External Account Binding
+	"acme.eab.hmac": {},
+
 	// gendoc:generate(entity=server, group=acme, key=acme.agree_tos)
 	//
 	// ---
@@ -564,7 +596,86 @@ var ConfigSchema = config.Schema{
 	//  shortdesc: Port and interface for HTTP server (used by HTTP-01)
 	"acme.http.port": {Default: ":80", Validator: validate.Optional(validate.IsListenAddress(true, true, false))},
 
-	// gendoc:generate(entity=server, group=miscellaneous, key=authorization.scriptlet)
+	// gendoc:generate(entity=server, group=authorization, key=authorization.client.default)
+	// Routes clients that do not match a more specific class to an authorization driver.
+	// Possible values are `allow`, `deny`, `openfga` and `scriptlet`.
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: Authorization driver for clients without a more specific class route
+	"authorization.client.default": {Validator: validate.Optional(validate.IsOneOf("allow", "deny", "openfga", "scriptlet"))},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.client.oidc)
+	// Routes OIDC-authenticated clients to an authorization driver.
+	// Possible values are `allow`, `deny`, `openfga` and `scriptlet`.
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: Authorization driver for OIDC-authenticated clients
+	"authorization.client.oidc": {Validator: validate.Optional(validate.IsOneOf("allow", "deny", "openfga", "scriptlet"))},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.client.tls)
+	// Routes clients using an unrestricted client certificate to an authorization driver.
+	// Possible values are `allow`, `deny`, `openfga` and `scriptlet`.
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: Authorization driver for unrestricted TLS clients
+	"authorization.client.tls": {Validator: validate.Optional(validate.IsOneOf("allow", "deny", "openfga", "scriptlet"))},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.client.tls-restricted)
+	// Routes clients using a restricted (project-scoped) client certificate to an authorization driver.
+	// Possible values are `allow`, `deny`, `tls`, `openfga` and `scriptlet`.
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: Authorization driver for restricted TLS clients
+	"authorization.client.tls-restricted": {Validator: validate.Optional(validate.IsOneOf("allow", "deny", "tls", "openfga", "scriptlet"))},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.client.unix)
+	// Routes local clients connecting over the `unix` socket to an authorization driver.
+	// Possible values are `allow`, `deny`, `openfga` and `scriptlet`.
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: Authorization driver for local (`unix` socket) clients
+	"authorization.client.unix": {Validator: validate.Optional(validate.IsOneOf("allow", "deny", "openfga", "scriptlet"))},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.openfga.api.token)
+	//
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: API token of the OpenFGA server
+	"authorization.openfga.api.token": {},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.openfga.api.url)
+	//
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: URL of the OpenFGA server
+	"authorization.openfga.api.url": {},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.openfga.store.id)
+	//
+	// ---
+	// type: string
+	// scope: global
+	// shortdesc: ID of the OpenFGA permission store
+	"authorization.openfga.store.id": {},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.openfga.tls.identifier)
+	// When a TLS client is authorized by OpenFGA, this selects the certificate
+	// attribute used as the OpenFGA user: `fingerprint` or `name`.
+	// ---
+	//  type: string
+	//  scope: global
+	//  defaultdesc: `name`
+	//  shortdesc: Certificate attribute used as the OpenFGA user for TLS clients
+	"authorization.openfga.tls.identifier": {Default: "name", Validator: validate.Optional(validate.IsOneOf("fingerprint", "name"))},
+
+	// gendoc:generate(entity=server, group=authorization, key=authorization.scriptlet)
 	// When using scriptlet-based authorization, this option stores the scriptlet.
 	// ---
 	//  type: string
@@ -984,30 +1095,6 @@ var ConfigSchema = config.Schema{
 	// defaultdesc: `10:66:6a:xx:xx:xx`
 	// shortdesc: MAC address template
 	"network.hwaddr_pattern": {Default: "10:66:6a:xx:xx:xx", Validator: validate.Optional(validate.IsMACPattern)},
-
-	// gendoc:generate(entity=server, group=openfga, key=openfga.api.token)
-	//
-	// ---
-	// type: string
-	// scope: global
-	// shortdesc: API token of the OpenFGA server
-	"openfga.api.token": {},
-
-	// gendoc:generate(entity=server, group=openfga, key=openfga.api.url)
-	//
-	// ---
-	// type: string
-	// scope: global
-	// shortdesc: URL of the OpenFGA server
-	"openfga.api.url": {},
-
-	// gendoc:generate(entity=server, group=openfga, key=openfga.store.id)
-	//
-	// ---
-	// type: string
-	// scope: global
-	// shortdesc: ID of the OpenFGA permission store
-	"openfga.store.id": {},
 
 	// gendoc:generate(entity=server, group=oidc, key=oidc.client.id)
 	//

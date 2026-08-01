@@ -80,6 +80,23 @@ func qemuMachineType(architecture int) string {
 	return machineType
 }
 
+// qemuDefaultRAMObject returns QEMU's default RAM object name for the architecture.
+// Reusing that name for an explicit main memory backend preserves migration compatibility.
+func qemuDefaultRAMObject(architecture int) string {
+	switch architecture {
+	case osarch.ARCH_64BIT_INTEL_X86:
+		return "pc.ram"
+	case osarch.ARCH_64BIT_ARMV8_LITTLE_ENDIAN:
+		return "mach-virt.ram"
+	case osarch.ARCH_64BIT_POWERPC_LITTLE_ENDIAN:
+		return "ppc_spapr.ram"
+	case osarch.ARCH_64BIT_S390_BIG_ENDIAN:
+		return "s390.ram"
+	}
+
+	return ""
+}
+
 type qemuBaseOpts struct {
 	architecture int
 	iommu        bool
@@ -117,6 +134,11 @@ func qemuBase(opts *qemuBaseOpts) []cfg.Section {
 
 	if opts.iommu {
 		sections[0].Entries["kernel-irqchip"] = "split"
+	}
+
+	// On non-x86_64, the main RAM is an explicit shared memory backend.
+	if opts.architecture != osarch.ARCH_64BIT_INTEL_X86 {
+		sections[0].Entries["memory-backend"] = qemuDefaultRAMObject(opts.architecture)
 	}
 
 	if opts.architecture == osarch.ARCH_64BIT_INTEL_X86 {
@@ -450,15 +472,25 @@ func qemuVsock(opts *qemuVsockOpts) []cfg.Section {
 }
 
 type qemuGpuOpts struct {
-	dev          qemuDevOpts
-	architecture int
-	virtioVGA    bool
+	dev           qemuDevOpts
+	architecture  int
+	virtioVGA     bool
+	nativeContext bool
+	hostmem       string
 }
 
 func qemuGPU(opts *qemuGpuOpts) []cfg.Section {
 	var pciName string
 
-	if opts.architecture == osarch.ARCH_64BIT_INTEL_X86 && opts.virtioVGA {
+	if opts.nativeContext {
+		// DRM native context forwards the guest's native GPU driver context to the
+		// host, so the default emulated GPU must be a GL-capable virtio-gpu device.
+		if opts.architecture == osarch.ARCH_64BIT_INTEL_X86 {
+			pciName = "virtio-vga-gl"
+		} else {
+			pciName = "virtio-gpu-gl-pci"
+		}
+	} else if opts.architecture == osarch.ARCH_64BIT_INTEL_X86 && opts.virtioVGA {
 		pciName = "virtio-vga"
 	} else {
 		pciName = "virtio-gpu-pci"
@@ -470,10 +502,22 @@ func qemuGPU(opts *qemuGpuOpts) []cfg.Section {
 		ccwName: "virtio-gpu-ccw",
 	}
 
+	entries := qemuDeviceEntries(&entriesOpts)
+
+	if opts.nativeContext {
+		// blob=on lets the guest map host GPU buffers directly (required for native
+		// context), drm_native_context=on turns the feature on, and hostmem reserves
+		// the host-visible blob window exposed through the device's PCI BAR. The size
+		// is set from the device's blob.size option, resolved to a byte count.
+		entries["blob"] = "on"
+		entries["drm_native_context"] = "on"
+		entries["hostmem"] = opts.hostmem
+	}
+
 	return []cfg.Section{{
 		Name:    `device "qemu_gpu"`,
 		Comment: "GPU",
-		Entries: qemuDeviceEntries(&entriesOpts),
+		Entries: entries,
 	}}
 }
 
@@ -513,7 +557,7 @@ type qemuNumaEntry struct {
 }
 
 type qemuCPUOpts struct {
-	architecture     string
+	architecture     int
 	cpuCount         int
 	cpuRequested     int
 	cpuSockets       int
@@ -586,8 +630,24 @@ func qemuCPU(opts *qemuCPUOpts, pinning bool) []cfg.Section {
 		Entries: entries,
 	}}
 
-	if opts.architecture != "x86_64" {
-		return sections
+	if opts.architecture != osarch.ARCH_64BIT_INTEL_X86 {
+		// Define the main RAM as a shared memory backend so vhost-user devices (virtiofsd) can map it.
+		// It gets attached through the machine's memory-backend property.
+		ramObject := qemuCPUNumaHostNode(opts, 0)[0]
+		ramObject.Name = fmt.Sprintf("object %q", qemuDefaultRAMObject(opts.architecture))
+		ramObject.Entries["share"] = "on"
+
+		// If NUMA memory restrictions are set, apply them.
+		if len(opts.memoryHostNodes) > 0 {
+			ramObject.Entries["policy"] = "bind"
+
+			for index, element := range opts.memoryHostNodes {
+				hostNodesKey := fmt.Sprintf("host-nodes.%d", index)
+				ramObject.Entries[hostNodesKey] = fmt.Sprintf("%d", element)
+			}
+		}
+
+		return append(sections, ramObject)
 	}
 
 	if len(opts.cpuNumaHostNodes) == 0 {

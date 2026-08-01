@@ -269,7 +269,7 @@ func (n *bridge) Validate(config map[string]string, clientType request.ClientTyp
 				return nil
 			}
 
-			return validate.IsNetworkAddressCIDRV4(value)
+			return validate.IsNetworkAddressCIDRV4(value, false)
 		}),
 
 		// gendoc:generate(entity=network_bridge, group=common, key=ipv4.firewall)
@@ -398,7 +398,7 @@ func (n *bridge) Validate(config map[string]string, clientType request.ClientTyp
 				return nil
 			}
 
-			return validate.Or(validate.IsNetworkAddressCIDRV6, validate.IsNetworkV6)(value)
+			return validate.Or(func(value string) error { return validate.IsNetworkAddressCIDRV6(value, false) }, validate.IsNetworkV6)(value)
 		}),
 
 		// gendoc:generate(entity=network_bridge, group=common, key=ipv6.firewall)
@@ -718,6 +718,14 @@ func (n *bridge) Validate(config map[string]string, clientType request.ClientTyp
 	// condition: BGP server
 	// defaultdesc: -
 	// shortdesc: Peer address (IPv4 or IPv6) for use by `ovn` downstream networks
+
+	// gendoc:generate(entity=network_bridge, group=bgp, key=bgp.peers.NAME.interface)
+	//
+	// ---
+	// type: string
+	// condition: BGP server
+	// defaultdesc: -
+	// shortdesc: Interface name for BGP unnumbered peering (alternative to the peer address)
 
 	// gendoc:generate(entity=network_bridge, group=bgp, key=bgp.peers.NAME.asn)
 	//
@@ -3354,7 +3362,7 @@ func (n *bridge) Leases(projectName string, clientType request.ClientType) ([]ap
 			}
 
 			// Add the lease.
-			nicIP4 := net.ParseIP(nicConfig["ipv4.address"])
+			nicIP4 := net.ParseIP(nicAddressIP(nicConfig["ipv4.address"]))
 			if nicIP4 != nil {
 				leases = append(leases, api.NetworkLease{
 					Hostname: inst.Name,
@@ -3365,7 +3373,7 @@ func (n *bridge) Leases(projectName string, clientType request.ClientType) ([]ap
 				})
 			}
 
-			nicIP6 := net.ParseIP(nicConfig["ipv6.address"])
+			nicIP6 := net.ParseIP(nicAddressIP(nicConfig["ipv6.address"]))
 			if nicIP6 != nil {
 				leases = append(leases, api.NetworkLease{
 					Hostname: inst.Name,

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/lxc/incus/v7/internal/linux"
 	"github.com/lxc/incus/v7/internal/migration"
 	"github.com/lxc/incus/v7/internal/server/backup"
+	"github.com/lxc/incus/v7/internal/server/locking"
 	localMigration "github.com/lxc/incus/v7/internal/server/migration"
 	"github.com/lxc/incus/v7/internal/server/operations"
 	"github.com/lxc/incus/v7/internal/server/response"
@@ -676,8 +678,16 @@ func (d *ceph) DeleteVolume(vol Volume, op *operations.Operation) error {
 	}
 
 	if vol.volType == VolumeTypeImage {
+		// Lock the image volume so concurrent deletions of its clones can't race the cleanup.
+		unlock, err := locking.Lock(context.TODO(), OperationLockName("DeleteVolume", d.name, vol.volType, vol.contentType, vol.name))
+		if err != nil {
+			return err
+		}
+
+		defer unlock()
+
 		// Unmount and unmap.
-		_, err := d.UnmountVolume(vol, false, op)
+		_, err = d.UnmountVolume(vol, false, op)
 		if err != nil {
 			return err
 		}
@@ -709,7 +719,7 @@ func (d *ceph) DeleteVolume(vol Volume, op *operations.Operation) error {
 			if hasReadonlySnapshot {
 				// Unprotect snapshot.
 				err := d.rbdUnprotectVolumeSnapshot(vol, "readonly")
-				if err != nil {
+				if err != nil && !isRBDNotFoundExitError(err) {
 					return err
 				}
 			}
@@ -724,13 +734,13 @@ func (d *ceph) DeleteVolume(vol Volume, op *operations.Operation) error {
 				"purge",
 				d.getRBDVolumeName(vol, "", false),
 			)
-			if err != nil {
+			if err != nil && !isRBDNotFoundExitError(err) {
 				return err
 			}
 
 			// Delete image.
 			err = d.rbdDeleteVolume(vol)
-			if err != nil {
+			if err != nil && !isRBDNotFoundExitError(err) {
 				return err
 			}
 		}
@@ -739,6 +749,22 @@ func (d *ceph) DeleteVolume(vol Volume, op *operations.Operation) error {
 		_, err := d.UnmountVolume(vol, false, op)
 		if err != nil {
 			return err
+		}
+
+		// If the volume is a clone, lock its parent volume so concurrent deletions of sibling
+		// clones can't race the cleanup of the shared parent snapshot (this applies not only to
+		// image parents, but also to non-image volumes used as the source of a lightweight copy).
+		parent, err := d.rbdGetVolumeParent(vol)
+		if err == nil {
+			parentVol, _, err := d.parseParent(parent)
+			if err == nil {
+				unlock, err := locking.Lock(context.TODO(), OperationLockName("DeleteVolume", d.name, parentVol.volType, parentVol.contentType, parentVol.name))
+				if err != nil {
+					return err
+				}
+
+				defer unlock()
+			}
 		}
 
 		_, err = d.deleteVolume(vol)
@@ -807,6 +833,32 @@ func (d *ceph) hasVolume(rbdVolumeName string) (bool, error) {
 // HasVolume indicates whether a specific volume exists on the storage pool.
 func (d *ceph) HasVolume(vol Volume) (bool, error) {
 	return d.hasVolume(d.getRBDVolumeName(vol, "", false))
+}
+
+// IsImageCloneSourceReady reports whether the image volume's clone source is ready to be cloned
+// from. Instances are created by cloning the image volume's protected "readonly" snapshot (see
+// CreateVolumeFromCopy), which is only created and protected at the very end of CreateVolume, after
+// the (potentially slow) image unpack. On a shared pool a different cluster member may still be
+// unpacking the image, so the base volume existing is not sufficcient: the readonly snapshot must
+// also exist and be protected before a clone can succeed.
+func (d *ceph) IsImageCloneSourceReady(vol Volume) (bool, error) {
+	ready, err := d.rbdSnapshotIsProtected(vol, "readonly")
+	if err != nil || !ready {
+		return false, err
+	}
+
+	// For VM block images the associated filesystem config volume carries its own readonly
+	// snapshot that is used as the clone source for the config volume, so it must be ready too.
+	if vol.IsVMBlock() {
+		fsVol := vol.NewVMBlockFilesystemVolume()
+
+		fsReady, err := d.rbdSnapshotIsProtected(fsVol, "readonly")
+		if err != nil || !fsReady {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 // FillVolumeConfig populate volume with default config.
@@ -1469,6 +1521,10 @@ func (d *ceph) RenameVolume(vol Volume, newVolName string, op *operations.Operat
 
 		err := d.rbdRenameVolume(vol, newVolName)
 		if err != nil {
+			if isRBDNotFoundExitError(err) {
+				return api.StatusErrorf(http.StatusNotFound, "Ceph RBD volume not found")
+			}
+
 			return err
 		}
 
@@ -1996,6 +2052,10 @@ func (d *ceph) RenameVolumeSnapshot(snapVol Volume, newSnapshotName string, op *
 
 	err := d.rbdRenameVolumeSnapshot(parentVol, oldSnapOnlyName, newSnapOnlyName)
 	if err != nil {
+		if isRBDNotFoundExitError(err) {
+			return api.StatusErrorf(http.StatusNotFound, "Ceph RBD volume snapshot not found")
+		}
+
 		return err
 	}
 

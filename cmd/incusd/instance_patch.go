@@ -56,6 +56,12 @@ import (
 //	    $ref: "#/responses/BadRequest"
 //	  "403":
 //	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
+//	  "412":
+//	    $ref: "#/responses/PreconditionFailed"
 //	  "500":
 //	    $ref: "#/responses/InternalServerError"
 func instancePatch(d *Daemon, r *http.Request) response.Response {
@@ -194,12 +200,12 @@ func instancePatch(d *Daemon, r *http.Request) response.Response {
 			return err
 		}
 
-		profileConfigs, err := cluster.GetAllProfileConfigs(ctx, tx.Tx())
+		profileConfigs, err := cluster.GetReferencedProfileConfigs(ctx, tx.Tx(), profiles)
 		if err != nil {
 			return err
 		}
 
-		profileDevices, err := cluster.GetAllProfileDevices(ctx, tx.Tx())
+		profileDevices, err := cluster.GetReferencedProfileDevices(ctx, tx.Tx(), profiles)
 		if err != nil {
 			return err
 		}

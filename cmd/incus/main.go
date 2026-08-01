@@ -278,6 +278,10 @@ Custom commands can be defined through aliases, use "incus alias" to control tho
 	pauseCmd := cmdPause{global: &globalCmd}
 	app.AddCommand(pauseCmd.command())
 
+	// port-forward sub-command
+	portForwardCmd := cmdPortForward{global: &globalCmd}
+	app.AddCommand(portForwardCmd.command())
+
 	// publish sub-command
 	publishCmd := cmdPublish{global: &globalCmd}
 	app.AddCommand(publishCmd.command())
@@ -346,9 +350,9 @@ Custom commands can be defined through aliases, use "incus alias" to control tho
 	webuiCmd := cmdWebui{global: &globalCmd}
 	app.AddCommand(webuiCmd.command())
 
-	// debug sub-command
-	debugCmd := cmdDebug{global: &globalCmd}
-	app.AddCommand(debugCmd.command())
+	// low-level sub-command
+	lowLevelCmd := cmdLowLevel{global: &globalCmd}
+	app.AddCommand(lowLevelCmd.command())
 
 	// wait sub-command
 	waitCmd := cmdWait{global: &globalCmd}
@@ -539,7 +543,7 @@ func (c *cmdGlobal) preRun(cmd *cobra.Command, _ []string) error {
 	// Setup password helper
 	if termios.IsTerminal(getStdinFd()) {
 		c.conf.PromptPassword = func(filename string) (string, error) {
-			return c.asker.AskPasswordOnce(fmt.Sprintf(i18n.G("Password for %s: "), filename)), nil
+			return c.asker.AskPasswordOnce(fmt.Sprintf(i18n.G("Password for %s: "), filename))
 		}
 	}
 

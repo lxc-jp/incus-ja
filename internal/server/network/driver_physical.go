@@ -95,7 +95,7 @@ func (n *physical) Validate(config map[string]string, clientType request.ClientT
 		// type: string
 		// condition: standard mode
 		// shortdesc: IPv4 address for the gateway and network (CIDR)
-		"ipv4.gateway": validate.Optional(validate.IsNetworkAddressCIDRV4),
+		"ipv4.gateway": validate.Optional(func(value string) error { return validate.IsNetworkAddressCIDRV4(value, false) }),
 
 		// gendoc:generate(entity=network_physical, group=ipv6, key=ipv6.gateway)
 		//
@@ -103,7 +103,7 @@ func (n *physical) Validate(config map[string]string, clientType request.ClientT
 		// type: string
 		// condition: standard mode
 		// shortdesc: IPv6 address for the gateway and network (CIDR)
-		"ipv6.gateway": validate.Optional(validate.IsNetworkAddressCIDRV6),
+		"ipv6.gateway": validate.Optional(func(value string) error { return validate.IsNetworkAddressCIDRV6(value, false) }),
 
 		// gendoc:generate(entity=network_physical, group=ipv4, key=ipv4.gateway.hwaddr)
 		//
@@ -196,6 +196,14 @@ func (n *physical) Validate(config map[string]string, clientType request.ClientT
 	// condition: BGP server
 	// defaultdesc: -
 	// shortdesc: Peer address (IPv4 or IPv6) for use by `ovn` downstream networks
+
+	// gendoc:generate(entity=network_physical, group=bgp, key=bgp.peers.NAME.interface)
+	//
+	// ---
+	// type: string
+	// condition: BGP server
+	// defaultdesc: -
+	// shortdesc: Interface name for BGP unnumbered peering (alternative to the peer address)
 
 	// gendoc:generate(entity=network_physical, group=bgp, key=bgp.peers.NAME.asn)
 	//

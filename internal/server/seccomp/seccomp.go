@@ -721,7 +721,15 @@ func InstanceNeedsIntercept(s *state.State, c Instance) (bool, error) {
 func MakePidFd(pid int) (int, *os.File, error) {
 	pidFdFile, err := linux.PidFdOpen(pid, 0)
 	if err != nil {
-		return -1, nil, err
+		// The kernel requires PIDFD_THREAD for non-leader threads.
+		if !errors.Is(err, unix.EINVAL) {
+			return -1, nil, err
+		}
+
+		pidFdFile, err = linux.PidFdOpen(pid, C.PIDFD_THREAD)
+		if err != nil {
+			return -1, nil, err
+		}
 	}
 
 	return 3, pidFdFile, nil
@@ -1789,7 +1797,7 @@ func (srv *Server) HandleSysinfoSyscall(c Instance, siov *Iovec) int {
 	instMetrics.Freeram = instMetrics.Totalram - uint64(memoryUsage) - instMetrics.Bufferram
 
 	// Get instance swap info.
-	if cgroup.Supports(cgroup.Memory) {
+	if cgroup.Supports(cgroup.MemorySwap) {
 		swapLimit, err := cg.GetMemorySwapLimit()
 		if err != nil {
 			l.Warn("Failed getting swap limit", logger.Ctx{"err": err})
@@ -2162,10 +2170,10 @@ func (srv *Server) HandleMountSyscall(c Instance, siov *Iovec) int {
 			fmt.Sprintf("%d", args.pid),
 			fmt.Sprintf("%d", pidFdNr),
 			fmt.Sprintf("%d", 1),
-			fmt.Sprintf("%d", args.uid),
-			fmt.Sprintf("%d", args.gid),
-			fmt.Sprintf("%d", args.fsuid),
-			fmt.Sprintf("%d", args.fsgid),
+			fmt.Sprintf("%d", args.nsuid),
+			fmt.Sprintf("%d", args.nsgid),
+			fmt.Sprintf("%d", args.nsfsuid),
+			fmt.Sprintf("%d", args.nsfsgid),
 			fuseSource,
 			args.target,
 			fuseOpts,
@@ -2199,6 +2207,7 @@ func (srv *Server) HandleMountSyscall(c Instance, siov *Iovec) int {
 	}
 
 	if err != nil {
+		ctx["err"] = err
 		ctx["syscall_continue"] = "true"
 		C.seccomp_notify_update_response(siov.resp, 0, C.uint32_t(seccompUserNotifFlagContinue))
 		return 0

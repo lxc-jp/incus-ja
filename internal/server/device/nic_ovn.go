@@ -156,7 +156,7 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		// ---
 		//  type: string
 		//  managed: no
-		//  shortdesc: IPv4 default gateway to statically configure inside an OCI container
+		//  shortdesc: IPv4 default gateway to statically configure inside an OCI container (`none` to prevent a default gateway from being applied)
 		"ipv4.gateway",
 
 		// gendoc:generate(entity=devices, group=nic_ovn, key=ipv6.gateway)
@@ -164,7 +164,7 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		// ---
 		//  type: string
 		//  managed: no
-		//  shortdesc: IPv6 default gateway to statically configure inside an OCI container
+		//  shortdesc: IPv6 default gateway to statically configure inside an OCI container (`none` to prevent a default gateway from being applied)
 		"ipv6.gateway",
 
 		// gendoc:generate(entity=devices, group=nic_ovn, key=ipv4.address.external)
@@ -509,7 +509,7 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		}
 
 		if strings.Contains(value, "/") {
-			return validate.IsNetworkAddressCIDRV4(value)
+			return validate.IsNetworkAddressCIDRV4(value, true)
 		}
 
 		return validate.IsNetworkAddressV4(value)
@@ -521,7 +521,7 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		}
 
 		if strings.Contains(value, "/") {
-			return validate.IsNetworkAddressCIDRV6(value)
+			return validate.IsNetworkAddressCIDRV6(value, true)
 		}
 
 		return validate.IsNetworkAddressV6(value)
@@ -656,8 +656,8 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 // Returns api.StatusError with status code set to http.StatusConflict if conflicting address found.
 func (d *nicOVN) checkAddressConflict() error {
 	ourNICIPs := make(map[string]net.IP, 2)
-	ourNICIPs["ipv4.address"] = net.ParseIP(d.config["ipv4.address"])
-	ourNICIPs["ipv6.address"] = net.ParseIP(d.config["ipv6.address"])
+	ourNICIPs["ipv4.address"] = net.ParseIP(nicAddressIP(d.config["ipv4.address"]))
+	ourNICIPs["ipv6.address"] = net.ParseIP(nicAddressIP(d.config["ipv6.address"]))
 
 	// Shortcut when no IP needs to be assigned.
 	if ourNICIPs["ipv4.address"] == nil && ourNICIPs["ipv6.address"] == nil {
@@ -702,7 +702,7 @@ func (d *nicOVN) checkAddressConflict() error {
 			}
 
 			// Parse IPs to avoid being tripped up by presentation differences.
-			devNICIP := net.ParseIP(nicConfig[key])
+			devNICIP := net.ParseIP(nicAddressIP(nicConfig[key]))
 
 			if ourNICIPs[key] != nil && devNICIP != nil && ourNICIPs[key].Equal(devNICIP) {
 				return api.StatusErrorf(http.StatusConflict, "IP address %q already defined on another NIC", devNICIP.String())
@@ -715,7 +715,7 @@ func (d *nicOVN) checkAddressConflict() error {
 
 // Add is run when a device is added to a non-snapshot instance whether or not the instance is running.
 func (d *nicOVN) Add() error {
-	return d.network.InstanceDevicePortAdd(d.inst.LocalConfig()["volatile.uuid"], d.name, d.config)
+	return d.network.InstanceDevicePortAdd(d.inst.LocalConfig()["volatile.uuid"], d.name, nicNormalizedAddressConfig(d.config))
 }
 
 // PreStartCheck checks the managed parent network is available (if relevant).
@@ -1204,7 +1204,7 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 				InstanceUUID: d.inst.LocalConfig()["volatile.uuid"],
 				DNSName:      d.inst.Name(),
 				DeviceName:   d.name,
-				DeviceConfig: d.config,
+				DeviceConfig: nicNormalizedAddressConfig(d.config),
 				UplinkConfig: uplinkConfig,
 			}, removedACLs)
 			if err != nil {
@@ -1290,7 +1290,7 @@ func (d *nicOVN) Stop() (*deviceConfig.RunConfig, error) {
 	}
 
 	var ovsExternalOVNPort string
-	if d.config["nested"] == "" {
+	if d.config["nested"] == "" && vswitch != nil {
 		ovsExternalOVNPort, err = vswitch.GetInterfaceAssociatedOVNSwitchPort(context.TODO(), d.config["host_name"])
 		if err != nil {
 			d.logger.Warn("Could not find OVN Switch port associated to OVS interface", logger.Ctx{"interface": d.config["host_name"]})
@@ -1309,7 +1309,7 @@ func (d *nicOVN) Stop() (*deviceConfig.RunConfig, error) {
 	// Do this early on during the stop process to prevent any future error from leaving the OVS port present
 	// as if the instance is being migrated, this can cause port conflicts in OVN if the instance comes up on
 	// another host later.
-	if integrationBridgeNICName != "" {
+	if integrationBridgeNICName != "" && vswitch != nil {
 		integrationBridge := d.state.GlobalConfig.NetworkOVNIntegrationBridge()
 
 		// Detach host-side end of veth pair from OVS integration bridge.
@@ -1320,15 +1320,21 @@ func (d *nicOVN) Stop() (*deviceConfig.RunConfig, error) {
 		}
 	}
 
-	instanceUUID := d.inst.LocalConfig()["volatile.uuid"]
-	err = d.network.InstanceDevicePortStop(ovn.OVNSwitchPort(ovsExternalOVNPort), &network.OVNInstanceNICStopOpts{
-		InstanceUUID: instanceUUID,
-		DeviceName:   d.name,
-		DeviceConfig: d.config,
-	})
-	if err != nil {
-		// Don't fail here as we still want the postStop hook to run to clean up the local veth pair.
-		d.logger.Error("Failed to remove OVN device port", logger.Ctx{"err": err})
+	// The network is nil when the device config failed validation (e.g. network still pending).
+	// Don't fail here either, so that the postStop hook still runs to clean up the local veth pair.
+	if d.network != nil {
+		instanceUUID := d.inst.LocalConfig()["volatile.uuid"]
+		err = d.network.InstanceDevicePortStop(ovn.OVNSwitchPort(ovsExternalOVNPort), &network.OVNInstanceNICStopOpts{
+			InstanceUUID: instanceUUID,
+			DeviceName:   d.name,
+			DeviceConfig: nicNormalizedAddressConfig(d.config),
+		})
+		if err != nil {
+			// Don't fail here as we still want the postStop hook to run to clean up the local veth pair.
+			d.logger.Error("Failed to remove OVN device port", logger.Ctx{"err": err})
+		}
+	} else {
+		d.logger.Error("Skipping OVN device port removal, network could not be loaded", logger.Ctx{"network": d.config["network"]})
 	}
 
 	// Remove BGP announcements.
@@ -1422,6 +1428,11 @@ func (d *nicOVN) postStop() error {
 
 // Remove is run when the device is removed from the instance or the instance is deleted.
 func (d *nicOVN) Remove(cleanupDependencies bool) error {
+	// The network is nil when the device config failed validation (e.g. network still pending).
+	if d.network == nil {
+		return fmt.Errorf("Failed removing OVN port for NIC %q: network %q could not be loaded", d.name, d.config["network"])
+	}
+
 	// Check for port groups that will become unused (and need deleting) as this NIC is deleted.
 	securityACLs := util.SplitNTrimSpace(d.config["security.acls"], ",", -1, true)
 	if len(securityACLs) > 0 {
@@ -1431,7 +1442,7 @@ func (d *nicOVN) Remove(cleanupDependencies bool) error {
 		}
 	}
 
-	return d.network.InstanceDevicePortRemove(d.inst.LocalConfig()["volatile.uuid"], d.name, d.config, d.checkAddressConflict() != nil)
+	return d.network.InstanceDevicePortRemove(d.inst.LocalConfig()["volatile.uuid"], d.name, nicNormalizedAddressConfig(d.config), d.checkAddressConflict() != nil)
 }
 
 // State gets the state of an OVN NIC by querying the OVN Northbound logical switch port record.
@@ -1487,7 +1498,7 @@ func (d *nicOVN) State() (*api.InstanceStateNetwork, error) {
 			// Static DHCPv4 allocation present, that is likely to be the NIC's IPv4. So assume that.
 			addresses = append(addresses, api.InstanceStateNetworkAddress{
 				Family:  "inet",
-				Address: d.config["ipv4.address"],
+				Address: nicAddressIP(d.config["ipv4.address"]),
 				Netmask: v4mask,
 				Scope:   "global",
 			})
@@ -1497,7 +1508,7 @@ func (d *nicOVN) State() (*api.InstanceStateNetwork, error) {
 			// Static DHCPv6 allocation present, that is likely to be the NIC's IPv6. So assume that.
 			addresses = append(addresses, api.InstanceStateNetworkAddress{
 				Family:  "inet6",
-				Address: d.config["ipv6.address"],
+				Address: nicAddressIP(d.config["ipv6.address"]),
 				Netmask: v6mask,
 				Scope:   "global",
 			})
