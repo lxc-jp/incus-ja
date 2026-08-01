@@ -7,7 +7,7 @@ Incus をネットワークに公開するには、ローカル Unix ソケッ�
 
 たとえば、Incus サーバーをポート`8443`でアクセスできるようにするには、以下のコマンドを入力します:
 
-    incus config set core.https_address :8443
+    incus config set core.https_address=:8443
 
 特定の IP アドレスからのアクセスを許可するには、`ip addr`を使用して利用可能なアドレスを見つけ、それを設定します。
 たとえば:
@@ -35,7 +35,7 @@ Incus をネットワークに公開するには、ローカル Unix ソケッ�
        valid_lft forever preferred_lft forever
     inet6 fd42:f4ab:4399:e6eb::1/64 scope global
        valid_lft forever preferred_lft forever
-:input: incus config set core.https_address 10.68.216.12
+:input: incus config set core.https_address=10.68.216.12
 ```
 
 すべてのリモートクライアントは Incus に接続して公開利用とマークされた任意のイメージにアクセスできます。

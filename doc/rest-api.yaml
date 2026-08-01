@@ -2049,6 +2049,67 @@ definitions:
         title: InstanceFull is a combination of Instance, InstanceBackup, InstanceState and InstanceSnapshot.
         type: object
         x-go-package: github.com/lxc/incus/v7/shared/api
+    InstanceNVRAMVariable:
+        properties:
+            attributes:
+                description: Variable attributes.
+                items:
+                    type: string
+                type: array
+                x-go-name: Attributes
+            binary:
+                description: Binary data.
+                items:
+                    format: uint8
+                    type: integer
+                type: array
+                x-go-name: Binary
+            data:
+                description: Dissected data.
+                x-go-name: Data
+            timestamp:
+                description: Authenticated variable timestamp.
+                format: date-time
+                type: string
+                x-go-name: Timestamp
+        title: InstanceNVRAMVariable represents a UEFI variable.
+        type: object
+        x-go-package: github.com/lxc/incus/v7/shared/api
+    InstanceNVRAMVariablePut:
+        properties:
+            attributes:
+                description: Variable attributes.
+                items:
+                    type: string
+                type: array
+                x-go-name: Attributes
+            data:
+                description: Dissected data.
+                x-go-name: Data
+            timestamp:
+                description: Authenticated variable timestamp.
+                format: date-time
+                type: string
+                x-go-name: Timestamp
+        title: InstanceNVRAMVariablePut represents the modifiable fields of a UEFI variable.
+        type: object
+        x-go-package: github.com/lxc/incus/v7/shared/api
+    InstancePortForwardPost:
+        properties:
+            address:
+                description: Address to connect to inside of the instance
+                example: 127.0.0.1
+                type: string
+                x-go-name: Address
+            port:
+                description: TCP port to connect to inside of the instance
+                example: 80
+                format: int64
+                type: integer
+                x-go-name: Port
+        title: InstancePortForwardPost represents an instance port forwarding request.
+        type: object
+        x-go-package: github.com/lxc/incus/v7/shared/api
     InstancePost:
         properties:
             Config:
@@ -3261,6 +3322,13 @@ definitions:
                 description: Whether the entity comes from a network that performs egress source NAT
                 type: boolean
                 x-go-name: NAT
+            network:
+                description: |-
+                    Name of the network
+
+                    API extension: network_allocations_network
+                type: string
+                x-go-name: Network
             type:
                 description: Type of the entity consuming the network address
                 type: string
@@ -4586,6 +4654,15 @@ definitions:
     ResourcesCPUCore:
         description: ResourcesCPUCore represents a CPU core on the system
         properties:
+            cluster:
+                description: |-
+                    What cluster the core is a part of (core identifiers may only be unique within a cluster)
+
+                    API extension: resources_cpu_cluster
+                example: 0
+                format: uint64
+                type: integer
+                x-go-name: Cluster
             core:
                 description: Core identifier within the socket
                 example: 0
@@ -7515,6 +7592,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the server environment and configuration
@@ -7546,6 +7631,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -7579,6 +7668,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -7627,8 +7720,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the trusted certificates
@@ -7651,12 +7750,18 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
+                "202":
+                    $ref: '#/responses/Operation'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a trusted certificate
@@ -7681,6 +7786,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the trusted certificate
@@ -7718,8 +7827,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the trusted certificate
@@ -7751,6 +7866,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -7784,6 +7903,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -7816,12 +7939,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a trusted certificate
@@ -7863,8 +7990,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the trusted certificates
@@ -7897,8 +8030,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the cluster configuration
@@ -7921,10 +8060,16 @@ paths:
             responses:
                 "200":
                     $ref: '#/responses/EmptySyncResponse'
+                "202":
+                    $ref: '#/responses/Operation'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -7954,6 +8099,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Update the certificate for the cluster
@@ -7994,8 +8143,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the cluster groups
@@ -8016,12 +8171,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a cluster group.
@@ -8046,6 +8205,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the cluster group.
@@ -8083,8 +8246,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the cluster group
@@ -8116,6 +8285,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -8143,12 +8316,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the cluster group
@@ -8180,6 +8357,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -8217,8 +8398,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the cluster groups
@@ -8265,8 +8452,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the cluster members
@@ -8293,6 +8486,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Request a join token
@@ -8317,6 +8514,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the cluster member
@@ -8354,8 +8555,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the cluster member
@@ -8387,6 +8594,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -8420,6 +8631,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the cluster member
@@ -8451,6 +8666,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -8491,8 +8710,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get state of the cluster member
@@ -8524,6 +8749,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Evacuate or restore a cluster member
@@ -8565,8 +8794,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the cluster members
@@ -8594,7 +8829,7 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "101":
                     description: Websocket message (JSON)
                     schema:
                         $ref: '#/definitions/Event'
@@ -8655,8 +8890,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the images
@@ -8732,6 +8973,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add an image
@@ -8761,6 +9006,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the image
@@ -8803,8 +9052,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the image
@@ -8841,6 +9096,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -8879,6 +9138,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -8909,8 +9172,14 @@ paths:
             responses:
                 "200":
                     description: Raw image data
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the raw image file(s)
@@ -8941,8 +9210,14 @@ paths:
             responses:
                 "202":
                     $ref: '#/responses/Operation'
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Make the server push the image to a remote server
@@ -8976,8 +9251,14 @@ paths:
             responses:
                 "200":
                     description: Raw image data
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the raw image file(s)
@@ -9006,8 +9287,14 @@ paths:
             responses:
                 "202":
                     $ref: '#/responses/Operation'
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Refresh an image
@@ -9036,8 +9323,14 @@ paths:
             responses:
                 "202":
                     $ref: '#/responses/Operation'
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Generate secret for retrieval of the image by an untrusted client
@@ -9086,8 +9379,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the public image
@@ -9134,8 +9433,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the image aliases
@@ -9161,12 +9466,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add an image alias
@@ -9196,6 +9505,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the image alias
@@ -9238,8 +9551,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the image alias
@@ -9276,6 +9595,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -9308,12 +9631,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the image alias
@@ -9350,6 +9677,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -9397,8 +9728,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the public image alias
@@ -9440,8 +9777,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the image aliases
@@ -9497,8 +9840,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the public images
@@ -9528,12 +9877,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
-                    $ref: '#/responses/EmptySyncResponse'
+                "202":
+                    $ref: '#/responses/Operation'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add an image
@@ -9584,8 +9937,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the public images
@@ -9637,8 +9996,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the images
@@ -9694,8 +10059,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the instances
@@ -9738,6 +10109,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a new instance
@@ -9768,6 +10143,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Bulk instance state update
@@ -9800,6 +10179,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete an instance
@@ -9842,8 +10225,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the instance
@@ -9879,6 +10268,12 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "412":
+                    $ref: '#/responses/PreconditionFailed'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Partially update the instance
@@ -9921,6 +10316,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename or move/migrate an instance
@@ -9956,6 +10355,12 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "412":
+                    $ref: '#/responses/PreconditionFailed'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Update the instance
@@ -10002,6 +10407,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get who has access to an instance
@@ -10053,8 +10462,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the backups
@@ -10095,6 +10510,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a backup
@@ -10131,6 +10550,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a backup
@@ -10178,8 +10601,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the backup
@@ -10220,6 +10649,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename a backup
@@ -10250,8 +10683,14 @@ paths:
             responses:
                 "200":
                     description: Raw image data
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the raw backup file(s)
@@ -10298,8 +10737,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the backups
@@ -10330,12 +10775,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "202":
-                    $ref: '#/responses/Operation'
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a bitmap
@@ -10367,6 +10816,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Clear the console log
@@ -10410,6 +10861,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get console output
@@ -10448,6 +10901,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Connect to console
@@ -10484,13 +10941,15 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get memory debug information of an instance
             tags:
                 - instances
     /1.0/instances/{name}/debug/repair:
-        get:
+        post:
             description: Runs an internal repair action on the instance.
             operationId: instance_debug_repair_post
             parameters:
@@ -10518,6 +10977,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Trigger a repair action on the instance.
@@ -10562,6 +11023,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Run a command
@@ -10604,6 +11069,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a file
@@ -10651,6 +11118,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get a file
@@ -10695,6 +11164,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get metadata for a file
@@ -10765,6 +11236,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create or replace a file
@@ -10815,10 +11288,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the log files
@@ -10855,6 +11332,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the log file
@@ -10891,6 +11370,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the log file
@@ -10942,10 +11423,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the exec record-output files
@@ -10982,6 +11467,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the exec record-output file
@@ -11018,6 +11505,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the exec-output log file
@@ -11061,8 +11550,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the instance image metadata
@@ -11099,6 +11594,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -11137,6 +11636,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -11175,6 +11678,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a template file
@@ -11213,6 +11718,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the template file names or a specific
@@ -11253,6 +11760,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create or replace a template file
@@ -11298,9 +11807,552 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get an NBD connection for all of the instance's disks
+            tags:
+                - instances
+    /1.0/instances/{name}/nvram:
+        get:
+            description: |-
+                Returns a list of NVRAM variable GUIDs (URLs).
+
+                Only supported for VMs.
+            operationId: instance_nvram_get
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: API endpoints
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                description: List of endpoints
+                                example: |-
+                                    [
+                                      "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c",
+                                      "/1.0/instances/foo/nvram/d9bee56e-75dc-49d9-b4d7-b534210f637a",
+                                    ]
+                                items:
+                                    type: string
+                                type: array
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the NVRAM variable GUIDs
+            tags:
+                - instances
+    /1.0/instances/{name}/nvram/{guid}:
+        get:
+            description: |-
+                Returns a map of variable names (URLs).
+
+                Only supported for VMs.
+            operationId: instance_nvram_guid_get
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: GUID
+                  in: path
+                  name: guid
+                  required: true
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: API endpoints
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                description: List of endpoints
+                                example: |-
+                                    [
+                                      "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/Boot0000",
+                                      "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/BootOrder"
+                                    ]
+                                items:
+                                    type: string
+                                type: array
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the NVRAM variable names under the given GUID
+            tags:
+                - instances
+    /1.0/instances/{name}/nvram/{guid}/{var}:
+        delete:
+            description: Only supported for VMs.
+            operationId: instance_nvram_guid_var_delete
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: Variable GUID
+                  example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
+                  in: path
+                  name: guid
+                  required: true
+                  type: string
+                - description: Variable name
+                  example: BootOrder
+                  in: path
+                  name: var
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Delete the NVRAM variable
+            tags:
+                - instances
+        get:
+            description: |-
+                If the `Accept` header is set to `application/octet-stream`, the raw binary value of the variable
+                is returned.
+
+                Only supported for VMs.
+            operationId: instance_nvram_guid_var_get
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: Variable GUID
+                  example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
+                  in: path
+                  name: guid
+                  required: true
+                  type: string
+                - description: Variable name
+                  example: BootOrder
+                  in: path
+                  name: var
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+                - application/octet-stream
+            responses:
+                "200":
+                    description: NVRAM variable
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                $ref: '#/definitions/InstanceNVRAMVariable'
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the NVRAM variable
+            tags:
+                - instances
+        put:
+            consumes:
+                - application/json
+                - application/octet-stream
+            description: |-
+                If the `Content-Type` header is set to `application/octet-stream`, this sets the raw binary
+                value of the variable.
+
+                Only supported for VMs.
+            operationId: instance_nvram_guid_var_put
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: Variable GUID
+                  example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
+                  in: path
+                  name: guid
+                  required: true
+                  type: string
+                - description: Variable name
+                  example: BootOrder
+                  in: path
+                  name: var
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+                - description: Raw UEFI variable attributes to set
+                  in: header
+                  name: X-Incus-attributes
+                  schema:
+                    type: integer
+                - description: Raw UEFI variable UNIX timestamp (in seconds) to set
+                  in: header
+                  name: X-Incus-timestamp
+                  schema:
+                    type: integer
+            produces:
+                - application/json
+            responses:
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
+                "201":
+                    $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "412":
+                    $ref: '#/responses/PreconditionFailed'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Update the NVRAM variable
+            tags:
+                - instances
+    /1.0/instances/{name}/nvram/{guid}?recursion=1:
+        get:
+            description: |-
+                Returns a map of NVRAM variable GUIDs and their dissected values.
+
+                Only supported for VMs.
+            operationId: instance_nvram_guid_get_recursion1
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: GUID
+                  in: path
+                  name: guid
+                  required: true
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: NVRAM variables
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                additionalProperties:
+                                    $ref: '#/definitions/InstanceNVRAMVariable'
+                                description: Namespaced UEFI variables
+                                type: object
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the NVRAM variables under the given GUID
+            tags:
+                - instances
+    /1.0/instances/{name}/nvram?recursion=1:
+        get:
+            description: |-
+                Returns a map of NVRAM variable GUIDs and their associated names (URLs).
+
+                Only supported for VMs.
+            operationId: instance_nvram_get_recursion1
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: API endpoints
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                additionalProperties:
+                                    description: List of endpoints
+                                    items:
+                                        type: string
+                                    type: array
+                                description: UEFI variables
+                                example: |-
+                                    {
+                                      "8be4df61-93ca-11d2-aa0d-00e098032b8c": [
+                                        "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/Boot0000",
+                                        "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/BootOrder"
+                                      ]
+                                    }
+                                type: object
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the NVRAM variable GUIDs and names
+            tags:
+                - instances
+    /1.0/instances/{name}/nvram?recursion=2:
+        get:
+            description: |-
+                Returns a map of NVRAM variable GUIDs and their dissected values.
+
+                Only supported for VMs.
+            operationId: instance_nvram_get_recursion2
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+            produces:
+                - application/json
+            responses:
+                "200":
+                    description: NVRAM variables
+                    schema:
+                        description: Sync response
+                        properties:
+                            metadata:
+                                additionalProperties:
+                                    additionalProperties:
+                                        $ref: '#/definitions/InstanceNVRAMVariable'
+                                    description: Namespaced UEFI variables
+                                    type: object
+                                description: UEFI variables
+                                type: object
+                            status:
+                                description: Status description
+                                example: Success
+                                type: string
+                            status_code:
+                                description: Status code
+                                example: 200
+                                type: integer
+                            type:
+                                description: Response type
+                                example: sync
+                                type: string
+                        type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Get the NVRAM variables
+            tags:
+                - instances
+    /1.0/instances/{name}/port-forward:
+        post:
+            consumes:
+                - application/json
+            description: |-
+                Upgrades the request to a raw TCP connection to the given address and port inside of the instance.
+
+                For containers, the connection is established directly by the server from within the
+                container's network namespace. For virtual machines, the request is forwarded to the
+                agent which then handles the connection.
+
+                This is only available on running instances.
+            operationId: instance_port_forward_post
+            parameters:
+                - description: Instance name
+                  in: path
+                  name: name
+                  required: true
+                  type: string
+                - description: Project name
+                  example: default
+                  in: query
+                  name: project
+                  type: string
+                - description: Port forwarding request
+                  in: body
+                  name: port-forward
+                  required: true
+                  schema:
+                    $ref: '#/definitions/InstancePortForwardPost'
+            produces:
+                - application/json
+                - application/octet-stream
+            responses:
+                "101":
+                    description: Switching protocols to TCP
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "500":
+                    $ref: '#/responses/InternalServerError'
+            summary: Connect to a TCP port inside the instance
             tags:
                 - instances
     /1.0/instances/{name}/rebuild:
@@ -11329,8 +12381,6 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
-                    $ref: '#/responses/EmptySyncResponse'
                 "202":
                     $ref: '#/responses/Operation'
                 "400":
@@ -11339,6 +12389,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rebuild an instance
@@ -11366,6 +12418,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the instance SFTP connection
@@ -11417,8 +12471,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the snapshots
@@ -11454,6 +12514,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a snapshot
@@ -11490,6 +12554,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a snapshot
@@ -11537,8 +12605,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the snapshot
@@ -11579,6 +12653,12 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "412":
+                    $ref: '#/responses/PreconditionFailed'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Partially update snapshot
@@ -11626,6 +12706,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename or move/migrate a snapshot
@@ -11666,6 +12750,12 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
+                "412":
+                    $ref: '#/responses/PreconditionFailed'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Update snapshot
@@ -11712,8 +12802,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the snapshots
@@ -11765,6 +12861,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the runtime state
@@ -11800,6 +12900,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Change the state
@@ -11846,8 +12950,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the instance
@@ -11898,8 +13008,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the instances
@@ -11955,8 +13071,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the instances
@@ -12018,8 +13140,14 @@ paths:
                     schema:
                         description: Instance metrics
                         type: string
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get metrics
@@ -12076,8 +13204,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network ACLs
@@ -12103,12 +13237,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network ACL
@@ -12138,6 +13276,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network ACL
@@ -12180,8 +13322,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network ACL
@@ -12218,6 +13366,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -12250,12 +13402,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the network ACL
@@ -12292,6 +13448,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -12319,8 +13479,14 @@ paths:
             responses:
                 "200":
                     description: Raw log file
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network ACL log
@@ -12372,8 +13538,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network ACLs
@@ -12430,8 +13602,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address sets
@@ -12457,12 +13635,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network address set
@@ -12492,6 +13674,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network address set
@@ -12534,8 +13720,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address set
@@ -12572,6 +13764,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -12604,12 +13800,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the network address set
@@ -12646,6 +13846,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -12699,8 +13903,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address sets
@@ -12745,8 +13955,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network allocations in use (`network`, `network-forward` and `load-balancer` and `instance`)
@@ -12815,12 +14031,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network integration
@@ -12845,6 +14065,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network integration
@@ -12882,8 +14106,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network integration
@@ -12915,6 +14145,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -12940,12 +14174,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the network integration
@@ -12977,6 +14215,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -13078,8 +14320,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network zones
@@ -13105,12 +14353,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network zone
@@ -13140,6 +14392,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network zone
@@ -13182,8 +14438,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network zone
@@ -13220,6 +14482,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -13258,6 +14524,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -13316,8 +14586,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network zone records
@@ -13348,12 +14624,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network zone record
@@ -13388,6 +14668,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network zone record
@@ -13435,8 +14719,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network zone record
@@ -13478,6 +14768,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -13521,6 +14815,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -13574,8 +14872,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network zone records
@@ -13627,8 +14931,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network zones
@@ -13685,8 +14995,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the networks
@@ -13719,12 +15035,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network
@@ -13754,6 +15074,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network
@@ -13801,8 +15125,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network
@@ -13844,6 +15174,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -13876,12 +15210,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the network
@@ -13923,6 +15261,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -13976,8 +15318,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the DHCP leases
@@ -14026,8 +15374,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network state
@@ -14084,8 +15438,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address forwards
@@ -14116,12 +15476,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network address forward
@@ -14156,6 +15520,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network address forward
@@ -14203,8 +15571,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address forward
@@ -14246,6 +15620,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -14289,6 +15667,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -14342,8 +15724,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address forwards
@@ -14400,8 +15788,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address of load balancers
@@ -14432,12 +15826,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network load balancer
@@ -14472,6 +15870,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network address load balancer
@@ -14519,8 +15921,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address load balancer
@@ -14562,6 +15970,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -14605,6 +16017,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -14655,8 +16071,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address load balancer state
@@ -14708,8 +16130,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network address load balancers
@@ -14766,8 +16194,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network peers
@@ -14798,14 +16232,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
-                    $ref: '#/responses/EmptySyncResponse'
-                "202":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a network peer
@@ -14840,6 +16276,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the network peer
@@ -14887,8 +16327,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network peer
@@ -14930,6 +16376,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -14973,6 +16423,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -15026,8 +16480,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the network peers
@@ -15079,8 +16539,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the networks
@@ -15134,8 +16600,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the operations
@@ -15160,6 +16632,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Cancel the operation
@@ -15197,8 +16673,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the operation state
@@ -15242,8 +16724,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Wait for the operation
@@ -15295,8 +16783,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Wait for the operation
@@ -15324,10 +16818,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "101":
                     description: Websocket operation messages (dependent on operation)
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the websocket stream
@@ -15358,10 +16858,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "101":
                     description: Websocket operation messages (dependent on operation)
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the websocket stream
@@ -15407,8 +16913,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the operations
@@ -15465,8 +16977,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the profiles
@@ -15492,12 +17010,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a profile
@@ -15527,6 +17049,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the profile
@@ -15569,8 +17095,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the profile
@@ -15607,6 +17139,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -15639,12 +17175,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the profile
@@ -15681,6 +17221,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -15734,8 +17278,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the profiles
@@ -15782,8 +17332,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the projects
@@ -15804,12 +17360,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a project
@@ -15838,6 +17398,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the project
@@ -15875,8 +17439,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the project
@@ -15908,6 +17478,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -15941,6 +17515,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename the project
@@ -15972,6 +17550,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -16016,6 +17598,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get who has access to a project
@@ -16054,8 +17640,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the project state
@@ -16097,8 +17689,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the projects
@@ -16137,8 +17735,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get system resources information
@@ -16190,8 +17794,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pools
@@ -16224,12 +17834,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a storage pool
@@ -16269,6 +17883,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the storage bucket
@@ -16315,6 +17933,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -16363,6 +17985,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -16409,6 +18035,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the storage bucket key
@@ -16460,6 +18090,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -16505,8 +18139,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get storage pool resources information
@@ -16536,6 +18176,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the storage pool
@@ -16583,8 +18227,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool
@@ -16626,6 +18276,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -16669,6 +18323,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -16732,8 +18390,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool buckets
@@ -16764,12 +18428,18 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/definitions/StorageBucketKey'
+                "202":
+                    $ref: '#/responses/Operation'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a storage pool bucket.
@@ -16818,8 +18488,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool bucket
@@ -16881,8 +18557,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage bucket backups
@@ -16934,6 +18616,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a storage bucket backup
@@ -16980,6 +18666,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a storage bucket backup
@@ -17037,8 +18727,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage bucket backup
@@ -17090,6 +18786,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename a storage bucket backup
@@ -17130,8 +18830,14 @@ paths:
             responses:
                 "200":
                     description: Raw backup data
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the raw backup file
@@ -17188,8 +18894,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage bucket backups
@@ -17246,8 +18958,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool bucket keys
@@ -17283,12 +19001,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "200":
+                "201":
                     $ref: '#/definitions/StorageBucketKey'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a storage pool bucket key.
@@ -17342,8 +19064,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool bucket key
@@ -17395,8 +19123,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool bucket keys
@@ -17445,8 +19179,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the full storage pool bucket details
@@ -17503,8 +19243,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool buckets
@@ -17561,8 +19307,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pool bucket details
@@ -17626,8 +19378,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volumes
@@ -17673,6 +19431,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a storage volume
@@ -17734,8 +19496,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volumes
@@ -17786,6 +19554,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Add a storage volume
@@ -17830,6 +19602,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the storage volume
@@ -17887,8 +19663,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume
@@ -17940,6 +19722,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -17993,12 +19779,18 @@ paths:
             produces:
                 - application/json
             responses:
+                "201":
+                    $ref: '#/responses/EmptySyncResponse'
                 "202":
                     $ref: '#/responses/Operation'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename or move/migrate a storage volume
@@ -18050,6 +19842,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -18118,8 +19914,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume backups
@@ -18176,6 +19978,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a storage volume backup
@@ -18227,6 +20033,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a storage volume backup
@@ -18289,8 +20099,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume backup
@@ -18347,6 +20163,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename a storage volume backup
@@ -18392,8 +20212,14 @@ paths:
             responses:
                 "200":
                     description: Raw backup data
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the raw backup file
@@ -18455,8 +20281,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume backups
@@ -18523,8 +20355,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume dirty bitmaps
@@ -18571,12 +20409,16 @@ paths:
                 - application/json
                 - application/octet-stream
             responses:
-                "202":
-                    $ref: '#/responses/Operation'
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a storage volume bitmap
@@ -18622,12 +20464,16 @@ paths:
             produces:
                 - application/json
             responses:
-                "202":
-                    $ref: '#/responses/Operation'
+                "200":
+                    $ref: '#/responses/EmptySyncResponse'
                 "400":
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a storage volume bitmap
@@ -18690,8 +20536,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume dirty bitmap
@@ -18753,8 +20605,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume dirty bitmaps
@@ -18807,6 +20665,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a file
@@ -18864,6 +20724,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get a file
@@ -18918,6 +20780,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get metadata for a file
@@ -18998,6 +20862,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create or replace a file
@@ -19045,6 +20911,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume NBD connection
@@ -19101,6 +20969,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rebuild the storage volume
@@ -19138,6 +21008,8 @@ paths:
                     $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume SFTP connection
@@ -19204,8 +21076,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume snapshots
@@ -19257,6 +21135,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Create a storage volume snapshot
@@ -19308,6 +21190,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete a storage volume snapshot
@@ -19370,8 +21256,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume snapshot
@@ -19428,6 +21320,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -19486,6 +21382,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Rename a storage volume snapshot
@@ -19542,6 +21442,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "412":
                     $ref: '#/responses/PreconditionFailed'
                 "500":
@@ -19605,8 +21509,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume snapshots
@@ -19665,8 +21575,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volume state
@@ -19725,8 +21641,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the full storage volume details
@@ -19783,8 +21705,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volumes
@@ -19841,8 +21769,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volumes with all details
@@ -19899,8 +21833,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage volumes
@@ -19947,8 +21887,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the storage pools
@@ -19995,6 +21941,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: List the warnings
@@ -20015,6 +21969,14 @@ paths:
             responses:
                 "200":
                     $ref: '#/responses/EmptySyncResponse'
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Delete the warning
@@ -20052,8 +22014,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
                 "404":
                     $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the warning
@@ -20085,6 +22053,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Partially update the warning
@@ -20116,6 +22088,10 @@ paths:
                     $ref: '#/responses/BadRequest'
                 "403":
                     $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Update the warning
@@ -20157,6 +22133,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the warnings
@@ -20194,6 +22178,14 @@ paths:
                                 example: sync
                                 type: string
                         type: object
+                "400":
+                    $ref: '#/responses/BadRequest'
+                "403":
+                    $ref: '#/responses/Forbidden'
+                "404":
+                    $ref: '#/responses/NotFound'
+                "409":
+                    $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
             summary: Get the server environment
@@ -20210,6 +22202,24 @@ responses:
                     x-go-name: Error
                 error_code:
                     example: 400
+                    format: int64
+                    type: integer
+                    x-go-name: ErrorCode
+                type:
+                    example: error
+                    type: string
+                    x-go-name: Type
+            type: object
+    Conflict:
+        description: Conflict
+        schema:
+            properties:
+                error:
+                    example: already exists
+                    type: string
+                    x-go-name: Error
+                error_code:
+                    example: 409
                     format: int64
                     type: integer
                     x-go-name: ErrorCode

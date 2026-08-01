@@ -50,12 +50,12 @@ Failed to mount proc at /proc: Operation not permitted
 したがって、何も変更される前の環境を確認でき、`raw.lxc` 設定パラメーターを使用してコンテナ内の`init`システムを明示的に変更できます。
 これは、Linux カーネルのコマンドラインで `init=/bin/bash` を設定するのと同等です。
 
-    incus config set systemd raw.lxc 'lxc.init.cmd = /bin/bash'
+    incus config set systemd raw.lxc='lxc.init.cmd = /bin/bash'
 
 これがどのように見えるかを示します:
 
 ```{terminal}
-:input: incus config set systemd raw.lxc 'lxc.init.cmd = /bin/bash'
+:input: incus config set systemd raw.lxc='lxc.init.cmd = /bin/bash'
 
 :input: incus start systemd
 :input: incus console --show-log systemd

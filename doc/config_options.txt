@@ -133,21 +133,21 @@ rootディスクデバイスでは、インスタンスのrootボリュームを
 
 ```{config:option} limits.max devices-disk
 :required: "no"
-:shortdesc: "読み取りと書き込み両方のbyte/sかIOPSによるI/O制限（`limits.read`と`limits.write`の両方を設定するのと同じ）"
+:shortdesc: "読み取りと書き込み両方のbyte/sとIOPSによるI/O制限の片方か両方（`limits.read`と`limits.write`の両方を設定するのと同じ）"
 :type: "string"
 
 ```
 
 ```{config:option} limits.read devices-disk
 :required: "no"
-:shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）もしくはIOPS（あとに`iops`と付けなければなりません）で指定する読み込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
+:shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）とIOPS（あとに`iops`と付けなければなりません）の片方か両方で指定する読み込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
 :type: "string"
 
 ```
 
 ```{config:option} limits.write devices-disk
 :required: "no"
-:shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）もしくはIOPS（あとに`iops`と付けなければなりません）で指定する書き込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
+:shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）とIOPS（あとに`iops`と付けなければなりません）の片方か両方で指定する書き込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
 :type: "string"
 
 ```
@@ -327,6 +327,44 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 <!-- config group devices-gpu_mig end -->
+<!-- config group devices-gpu_native_context start -->
+```{config:option} blob.size devices-gpu_native_context
+:default: "2GiB"
+:required: "no"
+:shortdesc: "`virtio-gpu`デバイスでhost上の見えるblobメモリーウィンドウのサイズ"
+:type: "string"
+
+```
+
+```{config:option} id devices-gpu_native_context
+:required: "no"
+:shortdesc: "GPUデバイスのDRMカードID"
+:type: "string"
+
+```
+
+```{config:option} pci devices-gpu_native_context
+:required: "no"
+:shortdesc: "GPUデバイスのPCIアドレス"
+:type: "string"
+
+```
+
+```{config:option} productid devices-gpu_native_context
+:required: "no"
+:shortdesc: "GPUデバイスのプロダクトID"
+:type: "string"
+
+```
+
+```{config:option} vendorid devices-gpu_native_context
+:required: "no"
+:shortdesc: "GPUデバイスのベンダーID"
+:type: "string"
+
+```
+
+<!-- config group devices-gpu_native_context end -->
 <!-- config group devices-gpu_physical start -->
 ```{config:option} gid devices-gpu_physical
 :default: "0"
@@ -533,7 +571,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv4.gateway devices-nic_bridged
 :managed: "no"
-:shortdesc: "OCIコンテナ内で静的に設定するIPv4デフォルトゲートウェイ"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv4デフォルトゲートウェイ（デフォルトゲートウェイの適用を避けるには`none`）"
 :type: "string"
 
 ```
@@ -561,7 +599,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv6.gateway devices-nic_bridged
 :managed: "no"
-:shortdesc: "OCIコンテナ内で静的に設定するIPv6デフォルトゲートウェイ"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv6デフォルトゲートウェイ（デフォルトゲートウェイの適用を避けるには`none`）"
 :type: "string"
 
 ```
@@ -984,7 +1022,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv4.gateway devices-nic_ovn
 :managed: "no"
-:shortdesc: "OCIコンテナ内で静的に設定するIPv4デフォルトゲートウェイ"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv4デフォルトゲートウェイ（デフォルトゲートウェイの適用を避けるには`none`）"
 :type: "string"
 
 ```
@@ -1019,7 +1057,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv6.gateway devices-nic_ovn
 :managed: "no"
-:shortdesc: "OCIコンテナ内で静的に設定するIPv6デフォルトゲートウェイ"
+:shortdesc: "OCIコンテナ内で静的に設定するIPv6デフォルトゲートウェイ（デフォルトゲートウェイの適用を避けるには`none`）"
 :type: "string"
 
 ```
@@ -1758,6 +1796,18 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :default: "0"
 :shortdesc: "インスタンス内のデバイス所有者のGID"
 :type: "int"
+
+```
+
+```{config:option} limits.read devices-unix-char-block
+:shortdesc: "読み取り操作へのbyte/sとIOPSでのI/O制限の片方か両方（カンマ区切り）"
+:type: "string"
+
+```
+
+```{config:option} limits.write devices-unix-char-block
+:shortdesc: "書き込み操作へのbyte/sとIOPSでのI/O制限の片方か両方（カンマ区切り）"
+:type: "string"
 
 ```
 
@@ -2533,6 +2583,7 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 :type: "string"
 `true`か`false`に設定すると、カーネルがスワップしたメモリの一部をコンテナが受け取るかどうかを制御します。
 あるいはバイト数の値をセットすると、コンテナがスワップを通じて追加のメモリを使用できるようにします。
+cgoup2のシステムではスワップの優先度の制御ができないため、この設定のサポートは制限されます。
 ```
 
 ```{config:option} limits.memory.swap.priority instance-resource-limits
@@ -2543,6 +2594,7 @@ CPUのどれだけを使えるか制御するため、パーセント（`50%`）
 :type: "integer"
 0から10の間の整数を指定します。
 値が高いほど、インスタンスがディスクにスワップされにくくなります。
+現状ではこの設定はcgroup2のシステムでは何の効果もありません。
 ```
 
 ```{config:option} limits.processes instance-resource-limits
@@ -2666,11 +2718,12 @@ BPFファイルシステムはいずれかの`security.bpffs.delegate_*`オプ�
 
 ```{config:option} security.nesting instance-security
 :condition: "container"
-:defaultdesc: "`false`"
-:liveupdate: "yes"
-:shortdesc: "インスタンス内部で（ネストして）Incusを稼働するのをサポートするかどうか"
+:defaultdesc: "`false`（コンテナ）、`true`（VM）"
+:liveupdate: "yes（コンテナのみ）"
+:shortdesc: "インスタンス内部のネストを許可するかどうか"
 :type: "bool"
-
+コンテナでは、これは（ネストした）Incusをインスタンス内部で動かせるかを制御します。
+仮想マシンでは、これを`false`に設定するとネストした仮想化を無効します（`svm`と`vmx` CPU フラグをオフにします）。
 ```
 
 ```{config:option} security.privileged instance-security
@@ -3372,6 +3425,14 @@ NVIDIA仮想GPUインスタンスUUID。
 :defaultdesc: "`180`"
 :shortdesc: "ピアセッションの持続時間（秒；省略可）"
 :type: "integer"
+
+```
+
+```{config:option} bgp.peers.NAME.interface network_bridge-bgp
+:condition: "BGPサーバー"
+:defaultdesc: "-"
+:shortdesc: "（ピアアドレスの代わりに）BGP unnumberedを使ったピアリングに使うインターフェース名"
+:type: "string"
 
 ```
 
@@ -4309,6 +4370,14 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```
 
+```{config:option} bgp.peers.NAME.interface network_physical-bgp
+:condition: "BGPサーバー"
+:defaultdesc: "-"
+:shortdesc: "（ピアアドレスの代わりに）BGP unnumberedを使ったピアリングに使うインターフェース名"
+:type: "string"
+
+```
+
 ```{config:option} bgp.peers.NAME.password network_physical-bgp
 :condition: "BGPサーバー"
 :defaultdesc: "- （パスワード無し）"
@@ -4693,7 +4762,7 @@ NVIDIA仮想GPUインスタンスUUID。
 設定できる値は`unprivileged`、`isolated`、`allow`です。
 
 - `unprivileged`に設定すると、このオプションは{config:option}`instance-security:security.privileged`を`true`に設定するのを禁止します。
-- `isolated`に設定すると、このオプションは{config:option}`instance-security:security.privileged`と{config:option}`instance-security:security.idmap.isolated`を`false`に設定するのを禁止します。
+- `isolated`に設定すると、このオプションは{config:option}`instance-security:security.privileged`を`true`に、{config:option}`instance-security:security.idmap.isolated`を`false`に設定するのを禁止します。
 - `allow`に設定すると、制限はありません。
 ```
 
@@ -4859,6 +4928,14 @@ Possible values are `allow` or `block`.
 `allow`と設定すると、{config:option}`instance-raw:raw.qemu`、`volatile.*`、などの低レベルのVMオプションが使用できます。
 ```
 
+```{config:option} restricted.virtual-machines.nesting project-restricted
+:defaultdesc: "`allow`"
+:shortdesc: "ネストした仮想化を禁止するかどうか"
+:type: "string"
+設定できる値は`allow`か`block`です。
+`block`に設定すると、{config:option}`instance-security:security.nesting`はすべての仮想マシンで`false`に設定する必要があり、ネストした仮想化をオフにします。
+```
+
 <!-- config group project-restricted end -->
 <!-- config group project-specific start -->
 ```{config:option} backups.compression_algorithm project-specific
@@ -4947,6 +5024,20 @@ Possible values are `allow` or `block`.
 
 ```
 
+```{config:option} acme.eab.hmac server-acme
+:scope: "global"
+:shortdesc: "External Account BindingのHMACキー"
+:type: "string"
+
+```
+
+```{config:option} acme.eab.kid server-acme
+:scope: "global"
+:shortdesc: "External Account Bindingのキー識別子"
+:type: "string"
+
+```
+
 ```{config:option} acme.email server-acme
 :scope: "global"
 :shortdesc: "アカウント登録に使用するEmailアドレス"
@@ -4987,6 +5078,84 @@ DNS-01チャレンジ中に（再帰的な）`CNAME`の名前解決とapexドメ
 ```
 
 <!-- config group server-acme end -->
+<!-- config group server-authorization start -->
+```{config:option} authorization.client.default server-authorization
+:scope: "global"
+:shortdesc: "より特定のクラスルートを持たないクライアント用の認可ドライバー"
+:type: "string"
+より特定なクラスにマッチしないクライアントを認可ドライバーにルーティングします。
+設定可能な値は、`allow`、`deny`、`openfga`、`scriptlet`です。
+```
+
+```{config:option} authorization.client.oidc server-authorization
+:scope: "global"
+:shortdesc: "OIDC認証のクライアント用の認可ドライバー"
+:type: "string"
+OIDC認証のクライアントを認可ドライバーにルーティングします。
+設定可能な値は、`allow`、`deny`、`openfga`、`scriptlet`です。
+```
+
+```{config:option} authorization.client.tls server-authorization
+:scope: "global"
+:shortdesc: "非制限TLSクライアント用の認可ドライバー"
+:type: "string"
+非制限クライアント証明書を認可ドライバーにルーティングします。
+設定可能な値は、`allow`、`deny`、`openfga`、`scriptlet`です。
+```
+
+```{config:option} authorization.client.tls-restricted server-authorization
+:scope: "global"
+:shortdesc: "制限付きTLSクライアント用の認可ドライバー"
+:type: "string"
+制限付き（プロジェクト制限）クライアント証明書を使うクライアントを認可ドライバーにルーティングします。
+設定可能な値は、`allow`、`deny`、`openfga`、`scriptlet`です。
+```
+
+```{config:option} authorization.client.unix server-authorization
+:scope: "global"
+:shortdesc: "ローカル（`unix`ソケット）クライアント用の認可ドライバー"
+:type: "string"
+`unix`ソケット越しに接続するローカルクライアントを認可ドライバーにルーティングします。
+設定可能な値は、`allow`、`deny`、`openfga`、`scriptlet`です。
+```
+
+```{config:option} authorization.openfga.api.token server-authorization
+:scope: "global"
+:shortdesc: "OpenFGAサーバーのAPIトークン"
+:type: "string"
+
+```
+
+```{config:option} authorization.openfga.api.url server-authorization
+:scope: "global"
+:shortdesc: "OpenFGAサーバーのURL"
+:type: "string"
+
+```
+
+```{config:option} authorization.openfga.store.id server-authorization
+:scope: "global"
+:shortdesc: "OpenFGAパーミッションストアーのID"
+:type: "string"
+
+```
+
+```{config:option} authorization.openfga.tls.identifier server-authorization
+:defaultdesc: "`name`"
+:scope: "global"
+:shortdesc: "TLSクライアントのOpenFGAユーザーとして使う証明書の属性"
+:type: "string"
+TLSクライアントがOpenFGAで認可される際に、OpenFGAユーザーとして使う証明書の属性（`fingerprint`か`name`）を選択します。
+```
+
+```{config:option} authorization.scriptlet server-authorization
+:scope: "global"
+:shortdesc: "認可スクリプトレット"
+:type: "string"
+スクリプトレットベースの認可を使用する際に、このオプションにスクリプトレットを保管します。
+```
+
+<!-- config group server-authorization end -->
 <!-- config group server-cluster start -->
 ```{config:option} cluster.healing_threshold server-cluster
 :defaultdesc: "`0`"
@@ -5454,13 +5623,6 @@ Lokiサーバーへ送るイベントのカンマ区切りリストを指定し�
 
 <!-- config group server-loki end -->
 <!-- config group server-miscellaneous start -->
-```{config:option} authorization.scriptlet server-miscellaneous
-:scope: "global"
-:shortdesc: "認可スクリプトレット"
-:type: "string"
-スクリプトレットベースの認可を使用する際に、このオプションにスクリプトレットを保管します。
-```
-
 ```{config:option} backups.compression_algorithm server-miscellaneous
 :defaultdesc: "`gzip`"
 :scope: "global"
@@ -5672,29 +5834,6 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```
 
 <!-- config group server-oidc end -->
-<!-- config group server-openfga start -->
-```{config:option} openfga.api.token server-openfga
-:scope: "global"
-:shortdesc: "OpenFGAサーバーのAPIトークン"
-:type: "string"
-
-```
-
-```{config:option} openfga.api.url server-openfga
-:scope: "global"
-:shortdesc: "OpenFGAサーバーのURL"
-:type: "string"
-
-```
-
-```{config:option} openfga.store.id server-openfga
-:scope: "global"
-:shortdesc: "OpenFGAパーミッションストアーのID"
-:type: "string"
-
-```
-
-<!-- config group server-openfga end -->
 <!-- config group storage_btrfs-common start -->
 ```{config:option} btrfs.create_options storage_btrfs-common
 :default: "-"

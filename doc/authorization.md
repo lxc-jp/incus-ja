@@ -11,6 +11,8 @@ Unix ソケットで Incus とやり取りする際、`incus-admin`グループ�
 - {ref}`authorization-openfga`
 - {ref}`authorization-scriptlet`
 
+デフォルトでは、リクエストに使われる方法はクライアントの認証プロトコルによって自動的に決定されます。異なるクライアントの種別が異なる方法で処理されるようにカスタマイズできます。{ref}`authorization-client-routing`を参照してください。
+
 (authorization-tls)=
 ## TLS 認可
 
@@ -21,7 +23,9 @@ Incus はネイティブで {ref}`authentication-trusted-clients` を 1 つま�
 `restricted`キーを`true`に設定し、クライアントのアクセスを制限するプロジェクトのリストを指定します。
 プロジェクトのリストが空の場合、クライアントはどのプロジェクトへのアクセスも許可されません。
 
-{ref}`OpenFGA authorization <authorization-openfga>`が設定されている場合でも、クライアントが TLS で認証する場合は、この認可の方法が使われます。
+デフォルトでは、制限付きTLS証明書で認証するクライアントにはこの認可の方法が使われます。
+一方、非制限の証明書を使うクライアントはフルアクセスを許可されます。
+これらは両方変更できます。{ref}`authorization-client-routing`を参照してください。
 
 (authorization-openfga)=
 ## Open Fine-Grained Authorization (OpenFGA)
@@ -33,8 +37,15 @@ Incus は [{abbr}`OpenFGA (Open Fine-Grained Authorization)`](https://openfga.de
 OpenFGA を認可に使うには、あなた自身で OpenFGA サーバーを設定し稼働させる必要があります。
 Incus は OpenFGA サーバーに接続し、{ref}`openfga-model` を書き込み、以降の全てのリクエストへの認可をこのサーバーに問い合わせます。
 
-Incusでこの認可の方法を有効にするには、[`openfga.*`](server-options-openfga)サーバー設定オプションを設定してください。
+Incusでこの認可の方法を有効にするには、[`authorization.openfga.*`](server-options-authorization)サーバー設定オプションを設定してください。
 OpenFGAを有効にするためにはすべてのオプションの設定が必要です。しかし、認可モデルを自身で作成する必要はありません。認証されたユーザーだけを許可するような初期設定タプル`server:incus#authenticated@user:*`を含む認可モデルをIncusが生成します。
+
+```{warning}
+`authorization.openfga.*`オプションを設定してもOpenFGAが使えるようになるだけです。
+これだけではリクエストがOpenFGAで認可されるようにはなりません。
+
+`authorization.client.*`オプションでOpenFGAにルーティングされるクラスのクライアントだけがOpenFGAで認可されます。{ref}`authorization-client-routing`を参照してください。
+```
 
 (openfga-model)=
 ### OpenFGA モデル
@@ -71,6 +82,13 @@ Incus の OpenFGA 認可モデルは API リソースを他のリソースとの
 
 Incusはきめ細やかな認可を管理するスクリプトレットの定義をサポートします。これにより外部ツールに依存することなく詳細な認可のルールを書くことができます。
 
+```{warning}
+`authorization.scriptlet`を設定してもスクリプトレットが利用可能になるだけです。
+これだけではリクエストがスクリプトレットで認可されるわけではありません。
+
+`authorization.client.*`オプションでスクリプトレットにルーティングされるクラスのクライアントだけがスクリプトレットで認可されます。{ref}`authorization-client-routing`を参照してください。
+```
+
 認可スクリプトレットを使うためには、`authorization.scriptlet`サーバー設定オプションに`authorize`という関数を実装するスクリプトレットを書きます。この関数は3つの引数を取ります:
 
 - `details`：以下のアトリビュートを持つオブジェクト
@@ -89,3 +107,55 @@ Incusはきめ細やかな認可を管理するスクリプトレットの定義
 
 - `get_instance_access`：2つの引数（`project_name`と`instance_name`）を取り、指定のインスタンスにアクセスできるユーザー一覧を返す
 - `get_project_access`：1つの引数（`project_name`）を取り、指定のプロジェクトにアクセスできるユーザー一覧を返す
+
+(authorization-client-routing)=
+## クライアントのルーティング
+
+1つ以上の認可の方法を同時にロードできます。各リクエストはクライアントの認証クラスに基づいて、それらの認可の方法の1つにルーティングされます。これはクライアントクラス毎に1つの`authorization.client.*`サーバー設定オプションで制御されます：
+
+- `authorization.client.unix`: Unixソケット越しに接続するローカルクライアント
+- `authorization.client.tls`: 非制限の証明書を使うクライアント
+- `authorization.client.tls-restricted`: 制限付き（プロジェクト制限）クライアント証明書を使うクライアント
+- `authorization.client.oidc`: OIDC認証のクライアント
+- `authorization.client.default`: 上記のいずれのクラスでもないクライアント
+
+各オプションは以下の値のいずれか1つを受け付けます：
+
+- `allow`: 無条件にアクセスを許可
+- `deny`: 無条件にアクセスを拒否
+- `tls`: {ref}`authorization-tls`を使う。`authorization.client.tls-restricted`の場合のみ有効
+- `openfga`: {ref}`authorization-openfga`を使う
+- `scriptlet`: {ref}`authorization-scriptlet`を使う
+
+クラス毎のオプションは未設定時は`authorization.client.default`にフォールバックします。
+それも未設定な場合、以下の組み込みのルーティングが適用されます：
+
+| クライアントクラス | 組み込みのルート |
+|--------------------|------------------|
+| `unix`             | `allow`          |
+| `tls`              | `allow`          |
+| `tls-restricted`   | `tls`            |
+| `oidc`             | `allow`          |
+| `default`          | `deny`           |
+
+このルーティングは固定です。
+
+```{warning}
+{ref}`authorization-tls`で説明されている証明書毎のプロジェクト制限はTLS認証だけで強制されます。
+
+`authorization.client.tls-restricted`が`tls`以外に設定される場合、クライアント証明書のプロジェクトリストはもはや参照されず、制限付きの証明書が制限しているプロジェクト以外にもアクセスできてしまいます。
+`tls`以外の値に設定するのは、想定している制限をその方法で再現できる場合のみにしてください。
+```
+
+```{warning}
+`authorization.client.default`を設定する際は、明示的に設定されるクライアントクラスがすべて期待どおりに振る舞うことを確認してから、常に最後に設定するようにしてください。
+
+各クラスに設定されるデフォルトが明示的に設定されていないと、1つの設定ミスがすべてのクライアントに影響します。`openfga`か`scriptlet`に設定してそれらが設定を間違えていたり到達できなかったり、あるいは`deny`に設定されていると、すべてのリモートのクライアントが拒否されます。
+
+`root`ユーザーは、設定された認可方法に関係なく、Unixソケット超しにAPIでの操作が常に許可されます。これによりルーティング設定を間違えて締め出されたサーバーを復旧できます。
+```
+
+例えば、OpenFGAはOIDCクライアントを認可し、制限付きTLS証明書はTLS認可を使い続けるには以下のように設定します：
+
+    incus config set authorization.client.oidc=openfga
+    incus config set authorization.client.tls-restricted=scriptlet

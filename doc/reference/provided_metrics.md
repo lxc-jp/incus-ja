@@ -169,6 +169,10 @@ Incus は、数々のインスタンスメトリクスと内部メトリクス�
   - システムから取得されたバイト数
 * - `incus_operations_total`
   - 実行中の処理の数
+* - `incus_storage_pool_size_bytes{pool="<pool>",driver="<driver>"}`
+  - ストレージプールの容量（バイト単位）
+* - `incus_storage_pool_used_bytes{pool="<pool>",driver="<driver>"}`
+  - ストレージプールの使用量（バイト単位）
 * - `incus_uptime_seconds`
   - デーモンのuptime（秒単位）
 * - `incus_warnings_total`

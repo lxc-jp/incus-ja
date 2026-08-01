@@ -10,16 +10,16 @@ Incus サーバーがクラスタの一部の場合、一部のオプション�
 
 以下のコマンドでサーバーオプションを設定できます:
 
-    incus config set <key> <value>
+    incus config set <key>=<value>
 
 たとえば、ポート 8443 で Incus サーバーにリモートからのアクセスを許可するには、以下のコマンドを入力します:
 
-    incus config set core.https_address :8443
+    incus config set core.https_address=:8443
 
 クラスタ構成では、クラスタメンバーだけにサーバー設定を行うには`--target`フラグを追加してください。
 たとえば、特定のクラスタメンバーでイメージの tarball を保管する場所を設定するには、以下のようなコマンドを入力してください:
 
-    incus config set storage.images_volume my-pool/my-volume --target member02
+    incus config set storage.images_volume=my-pool/my-volume --target member02
 
 ## サーバー設定を表示する
 

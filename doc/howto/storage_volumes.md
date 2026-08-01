@@ -75,6 +75,7 @@
 
 ストレージボリュームをインスタンスに {ref}`ディスクデバイス <devices-disk>` としてアタッチする際に、 I/O 制限値を設定できます。
 そのためには `limits.read`, `limits.write`, `limits.max` に対応する制限値を設定します。
+それぞれの制限はbyte/sとIOPS（`iops`の接尾辞をつける）の片方か両方を指定でき、両方指定する際はカンマ区切り（例えば、`limits.read=30MiB,1000iops`）にします。
 詳細な情報は {ref}`devices-disk` レファレンスを参照してください。
 
 制限値は Linux の `blkio` cgroup コントローラー経由で適用されます。これによりディスクのレベルで I/O を制限することができます（しかしそれより細かい単位では制限できません）。
@@ -100,11 +101,11 @@
 
 - バックアップ tarball を保管するためにカスタムボリュームを使用する:
 
-      incus config set storage.backups_volume <pool_name>/<volume_name>
+      incus config set storage.backups_volume=<pool_name>/<volume_name>
 
 - イメージ tarball を保管するためにカスタムボリュームを使用する:
 
-      incus config set storage.images_volume <pool_name>/<volume_name>
+      incus config set storage.images_volume=<pool_name>/<volume_name>
 
 (storage-configure-volume)=
 ## ストレージボリュームを設定する

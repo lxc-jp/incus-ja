@@ -32,7 +32,7 @@
 クラスタを設定するには、[`incus config`](incus_config.md) を使用します。
 たとえば:
 
-    incus config set cluster.max_voters 5
+    incus config set cluster.max_voters=5
 
 いくつかの {ref}`サーバー設定 <server>` はグローバルで他はローカルであることに注意してください。
 グローバル設定はどのクラスタメンバー上でも実行でき、変更は分散データベースを通して他のクラスタメンバーにも伝搬されます。

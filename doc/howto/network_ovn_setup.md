@@ -156,7 +156,7 @@ Incus と同様に、 OVN の分散データベースは奇数のメンバーで
 1. 引き続き最初のマシンで Incus を OVN DB クラスタと通信できるように設定します。
    そのためには、 `/etc/default/ovn-central` 内の `ovn-northd-nb-db` の値を確認し、以下のコマンドで Incus に指定します:
 
-       incus config set network.ovn.northbound_connection <ovn-northd-nb-db>
+       incus config set network.ovn.northbound_connection=<ovn-northd-nb-db>
 
 1. 最後に（最初のマシンで）実際の OVN ネットワークを作成します:
 

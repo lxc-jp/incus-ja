@@ -46,7 +46,7 @@
 1. メンバーがジョインした後、 REST API のアドレスを `core.https_address` で設定する。
    たとえば:
 
-       incus config set core.https_address 0.0.0.0:8443
+       incus config set core.https_address=0.0.0.0:8443
 
    ```{note}
    `core.https_address` はクラスタメンバーに固有ですので、異なるメンバーに異なるアドレスを設定できます。
