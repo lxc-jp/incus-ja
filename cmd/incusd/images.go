@@ -132,6 +132,21 @@ var imagePublishLock sync.Mutex
 // stepping on each other's toes.
 var imageTaskMu sync.Mutex
 
+// errorRecordingWriter wraps an io.Writer and records the first write error.
+type errorRecordingWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (w *errorRecordingWriter) Write(p []byte) (int, error) {
+	n, err := w.w.Write(p)
+	if err != nil && w.err == nil {
+		w.err = err
+	}
+
+	return n, err
+}
+
 func compressFile(compress string, infile io.Reader, outfile io.Writer) error {
 	// Compressors with reproducible output and the flags needed for it.
 	reproducible := map[string][]string{
@@ -202,11 +217,25 @@ func compressFile(compress string, infile io.Reader, outfile io.Writer) error {
 			args = append(args, flags...)
 		}
 
+		// Record output write errors as a failing write closes the pipe and kills
+		// the compressor with SIGPIPE, masking the actual error (e.g. ENOSPC).
+		writer := &errorRecordingWriter{w: outfile}
+		stderr := bytes.Buffer{}
+
 		cmd := exec.Command(fields[0], args...)
 		cmd.Stdin = infile
-		cmd.Stdout = outfile
+		cmd.Stdout = writer
+		cmd.Stderr = &stderr
 		err := cmd.Run()
 		if err != nil {
+			if writer.err != nil {
+				return writer.err
+			}
+
+			if stderr.Len() > 0 {
+				return fmt.Errorf("%s: %w (%s)", fields[0], err, strings.TrimSpace(stderr.String()))
+			}
+
 			return err
 		}
 	}
@@ -1070,7 +1099,7 @@ func imageCreateInPool(s *state.State, info *api.Image, storagePool string) erro
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: body
 //      name: image
 //      description: Image
@@ -1107,59 +1136,46 @@ func imageCreateInPool(s *state.State, info *api.Image, storagePool string) erro
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image
-//	    description: Image
+//	    description: Image (or raw image file)
 //	    required: false
 //	    schema:
 //	      $ref: "#/definitions/ImagesPost"
-//	  - in: body
-//	    name: raw_image
-//	    description: Raw image file
-//	    required: false
 //	  - in: header
 //	    name: X-Incus-secret
 //	    description: Push secret for server to server communication
-//	    schema:
-//	      type: string
-//	    example: RANDOM-STRING
+//	    type: string
+//	    x-example: RANDOM-STRING
 //	  - in: header
 //	    name: X-Incus-fingerprint
 //	    description: Expected fingerprint when pushing a raw image
-//	    schema:
-//	      type: string
+//	    type: string
 //	  - in: header
 //	    name: X-Incus-aliases
 //	    description: List of aliases to assign
-//	    schema:
-//	      type: array
-//	      items:
-//	        type: string
+//	    type: array
+//	    items:
+//	      type: string
 //	  - in: header
 //	    name: X-Incus-properties
-//	    description: Descriptive properties
-//	    schema:
-//	      type: object
-//	      additionalProperties:
-//	        type: string
+//	    description: Descriptive properties (URL encoded)
+//	    type: string
 //	  - in: header
 //	    name: X-Incus-public
 //	    description: Whether the image is available to unauthenticated users
-//	    schema:
-//	      type: boolean
+//	    type: boolean
 //	  - in: header
 //	    name: X-Incus-filename
 //	    description: Original filename of the image
-//	    schema:
-//	      type: string
+//	    type: string
 //	  - in: header
 //	    name: X-Incus-profiles
 //	    description: List of profiles to use
-//	    schema:
-//	      type: array
-//	      items:
-//	        type: string
+//	    type: array
+//	    items:
+//	      type: string
 //	responses:
 //	  "202":
 //	    $ref: "#/responses/Operation"
@@ -1572,6 +1588,31 @@ func getImageMetadata(fname string) (*api.ImageMetadata, string, error) {
 	return &result, imageType, nil
 }
 
+// imageMatchClauses matches an image against the clauses, letting architecture filters match both the Incus architecture and the image-provided one.
+func imageMatchClauses(image *api.Image, clauses *filter.ClauseSet) (bool, error) {
+	set := *clauses
+	set.Clauses = slices.Clone(clauses.Clauses)
+
+	for i, clause := range set.Clauses {
+		if !filter.DotPrefixMatch(strings.TrimPrefix(clause.Field, "properties."), "architecture") {
+			continue
+		}
+
+		if !strings.EqualFold(clause.Value, image.Architecture) && !strings.EqualFold(clause.Value, image.Properties["architecture"]) {
+			continue
+		}
+
+		// Rewrite the value to that of the targeted field so either name matches.
+		if strings.HasPrefix(clause.Field, "properties.") {
+			set.Clauses[i].Value = image.Properties["architecture"]
+		} else {
+			set.Clauses[i].Value = image.Architecture
+		}
+	}
+
+	return filter.Match(*image, set)
+}
+
 func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectName string, public bool, clauses *filter.ClauseSet, hasPermission auth.PermissionChecker, allProjects bool) (any, error) {
 	mustLoadObjects := recursion || (clauses != nil && len(clauses.Clauses) > 0)
 
@@ -1618,7 +1659,7 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 				resultString = append(resultString, api.NewURL().Path(version.APIVersion, "images", fingerprint).String())
 			} else {
 				if clauses != nil && len(clauses.Clauses) > 0 {
-					match, err := filter.Match(*image, *clauses)
+					match, err := imageMatchClauses(image, clauses)
 					if err != nil {
 						return nil, err
 					}
@@ -1658,12 +1699,12 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve images from all projects
@@ -1692,11 +1733,9 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/images/06b86454720d36b20f94e31c6812e05ec51c1b568cf3a8abd273769d213394bb",
-//                "/1.0/images/084dd79dd1360fd25a2479eb46674c2a5ef3022a40fe03c91ab3603e3402b8e1"
-//              ]
+//            example:
+//              - /1.0/images/06b86454720d36b20f94e31c6812e05ec51c1b568cf3a8abd273769d213394bb
+//              - /1.0/images/084dd79dd1360fd25a2479eb46674c2a5ef3022a40fe03c91ab3603e3402b8e1
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -1722,12 +1761,12 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve images from all projects
@@ -1781,12 +1820,12 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve images from all projects
@@ -1815,11 +1854,9 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/images/06b86454720d36b20f94e31c6812e05ec51c1b568cf3a8abd273769d213394bb",
-//                "/1.0/images/084dd79dd1360fd25a2479eb46674c2a5ef3022a40fe03c91ab3603e3402b8e1"
-//              ]
+//            example:
+//              - /1.0/images/06b86454720d36b20f94e31c6812e05ec51c1b568cf3a8abd273769d213394bb
+//              - /1.0/images/084dd79dd1360fd25a2479eb46674c2a5ef3022a40fe03c91ab3603e3402b8e1
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -1845,17 +1882,17 @@ func doImagesGet(ctx context.Context, tx *db.ClusterTx, recursion bool, projectN
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: filter
 //	    description: Collection filter
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: all-projects
 //	    description: Retrieve images from all projects
 //	    type: boolean
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -2108,17 +2145,20 @@ func autoUpdateImages(ctx context.Context, s *state.State) error {
 				}
 			}
 
-			_ = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+			// Remove the database entries for the image after distributing to cluster members.
+			err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
 				for _, ID := range deleteIDs {
-					// Remove the database entry for the image after distributing to cluster members.
 					err := tx.DeleteImage(ctx, ID)
 					if err != nil {
-						logger.Error("Error deleting old image from database", logger.Ctx{"err": err, "fingerprint": fingerprint, "ID": ID})
+						return err
 					}
 				}
 
 				return nil
 			})
+			if err != nil {
+				logger.Error("Error deleting old image from database", logger.Ctx{"err": err, "fingerprint": fingerprint, "IDs": deleteIDs})
+			}
 		}
 	}
 
@@ -2168,6 +2208,11 @@ func distributeImage(ctx context.Context, s *state.State, nodes []string, oldFin
 		})
 		if err != nil {
 			return fmt.Errorf("Failed to retrieve information about cluster member with address %q: %w", nodeAddress, err)
+		}
+
+		// Skip offline members.
+		if nodeInfo.IsOffline(s.GlobalConfig.OfflineThreshold()) {
+			continue
 		}
 
 		client, err := cluster.Connect(nodeAddress, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
@@ -2442,7 +2487,15 @@ func autoUpdateImage(ctx context.Context, s *state.State, op *operations.Operati
 				continue
 			}
 
+			// Lock this operation to ensure that concurrent image operations don't conflict.
+			unlock, err := imageOperationLock(ctx, fingerprint)
+			if err != nil {
+				logger.Error("Error locking image for deletion from storage pool", logger.Ctx{"err": err, "pool": pool.Name(), "fingerprint": fingerprint})
+				continue
+			}
+
 			err = pool.DeleteImage(fingerprint, op)
+			unlock()
 			if err != nil {
 				logger.Error("Error deleting image from storage pool", logger.Ctx{"err": err, "pool": pool.Name(), "fingerprint": fingerprint})
 				continue
@@ -2468,6 +2521,14 @@ func autoUpdateImage(ctx context.Context, s *state.State, op *operations.Operati
 		setRefreshResult(false)
 		return nil, nil
 	}
+
+	// Lock this operation to ensure that concurrent image operations don't conflict.
+	unlock, err := imageOperationLock(ctx, fingerprint)
+	if err != nil {
+		return nil, err
+	}
+
+	defer unlock()
 
 	// Remove main image file.
 	fname := filepath.Join(s.OS.VarDir, "images", fingerprint)
@@ -2706,100 +2767,119 @@ func pruneExpiredImages(ctx context.Context, s *state.State, op *operations.Oper
 		default:
 		}
 
-		dbImagesDeleted := 0
-		for _, dbImage := range dbImages {
-			// Get expiry days for image's project.
-			expiryDays := projectsImageRemoteCacheExpiryDays[dbImage.Project]
-
-			// Skip if no project expiry time set.
-			if expiryDays <= 0 {
-				continue
-			}
-
-			// Figure out the expiry of image.
-			timestamp := dbImage.UploadDate
-			if !dbImage.LastUseDate.Time.IsZero() {
-				timestamp = dbImage.LastUseDate.Time
-			}
-
-			imageExpiry := timestamp.Add(time.Duration(expiryDays) * time.Hour * 24)
-
-			// Skip if image is not expired.
-			if imageExpiry.After(time.Now()) {
-				continue
-			}
-
-			err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
-				// Remove the database entry for the image.
-				return tx.DeleteImage(ctx, dbImage.ID)
-			})
-			if err != nil {
-				return fmt.Errorf("Error deleting image %q in project %q from database: %w", fingerprint, dbImage.Project, err)
-			}
-
-			dbImagesDeleted++
-
-			logger.Info("Deleted expired cached image record", logger.Ctx{"fingerprint": fingerprint, "project": dbImage.Project, "expiry": imageExpiry})
-
-			s.Events.SendLifecycle(dbImage.Project, lifecycle.ImageDeleted.Event(fingerprint, dbImage.Project, op.Requestor(), nil))
+		err = pruneExpiredImage(ctx, s, op, fingerprint, dbImages, projectsImageRemoteCacheExpiryDays)
+		if err != nil {
+			return err
 		}
+	}
 
-		// Skip deleting the image files and image storage volumes on disk if image is not expired in all
-		// of its projects.
-		if dbImagesDeleted < len(dbImages) {
+	return nil
+}
+
+// pruneExpiredImage removes an expired image's database records and, once unused by all projects,
+// its storage volumes and files.
+func pruneExpiredImage(ctx context.Context, s *state.State, op *operations.Operation, fingerprint string, dbImages []dbCluster.Image, projectsImageRemoteCacheExpiryDays map[string]int64) error {
+	// Lock this operation to ensure that concurrent image operations don't conflict.
+	unlock, err := imageOperationLock(ctx, fingerprint)
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	dbImagesDeleted := 0
+	for _, dbImage := range dbImages {
+		// Get expiry days for image's project.
+		expiryDays := projectsImageRemoteCacheExpiryDays[dbImage.Project]
+
+		// Skip if no project expiry time set.
+		if expiryDays <= 0 {
 			continue
 		}
 
-		var poolIDs []int64
-		var poolNames []string
+		// Figure out the expiry of image.
+		timestamp := dbImage.UploadDate
+		if !dbImage.LastUseDate.Time.IsZero() {
+			timestamp = dbImage.LastUseDate.Time
+		}
+
+		imageExpiry := timestamp.Add(time.Duration(expiryDays) * time.Hour * 24)
+
+		// Skip if image is not expired.
+		if imageExpiry.After(time.Now()) {
+			continue
+		}
 
 		err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
-			// Get the IDs of all storage pools on which a storage volume for the image currently exists.
-			poolIDs, err = tx.GetPoolsWithImage(ctx, fingerprint)
-			if err != nil {
-				return err
-			}
-
-			// Translate the IDs to poolNames.
-			poolNames, err = tx.GetPoolNamesFromIDs(ctx, poolIDs)
-			if err != nil {
-				return err
-			}
-
-			return nil
+			// Remove the database entry for the image.
+			return tx.DeleteImage(ctx, dbImage.ID)
 		})
 		if err != nil {
-			continue
+			return fmt.Errorf("Error deleting image %q in project %q from database: %w", fingerprint, dbImage.Project, err)
 		}
 
-		for _, poolName := range poolNames {
-			pool, err := storagePools.LoadByName(s, poolName)
-			if err != nil {
-				return fmt.Errorf("Error loading storage pool %q to delete image volume %q: %w", poolName, fingerprint, err)
-			}
+		dbImagesDeleted++
 
-			err = pool.DeleteImage(fingerprint, op)
-			if err != nil {
-				return fmt.Errorf("Error deleting image volume %q from storage pool %q: %w", fingerprint, pool.Name(), err)
-			}
-		}
+		logger.Info("Deleted expired cached image record", logger.Ctx{"fingerprint": fingerprint, "project": dbImage.Project, "expiry": imageExpiry})
 
-		// Remove main image file.
-		fname := filepath.Join(s.OS.VarDir, "images", fingerprint)
-		err = os.Remove(fname)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("Error deleting image file %q: %w", fname, err)
-		}
-
-		// Remove the rootfs file for the image.
-		fname = filepath.Join(s.OS.VarDir, "images", fingerprint) + ".rootfs"
-		err = os.Remove(fname)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("Error deleting image file %q: %w", fname, err)
-		}
-
-		logger.Info("Deleted expired cached image files and volumes", logger.Ctx{"fingerprint": fingerprint})
+		s.Events.SendLifecycle(dbImage.Project, lifecycle.ImageDeleted.Event(fingerprint, dbImage.Project, op.Requestor(), nil))
 	}
+
+	// Skip deleting the image files and image storage volumes on disk if image is not expired in all
+	// of its projects.
+	if dbImagesDeleted < len(dbImages) {
+		return nil
+	}
+
+	var poolIDs []int64
+	var poolNames []string
+
+	err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		// Get the IDs of all storage pools on which a storage volume for the image currently exists.
+		poolIDs, err = tx.GetPoolsWithImage(ctx, fingerprint)
+		if err != nil {
+			return err
+		}
+
+		// Translate the IDs to poolNames.
+		poolNames, err = tx.GetPoolNamesFromIDs(ctx, poolIDs)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil
+	}
+
+	for _, poolName := range poolNames {
+		pool, err := storagePools.LoadByName(s, poolName)
+		if err != nil {
+			return fmt.Errorf("Error loading storage pool %q to delete image volume %q: %w", poolName, fingerprint, err)
+		}
+
+		err = pool.DeleteImage(fingerprint, op)
+		if err != nil {
+			return fmt.Errorf("Error deleting image volume %q from storage pool %q: %w", fingerprint, pool.Name(), err)
+		}
+	}
+
+	// Remove main image file.
+	fname := filepath.Join(s.OS.VarDir, "images", fingerprint)
+	err = os.Remove(fname)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("Error deleting image file %q: %w", fname, err)
+	}
+
+	// Remove the rootfs file for the image.
+	fname = filepath.Join(s.OS.VarDir, "images", fingerprint) + ".rootfs"
+	err = os.Remove(fname)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("Error deleting image file %q: %w", fname, err)
+	}
+
+	logger.Info("Deleted expired cached image files and volumes", logger.Ctx{"fingerprint": fingerprint})
 
 	return nil
 }
@@ -2823,7 +2903,7 @@ func pruneExpiredImages(ctx context.Context, s *state.State, op *operations.Oper
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "202":
 //	    $ref: "#/responses/Operation"
@@ -3122,12 +3202,12 @@ func imageValidSecret(s *state.State, r *http.Request, projectName string, finge
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: secret
 //      description: Secret token to retrieve a private image
 //      type: string
-//      example: RANDOM-STRING
+//      x-example: RANDOM-STRING
 //  responses:
 //    "200":
 //      description: Image
@@ -3179,7 +3259,7 @@ func imageValidSecret(s *state.State, r *http.Request, projectName string, finge
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: Image
@@ -3285,7 +3365,7 @@ func imageGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image
 //	    description: Image configuration
@@ -3403,7 +3483,7 @@ func imagePut(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image
 //	    description: Image configuration
@@ -3528,7 +3608,7 @@ func imagePatch(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image alias
 //	    description: Image alias
@@ -3622,7 +3702,7 @@ func imageAliasesPost(d *Daemon, r *http.Request) response.Response {
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -3647,11 +3727,9 @@ func imageAliasesPost(d *Daemon, r *http.Request) response.Response {
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/images/aliases/foo",
-//                "/1.0/images/aliases/bar1"
-//              ]
+//            example:
+//              - /1.0/images/aliases/foo
+//              - /1.0/images/aliases/bar1
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -3677,7 +3755,7 @@ func imageAliasesPost(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -3786,7 +3864,7 @@ func imageAliasesGet(d *Daemon, r *http.Request) response.Response {
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: Image alias
@@ -3838,7 +3916,7 @@ func imageAliasesGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: Image alias
@@ -3921,7 +3999,7 @@ func imageAliasGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -3994,7 +4072,7 @@ func imageAliasDelete(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image alias
 //	    description: Image alias configuration
@@ -4094,7 +4172,7 @@ func imageAliasPut(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image alias
 //	    description: Image alias configuration
@@ -4209,7 +4287,7 @@ func imageAliasPatch(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image alias
 //	    description: Image alias rename request
@@ -4306,12 +4384,12 @@ func imageAliasPost(d *Daemon, r *http.Request) response.Response {
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: secret
 //      description: Secret token to retrieve a private image
 //      type: string
-//      example: RANDOM-STRING
+//      x-example: RANDOM-STRING
 //  responses:
 //    "200":
 //      description: Raw image data
@@ -4347,7 +4425,7 @@ func imageAliasPost(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: Raw image data
@@ -4518,7 +4596,7 @@ func imageExport(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: image
 //	    description: Image push request
@@ -4686,7 +4764,7 @@ func imageExportPost(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "202":
 //	    $ref: "#/responses/Operation"
@@ -4816,7 +4894,7 @@ func imageImportFromNode(imagesDir string, client incus.InstanceServer, fingerpr
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "202":
 //	    $ref: "#/responses/Operation"
@@ -5062,16 +5140,38 @@ func imageSyncBetweenNodes(ctx context.Context, s *state.State, r *http.Request,
 
 		err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
 			// Get a list of nodes that do not have the image.
-			addresses, err = tx.GetNodesWithoutImage(ctx, fingerprint)
+			candidates, err := tx.GetNodesWithoutImage(ctx, fingerprint)
+			if err != nil {
+				return err
+			}
 
-			return err
+			// Skip offline members.
+			members, err := tx.GetNodes(ctx)
+			if err != nil {
+				return err
+			}
+
+			offlineThreshold := s.GlobalConfig.OfflineThreshold()
+
+			addresses = nil
+			for _, member := range members {
+				if member.IsOffline(offlineThreshold) {
+					continue
+				}
+
+				if slices.Contains(candidates, member.Address) {
+					addresses = append(addresses, member.Address)
+				}
+			}
+
+			return nil
 		})
 		if err != nil {
 			return fmt.Errorf("Failed to get nodes for the image synchronization: %w", err)
 		}
 
-		if len(addresses) <= 0 {
-			logger.Info("All members have image", logger.Ctx{"fingerprint": fingerprint, "project": project})
+		if len(addresses) == 0 {
+			logger.Info("All online members have image", logger.Ctx{"fingerprint": fingerprint, "project": project})
 			return nil
 		}
 

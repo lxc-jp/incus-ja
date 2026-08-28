@@ -130,6 +130,23 @@
 						}
 					},
 					{
+						"limits.max.burst": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "I/O limit in byte/s and/or IOPS that both reads and writes may burst up to (same as setting both `limits.read.burst` and `limits.write.burst`)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.burst.length": {
+							"default": "`1s`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "How long the burst limits may be sustained for (same as setting both `limits.read.burst.length` and `limits.write.burst.length`)",
+							"type": "string"
+						}
+					},
+					{
 						"limits.read": {
 							"longdesc": "",
 							"required": "no",
@@ -138,10 +155,44 @@
 						}
 					},
 					{
+						"limits.read.burst": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "I/O limit in byte/s and/or IOPS that reads may burst up to for `limits.read.burst.length` (only for virtual machines) - see also {ref}`storage-configure-IO`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.read.burst.length": {
+							"default": "`1s`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "How long `limits.read.burst` may be sustained for before falling back to the sustained limit",
+							"type": "string"
+						}
+					},
+					{
 						"limits.write": {
 							"longdesc": "",
 							"required": "no",
 							"shortdesc": "I/O limit in byte/s (various suffixes supported, see {ref}`instances-limit-units`) and/or in IOPS (must be suffixed with `iops`), comma separated when specifying both - see also {ref}`storage-configure-IO`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.write.burst": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "I/O limit in byte/s and/or IOPS that writes may burst up to for `limits.write.burst.length` (only for virtual machines) - see also {ref}`storage-configure-IO`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.write.burst.length": {
+							"default": "`1s`",
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "How long `limits.write.burst` may be sustained for before falling back to the sustained limit",
 							"type": "string"
 						}
 					},
@@ -613,7 +664,7 @@
 						"ipv4.address": {
 							"longdesc": "",
 							"managed": "no",
-							"shortdesc": "An IPv4 address to assign to the instance through DHCP (can be `none` to restrict all IPv4 traffic when `security.ipv4_filtering` is set, or a CIDR value to statically configure the address inside an OCI container)",
+							"shortdesc": "An IPv4 address to assign to the instance through DHCP (can be `none` to disable DHCPv4 inside an OCI container and restrict all IPv4 traffic when `security.ipv4_filtering` is set, or a CIDR value to statically configure the address inside an OCI container)",
 							"type": "string"
 						}
 					},
@@ -645,7 +696,7 @@
 						"ipv6.address": {
 							"longdesc": "",
 							"managed": "no",
-							"shortdesc": "An IPv6 address to assign to the instance through DHCP (can be `none` to restrict all IPv6 traffic when `security.ipv6_filtering` is set, or a CIDR value to statically configure the address inside an OCI container)",
+							"shortdesc": "An IPv6 address to assign to the instance through DHCP (can be `none` to disable DHCPv6 and SLAAC inside an OCI container and restrict all IPv6 traffic when `security.ipv6_filtering` is set, or a CIDR value to statically configure the address inside an OCI container)",
 							"type": "string"
 						}
 					},
@@ -682,6 +733,22 @@
 						}
 					},
 					{
+						"limits.egress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that outgoing traffic may send in excess of `limits.egress`, requires `limits.egress.burst`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.egress.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that outgoing traffic may burst up to, requires `limits.egress.bucket`",
+							"type": "string"
+						}
+					},
+					{
 						"limits.ingress": {
 							"longdesc": "",
 							"managed": "no",
@@ -690,10 +757,42 @@
 						}
 					},
 					{
+						"limits.ingress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that incoming traffic may send in excess of `limits.ingress`, requires `limits.ingress.burst`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.ingress.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that incoming traffic may burst up to, requires `limits.ingress.bucket`",
+							"type": "string"
+						}
+					},
+					{
 						"limits.max": {
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "I/O limit in bit/s for both incoming and outgoing traffic (same as setting both limits.ingress and limits.egress)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that traffic may send in excess of the sustained limit (same as setting both `limits.ingress.bucket` and `limits.egress.bucket`)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that both incoming and outgoing traffic may burst up to (same as setting both `limits.ingress.burst` and `limits.egress.burst`)",
 							"type": "string"
 						}
 					},
@@ -736,6 +835,23 @@
 							"longdesc": "",
 							"managed": "yes",
 							"shortdesc": "The name of the parent host device (required if specifying the `nictype` directly)",
+							"type": "string"
+						}
+					},
+					{
+						"queue.discipline": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "The queuing discipline to set on the NIC, applied to the rate limit's class when a limit is set",
+							"type": "string"
+						}
+					},
+					{
+						"queue.discipline.attach": {
+							"default": "`queue`",
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Only for VMs: Whether to attach the queuing discipline to each transmit queue (`queue`) or to the interface root (`root`)",
 							"type": "string"
 						}
 					},
@@ -1217,6 +1333,14 @@
 						}
 					},
 					{
+						"limits.egress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that outgoing traffic may send in excess of `limits.egress` (mutually exclusive with `limits.max.bucket`)",
+							"type": "string"
+						}
+					},
+					{
 						"limits.ingress": {
 							"longdesc": "",
 							"managed": "no",
@@ -1225,10 +1349,26 @@
 						}
 					},
 					{
+						"limits.ingress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that incoming traffic may send in excess of `limits.ingress` (mutually exclusive with `limits.max.bucket`)",
+							"type": "string"
+						}
+					},
+					{
 						"limits.max": {
 							"longdesc": "",
 							"managed": "no",
 							"shortdesc": "I/O limit in bit/s for both incoming and outgoing traffic. (same as setting both limits.ingress and limits.egress / mutually exclusive with limits.ingress and limits.egress)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that traffic may send in excess of the sustained limit (same as setting both `limits.ingress.bucket` and `limits.egress.bucket` / mutually exclusive with them)",
 							"type": "string"
 						}
 					},
@@ -1411,6 +1551,22 @@
 						}
 					},
 					{
+						"limits.egress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that outgoing traffic may send in excess of `limits.egress`, requires `limits.egress.burst`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.egress.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that outgoing traffic may burst up to, requires `limits.egress.bucket`",
+							"type": "string"
+						}
+					},
+					{
 						"limits.ingress": {
 							"longdesc": "",
 							"shortdesc": "I/O limit in bit/s for incoming traffic (various suffixes supported, see {ref}`instances-limit-units`)",
@@ -1418,9 +1574,41 @@
 						}
 					},
 					{
+						"limits.ingress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that incoming traffic may send in excess of `limits.ingress`, requires `limits.ingress.burst`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.ingress.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that incoming traffic may burst up to, requires `limits.ingress.bucket`",
+							"type": "string"
+						}
+					},
+					{
 						"limits.max": {
 							"longdesc": "",
 							"shortdesc": "I/O limit in bit/s for both incoming and outgoing traffic (same as setting both limits.ingress and limits.egress)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that traffic may send in excess of the sustained limit (same as setting both `limits.ingress.bucket` and `limits.egress.bucket`)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that both incoming and outgoing traffic may burst up to (same as setting both `limits.ingress.burst` and `limits.egress.burst`)",
 							"type": "string"
 						}
 					},
@@ -1444,6 +1632,21 @@
 							"default": "kernel assigned",
 							"longdesc": "",
 							"shortdesc": "The name of the interface inside the instance",
+							"type": "string"
+						}
+					},
+					{
+						"queue.discipline": {
+							"longdesc": "",
+							"shortdesc": "The queuing discipline to set on the NIC, applied to the rate limit's class when a limit is set",
+							"type": "string"
+						}
+					},
+					{
+						"queue.discipline.attach": {
+							"default": "`queue`",
+							"longdesc": "",
+							"shortdesc": "Only for VMs: Whether to attach the queuing discipline to each transmit queue (`queue`) or to the interface root (`root`)",
 							"type": "string"
 						}
 					},
@@ -1716,6 +1919,22 @@
 						}
 					},
 					{
+						"limits.egress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that outgoing traffic may send in excess of `limits.egress`, requires `limits.egress.burst`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.egress.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that outgoing traffic may burst up to, requires `limits.egress.bucket`",
+							"type": "string"
+						}
+					},
+					{
 						"limits.ingress": {
 							"longdesc": "",
 							"shortdesc": "I/O limit in bit/s for incoming traffic (various suffixes supported, see {ref}`instances-limit-units`)",
@@ -1723,9 +1942,41 @@
 						}
 					},
 					{
+						"limits.ingress.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that incoming traffic may send in excess of `limits.ingress`, requires `limits.ingress.burst`",
+							"type": "string"
+						}
+					},
+					{
+						"limits.ingress.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that incoming traffic may burst up to, requires `limits.ingress.bucket`",
+							"type": "string"
+						}
+					},
+					{
 						"limits.max": {
 							"longdesc": "",
 							"shortdesc": "I/O limit in bit/s for both incoming and outgoing traffic (same as setting both limits.ingress and limits.egress)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.bucket": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "Amount of data in bit that traffic may send in excess of the sustained limit (same as setting both `limits.ingress.bucket` and `limits.egress.bucket`)",
+							"type": "string"
+						}
+					},
+					{
+						"limits.max.burst": {
+							"longdesc": "",
+							"managed": "no",
+							"shortdesc": "I/O limit in bit/s that both incoming and outgoing traffic may burst up to (same as setting both `limits.ingress.burst` and `limits.egress.burst`)",
 							"type": "string"
 						}
 					},
@@ -1756,6 +2007,21 @@
 						"parent": {
 							"longdesc": "",
 							"shortdesc": "The name of the parent host device to join the instance to",
+							"type": "string"
+						}
+					},
+					{
+						"queue.discipline": {
+							"longdesc": "",
+							"shortdesc": "The queuing discipline to set on the NIC, applied to the rate limit's class when a limit is set",
+							"type": "string"
+						}
+					},
+					{
+						"queue.discipline.attach": {
+							"default": "`queue`",
+							"longdesc": "",
+							"shortdesc": "Only for VMs: Whether to attach the queuing discipline to each transmit queue (`queue`) or to the interface root (`root`)",
 							"type": "string"
 						}
 					},
@@ -2485,7 +2751,7 @@
 						"cluster.evacuate": {
 							"defaultdesc": "`auto`",
 							"liveupdate": "no",
-							"longdesc": "The `cluster.evacuate` provides control over how instances are handled when a cluster member is being\nevacuated.\n\nAvailable Modes:\n  - `auto` *(default)*: The system will automatically decide the best evacuation method based on the\n     instance's type and configured devices:\n    + If any device is not suitable for migration, the instance will not be migrated (only stopped).\n    + Live migration will be used only for virtual machines with the `migration.stateful` setting\n      enabled and for which all its devices can be migrated as well.\n  - `live-migrate`: Instances are live-migrated to another server. This means the instance remains running\n     and operational during the migration process, ensuring minimal disruption.\n  - `migrate`: In this mode, instances are migrated to another server in the cluster. The migration\n     process will not be live, meaning there will be a brief downtime for the instance during the\n     migration.\n  -  `stop`: Instances are not migrated. Instead, they are stopped on the current server.\n  -  `stateful-stop`: Instances are not migrated. Instead, they are stopped on the current server\n     but with their runtime state (memory) stored on disk for resuming on restore.\n  -  `force-stop`: Instances are not migrated. Instead, they are forcefully stopped.\n\nSee {ref}`cluster-evacuate` for more information.",
+							"longdesc": "The `cluster.evacuate` provides control over how instances are handled when a cluster member is being\nevacuated.\n\nAvailable Modes:\n  - `auto` *(default)*: The system will automatically decide the best evacuation method based on the\n     instance's type and configured devices:\n    + If any device is not suitable for migration, the instance will not be migrated (only stopped).\n    + Live migration will be used only for virtual machines with the `migration.stateful` setting\n      enabled and for which all its devices can be migrated as well.\n  - `live-migrate`: Instances are live-migrated to another server. This means the instance remains running\n     and operational during the migration process, ensuring minimal disruption.\n  - `refresh-migrate`: Instances are migrated to another server through a series of incremental\n     transfers, keeping the instance running until the last one. This isn't a live migration, but the\n     downtime is limited to the final transfer. Only supported for containers.\n  - `migrate`: In this mode, instances are migrated to another server in the cluster. The migration\n     process will not be live, meaning there will be a brief downtime for the instance during the\n     migration.\n  -  `stop`: Instances are not migrated. Instead, they are stopped on the current server.\n  -  `stateful-stop`: Instances are not migrated. Instead, they are stopped on the current server\n     but with their runtime state (memory) stored on disk for resuming on restore.\n  -  `force-stop`: Instances are not migrated. Instead, they are forcefully stopped.\n\nSee {ref}`cluster-evacuate` for more information.",
 							"shortdesc": "What to do when evacuating the instance",
 							"type": "string"
 						}
@@ -2607,7 +2873,7 @@
 						"oci.dns.domain": {
 							"condition": "OCI container",
 							"liveupdate": "no",
-							"longdesc": "Domain name for the initial `resolv.conf`.",
+							"longdesc": "Domain name for `resolv.conf`.\nWhen set, the domain name received over DHCP is ignored.",
 							"shortdesc": "DNS domain",
 							"type": "string"
 						}
@@ -2616,7 +2882,7 @@
 						"oci.dns.nameservers": {
 							"condition": "OCI container",
 							"liveupdate": "no",
-							"longdesc": "Comma-separated list of name server addresses for the initial `resolv.conf`.",
+							"longdesc": "Comma-separated list of name server addresses for `resolv.conf`.\nWhen set, name servers received over DHCP are ignored.",
 							"shortdesc": "DNS name servers",
 							"type": "string"
 						}
@@ -2625,7 +2891,7 @@
 						"oci.dns.search": {
 							"condition": "OCI container",
 							"liveupdate": "no",
-							"longdesc": "Comma-separated list of search domains for the initial `resolv.conf`.",
+							"longdesc": "Comma-separated list of search domains for `resolv.conf`.\nWhen set, search domains received over DHCP are ignored.",
 							"shortdesc": "DNS search domains",
 							"type": "string"
 						}
@@ -2661,6 +2927,24 @@
 			},
 			"raw": {
 				"keys": [
+					{
+						"initial.nvram-binary.\u003cGUID\u003e.\u003cname\u003e": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "Base64-encoded variable value to set when generating the NVRAM, optionally prefixed by `\u003cattributes\u003e:`, with `\u003cattributes\u003e` an integer.",
+							"shortdesc": "Base64-encoded NVRAM variable value to set when generating the NVRAM, optionally prefixed by its attributes",
+							"type": "blob"
+						}
+					},
+					{
+						"initial.nvram.\u003cGUID\u003e.\u003cname\u003e": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "",
+							"shortdesc": "Dissected NVRAM variable value to set when generating the NVRAM",
+							"type": "blob"
+						}
+					},
 					{
 						"raw.apparmor": {
 							"liveupdate": "yes",
@@ -2919,6 +3203,60 @@
 			"security": {
 				"keys": [
 					{
+						"initial.secureboot.db": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "This option accepts signatures armored with `SIGNATURE` in addition to certificates.",
+							"shortdesc": "Initial authorized signature database entries to enroll when generating the NVRAM (PEM certificate and signature bundle)",
+							"type": "string"
+						}
+					},
+					{
+						"initial.secureboot.dbt": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "",
+							"shortdesc": "Initial authorized timestamp signature database certificates to enroll when generating the NVRAM (PEM certificate bundle)",
+							"type": "string"
+						}
+					},
+					{
+						"initial.secureboot.dbx": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "This option accepts signatures armored with `SIGNATURE` in addition to certificates.",
+							"shortdesc": "Initial forbidden signature database entries to enroll when generating the NVRAM (PEM certificate and signature bundle)",
+							"type": "string"
+						}
+					},
+					{
+						"initial.secureboot.kek": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "",
+							"shortdesc": "Initial key exchange keys to enroll when generating the NVRAM (PEM certificate bundle)",
+							"type": "string"
+						}
+					},
+					{
+						"initial.secureboot.mok": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "This option accepts signatures armored with `SIGNATURE` in addition to certificates.",
+							"shortdesc": "Initial machine owner key entries to enroll when generating the NVRAM (PEM certificate and signature bundle)",
+							"type": "string"
+						}
+					},
+					{
+						"initial.secureboot.pk": {
+							"condition": "virtual machine",
+							"liveupdate": "yes",
+							"longdesc": "",
+							"shortdesc": "Initial platform key to enroll when generating the NVRAM (PEM certificate)",
+							"type": "string"
+						}
+					},
+					{
 						"security.agent.metrics": {
 							"condition": "virtual machine",
 							"defaultdesc": "`true`",
@@ -3076,6 +3414,15 @@
 							"liveupdate": "yes",
 							"longdesc": "Set this option to `true` to prevent the instance's file system from being UID/GID shifted on startup.",
 							"shortdesc": "Whether to protect the file system from being UID/GID shifted",
+							"type": "bool"
+						}
+					},
+					{
+						"security.protection.start": {
+							"defaultdesc": "`false`",
+							"liveupdate": "yes",
+							"longdesc": "",
+							"shortdesc": "Prevents the instance from being started",
 							"type": "bool"
 						}
 					},
@@ -4210,6 +4557,15 @@
 						}
 					},
 					{
+						"ipv6.ra": {
+							"condition": "IPv6 address",
+							"default": "`true`",
+							"longdesc": "",
+							"shortdesc": "Whether to send IPv6 router advertisements",
+							"type": "bool"
+						}
+					},
+					{
 						"ipv6.routes": {
 							"condition": "IPv6 address",
 							"default": "-",
@@ -4403,7 +4759,7 @@
 						"ovn.ca_cert": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "OVN SSL certificate authority for the inter-connection database",
+							"shortdesc": "OVN SSL certificate authorities for the inter-connection database (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -4411,7 +4767,7 @@
 						"ovn.client_cert": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "OVN SSL client certificate",
+							"shortdesc": "OVN SSL client certificate (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -4419,7 +4775,7 @@
 						"ovn.client_key": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "OVN SSL client key",
+							"shortdesc": "OVN SSL client key (PEM private key)",
 							"type": "string"
 						}
 					},
@@ -4574,6 +4930,22 @@
 							"longdesc": "",
 							"shortdesc": "Bridge MTU (default allows host to host Geneve tunnels)",
 							"type": "integer"
+						}
+					},
+					{
+						"bridge.multicast_relay": {
+							"default": "`false`",
+							"longdesc": "",
+							"shortdesc": "Whether to relay multicast traffic through the network's logical router",
+							"type": "bool"
+						}
+					},
+					{
+						"bridge.multicast_snooping": {
+							"default": "`true`",
+							"longdesc": "",
+							"shortdesc": "Whether to enable multicast snooping on the virtual network",
+							"type": "bool"
 						}
 					},
 					{
@@ -4759,6 +5131,15 @@
 							"longdesc": "",
 							"shortdesc": "The source address used for outbound traffic from the network (requires uplink `ovn.ingress_mode=routed`)",
 							"type": "string"
+						}
+					},
+					{
+						"ipv6.ra": {
+							"condition": "IPv6 address",
+							"default": "`true`",
+							"longdesc": "",
+							"shortdesc": "Whether to send IPv6 router advertisements",
+							"type": "bool"
 						}
 					},
 					{
@@ -5213,7 +5594,7 @@
 						"features.networks": {
 							"defaultdesc": "`false`",
 							"initialvaluedesc": "`false`",
-							"longdesc": "",
+							"longdesc": "This feature requires the server to be configured for OVN.",
 							"shortdesc": "Whether to use a separate set of networks for the project",
 							"type": "bool"
 						}
@@ -5498,7 +5879,7 @@
 					},
 					{
 						"restricted.networks.access": {
-							"longdesc": "Specify a comma-delimited list of network names that are allowed for use in this project.\nIf this option is not set, all networks are accessible.\n\nNote that this setting depends on the {config:option}`project-restricted:restricted.devices.nic` setting.",
+							"longdesc": "Specify a comma-delimited list of network names that are allowed for use in this project.\nIf this option is not set, all networks are accessible.\n\nIn restricted projects with {config:option}`project-features:features.networks` enabled,\nthe listed networks from the default project are shared into the project and their names\ncan't be used for the project's own networks.\n\nNote that this setting depends on the {config:option}`project-restricted:restricted.devices.nic` setting.",
 							"shortdesc": "Which network names are allowed for use in this project",
 							"type": "string"
 						}
@@ -6196,7 +6577,7 @@
 						"logging.NAME.target.ca_cert": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "CA certificate for the server",
+							"shortdesc": "CA certificates for the server (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -6274,7 +6655,7 @@
 						"loki.api.ca_cert": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "CA certificate for the Loki server",
+							"shortdesc": "CA certificates for the Loki server (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -6380,7 +6761,7 @@
 						"instances.tpm.platform_cert": {
 							"longdesc": "PEM encoded platform CA certificate used to sign the Endorsement\nKey and platform certificate of newly created TPM devices.\nMust be set together with `instances.tpm.platform_key`.",
 							"scope": "global",
-							"shortdesc": "Platform CA certificate used to provision TPM Endorsement Keys",
+							"shortdesc": "Platform CA certificate used to provision TPM Endorsement Keys (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -6388,7 +6769,7 @@
 						"instances.tpm.platform_key": {
 							"longdesc": "PEM encoded private key matching `instances.tpm.platform_cert`.\nUsed to sign the Endorsement Key and platform certificate of newly\ncreated TPM devices.",
 							"scope": "global",
-							"shortdesc": "Private key for the TPM platform CA certificate",
+							"shortdesc": "Private key for the TPM platform CA certificate (PEM private key)",
 							"type": "string"
 						}
 					},
@@ -6397,7 +6778,7 @@
 							"defaultdesc": "Content of `/etc/ovn/ovn-central.crt` if present",
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "OVN SSL certificate authority",
+							"shortdesc": "OVN SSL certificate authorities (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -6406,7 +6787,7 @@
 							"defaultdesc": "Content of `/etc/ovn/cert_host` if present",
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "OVN SSL client certificate",
+							"shortdesc": "OVN SSL client certificate (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -6415,7 +6796,7 @@
 							"defaultdesc": "Content of `/etc/ovn/key_host` if present",
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "OVN SSL client key",
+							"shortdesc": "OVN SSL client key (PEM private key)",
 							"type": "string"
 						}
 					},
@@ -6466,7 +6847,7 @@
 						"storage.linstor.ca_cert": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "LINSTOR SSL certificate authority",
+							"shortdesc": "LINSTOR SSL certificate authorities (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -6474,7 +6855,7 @@
 						"storage.linstor.client_cert": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "LINSTOR SSL client certificate",
+							"shortdesc": "LINSTOR SSL client certificate (PEM bundle)",
 							"type": "string"
 						}
 					},
@@ -6482,7 +6863,7 @@
 						"storage.linstor.client_key": {
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "LINSTOR SSL client key",
+							"shortdesc": "LINSTOR SSL client key (PEM private key)",
 							"type": "string"
 						}
 					},
@@ -6729,6 +7110,15 @@
 						}
 					},
 					{
+						"ceph.rbd.backend": {
+							"default": "`krbd`",
+							"longdesc": "",
+							"scope": "global",
+							"shortdesc": "Whether to use the RBD kernel driver (`krbd`) or `librbd` through `qemu-nbd` (`librbd`)",
+							"type": "string"
+						}
+					},
+					{
 						"ceph.rbd.clone_copy": {
 							"default": "`true`",
 							"longdesc": "",
@@ -6912,11 +7302,11 @@
 						}
 					},
 					{
-						"cephobject.radosgw.endpoint_cert_file": {
+						"cephobject.radosgw.endpoint_cert": {
 							"default": "-",
 							"longdesc": "",
 							"scope": "global",
-							"shortdesc": "Path to the file containing the TLS client certificate to use for endpoint communication",
+							"shortdesc": "TLS certificate (PEM bundle) to trust for endpoint communication",
 							"type": "string"
 						}
 					},

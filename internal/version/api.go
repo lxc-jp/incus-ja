@@ -562,6 +562,18 @@ var APIExtensions = []string{
 	"disk_io_limits_combined",
 	"resources_cpu_cluster",
 	"acme_eab",
+	"instance_protection_start",
+	"instance_nvram_bulk_update",
+	"instance_refresh_migration",
+	"image_locations",
+	"network_ovn_multicast",
+	"device_burst_limits",
+	"network_ipv6_ra",
+	"qemu_scriptlet_nvram",
+	"storage_ceph_rbd_backend",
+	"instance_nvram_config",
+	"storage_cephobject_endpoint_cert",
+	"device_queue_disc",
 }
 
 // APIExtensionsCount returns the number of available API extensions.

@@ -164,7 +164,7 @@ func (d *zfs) getClones(dataset string) ([]string, error) {
 	}
 
 	clones := []string{}
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == dataset || line == "" || line == "-" {
 			continue
@@ -184,7 +184,7 @@ func (d *zfs) getDatasets(dataset string, types string) ([]string, error) {
 	}
 
 	children := []string{}
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == dataset || line == "" {
 			continue
@@ -205,7 +205,7 @@ func (d *zfs) getSnapshotGUIDs(dataset string) (map[string]string, error) {
 	}
 
 	guids := map[string]string{}
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -285,7 +285,7 @@ func (d *zfs) getDatasetProperties(dataset string, keys ...string) (map[string]s
 
 	props := make(map[string]string, len(keys))
 
-	for _, row := range strings.Split(output, "\n") {
+	for row := range strings.SplitSeq(output, "\n") {
 		prop := strings.Split(row, "\t")
 
 		if len(prop) < 2 {
@@ -499,6 +499,29 @@ func (d *zfs) delegateDataset(vol Volume, pid int) error {
 	}
 
 	return nil
+}
+
+// resetDelegatedDataset restores the host-facing properties of a delegated dataset.
+func (d *zfs) resetDelegatedDataset(dataset string) error {
+	// Drop any per-dataset override of the systemd ignore flag.
+	_, err := subprocess.RunCommand("zfs", "inherit", "-r", "org.openzfs.systemd:ignore", dataset)
+	if err != nil {
+		return err
+	}
+
+	// Hide the dataset from the host's mount tooling before clearing zoned.
+	err = d.setDatasetProperties(dataset, "canmount=noauto", "org.openzfs.systemd:ignore=on")
+	if err != nil {
+		return err
+	}
+
+	// The zoned flag must be cleared before the mountpoint can be changed.
+	err = d.setDatasetProperties(dataset, "zoned=off")
+	if err != nil {
+		return err
+	}
+
+	return d.setDatasetProperties(dataset, "mountpoint=legacy")
 }
 
 // ZFSSupportsDelegation returns true if the ZFS version on the system supports user namespace delegation.

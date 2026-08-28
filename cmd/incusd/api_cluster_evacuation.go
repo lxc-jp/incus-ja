@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -38,7 +40,7 @@ import (
 
 type (
 	evacuateStopFunc    func(inst instance.Instance, action string) error
-	evacuateMigrateFunc func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, op *operations.Operation) error
+	evacuateMigrateFunc func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, action string, startInstance bool, op *operations.Operation) error
 )
 
 // evacuationProgressHandler allows wrapping progress data with a prefix string (instance identifier).
@@ -108,9 +110,6 @@ func evacuateClusterSetState(s *state.State, name string, newState int) error {
 	})
 }
 
-// evacuateHostShutdownDefaultTimeout default timeout (in seconds) for waiting for clean shutdown to complete.
-const evacuateHostShutdownDefaultTimeout = 30
-
 func evacuateStopInstance(inst instance.Instance, action string) error {
 	l := logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
 
@@ -130,23 +129,10 @@ func evacuateStopInstance(inst instance.Instance, action string) error {
 		}
 
 	default:
-		// Get the shutdown timeout for the instance.
-		timeout := inst.ExpandedConfig()["boot.host_shutdown_timeout"]
-		val, err := strconv.Atoi(timeout)
+		// Clean shutdown, falling back to a forced stop.
+		err := instanceShutdownOrForceStop(inst)
 		if err != nil {
-			val = evacuateHostShutdownDefaultTimeout
-		}
-
-		// Start with a clean shutdown.
-		err = inst.Shutdown(time.Duration(val) * time.Second)
-		if err != nil {
-			l.Warn("Failed shutting down instance, forcing stop", logger.Ctx{"err": err})
-
-			// Fallback to forced stop.
-			err = inst.Stop(false)
-			if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
-				return fmt.Errorf("Failed to stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
-			}
+			return err
 		}
 	}
 
@@ -160,11 +146,12 @@ func evacuateStopInstance(inst instance.Instance, action string) error {
 }
 
 func evacuateMigrateInstance(r *http.Request) evacuateMigrateFunc {
-	return func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, op *operations.Operation) error {
+	return func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, action string, startInstance bool, op *operations.Operation) error {
 		// Migrate the instance.
 		req := api.InstancePost{
 			Migration: true,
-			Live:      live,
+			Live:      action == "live-migrate",
+			Refresh:   action == "refresh-migrate",
 		}
 
 		progressHandler := evacuationProgressHandler(op, fmt.Sprintf("Migrating %q in project %q to %q", inst.Name(), inst.Project().Name, targetMemberInfo.Name))
@@ -174,7 +161,7 @@ func evacuateMigrateInstance(r *http.Request) evacuateMigrateFunc {
 			return fmt.Errorf("Failed to migrate instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
 		}
 
-		if !startInstance || live {
+		if !startInstance || action == "live-migrate" || action == "refresh-migrate" {
 			return nil
 		}
 
@@ -204,10 +191,61 @@ func evacuateMigrateInstance(r *http.Request) evacuateMigrateFunc {
 	}
 }
 
+// evacuateWaitForCreations waits for local instance creation operations to complete.
+func evacuateWaitForCreations(ctx context.Context, op *operations.Operation) error {
+	lastCount := -1
+
+	for {
+		count := 0
+		for _, localOp := range operations.Clone() {
+			if localOp.Type() == operationtype.InstanceCreate && !localOp.Status().IsFinal() {
+				count++
+			}
+		}
+
+		if count == 0 {
+			return nil
+		}
+
+		if op != nil && count != lastCount {
+			lastCount = count
+			_ = op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Waiting for %d instance creation operations to complete", count)})
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
+}
+
 func evacuateClusterMember(ctx context.Context, s *state.State, op *operations.Operation, name string, mode string, stopInstance evacuateStopFunc, migrateInstance evacuateMigrateFunc) error {
+	// Setup a reverter.
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	// Set cluster member status to EVACUATING to prevent any new instance from being placed on it.
+	err := evacuateClusterSetState(s, name, db.ClusterMemberStateEvacuating)
+	if err != nil {
+		return err
+	}
+
+	reverter.Add(func() {
+		_ = evacuateClusterSetState(s, name, db.ClusterMemberStateCreated)
+	})
+
+	// Wait for ongoing instance creations to complete (skipped when healing an offline member).
+	if mode != "heal" {
+		err = evacuateWaitForCreations(ctx, op)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Get the instance list for the server being evacuated.
 	var dbInstances []dbCluster.Instance
-	err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+	err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
 		var err error
 
 		dbInstances, err = dbCluster.GetInstances(ctx, tx.Tx(), dbCluster.InstanceFilter{Node: &name})
@@ -231,20 +269,6 @@ func evacuateClusterMember(ctx context.Context, s *state.State, op *operations.O
 
 		instances[i] = inst
 	}
-
-	// Setup a reverter.
-	reverter := revert.New()
-	defer reverter.Fail()
-
-	// Set cluster member status to EVACUATING.
-	err = evacuateClusterSetState(s, name, db.ClusterMemberStateEvacuating)
-	if err != nil {
-		return err
-	}
-
-	reverter.Add(func() {
-		_ = evacuateClusterSetState(s, name, db.ClusterMemberStateCreated)
-	})
 
 	// Perform the evacuation.
 	opts := evacuateOpts{
@@ -282,29 +306,47 @@ func evacuateClusterMember(ctx context.Context, s *state.State, op *operations.O
 	return nil
 }
 
+// concurrentInstanceActions runs fn on every instance with bounded concurrency.
+// Each instance runs to completion regardless of other failures, all of which are reported at the end.
+func concurrentInstanceActions(instances []instance.Instance, prefix string, fn func(inst instance.Instance) error) error {
+	group := errgroup.Group{}
+	group.SetLimit(max(runtime.NumCPU()/16, 1))
+
+	var failuresLock sync.Mutex
+	failures := []string{}
+
+	for _, inst := range instances {
+		group.Go(func() error {
+			err := fn(inst)
+			if err != nil {
+				failuresLock.Lock()
+				failures = append(failures, fmt.Sprintf("%s/%s: %v", inst.Project().Name, inst.Name(), err))
+				failuresLock.Unlock()
+			}
+
+			return nil
+		})
+	}
+
+	_ = group.Wait()
+
+	if len(failures) > 0 {
+		sort.Strings(failures)
+
+		return fmt.Errorf("%s:\n - %s", prefix, strings.Join(failures, "\n - "))
+	}
+
+	return nil
+}
+
 func evacuateInstances(ctx context.Context, opts evacuateOpts) error {
 	if opts.migrateInstance == nil {
 		return errors.New("Missing migration callback function")
 	}
 
-	// Limit the number of concurrent evacuations to run at the same time
-	numParallelEvacs := max(runtime.NumCPU()/16, 1)
-
-	group, groupCtx := errgroup.WithContext(ctx)
-	group.SetLimit(numParallelEvacs)
-
-	for _, inst := range opts.instances {
-		group.Go(func() error {
-			return evacuateInstancesFunc(groupCtx, inst, opts)
-		})
-	}
-
-	err := group.Wait()
-	if err != nil {
-		return fmt.Errorf("Failed to evacuate instances: %w", err)
-	}
-
-	return nil
+	return concurrentInstanceActions(opts.instances, "Failed to evacuate instances", func(inst instance.Instance) error {
+		return evacuateInstancesFunc(ctx, inst, opts)
+	})
 }
 
 func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts evacuateOpts) error {
@@ -318,7 +360,7 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 	if opts.mode != "" {
 		if opts.mode == "heal" {
 			// Source server is dead, live-migration isn't an option.
-			if action == "live-migrate" {
+			if action == "live-migrate" || action == "refresh-migrate" {
 				action = "migrate"
 			}
 
@@ -333,7 +375,7 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 
 	// Stop the instance if needed.
 	isRunning := inst.IsRunning()
-	if action != "live-migrate" {
+	if action != "live-migrate" && action != "refresh-migrate" {
 		if opts.stopInstance != nil && isRunning {
 			_ = opts.op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Stopping %q in project %q", inst.Name(), instProject.Name)})
 
@@ -348,7 +390,7 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 			return nil
 		}
 	} else if !isRunning {
-		// Can't live migrate if we're stopped.
+		// Can't live or refresh migrate if we're stopped.
 		action = "migrate"
 	}
 
@@ -356,8 +398,15 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 	sourceMemberInfo, targetMemberInfo, err := evacuateClusterSelectTarget(ctx, opts.s, inst)
 	if err != nil {
 		if api.StatusErrorCheck(err, http.StatusNotFound) {
-			// Skip migration if no target is available.
-			l.Warn("No migration target available for instance")
+			// No target was available, so stop the instance in place instead.
+			l.Warn("No migration target available for instance, stopping it in place")
+
+			if opts.stopInstance != nil && isRunning {
+				_ = opts.op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Stopping %q in project %q", inst.Name(), instProject.Name)})
+
+				return opts.stopInstance(inst, "")
+			}
+
 			return nil
 		}
 
@@ -373,7 +422,7 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 	}
 
 	start := isRunning || instanceShouldAutoStart(inst)
-	err = opts.migrateInstance(ctx, opts.s, inst, sourceMemberInfo, targetMemberInfo, action == "live-migrate", start, opts.op)
+	err = opts.migrateInstance(ctx, opts.s, inst, sourceMemberInfo, targetMemberInfo, action, start, opts.op)
 	if err != nil {
 		return err
 	}
@@ -502,22 +551,12 @@ func restoreClusterMember(d *Daemon, r *http.Request, skipInstances bool) respon
 			}
 		}
 
-		// Limit the number of concurrent migrations to run at the same time
-		numParallelMigrations := max(runtime.NumCPU()/16, 1)
-
-		group := &errgroup.Group{}
-		group.SetLimit(numParallelMigrations)
-
 		// Migrate back the remote instances.
-		for _, inst := range instances {
-			group.Go(func() error {
-				return restoreClusterMemberFunc(inst, op, originName, r, s)
-			})
-		}
-
-		err = group.Wait()
+		err = concurrentInstanceActions(instances, "Failed to restore instances", func(inst instance.Instance) error {
+			return restoreClusterMemberFunc(inst, op, originName, r, s)
+		})
 		if err != nil {
-			return fmt.Errorf("Failed to restore instances: %w", err)
+			return err
 		}
 
 		// Set node status to CREATED.
@@ -549,7 +588,9 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 	l := logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
 
 	// Check the action.
-	live := inst.CanMigrate() == "live-migrate"
+	action := inst.CanMigrate()
+	live := action == "live-migrate"
+	liveOrNearLive := live || action == "refresh-migrate"
 
 	_ = op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Migrating %q in project %q from %q", inst.Name(), inst.Project().Name, inst.Location())})
 
@@ -578,13 +619,13 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 	}
 
 	isRunning := apiInst.StatusCode == api.Running
-	if isRunning && !live {
+	if isRunning && !liveOrNearLive {
 		_ = op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Stopping %q in project %q", inst.Name(), inst.Project().Name)})
 
 		timeout := inst.ExpandedConfig()["boot.host_shutdown_timeout"]
 		val, err := strconv.Atoi(timeout)
 		if err != nil {
-			val = evacuateHostShutdownDefaultTimeout
+			val = instanceShutdownDefaultTimeout
 		}
 
 		// Attempt a clean stop.
@@ -617,6 +658,7 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 		Name:      inst.Name(),
 		Migration: true,
 		Live:      live,
+		Refresh:   action == "refresh-migrate",
 	}
 
 	source = source.UseTarget(originName)
@@ -666,7 +708,7 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 		return fmt.Errorf("Failed to update instance %q: %w", inst.Name(), err)
 	}
 
-	if !isRunning || live {
+	if !isRunning || liveOrNearLive {
 		return nil
 	}
 
@@ -762,7 +804,7 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, inst insta
 	}
 
 	if targetMemberInfo == nil {
-		return nil, nil, fmt.Errorf("Couldn't find a cluster member for instance %q in project %q", inst.Name(), inst.Project().Name)
+		return nil, nil, api.StatusErrorf(http.StatusNotFound, "Couldn't find a cluster member for instance %q in project %q", inst.Name(), inst.Project().Name)
 	}
 
 	return sourceMemberInfo, targetMemberInfo, nil
@@ -871,7 +913,7 @@ func healClusterMember(d *Daemon, op *operations.Operation, name string) error {
 	logger.Info("Starting cluster healing", logger.Ctx{"server": name})
 	defer logger.Info("Completed cluster healing", logger.Ctx{"server": name})
 
-	migrateFunc := func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, live bool, startInstance bool, op *operations.Operation) error {
+	migrateFunc := func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, action string, startInstance bool, op *operations.Operation) error {
 		// This returns an error if the instance's storage pool is local.
 		// Since we only care about remote backed instances, this can be ignored and return nil instead.
 		poolName, err := inst.StoragePool()

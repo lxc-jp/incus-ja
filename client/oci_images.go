@@ -198,7 +198,7 @@ func (r *ProtocolOCI) GetImageFile(fingerprint string, req ImageFileRequest) (*I
 		req.ProgressHandler(ioprogress.ProgressData{Text: "Unpacking the OCI image"})
 	}
 
-	err = unpackOCIImage(filepath.Join(ociPath, "oci"), imageTag, filepath.Join(ociPath, "image"))
+	err = r.unpackOCIImage(filepath.Join(ociPath, "oci"), imageTag, filepath.Join(ociPath, "image"))
 	if err != nil {
 		logger.Debug("Error unpacking OCI image", logger.Ctx{"image": filepath.Join(ociPath, "oci"), "err": err})
 		return nil, err
@@ -367,10 +367,12 @@ func (r *ProtocolOCI) runSkopeo(action string, image string, args ...string) (st
 
 	// Handle authentication.
 	if uri.User != nil {
+		// Use the decoded username and password rather than the URL-escaped form.
+		password, _ := uri.User.Password()
 		creds, err := json.Marshal(map[string]any{
 			"auths": map[string]any{
 				uri.Scheme + "://" + uri.Host: map[string]string{
-					"auth": base64.StdEncoding.EncodeToString([]byte(uri.User.String())),
+					"auth": base64.StdEncoding.EncodeToString([]byte(uri.User.Username() + ":" + password)),
 				},
 			},
 		})

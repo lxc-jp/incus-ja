@@ -57,9 +57,9 @@ The pull transfer mode is the default as it is compatible with all server versio
 	))
 
 	cmd.RunE = c.run
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagConfig, "config|c", i18n.G("Config key/value to apply to the new instance"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagDevice, "device|d", i18n.G("New key/value to apply to a specific device"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the new instance"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagConfig, "config|c", i18n.G("Config key/value to apply to the new instance (may be passed multiple times)"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagDevice, "device|d", i18n.G("New key/value to apply to a specific device (may be passed multiple times)"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the new instance (may be passed multiple times)"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagEphemeral, "ephemeral|e", i18n.G("Ephemeral instance"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagMode, "mode", "pull", "", i18n.G("Transfer mode. One of pull, push or relay"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagInstanceOnly, "instance-only", i18n.G("Copy the instance without its snapshots"))
@@ -71,6 +71,10 @@ The pull transfer mode is the default as it is compatible with all server versio
 	cli.AddBoolFlag(cmd.Flags(), &c.flagRefresh, "refresh", i18n.G("Perform an incremental copy"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagRefreshExcludeOlder, "refresh-exclude-older", i18n.G("During incremental copy, exclude source snapshots earlier than latest target snapshot"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagAllowInconsistent, "allow-inconsistent", i18n.G("Ignore copy errors for volatile files"))
+
+	_ = cmd.RegisterFlagCompletionFunc("target-project", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return c.global.cmpTargetProjectNames(args)
+	})
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -345,6 +349,11 @@ func (c *cmdCopy) copyOrMove(cmd *cobra.Command, src *u.Parsed, dst *u.Parsed, k
 		// Do the actual copy
 		if c.flagTarget != "" {
 			dstServer = dstServer.UseTarget(c.flagTarget)
+		}
+
+		// A stateless move of a running container is performed as a near-live migration.
+		if srcServer.HasExtension("container_incremental_copy") && dstServer.HasExtension("container_incremental_copy") && move && !stateful && c.flagRefresh && !instanceOnly && entry.StatusCode == api.Running && entry.Type == "container" {
+			return c.nearLiveMoveInstance(srcServer, dstServer, srcInstanceName, dstInstanceName, entry, &args)
 		}
 
 		op, err = dstServer.CopyInstance(srcServer, *entry, &args)

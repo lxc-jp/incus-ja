@@ -280,6 +280,11 @@ func (d *linstor) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.
 		return fmt.Errorf("Unable to parse volume size: %w", err)
 	}
 
+	requiredBytes, err = d.roundVolumeBlockSizeBytes(vol, requiredBytes)
+	if err != nil {
+		return err
+	}
+
 	requiredKiB := requiredBytes / 1024
 	resourceDefinitionName := d.generateUUIDWithPrefix()
 
@@ -294,15 +299,21 @@ func (d *linstor) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.
 			return fmt.Errorf("Unable to parse volume size: %w", err)
 		}
 
+		requiredBytes, err = d.roundVolumeBlockSizeBytes(fsVol, requiredBytes)
+		if err != nil {
+			return err
+		}
+
 		requiredKiB := requiredBytes / 1024
 
 		volumeSizes = append(volumeSizes, requiredKiB)
 	}
 
-	// Spawn resource.
+	// Spawn the resource definitions without deploying them so properties can still be set.
 	err = linstor.Client.ResourceGroups.Spawn(context.TODO(), d.config[LinstorResourceGroupNameConfigKey], linstorClient.ResourceGroupSpawn{
 		ResourceDefinitionName: resourceDefinitionName,
 		VolumeSizes:            volumeSizes,
+		DefinitionsOnly:        true,
 	})
 	if err != nil {
 		return fmt.Errorf("Unable to spawn from resource group: %w", err)
@@ -311,9 +322,33 @@ func (d *linstor) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.
 	l.Debug("Spawned a new Linstor resource definition for volume", logger.Ctx{"resourceDefinitionName": resourceDefinitionName})
 	rev.Add(func() { _ = d.DeleteVolume(vol, op) })
 
-	err = d.setResourceDefinitionProperties(vol, resourceDefinitionName)
+	props, err := d.resourceDefinitionProperties(vol)
 	if err != nil {
 		return err
+	}
+
+	// Mark image volumes as still unpacking so other cluster members don't use them as a clone
+	// source before the fill below completes. Set atomically with the identity properties.
+	if vol.volType == VolumeTypeImage {
+		props[LinstorAuxUnpacking] = "true"
+	}
+
+	err = linstor.Client.ResourceDefinitions.Modify(context.TODO(), resourceDefinitionName, linstorClient.GenericPropsModify{
+		OverrideProps: props,
+	})
+	if err != nil {
+		return fmt.Errorf("Could not set properties on resource definition: %w", err)
+	}
+
+	err = d.setResourceDefinitionExactSize(resourceDefinitionName)
+	if err != nil {
+		return err
+	}
+
+	// Deploy the resource.
+	err = linstor.Client.Resources.Autoplace(context.TODO(), resourceDefinitionName, linstorClient.AutoPlaceRequest{})
+	if err != nil {
+		return fmt.Errorf("Unable to deploy resource: %w", err)
 	}
 
 	// Setup the filesystem.
@@ -409,6 +444,16 @@ func (d *linstor) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.
 	}, op)
 	if err != nil {
 		return err
+	}
+
+	// The image volume is now fully unpacked and can be used as a clone source.
+	if vol.volType == VolumeTypeImage {
+		err = linstor.Client.ResourceDefinitions.Modify(context.TODO(), resourceDefinitionName, linstorClient.GenericPropsModify{
+			DeleteProps: []string{LinstorAuxUnpacking},
+		})
+		if err != nil {
+			return fmt.Errorf("Could not clear the unpacking property on resource definition: %w", err)
+		}
 	}
 
 	rev.Success()
@@ -517,11 +562,6 @@ func (d *linstor) DeleteVolume(vol Volume, op *operations.Operation) error {
 	l := d.logger.AddContext(logger.Ctx{"volume": vol.Name()})
 	l.Debug("Deleting Linstor volume")
 
-	linstor, err := d.state.Linstor()
-	if err != nil {
-		return err
-	}
-
 	// Test if the volume exists.
 	volumeExists, err := d.HasVolume(vol)
 	if err != nil {
@@ -536,7 +576,7 @@ func (d *linstor) DeleteVolume(vol Volume, op *operations.Operation) error {
 			return err
 		}
 
-		err = linstor.Client.ResourceDefinitions.Delete(context.TODO(), resourceDefinition.Name)
+		err = d.deleteResourceDefinition(resourceDefinition.Name)
 		if err != nil {
 			return fmt.Errorf("Unable to delete the resource definition: %w", err)
 		}
@@ -711,7 +751,14 @@ func (d *linstor) MountVolume(vol Volume, op *operations.Operation) error {
 		mountPath := vol.MountPath()
 		l.Debug("Content type FS", logger.Ctx{"mountPath": mountPath})
 		if !linux.IsMountPoint(mountPath) {
-			err := vol.EnsureMountPath(false)
+			// The DRBD device may have persisted on this node while another node was
+			// writing to the volume, leaving stale data in the kernel buffer cache.
+			err := flushBlockDeviceCache(volDevPath)
+			if err != nil {
+				return err
+			}
+
+			err = vol.EnsureMountPath(false)
 			if err != nil {
 				return err
 			}
@@ -738,6 +785,14 @@ func (d *linstor) MountVolume(vol Volume, op *operations.Operation) error {
 
 	case ContentTypeBlock:
 		l.Debug("Content type Block")
+		// Flush any stale buffer cache unless the volume is already in use locally.
+		if !vol.MountInUse() {
+			err := flushBlockDeviceCache(volDevPath)
+			if err != nil {
+				return err
+			}
+		}
+
 		// For VMs, mount the filesystem volume.
 		if vol.IsVMBlock() {
 			fsVol := vol.NewVMBlockFilesystemVolume()
@@ -778,7 +833,7 @@ func (d *linstor) UnmountVolume(vol Volume, keepBlockDev bool, op *operations.Op
 			return false, ErrInUse
 		}
 
-		err = TryUnmount(mountPath, unix.MNT_DETACH)
+		err = TryUnmount(mountPath, 0)
 		if err != nil {
 			return false, err
 		}
@@ -842,14 +897,12 @@ func (d *linstor) CreateVolumeSnapshot(snapVol Volume, op *operations.Operation)
 	sourcePath := GetVolumeMountPath(d.name, snapVol.volType, parentName)
 
 	if linux.IsMountPoint(sourcePath) {
-		// Attempt to sync and freeze filesystem, but do not error if not able to freeze (as filesystem
-		// could still be busy), as LINSTOR does not have any notion of the filesystem and therefore can't
-		// guarantee the consistently of the filesystem on a snapshot. This is costly but tries to ensure
-		// that all cached data has been committed to the underlying DRBD device. If we don't then the
-		// LINSTOR snapshot can be inconsistent or, in the worst case, empty.
-		unfreezeFS, err := d.filesystemFreeze(sourcePath)
-		if err == nil {
-			defer logger.WarnOnError(unfreezeFS, "Failed to unfreeze filesystem")
+		// The filesystem is deliberately not frozen. A userspace freeze held across a LINSTOR
+		// snapshot leaves the DRBD device frozen even once the filesystem has been thawed, so the
+		// volume can never be mounted again ("Can't mount, blockdev is frozen").
+		err := linux.SyncFS(sourcePath)
+		if err != nil {
+			d.logger.Warn("Failed syncing filesystem before snapshot", logger.Ctx{"path": sourcePath, "err": err})
 		}
 	}
 
@@ -1037,13 +1090,21 @@ func (d *linstor) MountVolumeSnapshot(snapVol Volume, op *operations.Operation) 
 		return d.MountVolumeSnapshot(fsVol, op)
 	}
 
-	// Create a new temporary resource definition from the snapshot
-	err = d.createResourceDefinitionFromSnapshot(snapVol, snapVol)
+	// Reuse any existing resource definition, e.g. from a concurrent mount or an interrupted cleanup.
+	_, err = d.getResourceDefinition(snapVol, false)
 	if err != nil {
-		return err
-	}
+		if !errors.Is(err, errResourceDefinitionNotFound) {
+			return err
+		}
 
-	rev.Add(func() { _ = d.deleteResourceDefinitionFromSnapshot(snapVol) })
+		// Create a new temporary resource definition from the snapshot.
+		err = d.createResourceDefinitionFromSnapshot(snapVol, snapVol)
+		if err != nil {
+			return err
+		}
+
+		rev.Add(func() { _ = d.deleteResourceDefinitionFromSnapshot(snapVol) })
+	}
 
 	volDevPath, err := d.getLinstorDevPath(snapVol)
 	if err != nil {
@@ -1056,7 +1117,13 @@ func (d *linstor) MountVolumeSnapshot(snapVol Volume, op *operations.Operation) 
 		mountPath := snapVol.MountPath()
 		l.Debug("Content type FS", logger.Ctx{"mountPath": mountPath})
 		if !linux.IsMountPoint(mountPath) {
-			err := snapVol.EnsureMountPath(false)
+			// Flush any stale buffer cache in case the DRBD device got reused.
+			err := flushBlockDeviceCache(volDevPath)
+			if err != nil {
+				return err
+			}
+
+			err = snapVol.EnsureMountPath(false)
 			if err != nil {
 				return err
 			}
@@ -1088,7 +1155,7 @@ func (d *linstor) MountVolumeSnapshot(snapVol Volume, op *operations.Operation) 
 			}
 
 			l.Debug("Will try mount")
-			err = TryMount(volDevPath, mountPath, snapVolFS, mountFlags, mountOptions)
+			err = TryMount(volDevPath, mountPath, snapVolFS, mountFlags|unix.MS_RDONLY, mountOptions)
 			if err != nil {
 				l.Debug("Tried mounting but failed", logger.Ctx{"error": err})
 				return err
@@ -1202,6 +1269,11 @@ func (d *linstor) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool
 	// Do nothing if size isn't specified.
 	if sizeBytes <= 0 {
 		return nil
+	}
+
+	sizeBytes, err = d.roundVolumeBlockSizeBytes(vol, sizeBytes)
+	if err != nil {
+		return err
 	}
 
 	// Get the device path.
@@ -1413,6 +1485,17 @@ func (d *linstor) CreateVolumeFromBackup(vol Volume, srcBackup backup.Info, srcD
 
 // IsImageCloneSourceReady checks if the image clone source is ready.
 func (d *linstor) IsImageCloneSourceReady(vol Volume) (bool, error) {
-	// TODO: Further implementation required
-	return true, nil
+	resourceDefinition, err := d.getResourceDefinition(vol, false)
+	if err != nil {
+		if errors.Is(err, errResourceDefinitionNotFound) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	// Image volumes carry an unpacking marker until their content is fully unpacked.
+	_, unpacking := resourceDefinition.Props[LinstorAuxUnpacking]
+
+	return !unpacking, nil
 }

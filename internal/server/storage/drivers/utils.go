@@ -103,6 +103,25 @@ func forceUnmount(path string) (bool, error) {
 	}
 }
 
+// flushBlockDeviceCache flushes and invalidates the kernel buffer cache of a block device.
+// This is needed on devices whose content may have been modified through another node, as
+// the kernel may otherwise keep serving stale cached data.
+func flushBlockDeviceCache(devPath string) error {
+	f, err := os.Open(devPath)
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = f.Close() }()
+
+	_, err = unix.IoctlRetInt(int(f.Fd()), unix.BLKFLSBUF)
+	if err != nil {
+		return fmt.Errorf("Failed flushing block device %q: %w", devPath, err)
+	}
+
+	return nil
+}
+
 // mountReadOnly performs a read-only bind-mount.
 func mountReadOnly(srcPath string, dstPath string) (bool, error) {
 	// Check if already mounted.
@@ -320,7 +339,7 @@ func ensureSparseFile(filePath string, sizeBytes int64) error {
 		return fmt.Errorf("Failed to open %s: %w", filePath, err)
 	}
 
-	defer logger.WarnOnError(f.Close, "Failed to close file")
+	defer logger.WarnOnErrorExcept(f.Close, []error{os.ErrClosed}, "Failed to close file")
 
 	err = f.Truncate(sizeBytes)
 	if err != nil {
@@ -1110,7 +1129,7 @@ func BackupVolume(d Driver, v Volume, writer instancewriter.InstanceWriter, moun
 			return fmt.Errorf("Error opening file for reading %q: %w", blockPath, err)
 		}
 
-		defer logger.WarnOnError(from.Close, "Failed to close file")
+		defer logger.WarnOnErrorExcept(from.Close, []error{os.ErrClosed}, "Failed to close file")
 
 		var fileSize int64
 		fileSize, err = strconv.ParseInt(v.config["size"], 10, 64)
@@ -1276,7 +1295,7 @@ func UnpackVolume(d Driver, vol Volume, r io.ReadSeeker, tarArgs []string, unpac
 				return fmt.Errorf("Error opening file for writing %q: %w", targetPath, err)
 			}
 
-			defer logger.WarnOnError(to.Close, "Failed to close file")
+			defer logger.WarnOnErrorExcept(to.Close, []error{os.ErrClosed}, "Failed to close file")
 
 			// Restore original size of volume from raw block backup file size.
 			d.Logger().Debug("Setting volume size from source", logger.Ctx{"source": srcFile, "target": targetPath, "size": hdr.Size})

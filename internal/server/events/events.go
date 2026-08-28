@@ -85,6 +85,7 @@ func (s *Server) AddListener(projectName string, allProjects bool, projectPermis
 			done:                    cancel.New(context.Background()),
 			id:                      uuid.New().String(),
 			recvFunc:                recvFunc,
+			writeQueue:              make(chan api.Event, eventQueueSize),
 		},
 
 		allProjects:           allProjects,
@@ -165,14 +166,33 @@ func (s *Server) broadcast(event api.Event, eventSource EventSource) error {
 		event.Location = s.location
 	}
 
-	// If a notification hook is present, then call it for locally produced events.
-	// This can be used to send local events to another target (such as an event-hub member).
-	if s.notify != nil && eventSource == EventSourceLocal {
-		s.notify(event)
+	notify := s.notify
+	listeners := make([]*Listener, 0, len(s.listeners))
+	for _, listener := range s.listeners {
+		listeners = append(listeners, listener)
 	}
 
-	listeners := s.listeners
+	s.lock.Unlock()
+
+	// Dispatch outside of the lock as both the notification hook and the listener filters can block,
+	// which would otherwise also block anything logging (logging is fed back through broadcast).
+	if notify != nil && eventSource == EventSourceLocal {
+		notify(event)
+	}
+
+	removeListener := func(listener *Listener) {
+		s.lock.Lock()
+		delete(s.listeners, listener.id)
+		s.lock.Unlock()
+	}
+
 	for _, listener := range listeners {
+		// Drop listeners that are already gone.
+		if listener.IsClosed() {
+			removeListener(listener)
+			continue
+		}
+
 		// If the event is project specific, check if the listener is requesting events from that project.
 		if event.Project != "" && !listener.allProjects && event.Project != listener.projectName {
 			continue
@@ -196,34 +216,13 @@ func (s *Server) broadcast(event api.Event, eventSource EventSource) error {
 			continue
 		}
 
-		go func(listener *Listener, event api.Event) {
-			// Check that the listener still exists
-			if listener == nil {
-				return
-			}
-
-			// Make sure we're not done already
-			if listener.IsClosed() {
-				// Remove the listener from the list
-				s.lock.Lock()
-				delete(s.listeners, listener.id)
-				s.lock.Unlock()
-				return
-			}
-
-			err := listener.WriteJSON(event)
-			if err != nil {
-				// Remove the listener from the list
-				s.lock.Lock()
-				delete(s.listeners, listener.id)
-				s.lock.Unlock()
-
-				listener.Close()
-			}
-		}(listener, event)
+		// Queue the event so a slow listener doesn't hold up the others or lose ordering.
+		err := listener.enqueue(event)
+		if err != nil {
+			removeListener(listener)
+			listener.Close()
+		}
 	}
-
-	s.lock.Unlock()
 
 	return nil
 }

@@ -178,11 +178,9 @@ func clusterGroupsPost(d *Daemon, r *http.Request) response.Response {
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/cluster/groups/server01",
-//                "/1.0/cluster/groups/server02"
-//              ]
+//            example:
+//              - /1.0/cluster/groups/server01
+//              - /1.0/cluster/groups/server02
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -815,7 +813,7 @@ func clusterGroupPatch(d *Daemon, r *http.Request) response.Response {
 			return err
 		}
 
-		err = dbCluster.DeleteNodeClusterGroup(ctx, tx.Tx(), int(groupID))
+		err = dbCluster.DeleteNodeClusterGroups(ctx, tx.Tx(), int(groupID))
 		if err != nil {
 			return err
 		}

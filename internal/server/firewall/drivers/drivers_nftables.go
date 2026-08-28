@@ -13,6 +13,7 @@ import (
 	"text/template"
 
 	"github.com/google/uuid"
+	"github.com/mdlayher/netx/eui64"
 
 	"github.com/lxc/incus/v7/internal/server/project"
 	"github.com/lxc/incus/v7/shared/subprocess"
@@ -393,6 +394,16 @@ func (d Nftables) InstanceSetupBridgeFilter(projectName string, instanceName str
 		tplFields["macFiltering"] = true
 	}
 
+	// Allow the EUI-64 link-local address so NDP and DHCPv6 replies to the instance keep working.
+	if len(IPv6Nets) > 0 {
+		linkLocal, err := eui64.ParseMAC(net.ParseIP("fe80::"), mac)
+		if err != nil {
+			return err
+		}
+
+		IPv6Nets = append(slices.Clone(IPv6Nets), &net.IPNet{IP: linkLocal, Mask: net.CIDRMask(128, 128)})
+	}
+
 	ipv6NetsList := make([]string, 0, len(IPv6Nets))
 	ipv6NetsPrefixList := make([]string, 0, len(IPv6Nets))
 	for _, ipv6Net := range IPv6Nets {
@@ -486,6 +497,14 @@ func (d Nftables) InstanceSetupProxyNAT(projectName string, instanceName string,
 		listenAddressStr = forward.ListenAddress.String()
 	}
 
+	// Only used for wildcard listen addresses, where no address match constrains the family.
+	nfProto := "ipv4"
+	loopbackNet := "127.0.0.0/8"
+	if ipFamily == "ip6" {
+		nfProto = "ipv6"
+		loopbackNet = "::1/128"
+	}
+
 	targetAddressStr := forward.TargetAddress.String()
 
 	// Generate slices of rules to add.
@@ -517,6 +536,8 @@ func (d Nftables) InstanceSetupProxyNAT(projectName string, instanceName string,
 
 		dnatRules = append(dnatRules, map[string]any{
 			"ipFamily":      ipFamily,
+			"nfProto":       nfProto,
+			"loopbackNet":   loopbackNet,
 			"protocol":      forward.Protocol,
 			"listenAddress": listenAddressStr,
 			"listenPorts":   portRangeStr(listenPortRange, "-"),

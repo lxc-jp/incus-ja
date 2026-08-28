@@ -86,17 +86,17 @@ var storagePoolBucketKeyCmd = APIEndpoint{
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve storage pool buckets from all projects
 //      type: boolean
-//      example: true
+//      x-example: true
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -121,11 +121,9 @@ var storagePoolBucketKeyCmd = APIEndpoint{
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/storage-pools/default/buckets/foo",
-//                "/1.0/storage-pools/default/buckets/bar",
-//              ]
+//            example:
+//              - /1.0/storage-pools/default/buckets/foo
+//              - /1.0/storage-pools/default/buckets/bar
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -156,17 +154,17 @@ var storagePoolBucketKeyCmd = APIEndpoint{
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve storage pool buckets from all projects
 //      type: boolean
-//      example: true
+//      x-example: true
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -221,17 +219,17 @@ var storagePoolBucketKeyCmd = APIEndpoint{
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve storage pool buckets from all projects
 //      type: boolean
-//      example: true
+//      x-example: true
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -375,9 +373,12 @@ func storagePoolBucketsGet(d *Daemon, r *http.Request) response.Response {
 	if recursion > 0 {
 		buckets := make([]*api.StorageBucket, 0, len(filteredDBBuckets))
 		for _, dbBucket := range filteredDBBuckets {
-			u := pool.GetBucketURL(dbBucket.Name)
-			if u != nil {
-				dbBucket.S3URL = u.String()
+			// Only include the S3 URL when the bucket is reachable through this server.
+			if !s.ServerClustered || dbBucket.Location == "" || dbBucket.Location == s.ServerName {
+				u := pool.GetBucketURL(dbBucket.Name)
+				if u != nil {
+					dbBucket.S3URL = u.String()
+				}
 			}
 
 			buckets = append(buckets, &dbBucket.StorageBucket)
@@ -433,7 +434,7 @@ func storagePoolBucketsGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: Storage pool bucket
@@ -490,7 +491,7 @@ func storagePoolBucketsGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: Storage pool bucket
@@ -552,6 +553,11 @@ func storagePoolBucketGet(d *Daemon, r *http.Request) response.Response {
 	bucketName, err := pathVar(r, "bucketName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	targetMember := request.QueryParam(r, "target")
@@ -651,7 +657,7 @@ func getBucketFull(ctx context.Context, s *state.State, pool storagePools.Pool, 
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: bucket
 //	    description: Bucket
@@ -781,12 +787,12 @@ func storagePoolBucketsPost(d *Daemon, r *http.Request) response.Response {
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: target
 //      description: Cluster member name
 //      type: string
-//      example: server01
+//      x-example: server01
 //    - in: body
 //      name: storage bucket
 //      description: Storage bucket configuration
@@ -835,12 +841,12 @@ func storagePoolBucketsPost(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	  - in: body
 //	    name: storage bucket
 //	    description: Storage bucket configuration
@@ -888,6 +894,11 @@ func storagePoolBucketPut(d *Daemon, r *http.Request) response.Response {
 	bucketName, err := pathVar(r, "bucketName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	// Decode the request.
@@ -954,12 +965,12 @@ func storagePoolBucketPut(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -1001,6 +1012,11 @@ func storagePoolBucketDelete(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
+	}
+
 	err = pool.DeleteBucket(bucketProjectName, bucketName, nil)
 	if err != nil {
 		return response.SmartError(fmt.Errorf("Failed deleting storage bucket: %w", err))
@@ -1037,7 +1053,7 @@ func storagePoolBucketDelete(d *Daemon, r *http.Request) response.Response {
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -1062,11 +1078,9 @@ func storagePoolBucketDelete(d *Daemon, r *http.Request) response.Response {
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/storage-pools/default/buckets/foo/keys/my-read-only-key",
-//                "/1.0/storage-pools/default/buckets/bar/keys/admin",
-//              ]
+//            example:
+//              - /1.0/storage-pools/default/buckets/foo/keys/my-read-only-key
+//              - /1.0/storage-pools/default/buckets/bar/keys/admin
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -1102,7 +1116,7 @@ func storagePoolBucketDelete(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -1168,6 +1182,11 @@ func storagePoolBucketKeysGet(d *Daemon, r *http.Request) response.Response {
 	bucketName, err := pathVar(r, "bucketName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	// If target is set, get buckets only for this cluster members.
@@ -1236,7 +1255,7 @@ func storagePoolBucketKeysGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: bucket
 //	    description: Bucket
@@ -1277,6 +1296,11 @@ func storagePoolBucketKeysPost(d *Daemon, r *http.Request) response.Response {
 	bucketName, err := pathVar(r, "bucketName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	// Parse the request into a record.
@@ -1331,12 +1355,12 @@ func storagePoolBucketKeysPost(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -1383,6 +1407,11 @@ func storagePoolBucketKeyDelete(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
+	}
+
 	err = pool.DeleteBucketKey(bucketProjectName, bucketName, keyName, nil)
 	if err != nil {
 		return response.SmartError(fmt.Errorf("Failed deleting storage bucket key: %w", err))
@@ -1422,7 +1451,7 @@ func storagePoolBucketKeyDelete(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: Storage pool bucket key
@@ -1491,6 +1520,11 @@ func storagePoolBucketKeyGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
+	}
+
 	targetMember := request.QueryParam(r, "target")
 	memberSpecific := targetMember != ""
 
@@ -1546,12 +1580,12 @@ func storagePoolBucketKeyGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	  - in: body
 //	    name: storage bucket
 //	    description: Storage bucket key configuration
@@ -1604,6 +1638,11 @@ func storagePoolBucketKeyPut(d *Daemon, r *http.Request) response.Response {
 	keyName, err := pathVar(r, "keyName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, bucketProjectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	// Decode the request.

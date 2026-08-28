@@ -46,6 +46,21 @@ func (d *nicP2P) validateConfig(instConf instance.ConfigReader, partialValidatio
 		//  shortdesc: The Maximum Transmit Unit (MTU) of the new interface
 		"mtu",
 
+		// gendoc:generate(entity=devices, group=nic_p2p, key=queue.discipline)
+		//
+		// ---
+		//  type: string
+		//  shortdesc: The queuing discipline to set on the NIC, applied to the rate limit's class when a limit is set
+		"queue.discipline",
+
+		// gendoc:generate(entity=devices, group=nic_p2p, key=queue.discipline.attach)
+		//
+		// ---
+		//  type: string
+		//  default: `queue`
+		//  shortdesc: Only for VMs: Whether to attach the queuing discipline to each transmit queue (`queue`) or to the interface root (`root`)
+		"queue.discipline.attach",
+
 		// gendoc:generate(entity=devices, group=nic_p2p, key=queue.tx.length)
 		//
 		// ---
@@ -89,6 +104,54 @@ func (d *nicP2P) validateConfig(instConf instance.ConfigReader, partialValidatio
 		//  type: string
 		//  shortdesc: I/O limit in bit/s for both incoming and outgoing traffic (same as setting both limits.ingress and limits.egress)
 		"limits.max",
+
+		// gendoc:generate(entity=devices, group=nic_p2p, key=limits.ingress.burst)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: I/O limit in bit/s that incoming traffic may burst up to, requires `limits.ingress.bucket`
+		"limits.ingress.burst",
+
+		// gendoc:generate(entity=devices, group=nic_p2p, key=limits.egress.burst)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: I/O limit in bit/s that outgoing traffic may burst up to, requires `limits.egress.bucket`
+		"limits.egress.burst",
+
+		// gendoc:generate(entity=devices, group=nic_p2p, key=limits.max.burst)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: I/O limit in bit/s that both incoming and outgoing traffic may burst up to (same as setting both `limits.ingress.burst` and `limits.egress.burst`)
+		"limits.max.burst",
+
+		// gendoc:generate(entity=devices, group=nic_p2p, key=limits.ingress.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that incoming traffic may send in excess of `limits.ingress`, requires `limits.ingress.burst`
+		"limits.ingress.bucket",
+
+		// gendoc:generate(entity=devices, group=nic_p2p, key=limits.egress.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that outgoing traffic may send in excess of `limits.egress`, requires `limits.egress.burst`
+		"limits.egress.bucket",
+
+		// gendoc:generate(entity=devices, group=nic_p2p, key=limits.max.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that traffic may send in excess of the sustained limit (same as setting both `limits.ingress.bucket` and `limits.egress.bucket`)
+		"limits.max.bucket",
 
 		// gendoc:generate(entity=devices, group=nic_p2p, key=limits.priority)
 		//
@@ -150,6 +213,16 @@ func (d *nicP2P) validateConfig(instConf instance.ConfigReader, partialValidatio
 		return err
 	}
 
+	err = nicValidateBurstLimits(d.config, true)
+	if err != nil {
+		return err
+	}
+
+	err = nicValidateQdisc(d.config, instConf.Type())
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -170,7 +243,7 @@ func (d *nicP2P) UpdatableFields(oldDevice Type) []string {
 		return []string{}
 	}
 
-	return []string{"limits.ingress", "limits.egress", "limits.max", "limits.priority", "ipv4.routes", "ipv6.routes", "connected"}
+	return []string{"limits.ingress", "limits.egress", "limits.max", "limits.ingress.burst", "limits.egress.burst", "limits.max.burst", "limits.ingress.bucket", "limits.egress.bucket", "limits.max.bucket", "limits.priority", "queue.discipline", "queue.discipline.attach", "ipv4.routes", "ipv6.routes", "connected"}
 }
 
 // Start is run when the device is added to a running instance or instance is starting up.

@@ -3,6 +3,7 @@ package validate
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -192,7 +193,7 @@ func IsAny(_ string) error {
 // IsListOf returns a validator for a comma separated list of values.
 func IsListOf(validator func(value string) error) func(value string) error {
 	return func(value string) error {
-		for _, v := range strings.Split(value, ",") {
+		for v := range strings.SplitSeq(value, ",") {
 			v = strings.TrimSpace(v)
 
 			err := validator(v)
@@ -718,8 +719,8 @@ func IsCron(aliases []string) func(value string) error {
 
 		// Can be comma+space separated (just commas are valid cron pattern).
 		value = strings.ToLower(value)
-		triggers := strings.Split(value, ", ")
-		for _, trigger := range triggers {
+		triggers := strings.SplitSeq(value, ", ")
+		for trigger := range triggers {
 			err := isValid(trigger)
 			if err != nil {
 				return err
@@ -916,9 +917,9 @@ func IsValidCPUSet(value string) error {
 
 	// Handle complex values.
 	cpus := make(map[int64]int)
-	chunks := strings.Split(value, ",")
+	chunks := strings.SplitSeq(value, ",")
 
-	for _, chunk := range chunks {
+	for chunk := range chunks {
 		if strings.Contains(chunk, "-") {
 			// Range
 			fields := strings.SplitN(chunk, "-", 2)
@@ -1063,4 +1064,65 @@ func IsSELinuxLevel(value string) error {
 	}
 
 	return nil
+}
+
+// IsRawNVRAMVariable validates whether the string is Base64 encoded, with an optional integer+colon
+// prefix.
+func IsRawNVRAMVariable(value string) error {
+	parts := strings.SplitN(value, ":", 2)
+	value = parts[len(parts)-1]
+	err := IsBase64(value)
+	if err != nil {
+		return fmt.Errorf("Invalid value for NVRAM variable %q: %w", value, err)
+	}
+
+	if len(parts) == 2 {
+		_, err = strconv.ParseUint(parts[0], 0, 32)
+		if err != nil {
+			return fmt.Errorf("Invalid value for NVRAM variable attribute %q: %w", parts[0], err)
+		}
+	}
+
+	return nil
+}
+
+// IsPEM validates whether the string is a valid PEM bundle. This doesn’t validate the content
+// of the individual blocks.
+func IsPEM(bundle bool, armors ...string) func(value string) error {
+	if len(armors) == 0 {
+		armors = []string{"CERTIFICATE"}
+	}
+
+	armorRegex := regexp.MustCompile("^(?:" + strings.Join(armors, "|") + ")$")
+	return func(value string) error {
+		rest := []byte(value)
+		ok := false
+		var block *pem.Block
+		for {
+			block, rest = pem.Decode(rest)
+			if block == nil {
+				break
+			}
+
+			if !armorRegex.MatchString(block.Type) {
+				return fmt.Errorf("Unknown armor %s; expected one of %v", block.Type, armors)
+			}
+
+			if ok && !bundle {
+				return errors.New("More than one block found; expected only one")
+			}
+
+			ok = true
+		}
+
+		if !ok {
+			if bundle {
+				return errors.New("Invalid value; must be a PEM bundle")
+			}
+
+			return errors.New("Invalid value; must be a single PEM block")
+		}
+
+		return nil
+	}
 }

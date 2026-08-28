@@ -201,6 +201,24 @@ func (d *qemu) cpuTopology() (*qemuCPUTopology, error) {
 	return topology, nil
 }
 
+// maxCPUs returns the maximum number of vCPUs, used as the hotplug limit for non-fixed topologies.
+func (d *qemu) maxCPUs(topology *qemuCPUTopology) (int, error) {
+	cpu, err := resources.GetCPU()
+	if err != nil {
+		return 0, err
+	}
+
+	// Cap the max number of CPUs to 64 unless directly assigned more.
+	maxCpus := 64
+	if int(cpu.Total) < maxCpus {
+		maxCpus = int(cpu.Total)
+	} else if topology.Cores > maxCpus {
+		maxCpus = topology.Cores
+	}
+
+	return maxCpus, nil
+}
+
 // startupCPUSet returns the host CPUs to confine QEMU to during startup.
 // On systems with heterogeneous CPU types (ARM big.LITTLE), KVM vCPU initialization
 // fails if the thread gets scheduled across CPU types, so QEMU must start on a
@@ -229,7 +247,8 @@ func (d *qemu) startupCPUSet(topology *qemuCPUTopology) []int64 {
 			return nil
 		}
 
-		key := strings.TrimSpace(string(midr))
+		var key strings.Builder
+		key.WriteString(strings.TrimSpace(string(midr)))
 
 		// Include the cache geometry as identical parts may still differ.
 		caches, _ := filepath.Glob(filepath.Join(cpuPath, "cache/index[0-9]*"))
@@ -237,15 +256,15 @@ func (d *qemu) startupCPUSet(topology *qemuCPUTopology) []int64 {
 		for _, cache := range caches {
 			for _, field := range []string{"level", "type", "coherency_line_size", "ways_of_associativity", "number_of_sets"} {
 				value, _ := os.ReadFile(filepath.Join(cache, field))
-				key += "/" + strings.TrimSpace(string(value))
+				key.WriteString("/" + strings.TrimSpace(string(value)))
 			}
 		}
 
-		if groups[key] == nil {
-			keys = append(keys, key)
+		if groups[key.String()] == nil {
+			keys = append(keys, key.String())
 		}
 
-		groups[key] = append(groups[key], id)
+		groups[key.String()] = append(groups[key.String()], id)
 	}
 
 	// Nothing to do on homogeneous systems.

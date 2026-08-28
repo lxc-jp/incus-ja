@@ -153,6 +153,10 @@ func (s *Products) ToAPI() ([]api.Image, map[string][][]string) {
 
 				// Generate the actual image entry
 				description := fmt.Sprintf("%s %s %s", product.OperatingSystem, product.ReleaseTitle, product.Architecture)
+				if product.Variant != "" && product.Variant != "default" {
+					description = fmt.Sprintf("%s (%s)", description, product.Variant)
+				}
+
 				if version.Label != "" {
 					description = fmt.Sprintf("%s (%s)", description, version.Label)
 				}
@@ -209,7 +213,7 @@ func (s *Products) ToAPI() ([]api.Image, map[string][][]string) {
 				// Add the provided aliases
 				if product.Aliases != "" {
 					image.Aliases = []api.ImageAlias{}
-					for _, entry := range strings.Split(product.Aliases, ",") {
+					for entry := range strings.SplitSeq(product.Aliases, ",") {
 						image.Aliases = append(image.Aliases, api.ImageAlias{Name: entry})
 					}
 				}

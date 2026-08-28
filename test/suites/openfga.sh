@@ -78,6 +78,14 @@ test_openfga() {
     user_is_not_server_operator
     user_is_not_project_admin
     user_is_project_operator
+    user_can_view_inherited_storage_volume
+
+    # Shared networks need OVN for features.networks projects.
+    if command -v ovn-nbctl > /dev/null 2>&1 && ovn-nbctl --timeout=10 show > /dev/null 2>&1; then
+        user_can_view_shared_network
+    else
+        echo "==> SKIP: OVN not available, skipping shared network test"
+    fi
 
     # Create an instance for testing the "instance -> user" relation.
     incus launch testimage user-foo
@@ -201,6 +209,57 @@ user_is_project_operator() {
     incus launch testimage oidc-openfga:operator-foo
     INC_LOCAL='' incus_remote exec oidc-openfga:operator-foo -- echo "bar"
     incus delete oidc-openfga:operator-foo --force
+}
+
+user_can_view_inherited_storage_volume() {
+    project_name="openfga-inherited-volume"
+    pool_name="$(incus storage list oidc-openfga: -f csv | cut -d, -f1)"
+    volume_name="openfga-inherited-volume"
+
+    incus project create "${project_name}" -c features.storage.volumes=false
+    fga tuple write --store-id "${OPENFGA_STORE_ID}" user:user1 operator "project:${project_name}"
+    incus storage volume create "oidc-openfga:${pool_name}" "${volume_name}"
+
+    fga tuple delete --store-id "${OPENFGA_STORE_ID}" user:user1 operator project:default
+    fga tuple write --store-id "${OPENFGA_STORE_ID}" user:user1 viewer project:default
+    incus storage volume show "oidc-openfga:${pool_name}" "${volume_name}" --project "${project_name}"
+    fga tuple delete --store-id "${OPENFGA_STORE_ID}" user:user1 viewer project:default
+    fga tuple write --store-id "${OPENFGA_STORE_ID}" user:user1 operator project:default
+
+    incus storage volume delete "oidc-openfga:${pool_name}" "${volume_name}"
+    fga tuple delete --store-id "${OPENFGA_STORE_ID}" user:user1 operator "project:${project_name}"
+    incus project delete "${project_name}"
+}
+
+user_can_view_shared_network() {
+    project_name="openfga-shared-network"
+    network_name="openfga-net"
+
+    # Create the network and a restricted project sharing it.
+    incus network create "${network_name}"
+    incus project create "${project_name}" -c features.networks=true -c restricted=true -c "restricted.networks.access=${network_name}"
+
+    # Make the user an operator of the new project with no access to the default project.
+    fga tuple write --store-id "${OPENFGA_STORE_ID}" user:user1 operator "project:${project_name}"
+    fga tuple delete --store-id "${OPENFGA_STORE_ID}" user:user1 operator project:default
+
+    # Shared network is visible but read-only.
+    [ "$(fga query check --store-id "${OPENFGA_STORE_ID}" user:user1 can_view "network:default/${network_name}" | jq -r '.allowed')" = "true" ]
+    [ "$(fga query check --store-id "${OPENFGA_STORE_ID}" user:user1 can_edit "network:default/${network_name}" | jq -r '.allowed')" = "false" ]
+    incus network list oidc-openfga: --project "${project_name}" -f csv | grep -F "${network_name}"
+    incus network show "oidc-openfga:${network_name}" --project "${project_name}"
+    ! incus network set "oidc-openfga:${network_name}" --project "${project_name}" user.foo=bar || false
+    ! incus network delete "oidc-openfga:${network_name}" --project "${project_name}" || false
+
+    # Removing the share also removes visibility.
+    incus project unset "${project_name}" restricted.networks.access
+    [ "$(fga query check --store-id "${OPENFGA_STORE_ID}" user:user1 can_view "network:default/${network_name}" | jq -r '.allowed')" = "false" ]
+    ! incus network show "oidc-openfga:${network_name}" --project "${project_name}" || false
+
+    fga tuple write --store-id "${OPENFGA_STORE_ID}" user:user1 operator project:default
+    fga tuple delete --store-id "${OPENFGA_STORE_ID}" user:user1 operator "project:${project_name}"
+    incus project delete "${project_name}"
+    incus network delete "${network_name}"
 }
 
 user_is_not_project_operator() {

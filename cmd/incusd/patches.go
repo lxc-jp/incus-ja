@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -104,6 +105,11 @@ var patches = []patch{
 	{name: "storage_lvmcluster_qcow2_overhead", stage: patchPostDaemonStorage, run: patchGenericStorage},
 	{name: "authorization_openfga_config_keys", stage: patchPreDaemonStorage, run: patchAuthorizationOpenFGAConfigKeys},
 	{name: "authorization_client_routes_from_driver", stage: patchPreDaemonStorage, run: patchAuthorizationClientRoutesFromDriver},
+	{name: "network_ovn_l2proxy_arp_proxy", stage: patchPostDaemonStorage, run: patchGenericNetwork(patchNetworkOVNL2ProxyARPProxy)},
+	{name: "auth_openfga_instance_tcp", stage: patchPostNetworks, run: patchGenericAuthorization},
+	{name: "auth_openfga_shared_networks", stage: patchPostNetworks, run: patchGenericAuthorization},
+	{name: "storage_cephobject_endpoint_cert", stage: patchPreDaemonStorage, run: patchStorageCephObjectEndpointCert},
+	{name: "network_ovn_acl_address_sets", stage: patchPostDaemonStorage, run: patchGenericNetwork(patchNetworkOVNACLAddressSets)},
 }
 
 type patchRun func(name string, d *Daemon) error
@@ -1886,6 +1892,46 @@ func patchAuthorizationOpenFGAConfigKeys(_ string, d *Daemon) error {
 	})
 }
 
+// patchStorageCephObjectEndpointCert converts cephobject.radosgw.endpoint_cert_file into cephobject.radosgw.endpoint_cert.
+func patchStorageCephObjectEndpointCert(_ string, d *Daemon) error {
+	return d.db.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		pools, _, err := tx.GetStoragePools(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("Failed getting storage pools: %w", err)
+		}
+
+		for _, pool := range pools {
+			if pool.Driver != "cephobject" {
+				continue
+			}
+
+			certFilePath := pool.Config["cephobject.radosgw.endpoint_cert_file"]
+			if certFilePath == "" {
+				continue
+			}
+
+			// Only carry over the value if the new key hasn't already been set.
+			if pool.Config["cephobject.radosgw.endpoint_cert"] == "" {
+				cert, err := os.ReadFile(certFilePath)
+				if err != nil {
+					return fmt.Errorf("Failed reading %q for storage pool %q: %w", certFilePath, pool.Name, err)
+				}
+
+				pool.Config["cephobject.radosgw.endpoint_cert"] = string(cert)
+			}
+
+			delete(pool.Config, "cephobject.radosgw.endpoint_cert_file")
+
+			err = tx.UpdateStoragePool(ctx, pool.Name, pool.Description, pool.Config)
+			if err != nil {
+				return fmt.Errorf("Failed updating storage pool %q: %w", pool.Name, err)
+			}
+		}
+
+		return nil
+	})
+}
+
 // patchAuthorizationClientRoutesFromDriver seeds authorization.client.* config
 // from the current authorizer class, so an upgrade keeps enforcing the same driver.
 func patchAuthorizationClientRoutesFromDriver(_ string, d *Daemon) error {
@@ -1927,6 +1973,298 @@ func patchAuthorizationClientRoutesFromDriver(_ string, d *Daemon) error {
 
 		return nil
 	})
+}
+
+// patchNetworkOVNL2ProxyARPProxy converts the DNAT_AND_SNAT rules used to publish addresses on OVN
+// uplink networks with l2proxy ingress mode into arp_proxy entries on the external switch router port.
+func patchNetworkOVNL2ProxyARPProxy(_ string, d *Daemon) error {
+	s := d.State()
+
+	// Only apply patch on leader.
+	var err error
+	var localConfig *node.Config
+	isLeader := false
+
+	err = d.db.Node.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.NodeTx) error {
+		localConfig, err = node.ConfigLoad(ctx, tx)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	leaderAddress, err := s.Cluster.LeaderAddress()
+	if err != nil {
+		// If we're not clustered, we're the leader.
+		if !errors.Is(err, cluster.ErrNodeIsNotClustered) {
+			return err
+		}
+
+		isLeader = true
+	} else if localConfig.ClusterAddress() == leaderAddress {
+		isLeader = true
+	}
+
+	if !isLeader {
+		return nil
+	}
+
+	// Get all networks.
+	var networks map[string]map[int64]api.Network
+
+	err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		networks, err = tx.GetCreatedNetworks(ctx)
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	for projectName, projectNetworks := range networks {
+		for networkID, netInfo := range projectNetworks {
+			if netInfo.Type != "ovn" {
+				continue
+			}
+
+			// Check that OVN is available.
+			ovnnb, _, err := s.OVN()
+			if err != nil {
+				logger.Errorf("Failed to connect to OVN: %v", err)
+				return errRetryNextTime
+			}
+
+			networkPrefix := acl.OVNNetworkPrefix(networkID)
+			routerName := ovn.OVNRouter(fmt.Sprintf("%s-lr", networkPrefix))
+			extSwitchRouterPortName := ovn.OVNSwitchPort(fmt.Sprintf("%s-ls-ext-lsp-router", networkPrefix))
+
+			// Get the identity DNAT_AND_SNAT rules used to publish addresses on the uplink.
+			natRules, err := ovnnb.GetLogicalRouterNATs(context.TODO(), routerName)
+			if err != nil {
+				if errors.Is(err, ovn.ErrNotFound) {
+					continue // Skip networks that don't exist on the OVN side.
+				}
+
+				return fmt.Errorf("Failed getting NAT rules for network %q in project %q: %w", netInfo.Name, projectName, err)
+			}
+
+			var identityIPs []net.IP
+			for _, natRule := range natRules {
+				if natRule.Type != "dnat_and_snat" || natRule.ExternalIP != natRule.LogicalIP {
+					continue
+				}
+
+				ip := net.ParseIP(natRule.ExternalIP)
+				if ip == nil {
+					continue
+				}
+
+				identityIPs = append(identityIPs, ip)
+			}
+
+			if len(identityIPs) == 0 {
+				continue
+			}
+
+			// Get the list of active instance ports.
+			activePorts, err := ovnnb.GetLogicalSwitchActivePorts(context.TODO(), acl.OVNIntSwitchName(networkID))
+			if err != nil {
+				return fmt.Errorf("Failed getting active ports for network %q in project %q: %w", netInfo.Name, projectName, err)
+			}
+
+			// Get the external routes of active NICs so their per-IP rules can be converted to subnets.
+			var routeIPNets []*net.IPNet
+			err = network.UsedByInstanceDevices(s, projectName, netInfo.Name, netInfo.Type, func(inst db.InstanceArgs, nicName string, nicConfig map[string]string) error {
+				instancePortName := ovn.OVNSwitchPort(fmt.Sprintf("%s-instance-%s-%s", networkPrefix, inst.Config["volatile.uuid"], nicName))
+				_, found := activePorts[instancePortName]
+				if !found {
+					return nil // Skip NICs that aren't started.
+				}
+
+				for _, key := range []string{"ipv4.routes.external", "ipv6.routes.external"} {
+					for _, routeStr := range util.SplitNTrimSpace(nicConfig[key], ",", -1, true) {
+						_, routeIPNet, err := net.ParseCIDR(routeStr)
+						if err != nil {
+							continue
+						}
+
+						routeIPNets = append(routeIPNets, routeIPNet)
+					}
+				}
+
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			// Build the proxy ARP/NDP entries.
+			var addIPNets []net.IPNet
+			for _, routeIPNet := range routeIPNets {
+				addIPNets = append(addIPNets, *routeIPNet)
+			}
+
+			for _, ip := range identityIPs {
+				covered := false
+				for _, routeIPNet := range routeIPNets {
+					if routeIPNet.Contains(ip) {
+						covered = true
+						break
+					}
+				}
+
+				if !covered {
+					addIPNets = append(addIPNets, network.IPToNet(ip))
+				}
+			}
+
+			// Add the proxy ARP/NDP entries before removing the NAT rules to avoid an advertisement gap.
+			err = ovnnb.UpdateLogicalSwitchPortARPProxy(context.TODO(), extSwitchRouterPortName, addIPNets, nil)
+			if err != nil {
+				return fmt.Errorf("Failed adding proxy ARP/NDP entries for network %q in project %q: %w", netInfo.Name, projectName, err)
+			}
+
+			err = ovnnb.DeleteLogicalRouterNAT(context.TODO(), routerName, "dnat_and_snat", false, identityIPs...)
+			if err != nil {
+				return fmt.Errorf("Failed deleting NAT rules for network %q in project %q: %w", netInfo.Name, projectName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// patchNetworkOVNACLAddressSets regenerates the OVN ACL rules.
+func patchNetworkOVNACLAddressSets(_ string, d *Daemon) error {
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	s := d.State()
+
+	// Only apply patch on leader.
+	var err error
+	var localConfig *node.Config
+	isLeader := false
+
+	err = d.db.Node.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.NodeTx) error {
+		localConfig, err = node.ConfigLoad(ctx, tx)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	leaderAddress, err := s.Cluster.LeaderAddress()
+	if err != nil {
+		// If we're not clustered, we're the leader.
+		if !errors.Is(err, cluster.ErrNodeIsNotClustered) {
+			return err
+		}
+
+		isLeader = true
+	} else if localConfig.ClusterAddress() == leaderAddress {
+		isLeader = true
+	}
+
+	if !isLeader {
+		return nil
+	}
+
+	// Get all networks.
+	var networks map[string]map[int64]api.Network
+
+	err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		networks, err = tx.GetCreatedNetworks(ctx)
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	// Skip if there are no OVN networks.
+	hasOVN := false
+	for _, projectNetworks := range networks {
+		for _, netInfo := range projectNetworks {
+			if netInfo.Type == "ovn" {
+				hasOVN = true
+				break
+			}
+		}
+	}
+
+	if !hasOVN {
+		return nil
+	}
+
+	// Check that OVN is available.
+	ovnnb, _, err := s.OVN()
+	if err != nil {
+		logger.Errorf("Failed to connect to OVN: %v", err)
+		return errRetryNextTime
+	}
+
+	// Re-apply the ACL rules on all ACL port groups.
+	projectACLs := make(map[string][]dbCluster.NetworkACL)
+	err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		projects, err := dbCluster.GetProjects(ctx, tx.Tx())
+		if err != nil {
+			return fmt.Errorf("Failed loading projects: %w", err)
+		}
+
+		for _, project := range projects {
+			networkACLs, err := dbCluster.GetNetworkACLs(ctx, tx.Tx(), dbCluster.NetworkACLFilter{Project: &project.Name})
+			if err != nil {
+				return err
+			}
+
+			projectACLs[project.Name] = networkACLs
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	for projectName, networkACLs := range projectACLs {
+		aclNameIDs := make(map[string]int64, len(networkACLs))
+		for _, networkACL := range networkACLs {
+			aclNameIDs[networkACL.Name] = int64(networkACL.ID)
+		}
+
+		for _, networkACL := range networkACLs {
+			// Get networks using this ACL directly or via a NIC.
+			aclNets := map[string]acl.NetworkACLUsage{}
+			err = acl.NetworkUsage(s, projectName, []string{networkACL.Name}, aclNets)
+			if err != nil {
+				return fmt.Errorf("Failed getting ACL network usage: %w", err)
+			}
+
+			aclOVNNets := map[string]acl.NetworkACLUsage{}
+			for k, v := range aclNets {
+				if v.Type != "ovn" {
+					continue
+				}
+
+				aclOVNNets[k] = v
+			}
+
+			if len(aclOVNNets) < 1 {
+				continue
+			}
+
+			cleanup, err := acl.OVNEnsureACLs(s, logger.AddContext(logger.Ctx{}), ovnnb, projectName, aclNameIDs, aclOVNNets, []string{networkACL.Name}, true)
+			if err != nil {
+				return fmt.Errorf("Failed ensuring ACL %q is configured in OVN: %w", networkACL.Name, err)
+			}
+
+			reverter.Add(cleanup)
+		}
+	}
+
+	reverter.Success()
+	return nil
 }
 
 // Patches end here

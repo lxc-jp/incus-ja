@@ -184,6 +184,7 @@ type InstanceServer interface {
 	GetRawInstanceNVRAMGUIDVar(name string, guid string, varName string) (resp []byte, attributes uint32, err error)
 	GetInstanceNVRAMGUIDVar(name string, guid string, varName string) (resp *api.InstanceNVRAMVariable, ETag string, err error)
 	DeleteInstanceNVRAMGUIDVar(name string, guid string, varName string) error
+	UpdateInstanceNVRAM(name string, vars map[string]map[string]*api.InstanceNVRAMVariablePut) error
 	UpdateRawInstanceNVRAMGUIDVar(name string, guid string, varName string, data []byte, attributes uint32, timestamp int64) error
 	UpdateInstanceNVRAMGUIDVar(name string, guid string, varName string, data api.InstanceNVRAMVariablePut, ETag string) error
 
@@ -472,6 +473,7 @@ type InstanceServer interface {
 
 	// Internal functions (for internal use)
 	RawQuery(method string, path string, data any, queryETag string) (resp *api.Response, ETag string, err error)
+	RawQueryWithHeaders(method string, path string, data any, queryETag string, headers http.Header) (resp *api.Response, ETag string, err error)
 	RawWebsocket(path string) (conn *websocket.Conn, err error)
 	RawOperation(method string, path string, data any, queryETag string) (op Operation, ETag string, err error)
 }

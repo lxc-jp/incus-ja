@@ -321,6 +321,64 @@ func (o *NB) GetLogicalRouter(ctx context.Context, routerName OVNRouter) (*ovnNB
 	return logicalRouter, nil
 }
 
+// UpdateLogicalRouterMulticastRelay sets the multicast relay option on the logical router.
+func (o *NB) UpdateLogicalRouterMulticastRelay(ctx context.Context, routerName OVNRouter, relay bool) error {
+	logicalRouter, err := o.GetLogicalRouter(ctx, routerName)
+	if err != nil {
+		return err
+	}
+
+	if logicalRouter.Options == nil {
+		logicalRouter.Options = map[string]string{}
+	}
+
+	logicalRouter.Options["mcast_relay"] = fmt.Sprintf("%v", relay)
+
+	operations, err := o.client.Where(logicalRouter).Update(logicalRouter)
+	if err != nil {
+		return err
+	}
+
+	// Apply the database changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetLogicalRouterNATs returns the NAT rules of a logical router.
+func (o *NB) GetLogicalRouterNATs(ctx context.Context, routerName OVNRouter) ([]ovnNB.NAT, error) {
+	// Get the logical router.
+	logicalRouter, err := o.GetLogicalRouter(ctx, routerName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the NAT rules.
+	natRules := make([]ovnNB.NAT, 0, len(logicalRouter.Nat))
+	for _, natUUID := range logicalRouter.Nat {
+		natRule := ovnNB.NAT{
+			UUID: natUUID,
+		}
+
+		err = o.get(ctx, &natRule)
+		if err != nil {
+			return nil, err
+		}
+
+		natRules = append(natRules, natRule)
+	}
+
+	return natRules, nil
+}
+
 // CreateLogicalRouterNAT adds an SNAT or DNAT rule to a logical router to translate packets from intNet to extIP.
 func (o *NB) CreateLogicalRouterNAT(ctx context.Context, routerName OVNRouter, natType string, intNet *net.IPNet, extIP net.IP, intIP net.IP, stateless bool, mayExist bool) error {
 	// Prepare the addresses.
@@ -344,7 +402,9 @@ func (o *NB) CreateLogicalRouterNAT(ctx context.Context, routerName OVNRouter, n
 		return err
 	}
 
-	// Check if the rule already exists.
+	// Check if the rule already exists, and collect any stale rules
+	// for the same logical IP so they can be replaced.
+	staleOperations := []ovsdb.Operation{}
 	for _, natUUID := range logicalRouter.Nat {
 		natRule := ovnNB.NAT{
 			UUID: natUUID,
@@ -361,12 +421,38 @@ func (o *NB) CreateLogicalRouterNAT(ctx context.Context, routerName OVNRouter, n
 		}
 
 		// Check if matching our new rule.
-		if natRule.LogicalIP == logicalIP && natRule.ExternalIP == externalIP {
-			if mayExist {
-				return nil
+		if natRule.LogicalIP == logicalIP {
+			if natRule.ExternalIP == externalIP {
+				if mayExist {
+					return nil
+				}
+
+				return ErrExists
 			}
 
-			return ErrExists
+			// Only SNAT rules are unique per logical IP, DNAT rules may
+			// translate multiple external addresses to the same target.
+			if natType != "snat" {
+				continue
+			}
+
+			deleteOps, err := o.client.Where(&natRule).Delete()
+			if err != nil {
+				return err
+			}
+
+			staleOperations = append(staleOperations, deleteOps...)
+
+			deleteOps, err = o.client.Where(logicalRouter).Mutate(logicalRouter, ovsModel.Mutation{
+				Field:   &logicalRouter.Nat,
+				Mutator: ovsdb.MutateOperationDelete,
+				Value:   []string{natRule.UUID},
+			})
+			if err != nil {
+				return err
+			}
+
+			staleOperations = append(staleOperations, deleteOps...)
 		}
 	}
 
@@ -378,7 +464,7 @@ func (o *NB) CreateLogicalRouterNAT(ctx context.Context, routerName OVNRouter, n
 		ExternalIP: externalIP,
 	}
 
-	operations := []ovsdb.Operation{}
+	operations := staleOperations
 
 	createOps, err := o.client.Create(&natRule)
 	if err != nil {
@@ -1255,6 +1341,40 @@ func (o *NB) UpdateLogicalSwitchIPAllocation(ctx context.Context, switchName OVN
 	return nil
 }
 
+// UpdateLogicalSwitchMulticastSnooping sets the multicast snooping config on the logical switch.
+func (o *NB) UpdateLogicalSwitchMulticastSnooping(ctx context.Context, switchName OVNSwitch, snoop bool) error {
+	// Get the logical switch.
+	logicalSwitch, err := o.GetLogicalSwitch(ctx, switchName)
+	if err != nil {
+		return err
+	}
+
+	// Update the configuration.
+	if logicalSwitch.OtherConfig == nil {
+		logicalSwitch.OtherConfig = map[string]string{}
+	}
+
+	logicalSwitch.OtherConfig["mcast_snoop"] = fmt.Sprintf("%v", snoop)
+
+	operations, err := o.client.Where(logicalSwitch).Update(logicalSwitch)
+	if err != nil {
+		return err
+	}
+
+	// Apply the database changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // UpdateLogicalSwitchDHCPv4Revervations sets the DHCPv4 IP reservations.
 func (o *NB) UpdateLogicalSwitchDHCPv4Revervations(ctx context.Context, switchName OVNSwitch, reservedIPs []iprange.Range) error {
 	// Get the logical switch.
@@ -1852,7 +1972,7 @@ func (o *NB) CreateLogicalSwitchPort(ctx context.Context, switchName OVNSwitch, 
 			tag := int(opts.VLAN)
 
 			logicalSwitchPort.ParentName = &parentName
-			logicalSwitchPort.Tag = &tag
+			logicalSwitchPort.TagRequest = &tag
 		}
 
 		if opts.RouterPort != "" {
@@ -1977,7 +2097,7 @@ func (o *NB) GetLogicalSwitchPortIPs(ctx context.Context, portName OVNSwitchPort
 
 	addresses := []net.IP{}
 	for _, address := range lsp.Addresses {
-		for _, entry := range strings.Split(address, " ") {
+		for entry := range strings.SplitSeq(address, " ") {
 			ip := net.ParseIP(entry)
 			if ip != nil {
 				addresses = append(addresses, ip)
@@ -1986,7 +2106,7 @@ func (o *NB) GetLogicalSwitchPortIPs(ctx context.Context, portName OVNSwitchPort
 	}
 
 	if lsp.DynamicAddresses != nil {
-		for _, entry := range strings.Split(*lsp.DynamicAddresses, " ") {
+		for entry := range strings.SplitSeq(*lsp.DynamicAddresses, " ") {
 			ip := net.ParseIP(entry)
 			if ip != nil {
 				addresses = append(addresses, ip)
@@ -2295,7 +2415,7 @@ func (o *NB) GetLogicalSwitchPortDNS(ctx context.Context, portName OVNSwitchPort
 	for key, value := range dnsRecords[0].Records {
 		dnsName = key
 
-		for _, ipPart := range strings.Split(value, " ") {
+		for ipPart := range strings.SplitSeq(value, " ") {
 			ip := net.ParseIP(strings.TrimSpace(ipPart))
 			if ip != nil {
 				ips = append(ips, ip)
@@ -2554,6 +2674,114 @@ func (o *NB) UpdateLogicalSwitchPortLinkRouter(ctx context.Context, switchPortNa
 	return nil
 }
 
+// UpdateLogicalSwitchPortARPProxy adds and removes entries from a logical switch port's arp_proxy option.
+func (o *NB) UpdateLogicalSwitchPortARPProxy(ctx context.Context, switchPortName OVNSwitchPort, addIPNets []net.IPNet, removeIPNets []net.IPNet) error {
+	// Get the logical switch port.
+	lsp := ovnNB.LogicalSwitchPort{
+		Name: string(switchPortName),
+	}
+
+	err := o.get(ctx, &lsp)
+	if err != nil {
+		return err
+	}
+
+	// Get the current entries.
+	entries := strings.Fields(lsp.Options["arp_proxy"])
+
+	// Apply the requested changes.
+	for _, ipNet := range removeIPNets {
+		entry := ipNet.String()
+		entries = slices.DeleteFunc(entries, func(e string) bool { return e == entry })
+	}
+
+	for _, ipNet := range addIPNets {
+		entry := ipNet.String()
+		if !slices.Contains(entries, entry) {
+			entries = append(entries, entry)
+		}
+	}
+
+	slices.Sort(entries)
+
+	// Check if anything changed.
+	newValue := strings.Join(entries, " ")
+	if newValue == lsp.Options["arp_proxy"] {
+		return nil
+	}
+
+	// Update the fields.
+	if lsp.Options == nil {
+		lsp.Options = map[string]string{}
+	}
+
+	if newValue != "" {
+		lsp.Options["arp_proxy"] = newValue
+	} else {
+		delete(lsp.Options, "arp_proxy")
+	}
+
+	// Update the record.
+	operations, err := o.client.Where(&lsp).Update(&lsp)
+	if err != nil {
+		return err
+	}
+
+	// Apply the changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ClearLogicalSwitchPortARPProxy removes the arp_proxy option from a logical switch port.
+func (o *NB) ClearLogicalSwitchPortARPProxy(ctx context.Context, switchPortName OVNSwitchPort) error {
+	// Get the logical switch port.
+	lsp := ovnNB.LogicalSwitchPort{
+		Name: string(switchPortName),
+	}
+
+	err := o.get(ctx, &lsp)
+	if err != nil {
+		return err
+	}
+
+	// Check if there's anything to clear.
+	_, found := lsp.Options["arp_proxy"]
+	if !found {
+		return nil
+	}
+
+	// Update the fields.
+	delete(lsp.Options, "arp_proxy")
+
+	// Update the record.
+	operations, err := o.client.Where(&lsp).Update(&lsp)
+	if err != nil {
+		return err
+	}
+
+	// Apply the changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // UpdateLogicalSwitchPortLinkProviderNetwork links a logical switch port to a provider network.
 func (o *NB) UpdateLogicalSwitchPortLinkProviderNetwork(ctx context.Context, switchPortName OVNSwitchPort, extNetworkName string) error {
 	// Get the logical switch port.
@@ -2763,6 +2991,11 @@ func (o *NB) SetChassisGroupPriority(ctx context.Context, haChassisGroupName OVN
 		}
 
 		operations = append(operations, updateOps...)
+	}
+
+	// Skip the transaction if nothing changed.
+	if len(operations) == 0 {
+		return nil
 	}
 
 	// Apply the changes.
@@ -3593,7 +3826,7 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 			lb.HealthCheck = append(lb.HealthCheck, lbhc.UUID)
 
 			// Set up the port bindings.
-			for _, target := range strings.Split(targets, ",") {
+			for target := range strings.SplitSeq(targets, ",") {
 				// Split host and port.
 				host, _, err := net.SplitHostPort(target)
 				if err == nil {

@@ -180,6 +180,9 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//       enabled and for which all its devices can be migrated as well.
 	//   - `live-migrate`: Instances are live-migrated to another server. This means the instance remains running
 	//      and operational during the migration process, ensuring minimal disruption.
+	//   - `refresh-migrate`: Instances are migrated to another server through a series of incremental
+	//      transfers, keeping the instance running until the last one. This isn't a live migration, but the
+	//      downtime is limited to the final transfer. Only supported for containers.
 	//   - `migrate`: In this mode, instances are migrated to another server in the cluster. The migration
 	//      process will not be live, meaning there will be a brief downtime for the instance during the
 	//      migration.
@@ -194,7 +197,7 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//  defaultdesc: `auto`
 	//  liveupdate: no
 	//  shortdesc: What to do when evacuating the instance
-	"cluster.evacuate": validate.Optional(validate.IsOneOf("auto", "migrate", "live-migrate", "stop", "stateful-stop", "force-stop")),
+	"cluster.evacuate": validate.Optional(validate.IsOneOf("auto", "migrate", "live-migrate", "refresh-migrate", "stop", "stateful-stop", "force-stop")),
 
 	// gendoc:generate(entity=instance, group=resource-limits, key=limits.cpu)
 	// A number or a specific range of CPUs to expose to the instance.
@@ -346,6 +349,15 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	//  liveupdate: yes
 	//  shortdesc: Prevents the instance from being deleted
 	"security.protection.delete": validate.Optional(validate.IsBool),
+
+	// gendoc:generate(entity=instance, group=security, key=security.protection.start)
+	//
+	// ---
+	//  type: bool
+	//  defaultdesc: `false`
+	//  liveupdate: yes
+	//  shortdesc: Prevents the instance from being started
+	"security.protection.start": validate.Optional(validate.IsBool),
 
 	// gendoc:generate(entity=instance, group=security, key=security.selinux.type)
 	// Override the SELinux file type used for labeling instance storage.
@@ -830,7 +842,8 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	"oci.uid": validate.Optional(validate.IsUint32),
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.dns.nameservers)
-	// Comma-separated list of name server addresses for the initial `resolv.conf`.
+	// Comma-separated list of name server addresses for `resolv.conf`.
+	// When set, name servers received over DHCP are ignored.
 	// ---
 	//  type: string
 	//  liveupdate: no
@@ -839,7 +852,8 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	"oci.dns.nameservers": validate.Optional(validate.IsListOf(validate.IsNetworkAddress)),
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.dns.domain)
-	// Domain name for the initial `resolv.conf`.
+	// Domain name for `resolv.conf`.
+	// When set, the domain name received over DHCP is ignored.
 	// ---
 	//  type: string
 	//  liveupdate: no
@@ -848,7 +862,8 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	"oci.dns.domain": validate.Optional(isResolvConfValue),
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.dns.search)
-	// Comma-separated list of search domains for the initial `resolv.conf`.
+	// Comma-separated list of search domains for `resolv.conf`.
+	// When set, search domains received over DHCP are ignored.
 	// ---
 	//  type: string
 	//  liveupdate: no
@@ -1172,6 +1187,60 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 
 // InstanceConfigKeysVM is a map of config key to validator. (keys applying to VM only).
 var InstanceConfigKeysVM = map[string]func(value string) error{
+	// gendoc:generate(entity=instance, group=security, key=initial.secureboot.pk)
+	//
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  condition: virtual machine
+	//  shortdesc: Initial platform key to enroll when generating the NVRAM (PEM certificate)
+	"initial.secureboot.pk": validate.IsPEM(false),
+
+	// gendoc:generate(entity=instance, group=security, key=initial.secureboot.kek)
+	//
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  condition: virtual machine
+	//  shortdesc: Initial key exchange keys to enroll when generating the NVRAM (PEM certificate bundle)
+	"initial.secureboot.kek": validate.IsPEM(true),
+
+	// gendoc:generate(entity=instance, group=security, key=initial.secureboot.db)
+	// This option accepts signatures armored with `SIGNATURE` in addition to certificates.
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  condition: virtual machine
+	//  shortdesc: Initial authorized signature database entries to enroll when generating the NVRAM (PEM certificate and signature bundle)
+	"initial.secureboot.db": validate.IsPEM(true, "CERTIFICATE", "SIGNATURE"),
+
+	// gendoc:generate(entity=instance, group=security, key=initial.secureboot.dbx)
+	// This option accepts signatures armored with `SIGNATURE` in addition to certificates.
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  condition: virtual machine
+	//  shortdesc: Initial forbidden signature database entries to enroll when generating the NVRAM (PEM certificate and signature bundle)
+	"initial.secureboot.dbx": validate.IsPEM(true, "CERTIFICATE", "SIGNATURE"),
+
+	// gendoc:generate(entity=instance, group=security, key=initial.secureboot.dbt)
+	//
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  condition: virtual machine
+	//  shortdesc: Initial authorized timestamp signature database certificates to enroll when generating the NVRAM (PEM certificate bundle)
+	"initial.secureboot.dbt": validate.IsPEM(true),
+
+	// gendoc:generate(entity=instance, group=security, key=initial.secureboot.mok)
+	// This option accepts signatures armored with `SIGNATURE` in addition to certificates.
+	// ---
+	//  type: string
+	//  liveupdate: yes
+	//  condition: virtual machine
+	//  shortdesc: Initial machine owner key entries to enroll when generating the NVRAM (PEM certificate and signature bundle)
+	"initial.secureboot.mok": validate.IsPEM(true, "CERTIFICATE", "SIGNATURE"),
+
 	// gendoc:generate(entity=instance, group=resource-limits, key=limits.memory.hotplug)
 	// If this option is set to `false`, disable memory hotplug entirely.
 	// Alternatively, it can be set to a bytes value which will define an upper limit for hotplugged memory.
@@ -1411,6 +1480,61 @@ func ConfigKeyChecker(key string, instanceType api.InstanceType) (func(value str
 		f, ok := InstanceConfigKeysVM[key]
 		if ok {
 			return f, nil
+		}
+
+		parts := strings.SplitN(key, ".", 4)
+		if len(parts) == 4 && (strings.HasPrefix(key, "initial.nvram.") || strings.HasPrefix(key, "initial.nvram-binary.")) {
+			// Reject GUIDs that don’t follow the strict lowercase 8-4-4-4-12 format, to avoid costly
+			// checks for duplicates.
+			validGUID := true
+			guid := parts[2]
+			if len(guid) != 36 {
+				validGUID = false
+			} else {
+			out:
+				for i := 0; i < len(guid); i++ {
+					switch i {
+					case 8, 13, 18, 23:
+						if guid[i] != '-' {
+							validGUID = false
+							break out
+						}
+
+					default:
+						c := guid[i]
+						if (c < '0' || c > '9') && (c < 'a' && c > 'f') {
+							validGUID = false
+							break out
+						}
+					}
+				}
+			}
+
+			if !validGUID {
+				return nil, fmt.Errorf("Invalid configuration key %s: invalid GUID", key)
+			}
+
+			if strings.HasPrefix(key, "initial.nvram.") {
+				// gendoc:generate(entity=instance, group=raw, key=initial.nvram.<GUID>.<name>)
+				//
+				// ---
+				//  type: blob
+				//  liveupdate: yes
+				//  condition: virtual machine
+				//  shortdesc: Dissected NVRAM variable value to set when generating the NVRAM
+				return validate.IsAny, nil
+			}
+
+			if strings.HasPrefix(key, "initial.nvram-binary.") {
+				// gendoc:generate(entity=instance, group=raw, key=initial.nvram-binary.<GUID>.<name>)
+				// Base64-encoded variable value to set when generating the NVRAM, optionally prefixed by `<attributes>:`, with `<attributes>` an integer.
+				// ---
+				//  type: blob
+				//  liveupdate: yes
+				//  condition: virtual machine
+				//  shortdesc: Base64-encoded NVRAM variable value to set when generating the NVRAM, optionally prefixed by its attributes
+				return validate.IsRawNVRAMVariable, nil
+			}
 		}
 	}
 

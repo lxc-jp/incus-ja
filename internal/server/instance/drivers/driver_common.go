@@ -15,10 +15,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/procfs"
 
 	internalInstance "github.com/lxc/incus/v7/internal/instance"
 	"github.com/lxc/incus/v7/internal/server/backup"
@@ -28,6 +28,7 @@ import (
 	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
 	"github.com/lxc/incus/v7/internal/server/device/nictype"
 	"github.com/lxc/incus/v7/internal/server/instance"
+	"github.com/lxc/incus/v7/internal/server/instance/drivers/qemudefault"
 	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
 	"github.com/lxc/incus/v7/internal/server/instance/operationlock"
 	"github.com/lxc/incus/v7/internal/server/lifecycle"
@@ -965,6 +966,11 @@ func (d *common) validateStartup(stateful bool, statusCode api.StatusCode) error
 		return errors.New("Requested architecture isn't supported by this host")
 	}
 
+	// Check if instance is start protected.
+	if util.IsTrue(d.expandedConfig["security.protection.start"]) {
+		return errors.New("Instance has startup protection enabled")
+	}
+
 	// Must happen before creating operation Start lock to avoid the status check returning Stopped due to the
 	// existence of a Start operation lock.
 	err = d.isStartableStatusCode(statusCode)
@@ -1652,19 +1658,43 @@ func (d *common) balanceNUMANodes() error {
 		}
 	}
 
+	numaNodesToUse := 1
 	if err == nil && limitsCPU > cpusPerNumaNode {
-		numaNodesToUse := int(math.Ceil(float64(limitsCPU) / float64(cpusPerNumaNode)))
-
-		selectedNumaNodes := make([]string, numaNodesToUse)
-		for i, node := range nodes[:numaNodesToUse] {
-			selectedNumaNodes[i] = strconv.FormatUint(node, 10)
-		}
-
-		joinedNumaNodes := strings.Join(selectedNumaNodes, ",")
-		return d.VolatileSet(map[string]string{"volatile.cpu.nodes": joinedNumaNodes})
+		numaNodesToUse = int(math.Ceil(float64(limitsCPU) / float64(cpusPerNumaNode)))
 	}
 
-	return d.VolatileSet(map[string]string{"volatile.cpu.nodes": fmt.Sprintf("%d", nodes[0])})
+	// Similarly, if the effective memory limit is greater than the amount of memory per NUMA node,
+	// use as many NUMA nodes as needed to fit it.
+	limitsMemoryStr := conf["limits.memory"]
+	if limitsMemoryStr == "" {
+		limitsMemoryStr = qemudefault.MemSize
+	}
+
+	limitsMemory, memoryErr := ParseMemoryStr(limitsMemoryStr)
+	defaultMemory, _ := ParseMemoryStr(qemudefault.MemSize)
+
+	// Never split anything at or below the default memory size.
+	if memoryErr == nil && limitsMemory > defaultMemory && len(nodes) > 0 {
+		memory, err := resources.GetMemory()
+		if err != nil {
+			return err
+		}
+
+		memoryPerNumaNode := int64(memory.Total) / int64(len(nodes))
+		if memoryPerNumaNode > 0 && limitsMemory > memoryPerNumaNode {
+			numaNodesToUse = max(numaNodesToUse, int(math.Ceil(float64(limitsMemory)/float64(memoryPerNumaNode))))
+		}
+	}
+
+	// Cap at the number of available NUMA nodes.
+	numaNodesToUse = min(numaNodesToUse, len(nodes))
+
+	selectedNumaNodes := make([]string, numaNodesToUse)
+	for i, node := range nodes[:numaNodesToUse] {
+		selectedNumaNodes[i] = strconv.FormatUint(node, 10)
+	}
+
+	return d.VolatileSet(map[string]string{"volatile.cpu.nodes": strings.Join(selectedNumaNodes, ",")})
 }
 
 // Gets the process starting time.
@@ -1673,17 +1703,23 @@ func (d *common) processStartedAt(pid int) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("Invalid PID %d", pid)
 	}
 
-	file, err := os.Stat(fmt.Sprintf("/proc/%d", pid))
+	proc, err := procfs.NewProc(pid)
 	if err != nil {
 		return time.Time{}, err
 	}
 
-	linuxInfo, ok := file.Sys().(*syscall.Stat_t)
-	if !ok {
-		return time.Time{}, errors.New("Bad stat type")
+	stat, err := proc.Stat()
+	if err != nil {
+		return time.Time{}, err
 	}
 
-	return time.Unix(int64(linuxInfo.Ctim.Sec), int64(linuxInfo.Ctim.Nsec)), nil
+	startedAt, err := stat.StartTime()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	seconds, fraction := math.Modf(startedAt)
+	return time.Unix(int64(seconds), int64(fraction*float64(time.Second))), nil
 }
 
 // ETag returns the instance configuration ETag data for pre-condition validation.
@@ -1740,7 +1776,7 @@ func (d *common) setOOMPriority(pid int) error {
 		return fmt.Errorf("Failed to set OOM priority: instance not running or PID not found")
 	}
 
-	err = os.WriteFile(fmt.Sprintf("/proc/%d/oom_score_adj", pid), []byte(fmt.Sprintf("%d", score)), 0o644)
+	err = os.WriteFile(fmt.Sprintf("/proc/%d/oom_score_adj", pid), fmt.Appendf(nil, "%d", score), 0o644)
 	if err != nil {
 		return fmt.Errorf("Failed to set OOM priority: %w", err)
 	}

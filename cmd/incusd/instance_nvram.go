@@ -83,7 +83,7 @@ func getNVRAMStore(d *Daemon, r *http.Request, projectName string, name string) 
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -108,11 +108,9 @@ func getNVRAMStore(d *Daemon, r *http.Request, projectName string, name string) 
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c",
-//                "/1.0/instances/foo/nvram/d9bee56e-75dc-49d9-b4d7-b534210f637a",
-//              ]
+//            example:
+//              - /1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c
+//              - /1.0/instances/foo/nvram/d9bee56e-75dc-49d9-b4d7-b534210f637a
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -145,7 +143,7 @@ func getNVRAMStore(d *Daemon, r *http.Request, projectName string, name string) 
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -173,13 +171,10 @@ func getNVRAMStore(d *Daemon, r *http.Request, projectName string, name string) 
 //              description: List of endpoints
 //              items:
 //                type: string
-//            example: |-
-//              {
-//                "8be4df61-93ca-11d2-aa0d-00e098032b8c": [
-//                  "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/Boot0000",
-//                  "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/BootOrder"
-//                ]
-//              }
+//            example:
+//              8be4df61-93ca-11d2-aa0d-00e098032b8c:
+//                - /1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/Boot0000
+//                - /1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/BootOrder
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -212,7 +207,7 @@ func getNVRAMStore(d *Daemon, r *http.Request, projectName string, name string) 
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: NVRAM variables
@@ -333,7 +328,7 @@ func instanceNVRAMGet(d *Daemon, r *http.Request) response.Response {
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -358,11 +353,9 @@ func instanceNVRAMGet(d *Daemon, r *http.Request) response.Response {
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/Boot0000",
-//                "/1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/BootOrder"
-//              ]
+//            example:
+//              - /1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/Boot0000
+//              - /1.0/instances/foo/nvram/8be4df61-93ca-11d2-aa0d-00e098032b8c/BootOrder
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -400,7 +393,7 @@ func instanceNVRAMGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: NVRAM variables
@@ -512,17 +505,18 @@ func instanceNVRAMGUIDGet(d *Daemon, r *http.Request) response.Response {
 //	    description: Variable GUID
 //	    type: string
 //	    required: true
-//	    example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
+//	    x-example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
 //	  - in: path
 //	    name: var
 //	    description: Variable name
 //	    type: string
-//	    example: BootOrder
+//	    required: true
+//	    x-example: BootOrder
 //	  - in: query
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: NVRAM variable
@@ -576,12 +570,7 @@ func instanceNVRAMGUIDVarGet(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	vars, ok := store.Vars[guid]
-	if !ok {
-		return response.SmartError(api.StatusErrorf(http.StatusNotFound, "GUID not found"))
-	}
-
-	v, ok := vars[varName]
+	v, ok := store.Get(guid, varName)
 	if !ok {
 		return response.SmartError(api.StatusErrorf(http.StatusNotFound, "Variable not found"))
 	}
@@ -625,17 +614,18 @@ func instanceNVRAMGUIDVarGet(d *Daemon, r *http.Request) response.Response {
 //	    description: Variable GUID
 //	    type: string
 //	    required: true
-//	    example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
+//	    x-example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
 //	  - in: path
 //	    name: var
 //	    description: Variable name
 //	    type: string
-//	    example: BootOrder
+//	    required: true
+//	    x-example: BootOrder
 //	  - in: query
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -675,17 +665,10 @@ func instanceNVRAMGUIDVarDelete(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(errors.New("UEFI variables cannot be deleted on running VMs"))
 	}
 
-	vars, ok := store.Vars[guid]
-	if !ok {
-		return response.SmartError(api.StatusErrorf(http.StatusNotFound, "GUID not found"))
-	}
-
-	_, ok = vars[varName]
-	if !ok {
+	if !store.Unset(guid, varName) {
 		return response.SmartError(api.StatusErrorf(http.StatusNotFound, "Variable not found"))
 	}
 
-	delete(store.Vars[guid], varName)
 	err = inst.SetNVRAM(store)
 	if err != nil {
 		return response.SmartError(err)
@@ -720,27 +703,26 @@ func instanceNVRAMGUIDVarDelete(d *Daemon, r *http.Request) response.Response {
 //	    description: Variable GUID
 //	    type: string
 //	    required: true
-//	    example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
+//	    x-example: 8be4df61-93ca-11d2-aa0d-00e098032b8c
 //	  - in: path
 //	    name: var
 //	    description: Variable name
 //	    type: string
-//	    example: BootOrder
+//	    required: true
+//	    x-example: BootOrder
 //	  - in: query
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: header
 //	    name: X-Incus-attributes
 //	    description: Raw UEFI variable attributes to set
-//	    schema:
-//	      type: integer
+//	    type: integer
 //	  - in: header
 //	    name: X-Incus-timestamp
 //	    description: Raw UEFI variable UNIX timestamp (in seconds) to set
-//	    schema:
-//	      type: integer
+//	    type: integer
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -784,12 +766,7 @@ func instanceNVRAMGUIDVarPut(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(errors.New("UEFI variables cannot be modified on running VMs"))
 	}
 
-	_, ok := store.Vars[guid]
-	if !ok {
-		store.Vars[guid] = map[string]*api.InstanceNVRAMVariable{}
-	}
-
-	oldV, updated := store.Vars[guid][varName]
+	oldV, updated := store.Get(guid, varName)
 	if updated {
 		// Validate ETag
 		etag := []any{
@@ -837,28 +814,21 @@ func instanceNVRAMGUIDVarPut(d *Daemon, r *http.Request) response.Response {
 			return response.SmartError(err)
 		}
 	} else {
-		// This leaves the dissected data unmarshalled for deferred processing.
-		var raw struct {
-			Data       json.RawMessage `json:"data"`
-			Attributes []string        `json:"attributes"`
-			Timestamp  *time.Time      `json:"timestamp"`
-		}
-
-		err := json.NewDecoder(r.Body).Decode(&raw)
+		err := json.NewDecoder(r.Body).Decode(&v.InstanceNVRAMVariablePut)
 		if err != nil {
-			return response.SmartError(err)
-		}
-
-		v.Data = raw.Data
-		v.Attributes = raw.Attributes
-		v.Timestamp = raw.Timestamp
-		err = uefi.Format(&v, guid, varName)
-		if err != nil {
-			return response.SmartError(err)
+			return response.BadRequest(err)
 		}
 	}
 
-	store.Vars[guid][varName] = &v
+	if !slices.Contains(v.Attributes, "NON_VOLATILE") {
+		return response.BadRequest(errors.New("Volatile UEFI variables cannot be stored in the NVRAM"))
+	}
+
+	err = store.Set(guid, varName, v)
+	if err != nil {
+		return response.SmartError(err)
+	}
+
 	err = inst.SetNVRAM(store)
 	if err != nil {
 		return response.SmartError(err)
@@ -869,4 +839,96 @@ func instanceNVRAMGUIDVarPut(d *Daemon, r *http.Request) response.Response {
 	}
 
 	return response.SyncResponseLocation(true, nil, r.URL.String())
+}
+
+// swagger:operation PATCH /1.0/instances/{name}/nvram instances instance_nvram_patch
+//
+//	Bulk modify NVRAM variables.
+//
+//	This consumes nested objects keyed on GUID, then variable name, deleting the corresponding
+//	UEFI variables if the objects are `null`, and updating them otherwise.
+//
+//	Only supported for VMs.
+//
+//	---
+//	consumes:
+//	  - application/json
+//	parameters:
+//	  - in: path
+//	    name: name
+//	    description: Instance name
+//	    type: string
+//	    required: true
+//	  - in: query
+//	    name: project
+//	    description: Project name
+//	    type: string
+//	    x-example: default
+//	  - in: body
+//	    name: UEFI variables map
+//	    description: Load Balancer
+//	    required: true
+//	    schema:
+//	       type: object
+//	       description: UEFI variables
+//	       additionalProperties:
+//	         type: object
+//	         description: Namespaced UEFI variables
+//	         additionalProperties:
+//	           $ref: "#/definitions/InstanceNVRAMVariablePut"
+//	responses:
+//	  "200":
+//	    $ref: "#/responses/EmptySyncResponse"
+//	  "400":
+//	    $ref: "#/responses/BadRequest"
+//	  "403":
+//	    $ref: "#/responses/Forbidden"
+//	  "404":
+//	    $ref: "#/responses/NotFound"
+//	  "409":
+//	    $ref: "#/responses/Conflict"
+//	  "500":
+//	    $ref: "#/responses/InternalServerError"
+func instanceNVRAMPatch(d *Daemon, r *http.Request) response.Response {
+	projectName := request.ProjectParam(r)
+	name, err := pathVar(r, "name")
+	if err != nil {
+		return response.SmartError(err)
+	}
+
+	store, inst, resp := getNVRAMStore(d, r, projectName, name)
+	if resp != nil {
+		return resp
+	}
+
+	if inst.IsRunning() {
+		return response.BadRequest(errors.New("UEFI variables cannot be modified on running VMs"))
+	}
+
+	var patched map[string]map[string]*api.InstanceNVRAMVariablePut
+	err = json.NewDecoder(r.Body).Decode(&patched)
+	if err != nil {
+		return response.BadRequest(err)
+	}
+
+	for guid, vars := range patched {
+		for varName, v := range vars {
+			if v == nil {
+				store.Unset(guid, varName)
+				continue
+			}
+
+			err = store.Set(guid, varName, api.InstanceNVRAMVariable{InstanceNVRAMVariablePut: *v})
+			if err != nil {
+				return response.SmartError(err)
+			}
+		}
+	}
+
+	err = inst.SetNVRAM(store)
+	if err != nil {
+		return response.SmartError(err)
+	}
+
+	return response.EmptySyncResponse
 }

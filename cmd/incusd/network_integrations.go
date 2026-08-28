@@ -56,7 +56,7 @@ var networkIntegrationCmd = APIEndpoint{
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -81,11 +81,9 @@ var networkIntegrationCmd = APIEndpoint{
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/network-integrations/region2",
-//                "/1.0/network-integrations/region3"
-//              ]
+//            example:
+//              - /1.0/network-integrations/region2
+//              - /1.0/network-integrations/region3
 //    "403":
 //      $ref: "#/responses/Forbidden"
 //    "500":
@@ -105,7 +103,7 @@ var networkIntegrationCmd = APIEndpoint{
 //       name: filter
 //       description: Collection filter
 //       type: string
-//       example: default
+//       x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -932,24 +930,24 @@ func networkIntegrationValidate(integrationType string, inUse bool, oldConfig ma
 		// ---
 		//  type: string
 		//  scope: global
-		//  shortdesc: OVN SSL certificate authority for the inter-connection database
-		"ovn.ca_cert": validate.Optional(validate.IsAny),
+		//  shortdesc: OVN SSL certificate authorities for the inter-connection database (PEM bundle)
+		"ovn.ca_cert": validate.IsPEM(true),
 
 		// gendoc:generate(entity=network_integration, group=ovn, key=ovn.client_cert)
 		//
 		// ---
 		//  type: string
 		//  scope: global
-		//  shortdesc: OVN SSL client certificate
-		"ovn.client_cert": validate.Optional(validate.IsAny),
+		//  shortdesc: OVN SSL client certificate (PEM bundle)
+		"ovn.client_cert": validate.IsPEM(true),
 
 		// gendoc:generate(entity=network_integration, group=ovn, key=ovn.client_key)
 		//
 		// ---
 		//  type: string
 		//  scope: global
-		//  shortdesc: OVN SSL client key
-		"ovn.client_key": validate.Optional(validate.IsAny),
+		//  shortdesc: OVN SSL client key (PEM private key)
+		"ovn.client_key": validate.IsPEM(false, "PRIVATE KEY", ".* PRIVATE KEY"),
 
 		// gendoc:generate(entity=network_integration, group=ovn, key=ovn.transit.pattern)
 		// Specify a Pongo2 template string that represents the transit switch name.

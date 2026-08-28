@@ -286,6 +286,7 @@ run_standalone_storage() {
     run_test test_snap_volume_db_recovery "snapshot volume database record recovery"
     run_test test_storage_bucket_export "storage buckets export and import"
     run_test test_storage_buckets "storage buckets"
+    run_test test_storage_buckets_drivers "storage buckets on all local drivers"
     run_test test_storage_driver_btrfs "btrfs storage driver"
     run_test test_storage_driver_ceph "ceph storage driver"
     run_test test_storage_driver_cephfs "cephfs storage driver"
@@ -304,6 +305,17 @@ run_standalone_storage() {
     run_test test_storage_volume_snapshots "storage volume snapshots"
 }
 
+# Tests related to virtual machines (needs QEMU and KVM)
+run_standalone_vm() {
+    run_test test_cpu_vm "VM CPU hotplug"
+    run_test test_guestapi_vm "VM guest API"
+    run_test test_network_routed "VM routed NIC"
+    run_test test_nvram_vm "VM NVRAM"
+    run_test test_storage_disks_vm "VM disk devices"
+    run_test test_storage_vm "VM storage"
+    run_test test_storage_volumes_vm "VM storage volumes"
+}
+
 # Network and networking related tests
 run_standalone_network() {
     run_test test_address_set "network address set"
@@ -319,10 +331,19 @@ run_standalone_network() {
     run_test test_container_devices_nic_sriov "container devices - nic - sriov"
     run_test test_container_devices_proxy "container devices - proxy"
     run_test test_network_acl "network ACL management"
+    run_test test_network_bridge_firewall "network bridge firewall"
     run_test test_network_dhcp_routes "network dhcp routes"
     run_test test_network_forward "network address forwards"
     run_test test_network_hwaddr_pattern "network MAC address pattern"
     run_test test_network "network management"
+    run_test test_network_ovn_acl "OVN network ACLs"
+    run_test test_network_ovn_basic "OVN network basics"
+    run_test test_network_ovn_dhcp_reservation "OVN network DHCP reservations"
+    run_test test_network_ovn_forward "OVN network address forwards"
+    run_test test_network_ovn_l3only "OVN network layer 3 only mode"
+    run_test test_network_ovn_load_balancer "OVN network load balancers"
+    run_test test_network_ovn_nested_vlan "OVN network nested VLANs"
+    run_test test_network_ovn_peering "OVN network peering"
     run_test test_network_peers "network peers"
     run_test test_network_zone "network DNS zones"
     run_test test_oidc "OpenID Connect"
@@ -337,6 +358,7 @@ run_standalone_network() {
 # Any other container test
 run_standalone_container() {
     run_test test_basic_usage "basic usage"
+    run_test test_cgroup "cgroup limits"
     run_test test_cloud_init "cloud-init"
     run_test test_concurrent "concurrent startup"
     run_test test_concurrent_exec "concurrent exec"
@@ -362,6 +384,7 @@ run_standalone_container() {
     run_test test_fdleak "fd leak"
     run_test test_filemanip "file manipulations"
     run_test test_idmap "id mapping"
+    run_test test_interception "syscall interception"
     run_test test_lxc_to_incus "LXC to Incus"
     run_test test_port_forward "port forward"
     run_test test_property "container property"
@@ -408,6 +431,7 @@ case "${1:-""}" in
     run_standalone_container
     run_standalone_network
     run_standalone_storage
+    run_standalone_vm
     run_cluster
     ;;
   standalone)
@@ -415,6 +439,7 @@ case "${1:-""}" in
     run_standalone_container
     run_standalone_network
     run_standalone_storage
+    run_standalone_vm
     ;;
   standalone_*)
     # shellcheck disable=SC2086

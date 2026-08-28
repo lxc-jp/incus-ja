@@ -24,6 +24,7 @@ type cmdMove struct {
 	flagInstanceOnly      bool
 	flagDevice            []string
 	flagMode              string
+	flagRefresh           bool
 	flagStateless         bool
 	flagStorage           string
 	flagTarget            string
@@ -58,17 +59,22 @@ incus move <old name> <new name> [--instance-only]
 	))
 
 	cmd.RunE = c.run
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagConfig, "config|c", i18n.G("Config key/value to apply to the target instance"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagDevice, "device|d", i18n.G("New key/value to apply to a specific device"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the target instance"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagConfig, "config|c", i18n.G("Config key/value to apply to the target instance (may be passed multiple times)"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagDevice, "device|d", i18n.G("New key/value to apply to a specific device (may be passed multiple times)"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the target instance (may be passed multiple times)"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagNoProfiles, "no-profiles", i18n.G("Unset all profiles on the target instance"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagInstanceOnly, "instance-only", i18n.G("Move the instance without its snapshots"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagMode, "mode", moveDefaultMode, "", i18n.G("Transfer mode. One of pull, push or relay"))
+	cli.AddBoolFlag(cmd.Flags(), &c.flagRefresh, "refresh", i18n.G("Transfer the instance incrementally, reducing the downtime of a running instance"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagStateless, "stateless", i18n.G("Copy a stateful instance stateless"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagStorage, "storage|s", "", "", i18n.G("Storage pool name"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagTarget, "target", "", "", i18n.G("Cluster member name"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagTargetProject, "target-project", "", "", i18n.G("Copy to a project different from the source"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagAllowInconsistent, "allow-inconsistent", i18n.G("Ignore copy errors for volatile files"))
+
+	_ = cmd.RegisterFlagCompletionFunc("target-project", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return c.global.cmpTargetProjectNames(args)
+	})
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -97,6 +103,10 @@ func (c *cmdMove) run(cmd *cobra.Command, args []string) error {
 	hasDstInstance := !parsed[1].RemoteObject.Skipped
 	dstInstanceName := parsed[1].RemoteObject.String
 
+	if c.flagRefresh && !c.flagStateless {
+		return errors.New(i18n.G("--refresh can only be used with --stateless"))
+	}
+
 	// Parse the mode
 	mode := moveDefaultMode
 	if c.flagMode != "" {
@@ -115,6 +125,10 @@ func (c *cmdMove) run(cmd *cobra.Command, args []string) error {
 
 		if c.flagConfig != nil || c.flagDevice != nil || c.flagProfile != nil || c.flagNoProfiles {
 			return errors.New(i18n.G("Can't override configuration or profiles in local rename"))
+		}
+
+		if c.flagRefresh {
+			return errors.New(i18n.G("Can't perform an incremental transfer in local rename"))
 		}
 
 		// Instance rename
@@ -181,6 +195,7 @@ func (c *cmdMove) run(cmd *cobra.Command, args []string) error {
 	cpy.flagProfile = c.flagProfile
 	cpy.flagNoProfiles = c.flagNoProfiles
 	cpy.flagAllowInconsistent = c.flagAllowInconsistent
+	cpy.flagRefresh = c.flagRefresh
 
 	instanceOnly := c.flagInstanceOnly
 
@@ -215,6 +230,11 @@ func (c *cmdMove) moveInstance(src *u.Parsed, dst *u.Parsed, stateful bool) erro
 		return errors.New(i18n.G("--target can only be used with clusters"))
 	}
 
+	// Validate server support for incremental transfers.
+	if c.flagRefresh && !srcServer.HasExtension("instance_refresh_migration") {
+		return errors.New(i18n.G("The server doesn't implement incremental instance transfers"))
+	}
+
 	// Set the target if specified.
 	if c.flagTarget != "" {
 		srcServer = srcServer.UseTarget(c.flagTarget)
@@ -228,6 +248,7 @@ func (c *cmdMove) moveInstance(src *u.Parsed, dst *u.Parsed, stateful bool) erro
 		Pool:         c.flagStorage,
 		Project:      c.flagTargetProject,
 		Live:         stateful,
+		Refresh:      c.flagRefresh,
 	}
 
 	// Override profiles.
