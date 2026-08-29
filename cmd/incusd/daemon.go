@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -366,7 +367,7 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 			}
 
 			if objectType == auth.ObjectTypeStorageVolume {
-				dbVolType, err := storagePools.VolumeTypeNameToDBType(muxVars[1])
+				dbVolType, err := storagePools.VolumeTypeNameToDBType(r.PathValue(muxVars[1]))
 				if err != nil {
 					return projectName
 				}
@@ -380,6 +381,11 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 
 			if slices.Contains([]auth.ObjectType{auth.ObjectTypeImage, auth.ObjectTypeImageAlias}, objectType) {
 				return project.ImageProjectFromRecord(p)
+			}
+
+			if objectType == auth.ObjectTypeNetwork && len(muxVars) > 0 {
+				// Networks shared from the default project resolve to the default project.
+				return project.NetworkProjectForNameFromRecord(p, r.PathValue(muxVars[0]))
 			}
 
 			if slices.Contains([]auth.ObjectType{auth.ObjectTypeNetwork, auth.ObjectTypeNetworkACL, auth.ObjectTypeNetworkAddressSet}, objectType) {
@@ -510,13 +516,10 @@ func (d *Daemon) getTrustedCertificates() (map[certificate.Type]map[string]x509.
 	}
 
 	// If in PKI mode, filter certificates that aren't trusted by the CA.
-	ca, err := localtls.ReadCert(internalUtil.VarPath("server.ca"))
+	certPool, err := localtls.ReadCerts(internalUtil.VarPath("server.ca"))
 	if err != nil {
 		return nil, err
 	}
-
-	certPool := x509.NewCertPool()
-	certPool.AddCert(ca)
 
 	for certType, certEntries := range certs {
 		if certType == certificate.TypeServer {
@@ -733,8 +736,8 @@ func (d *Daemon) createCmd(restAPI *http.ServeMux, apiVersion string, c APIEndpo
 		// Authentication
 		trusted, username, protocol, err := d.Authenticate(w, r)
 		if err != nil {
-			var authError *oidc.AuthError
-			if errors.As(err, &authError) {
+			_, ok := errors.AsType[*oidc.AuthError](err)
+			if ok {
 				// Ensure the OIDC headers are set if needed.
 				if d.oidcVerifier != nil {
 					_ = d.oidcVerifier.WriteHeaders(w)
@@ -1522,6 +1525,12 @@ func (d *Daemon) init() error {
 		logger.Info("Started DNS server")
 	}
 
+	// Watch for DHCP lease and static host changes to send DNS NOTIFY messages.
+	err = networkZone.StartLeasesWatcher(d.shutdownCtx, d.State())
+	if err != nil {
+		logger.Warn("Failed to start network zones watcher", logger.Ctx{"err": err})
+	}
+
 	// Setup the networks.
 	if !d.serverClustered || !d.db.Cluster.LocalNodeIsEvacuated() {
 		logger.Infof("Initializing networks")
@@ -1625,7 +1634,7 @@ func (d *Daemon) init() error {
 	_ = d.db.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 		// Create warnings that have been collected
 		for _, w := range dbWarnings {
-			err := tx.UpsertWarningLocalNode(ctx, "", -1, -1, warningtype.Type(w.TypeCode), w.LastMessage)
+			err := tx.UpsertWarning(ctx, d.serverName, "", -1, -1, warningtype.Type(w.TypeCode), w.LastMessage)
 			if err != nil {
 				logger.Warn("Failed to create warning", logger.Ctx{"err": err})
 			}
@@ -1635,7 +1644,7 @@ func (d *Daemon) init() error {
 	})
 
 	// Resolve warnings older than the daemon start time
-	err = warnings.ResolveWarningsByLocalNodeOlderThan(d.db.Cluster, d.startTime)
+	err = warnings.ResolveWarningsByNodeOlderThan(d.db.Cluster, d.serverName, d.startTime)
 	if err != nil {
 		logger.Warn("Failed to resolve warnings", logger.Ctx{"err": err})
 	}
@@ -1747,6 +1756,28 @@ func (d *Daemon) numRunningInstances(instances []instance.Instance) int {
 	return count
 }
 
+// closeGlobalDatabase closes the global database with a timeout as queries
+// stuck on an unreachable cluster can block it indefinitely.
+func closeGlobalDatabase(clusterDB *db.Cluster) {
+	done := make(chan struct{})
+	go func() {
+		err := clusterDB.Close()
+		if err != nil {
+			logger.Debug("Could not close global database cleanly", logger.Ctx{"err": err})
+		}
+
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		buf := make([]byte, 1024*1024)
+		n := runtime.Stack(buf, true)
+		logger.Warn("Timed out closing the global database", logger.Ctx{"goroutines": string(buf[:n])})
+	}
+}
+
 // Stop stops the shared daemon.
 func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 	logger.Info("Starting shutdown sequence", logger.Ctx{"signal": sig})
@@ -1779,6 +1810,10 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 		if err != nil {
 			logger.Warn("Could not handover member's responsibilities", logger.Ctx{"err": err})
 			d.gateway.Kill()
+
+			if d.db.Cluster != nil {
+				closeGlobalDatabase(d.db.Cluster)
+			}
 		}
 	}
 
@@ -1798,7 +1833,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 
 			// Make all future queries fail fast as DB is not available.
 			d.gateway.Kill()
-			_ = d.db.Cluster.Close()
+			closeGlobalDatabase(d.db.Cluster)
 		}
 
 		if err == nil {
@@ -1894,10 +1929,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 
 	if d.db.Cluster != nil {
 		logger.Info("Closing the database")
-		err := d.db.Cluster.Close()
-		if err != nil {
-			logger.Debug("Could not close global database cleanly", logger.Ctx{"err": err})
-		}
+		closeGlobalDatabase(d.db.Cluster)
 	}
 
 	if d.db != nil && d.db.Node != nil {
@@ -1905,7 +1937,20 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 	}
 
 	if d.gateway != nil {
-		trackError(d.gateway.Shutdown(), "Shutdown cowsql")
+		// Shut down the gateway with a timeout as its raft cleanup can get stuck on unreachable cluster members.
+		gatewayErr := make(chan error, 1)
+		go func() {
+			gatewayErr <- d.gateway.Shutdown()
+		}()
+
+		select {
+		case err := <-gatewayErr:
+			trackError(err, "Shutdown cowsql")
+		case <-time.After(10 * time.Second):
+			buf := make([]byte, 1024*1024)
+			n := runtime.Stack(buf, true)
+			logger.Warn("Timed out shutting down cowsql", logger.Ctx{"goroutines": string(buf[:n])})
+		}
 	}
 
 	if d.endpoints != nil {
@@ -2133,6 +2178,7 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string, tl
 				return err
 			}
 
+			defaultNetworks := []string{}
 			err = query.Scan(ctx, tx.Tx(), "SELECT networks.name, projects.name FROM networks JOIN projects ON projects.id=networks.project_id", func(scan func(dest ...any) error) error {
 				var networkName string
 				var projectName string
@@ -2141,11 +2187,49 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string, tl
 					return err
 				}
 
+				if projectName == api.ProjectDefaultName {
+					defaultNetworks = append(defaultNetworks, networkName)
+				}
+
 				resources.NetworkObjects = append(resources.NetworkObjects, auth.ObjectNetwork(projectName, networkName))
 				return nil
 			})
 			if err != nil {
 				return err
+			}
+
+			// Get the project config keys relevant to network sharing.
+			projectConfigs := map[string]map[string]string{}
+			err = query.Scan(ctx, tx.Tx(), "SELECT projects.name, projects_config.key, projects_config.value FROM projects_config JOIN projects ON projects.id=projects_config.project_id WHERE projects_config.key IN ('restricted', 'features.networks', 'restricted.networks.access')", func(scan func(dest ...any) error) error {
+				var projectName string
+				var key string
+				var value string
+				err := scan(&projectName, &key, &value)
+				if err != nil {
+					return err
+				}
+
+				if projectConfigs[projectName] == nil {
+					projectConfigs[projectName] = map[string]string{}
+				}
+
+				projectConfigs[projectName][key] = value
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			// Compute the networks shared from the default project into other projects.
+			resources.NetworkShareObjects = map[string][]auth.Object{}
+			for projectName, config := range projectConfigs {
+				p := api.Project{Name: projectName, ProjectPut: api.ProjectPut{Config: config}}
+
+				for _, networkName := range defaultNetworks {
+					if project.NetworkSharedFromDefault(&p, networkName) {
+						resources.NetworkShareObjects[projectName] = append(resources.NetworkShareObjects[projectName], auth.ObjectNetwork(api.ProjectDefaultName, networkName))
+					}
+				}
 			}
 
 			err = query.Scan(ctx, tx.Tx(), "SELECT networks_acls.name, projects.name FROM networks_acls JOIN projects ON projects.id=networks_acls.project_id", func(scan func(dest ...any) error) error {
@@ -2360,7 +2444,7 @@ func (d *Daemon) heartbeatHandler(w http.ResponseWriter, _ *http.Request, isLead
 
 			if d.db.Cluster != nil {
 				err := d.db.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-					return tx.UpsertWarningLocalNode(ctx, "", -1, -1, warningtype.ClusterTimeSkew, fmt.Sprintf("leaderTime: %s, localTime: %s", hbData.Time, now))
+					return tx.UpsertWarning(ctx, d.serverName, "", -1, -1, warningtype.ClusterTimeSkew, fmt.Sprintf("leaderTime: %s, localTime: %s", hbData.Time, now))
 				})
 				if err != nil {
 					logger.Warn("Failed to create cluster time skew warning", logger.Ctx{"err": err})
@@ -2374,7 +2458,7 @@ func (d *Daemon) heartbeatHandler(w http.ResponseWriter, _ *http.Request, isLead
 			logger.Warn("Time skew resolved")
 
 			if d.db.Cluster != nil {
-				err := warnings.ResolveWarningsByLocalNodeAndType(d.db.Cluster, warningtype.ClusterTimeSkew)
+				err := warnings.ResolveWarningsByNodeAndType(d.db.Cluster, d.serverName, warningtype.ClusterTimeSkew)
 				if err != nil {
 					logger.Warn("Failed to resolve cluster time skew warning", logger.Ctx{"err": err})
 				}
@@ -2777,7 +2861,7 @@ func (d *Daemon) clusterSyncCertificate() error {
 	d.gateway.NetworkUpdateCert(newCert)
 
 	// Resolve warning of this type.
-	_ = warnings.ResolveWarningsByLocalNodeAndType(d.db.Cluster, warningtype.UnableToUpdateClusterCertificate)
+	_ = warnings.ResolveWarningsByNodeAndType(d.db.Cluster, d.serverName, warningtype.UnableToUpdateClusterCertificate)
 
 	logger.Info("Updated cluster certificate from leader")
 

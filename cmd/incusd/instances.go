@@ -21,6 +21,7 @@ import (
 	"github.com/lxc/incus/v7/internal/server/db/cluster"
 	"github.com/lxc/incus/v7/internal/server/db/warningtype"
 	"github.com/lxc/incus/v7/internal/server/instance"
+	instanceDrivers "github.com/lxc/incus/v7/internal/server/instance/drivers"
 	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
 	"github.com/lxc/incus/v7/internal/server/project"
 	"github.com/lxc/incus/v7/internal/server/state"
@@ -206,7 +207,8 @@ var instanceNVRAMCmd = APIEndpoint{
 	Name: "instanceNVRAM",
 	Path: "instances/{name}/nvram",
 
-	Get: APIEndpointAction{Handler: instanceNVRAMGet, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanView, "name")},
+	Get:   APIEndpointAction{Handler: instanceNVRAMGet, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanView, "name")},
+	Patch: APIEndpointAction{Handler: instanceNVRAMPatch, AccessHandler: allowPermission(auth.ObjectTypeInstance, auth.EntitlementCanEdit, "name")},
 }
 
 var instanceNVRAMGUIDCmd = APIEndpoint{
@@ -324,7 +326,7 @@ func instanceStart(s *state.State, inst instance.Instance) error {
 			if attempt >= maxAttempts {
 				warnErr := s.DB.Cluster.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
 					// If unable to start after 3 tries, record a warning.
-					return tx.UpsertWarningLocalNode(ctx, inst.Project().Name, cluster.TypeInstance, inst.ID(), warningtype.InstanceAutostartFailure, fmt.Sprintf("%v", err))
+					return tx.UpsertWarning(ctx, s.ServerName, inst.Project().Name, cluster.TypeInstance, inst.ID(), warningtype.InstanceAutostartFailure, fmt.Sprintf("%v", err))
 				})
 				if warnErr != nil {
 					instLogger.Warn("Failed to create instance autostart failure warning", logger.Ctx{"err": warnErr})
@@ -341,7 +343,7 @@ func instanceStart(s *state.State, inst instance.Instance) error {
 		}
 
 		// Resolve any previous warning.
-		warnErr := warnings.ResolveWarningsByLocalNodeAndProjectAndTypeAndEntity(s.DB.Cluster, inst.Project().Name, warningtype.InstanceAutostartFailure, cluster.TypeInstance, inst.ID())
+		warnErr := warnings.ResolveWarningsByNodeAndProjectAndTypeAndEntity(s.DB.Cluster, s.ServerName, inst.Project().Name, warningtype.InstanceAutostartFailure, cluster.TypeInstance, inst.ID())
 		if warnErr != nil {
 			instLogger.Warn("Failed to resolve instance autostart failure warning", logger.Ctx{"err": warnErr})
 		}
@@ -604,4 +606,27 @@ func instancesShutdown(instances []instance.Instance) {
 
 	wg.Wait()
 	close(instShutdownCh)
+}
+
+// instanceShutdownDefaultTimeout is the default timeout (in seconds) to wait for a clean shutdown.
+const instanceShutdownDefaultTimeout = 30
+
+// instanceShutdownOrForceStop cleanly shuts the instance down, falling back to a forced stop if that fails.
+func instanceShutdownOrForceStop(inst instance.Instance) error {
+	val, err := strconv.Atoi(inst.ExpandedConfig()["boot.host_shutdown_timeout"])
+	if err != nil {
+		val = instanceShutdownDefaultTimeout
+	}
+
+	err = inst.Shutdown(time.Duration(val) * time.Second)
+	if err != nil {
+		logger.Warn("Failed shutting down instance, forcing stop", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+
+		err = inst.Stop(false)
+		if err != nil && !errors.Is(err, instanceDrivers.ErrInstanceIsStopped) {
+			return fmt.Errorf("Failed to stop instance %q in project %q: %w", inst.Name(), inst.Project().Name, err)
+		}
+	}
+
+	return nil
 }

@@ -1256,6 +1256,13 @@ func (d *btrfs) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, 
 				return err
 			}
 
+			// Wait for the rescan triggered by enabling quotas as
+			// limits aren't enforced until it completes.
+			_, err = subprocess.RunCommand("btrfs", "quota", "rescan", "-w", path)
+			if err != nil {
+				return err
+			}
+
 			// Try again.
 			qgroup, _, err = d.getQGroup(volPath)
 		}
@@ -1270,7 +1277,7 @@ func (d *btrfs) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, 
 			}
 
 			id := ""
-			for _, line := range strings.Split(output, "\n") {
+			for line := range strings.SplitSeq(output, "\n") {
 				line = strings.TrimSpace(line)
 				if strings.HasPrefix(line, "Subvolume ID:") {
 					fields := strings.Split(line, ":")
@@ -1774,7 +1781,7 @@ func (d *btrfs) BackupVolume(vol Volume, writer instancewriter.InstanceWriter, b
 			return fmt.Errorf("Failed to open temporary file for BTRFS backup: %w", err)
 		}
 
-		defer logger.WarnOnError(tmpFile.Close, "Failed to close temporary file")
+		defer logger.WarnOnErrorExcept(tmpFile.Close, []error{os.ErrClosed}, "Failed to close temporary file")
 		defer logger.WarnOnError(func() error { return os.Remove(tmpFile.Name()) }, "Failed to remove temporary file")
 
 		// Write the subvolume to the file.

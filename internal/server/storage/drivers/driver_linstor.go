@@ -294,6 +294,7 @@ func (d *linstor) Info() Info {
 		DefaultVMBlockFilesystemSize: deviceConfig.DefaultVMBlockFilesystemSize,
 		Buckets:                      false,
 		Remote:                       d.isRemote(),
+		NearLiveMigration:            false,
 		VolumeMultiNode:              false, // DRBD uses an active-passive replication paradigm, so we cannot use the same volume concurrently in multiple nodes.
 		OptimizedImages:              true,
 		OptimizedBackups:             false,
@@ -380,4 +381,17 @@ func (d *linstor) MigrationTypes(contentType ContentType, refresh bool, copySnap
 		},
 		d.rsyncMigrationType(contentType),
 	}
+}
+
+// roundVolumeBlockSizeBytes returns sizeBytes rounded up to the next multiple of MinBlockBoundary
+// and no smaller than the minimum size supported by DRBD.
+func (d *linstor) roundVolumeBlockSizeBytes(vol Volume, sizeBytes int64) (int64, error) {
+	// Smallest volume size supported by DRBD (space is needed for its metadata and activity log).
+	const drbdMinVolumeSizeBytes = int64(4 * 1024 * 1024)
+
+	if sizeBytes < drbdMinVolumeSizeBytes {
+		sizeBytes = drbdMinVolumeSizeBytes
+	}
+
+	return RoundAbove(MinBlockBoundary, sizeBytes), nil
 }

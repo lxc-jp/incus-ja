@@ -130,7 +130,7 @@ func instanceState(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: state
 //	    description: State
@@ -183,7 +183,7 @@ func instanceStatePut(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Check if the cluster member is evacuated.
-	if s.ServerClustered && req.Action != "stop" && s.DB.Cluster.LocalNodeIsEvacuated() {
+	if s.ServerClustered && req.Action != "stop" && r.Context().Value(request.CtxProtocol) != "cluster" && s.DB.Cluster.LocalNodeIsEvacuated() {
 		return response.Forbidden(errors.New("Cluster member is evacuated"))
 	}
 

@@ -130,9 +130,9 @@ ssh-keygen -p -o -f .config/incus/client.key
 
     $ incus list remote-host:
     Password for client.key:
-    +------+-------+------+------+------+-----------+
-    | NAME | STATE | IPV4 | IPV6 | TYPE | SNAPSHOTS |
-    +------+-------+------+------+------+-----------+
+    ┌──────┬───────┬──────┬──────┬──────┬───────────┐
+    │ NAME │ STATE │ IPV4 │ IPV6 │ TYPE │ SNAPSHOTS │
+    └──────┴───────┴──────┴──────┴──────┴───────────┘
 ```
 
 ```{note}

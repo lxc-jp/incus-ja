@@ -45,7 +45,7 @@ func (d *nicRouted) UpdatableFields(oldDevice Type) []string {
 		return []string{}
 	}
 
-	return []string{"limits.ingress", "limits.egress", "limits.max", "limits.priority", "connected"}
+	return []string{"limits.ingress", "limits.egress", "limits.max", "limits.ingress.burst", "limits.egress.burst", "limits.max.burst", "limits.ingress.bucket", "limits.egress.bucket", "limits.max.bucket", "limits.priority", "queue.discipline", "queue.discipline.attach", "connected"}
 }
 
 // validateConfig checks the supplied config for correctness.
@@ -83,6 +83,21 @@ func (d *nicRouted) validateConfig(instConf instance.ConfigReader, partialValida
 		//  default: parent MTU
 		//  shortdesc: The Maximum Transmit Unit (MTU) of the new interface
 		"mtu",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=queue.discipline)
+		//
+		// ---
+		//  type: string
+		//  shortdesc: The queuing discipline to set on the NIC, applied to the rate limit's class when a limit is set
+		"queue.discipline",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=queue.discipline.attach)
+		//
+		// ---
+		//  type: string
+		//  default: `queue`
+		//  shortdesc: Only for VMs: Whether to attach the queuing discipline to each transmit queue (`queue`) or to the interface root (`root`)
+		"queue.discipline.attach",
 
 		// gendoc:generate(entity=devices, group=nic_routed, key=queue.tx.length)
 		//
@@ -134,6 +149,54 @@ func (d *nicRouted) validateConfig(instConf instance.ConfigReader, partialValida
 		//  type: string
 		//  shortdesc: I/O limit in bit/s for both incoming and outgoing traffic (same as setting both limits.ingress and limits.egress)
 		"limits.max",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=limits.ingress.burst)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: I/O limit in bit/s that incoming traffic may burst up to, requires `limits.ingress.bucket`
+		"limits.ingress.burst",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=limits.egress.burst)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: I/O limit in bit/s that outgoing traffic may burst up to, requires `limits.egress.bucket`
+		"limits.egress.burst",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=limits.max.burst)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: I/O limit in bit/s that both incoming and outgoing traffic may burst up to (same as setting both `limits.ingress.burst` and `limits.egress.burst`)
+		"limits.max.burst",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=limits.ingress.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that incoming traffic may send in excess of `limits.ingress`, requires `limits.ingress.burst`
+		"limits.ingress.bucket",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=limits.egress.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that outgoing traffic may send in excess of `limits.egress`, requires `limits.egress.burst`
+		"limits.egress.bucket",
+
+		// gendoc:generate(entity=devices, group=nic_routed, key=limits.max.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that traffic may send in excess of the sustained limit (same as setting both `limits.ingress.bucket` and `limits.egress.bucket`)
+		"limits.max.bucket",
 
 		// gendoc:generate(entity=devices, group=nic_routed, key=limits.priority)
 		//
@@ -306,12 +369,22 @@ func (d *nicRouted) validateConfig(instConf instance.ConfigReader, partialValida
 		return err
 	}
 
+	err = nicValidateBurstLimits(d.config, true)
+	if err != nil {
+		return err
+	}
+
+	err = nicValidateQdisc(d.config, instConf.Type())
+	if err != nil {
+		return err
+	}
+
 	// Detect duplicate IPs in config.
 	for _, key := range []string{"ipv4.address", "ipv6.address"} {
 		ips := make(map[string]struct{})
 
 		if d.config[key] != "" {
-			for _, addr := range strings.Split(d.config[key], ",") {
+			for addr := range strings.SplitSeq(d.config[key], ",") {
 				addr = strings.TrimSpace(addr)
 				_, dupe := ips[addr]
 				if dupe {

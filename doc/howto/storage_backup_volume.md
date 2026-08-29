@@ -82,11 +82,11 @@ myst:
 
 たとえば、日次のスナップショットを設定するには、以下のコマンドを使います:
 
-    incus storage volume set <pool_name> <volume_name> snapshots.schedule @daily
+    incus storage volume set <pool_name> <volume_name> snapshots.schedule=@daily
 
 毎日 AM 6 時にスナップショットを作成するよう設定するには、以下のコマンドを使います:
 
-    incus storage volume set <pool_name> <volume_name> snapshots.schedule "0 6 * * *"
+    incus storage volume set <pool_name> <volume_name> snapshots.schedule="0 6 * * *"
 
 定期的にスナップショットをスケジュールする際、自動破棄（`snapshots.expiry`）とスナップショットの命名規則（`snapshots.pattern`）の設定も検討してください。
 設定オプションの詳細は{ref}`storage-drivers`のドキュメントを参照してください。

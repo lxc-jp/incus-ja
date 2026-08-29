@@ -1910,7 +1910,7 @@ func (d *lxc) handleIdmappedStorage() (idmap.StorageType, *idmap.Set, error) {
 	// We need to change the on-disk idmap but the container is protected
 	// against idmap changes.
 	if util.IsTrue(d.expandedConfig["security.protection.shift"]) {
-		return idmap.StorageTypeNone, nil, errors.New("Container is protected against filesystem shifting")
+		return idmap.StorageTypeNone, nil, errors.New("Instance has filesystem shifting protection enabled")
 	}
 
 	d.logger.Debug("Container idmap changed, remapping")
@@ -2141,7 +2141,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	// Load any required kernel modules
 	kernelModules := d.expandedConfig["linux.kernel_modules"]
 	if kernelModules != "" {
-		for _, module := range strings.Split(kernelModules, ",") {
+		for module := range strings.SplitSeq(kernelModules, ",") {
 			module = strings.TrimPrefix(module, " ")
 			err := linux.LoadModule(module)
 			if err != nil {
@@ -2471,7 +2471,11 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 		var config ociSpecs.Spec
 		err = json.Unmarshal([]byte(data), &config)
 		if err != nil {
-			return "", nil, err
+			return "", nil, fmt.Errorf("Failed parsing OCI config: %w", err)
+		}
+
+		if config.Process == nil {
+			return "", nil, errors.New("Failed parsing OCI config: Missing process section")
 		}
 
 		// Mark the container as an OCI container if not already set.
@@ -2608,11 +2612,30 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			lxcMounts = append(lxcMounts, mount.Destination)
 		}
 
-		// Mount /run as a tmpfs if it exists and isn't already mounted.
+		// Mount /run as a tmpfs if it isn't already mounted and the image's /run is empty.
 		if !slices.Contains(lxcMounts, "/run") {
-			err := lxcSetConfigItem(cc, "lxc.mount.entry", "none run tmpfs none,mode=755,optional")
+			// Confine the check to the rootfs to avoid following image-planted symlinks.
+			rootfsRoot, err := os.OpenRoot(d.RootfsPath())
 			if err != nil {
 				return "", nil, err
+			}
+
+			runEmpty := true
+			runDir, err := rootfsRoot.Open("run")
+			if err == nil {
+				names, _ := runDir.Readdirnames(1)
+				runEmpty = len(names) == 0
+
+				_ = runDir.Close()
+			}
+
+			_ = rootfsRoot.Close()
+
+			if runEmpty {
+				err = lxcSetConfigItem(cc, "lxc.mount.entry", "none run tmpfs mode=755,optional")
+				if err != nil {
+					return "", nil, err
+				}
 			}
 		}
 
@@ -2676,6 +2699,8 @@ ff02::2 ip6-allrouters
 		if d.expandedConfig["oci.dns.domain"] != "" {
 			fmt.Fprintf(&resolvConf, "domain %s\n", d.expandedConfig["oci.dns.domain"])
 		}
+
+		resolvConf.WriteString("options edns0\n")
 
 		err = instRoot.WriteFile("network/resolv.conf", []byte(resolvConf.String()), 0o644)
 		if err != nil {
@@ -2848,7 +2873,7 @@ ff02::2 ip6-allrouters
 
 	uid := int64(0)
 	if currentIdmapset != nil {
-		uid, _ = currentIdmapset.ShiftFromNS(0, 0)
+		uid, _ = currentIdmapset.ShiftIntoNS(0, 0)
 	}
 
 	err = os.Chown(d.Path(), int(uid), 0)
@@ -3116,7 +3141,7 @@ func (d *lxc) Start(stateful bool) error {
 		if util.PathExists(logPath) {
 			logContent, err := os.ReadFile(logPath)
 			if err == nil {
-				for _, line := range strings.Split(string(logContent), "\n") {
+				for line := range strings.SplitSeq(string(logContent), "\n") {
 					fields := strings.Fields(line)
 					if len(fields) < 4 {
 						continue
@@ -3404,8 +3429,11 @@ func (d *lxc) Stop(stateful bool) error {
 
 	err = cc.Stop()
 	if err != nil {
-		op.Done(err)
-		return err
+		// Only fail while the container is still running, it may have finished stopping on its own.
+		if d.IsRunning() {
+			op.Done(err)
+			return err
+		}
 	}
 
 	// Wait for operation lock to be Done. This is normally completed by onStop which picks up the same
@@ -4536,9 +4564,7 @@ func (d *lxc) delete(force bool, cleanupDependencies bool) error {
 	}
 
 	if !force && util.IsTrue(d.expandedConfig["security.protection.delete"]) && !d.IsSnapshot() {
-		err := errors.New("Instance is protected")
-		d.logger.Warn("Failed to delete instance", logger.Ctx{"err": err})
-		return err
+		return errors.New("Instance has delete protection enabled")
 	}
 
 	// Wait for any file operations to complete.
@@ -4559,7 +4585,7 @@ func (d *lxc) delete(force bool, cleanupDependencies bool) error {
 	} else if pool != nil {
 		if d.IsSnapshot() {
 			// Remove snapshot volume and database record.
-			err = pool.DeleteInstanceSnapshot(d, nil)
+			err = pool.DeleteInstanceSnapshot(d, cleanupDependencies, nil)
 			if err != nil {
 				return err
 			}
@@ -5279,7 +5305,7 @@ func (d *lxc) Update(args db.InstanceArgs, userRequested bool) error {
 					}
 				}
 			} else if key == "linux.kernel_modules" && value != "" {
-				for _, module := range strings.Split(value, ",") {
+				for module := range strings.SplitSeq(value, ",") {
 					module = strings.TrimPrefix(module, " ")
 					err := linux.LoadModule(module)
 					if err != nil {
@@ -5996,6 +6022,13 @@ func getCRIULogErrors(imagesDir string, method string) (string, error) {
 
 // Check if CRIU supports pre-dumping and number of pre-dump iterations.
 func (d *lxc) migrationSendCheckForPreDumpSupport() (bool, int) {
+	config := d.ExpandedConfig()
+
+	// Incremental memory migration is opt-in, matching the documented default and avoiding an unnecessary CRIU probe.
+	if !util.IsTrue(config["migration.incremental.memory"]) {
+		return false, 0
+	}
+
 	// Check if this architecture/kernel/criu combination supports pre-copy dirty memory tracking feature.
 	_, err := subprocess.RunCommand("criu", "check", "--feature", "mem_dirty_track")
 	if err != nil {
@@ -6004,23 +6037,12 @@ func (d *lxc) migrationSendCheckForPreDumpSupport() (bool, int) {
 		return false, 0
 	}
 
-	// CRIU says it can actually do pre-dump. Let's set it to true
-	// unless the user wants something else.
-	usePreDumps := true
-
-	// What does the configuration say about pre-copy
-	tmp := d.ExpandedConfig()["migration.incremental.memory"]
-
-	if tmp != "" {
-		usePreDumps = util.IsTrue(tmp)
-	}
-
 	var maxIterations int
 
 	// migration.incremental.memory.iterations is the value after which the
 	// container will be definitely migrated, even if the remaining number
 	// of memory pages is below the defined threshold.
-	tmp = d.ExpandedConfig()["migration.incremental.memory.iterations"]
+	tmp := config["migration.incremental.memory.iterations"]
 	if tmp != "" {
 		maxIterations, _ = strconv.Atoi(tmp)
 	} else {
@@ -6038,7 +6060,7 @@ func (d *lxc) migrationSendCheckForPreDumpSupport() (bool, int) {
 
 	logger.Debugf("Using maximal %d iterations for pre-dumping", maxIterations)
 
-	return usePreDumps, maxIterations
+	return true, maxIterations
 }
 
 func (d *lxc) migrationSendWriteActionScript(directory string, operation string, secret string, execPath string) error {
@@ -6142,10 +6164,10 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	if args.Live {
 		var offerUsePreDumps bool
 		offerUsePreDumps, maxDumpIterations = d.migrationSendCheckForPreDumpSupport()
-		offerHeader.Predump = proto.Bool(offerUsePreDumps)
+		offerHeader.Predump = new(offerUsePreDumps)
 		offerHeader.Criu = migration.CRIUType_CRIU_RSYNC.Enum()
 	} else {
-		offerHeader.Predump = proto.Bool(false)
+		offerHeader.Predump = new(false)
 
 		if d.IsRunning() {
 			// Indicate instance is running to target (can trigger MultiSync mode).
@@ -6163,11 +6185,11 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		offerHeader.Idmap = make([]*migration.IDMapType, 0, len(idmapset.Entries))
 		for _, ctnIdmap := range idmapset.Entries {
 			idmapEntry := migration.IDMapType{
-				Isuid:    proto.Bool(ctnIdmap.IsUID),
-				Isgid:    proto.Bool(ctnIdmap.IsGID),
-				Hostid:   proto.Int32(int32(ctnIdmap.HostID)),
-				Nsid:     proto.Int32(int32(ctnIdmap.NSID)),
-				Maprange: proto.Int32(int32(ctnIdmap.MapRange)),
+				Isuid:    new(ctnIdmap.IsUID),
+				Isgid:    new(ctnIdmap.IsGID),
+				Hostid:   new(int32(ctnIdmap.HostID)),
+				Nsid:     new(int32(ctnIdmap.NSID)),
+				Maprange: new(int32(ctnIdmap.MapRange)),
 			}
 
 			offerHeader.Idmap = append(offerHeader.Idmap, &idmapEntry)
@@ -6181,7 +6203,9 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		return err
 	}
 
-	dependentVolumesOffer, err := storagePools.GenerateDependentVolumesOffer(d.state, srcConfig, d.Project().Name, args.Snapshots, args.Devices, args.ClusterMoveSourceName != "")
+	// On a cluster move the dependent volumes on shared storage are taken over by the target
+	// rather than transferred, so they're kept out of the offer.
+	dependentVolumesOffer, err := storagePools.GenerateDependentVolumesOffer(d.state, srcConfig, d.Project().Name, args.Snapshots, args.Devices, args.SkipDependentVolumes, clusterMove)
 	if err != nil {
 		err := fmt.Errorf("Failed generating instance depending volumes offer: %w", err)
 		op.Done(err)
@@ -6427,6 +6451,12 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 					return err
 				}
 
+				err = actionScriptOp.Start()
+				if err != nil {
+					_ = os.RemoveAll(checkpointDir)
+					return err
+				}
+
 				err = d.migrationSendWriteActionScript(checkpointDir, actionScriptOp.URL(), actionScriptOpSecret, d.state.OS.ExecPath)
 				if err != nil {
 					_ = os.RemoveAll(checkpointDir)
@@ -6471,12 +6501,6 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 					}
 				} else {
 					d.logger.Debug("The other side does not support pre-copy")
-				}
-
-				err = actionScriptOp.Start()
-				if err != nil {
-					_ = os.RemoveAll(checkpointDir)
-					return err
 				}
 
 				go func() {
@@ -6548,6 +6572,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 			volSourceArgs.FinalSync = true
 			volSourceArgs.Snapshots = nil
 			volSourceArgs.Info.Config.VolumeSnapshots = nil
+			volSourceArgs.DependentVolumes = nil
 
 			err = pool.MigrateInstance(d, filesystemConn, volSourceArgs, d.op)
 			if err != nil {
@@ -6681,7 +6706,7 @@ func (d *lxc) migrateSendPreDumpLoop(args *preDumpLoopArgs) (bool, error) {
 	// If in pre-dump mode, the receiving side expects a message to know if this was the last pre-dump.
 	logger.Debug("Sending another CRIU pre-dump header")
 	syncMsg := migration.MigrationSync{
-		FinalPreDump: proto.Bool(final),
+		FinalPreDump: new(final),
 	}
 
 	data, err := proto.Marshal(&syncMsg)
@@ -6887,9 +6912,9 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 
 	if offerHeader.GetPredump() {
 		// If the other side wants pre-dump and if this side supports it, let's use it.
-		respHeader.Predump = proto.Bool(true)
+		respHeader.Predump = new(true)
 	} else {
-		respHeader.Predump = proto.Bool(false)
+		respHeader.Predump = new(false)
 	}
 
 	// Get rsync options from sender, these are passed into mySink function as part of
@@ -7105,7 +7130,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 				for k := range snapshots {
 					// Delete the snapshots in reverse order.
 					k = snapshotCount - 1 - k
-					_ = pool.DeleteInstanceSnapshot(snapshots[k], nil)
+					_ = pool.DeleteInstanceSnapshot(snapshots[k], true, nil)
 				}
 
 				_ = pool.DeleteInstance(d, nil)
@@ -7148,7 +7173,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 			defer logger.WarnOnError(func() error { return os.RemoveAll(imagesDir) }, "Failed to remove images directory")
 
 			sync := &migration.MigrationSync{
-				FinalPreDump: proto.Bool(false),
+				FinalPreDump: new(false),
 			}
 
 			if respHeader.GetPredump() {
@@ -7192,6 +7217,22 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 			}
 
 			d.logger.Debug("Done receiving final dump rsync")
+
+			// CRIU writes most images as the outer daemon's root user, but some namespace-owned
+			// images retain the source container's shifted IDs. Normalize only those shifted
+			// owners before migrate() applies the target container's idmap to the tree.
+			if len(srcIdmap.Entries) > 0 {
+				err = srcIdmap.UnshiftPath(imagesDir, func(_ string, _ string, _ os.FileInfo, newUID int64, newGID int64) error {
+					if newUID < 0 && newGID < 0 {
+						return errors.New("CRIU state owner is not source-idmapped")
+					}
+
+					return nil
+				})
+				if err != nil {
+					return fmt.Errorf("Failed normalizing CRIU state ownership: %w", err)
+				}
+			}
 
 			// Wait until filesystem transfer is done before starting final state sync and restore.
 			<-fsTransferDone
@@ -7238,11 +7279,11 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 
 			// Send failure response to source.
 			msg := migration.MigrationControl{
-				Success: proto.Bool(err == nil),
+				Success: new(err == nil),
 			}
 
 			if err != nil {
-				msg.Message = proto.String(err.Error())
+				msg.Message = new(err.Error())
 			}
 
 			d.logger.Debug("Sending migration failure response to source", logger.Ctx{"err": err})
@@ -7256,7 +7297,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 
 		// Send success response to source to control as nothing has gone wrong so far.
 		msg := migration.MigrationControl{
-			Success: proto.Bool(true),
+			Success: new(true),
 		}
 
 		d.logger.Debug("Sending migration success response to source", logger.Ctx{"success": msg.GetSuccess()})
@@ -7597,7 +7638,7 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 			relDir := path.Dir(relPath)
 
 			parent := ""
-			for _, part := range strings.Split(relDir, "/") {
+			for part := range strings.SplitSeq(relDir, "/") {
 				if part == "" || part == "." {
 					continue
 				}
@@ -7694,7 +7735,7 @@ func (d *lxc) templateApplyNow(trigger instance.TemplateTrigger) error {
 					return err
 				}
 			}
-			defer logger.WarnOnError(w.Close, "Failed to close file")
+			defer logger.WarnOnErrorExcept(w.Close, []error{os.ErrClosed}, "Failed to close file")
 
 			// Read the template
 			tplString, err := os.ReadFile(filepath.Join(d.TemplatesPath(), tpl.Template))

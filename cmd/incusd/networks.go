@@ -93,17 +93,17 @@ var networkStateCmd = APIEndpoint{
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve networks from all projects
 //      type: boolean
-//      example: true
+//      x-example: true
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -128,11 +128,9 @@ var networkStateCmd = APIEndpoint{
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/networks/mybr0",
-//                "/1.0/networks/mybr1"
-//              ]
+//            example:
+//              - /1.0/networks/mybr0
+//              - /1.0/networks/mybr1
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -158,17 +156,17 @@ var networkStateCmd = APIEndpoint{
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: all-projects
 //      description: Retrieve networks from all projects
 //      type: boolean
-//      example: true
+//      x-example: true
 //    - in: query
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -251,6 +249,25 @@ func networksGet(d *Daemon, r *http.Request) response.Response {
 
 			networkNames = map[string][]string{}
 			networkNames[projectName] = networks
+
+			// Include networks shared from the default project.
+			if projectName != api.ProjectDefaultName {
+				defaultNetworks, err := tx.GetNetworks(ctx, api.ProjectDefaultName)
+				if err != nil {
+					return err
+				}
+
+				sharedNetworks := []string{}
+				for _, networkName := range defaultNetworks {
+					if project.NetworkSharedFromDefault(reqProject, networkName) {
+						sharedNetworks = append(sharedNetworks, networkName)
+					}
+				}
+
+				if len(sharedNetworks) > 0 {
+					networkNames[api.ProjectDefaultName] = sharedNetworks
+				}
+			}
 		}
 
 		return nil
@@ -357,12 +374,12 @@ func networksGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	  - in: body
 //	    name: network
 //	    description: Network
@@ -418,6 +435,11 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 	// Check if project allows access to network.
 	if !project.NetworkAllowed(reqProject.Config, req.Name, true) {
 		return response.SmartError(api.StatusErrorf(http.StatusForbidden, "Network not allowed in project"))
+	}
+
+	// Prevent using the name of a network shared from the default project.
+	if project.NetworkSharedFromDefault(reqProject, req.Name) {
+		return response.BadRequest(fmt.Errorf("Network name %q is reserved for a network shared from the default project", req.Name))
 	}
 
 	if req.Type == "" {
@@ -537,6 +559,10 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 			if err != nil {
 				logger.Error("Failed to add network to authorizer", logger.Ctx{"name": req.Name, "project": projectName, "error": err})
 			}
+
+			if projectName == api.ProjectDefaultName {
+				networkUpdateShares(r.Context(), s, req.Name, true)
+			}
 		}
 
 		return resp
@@ -591,6 +617,10 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 			err = s.Authorizer.AddNetwork(r.Context(), projectName, req.Name)
 			if err != nil {
 				logger.Error("Failed to add network to authorizer", logger.Ctx{"name": req.Name, "project": projectName, "error": err})
+			}
+
+			if projectName == api.ProjectDefaultName {
+				networkUpdateShares(r.Context(), s, req.Name, true)
 			}
 		}
 
@@ -657,11 +687,56 @@ func networksPost(d *Daemon, r *http.Request) response.Response {
 		logger.Error("Failed to add network to authorizer", logger.Ctx{"name": req.Name, "project": projectName, "error": err})
 	}
 
+	if projectName == api.ProjectDefaultName {
+		networkUpdateShares(r.Context(), s, req.Name, true)
+	}
+
 	requestor := request.CreateRequestor(r)
 	s.Events.SendLifecycle(projectName, lifecycle.NetworkCreated.Event(n, requestor, nil))
 
 	reverter.Success()
 	return resp
+}
+
+// networkUpdateShares updates the authorizer's share entries for a default project network.
+func networkUpdateShares(ctx context.Context, s *state.State, networkName string, add bool) {
+	var projectNames []string
+
+	err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		dbProjects, err := dbCluster.GetProjects(ctx, tx.Tx())
+		if err != nil {
+			return err
+		}
+
+		for _, dbProject := range dbProjects {
+			p, err := dbProject.ToAPI(ctx, tx.Tx())
+			if err != nil {
+				return err
+			}
+
+			if project.NetworkSharedFromDefault(p, networkName) {
+				projectNames = append(projectNames, p.Name)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		logger.Error("Failed loading projects for network shares", logger.Ctx{"network": networkName, "error": err})
+		return
+	}
+
+	for _, projectName := range projectNames {
+		if add {
+			err = s.Authorizer.AddNetworkShare(ctx, projectName, networkName)
+		} else {
+			err = s.Authorizer.DeleteNetworkShare(ctx, projectName, networkName)
+		}
+
+		if err != nil {
+			logger.Error("Failed to update network share in authorizer", logger.Ctx{"network": networkName, "project": projectName, "error": err})
+		}
+	}
 }
 
 // networkPartiallyCreated returns true of supplied network has properties that indicate it has had previous
@@ -895,6 +970,11 @@ func doNetworksCreate(ctx context.Context, s *state.State, n network.Network, cl
 
 	logger.Debug("Marked network local status as created", logger.Ctx{"project": n.Project(), "network": n.Name()})
 
+	// Notify the DNS peers of the new zone content.
+	if clientType == clusterRequest.ClientTypeNormal {
+		network.DNSNotifyZones(s, n.Config())
+	}
+
 	reverter.Success()
 	return nil
 }
@@ -918,12 +998,12 @@ func doNetworksCreate(ctx context.Context, s *state.State, n network.Network, cl
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    description: Network
@@ -964,12 +1044,12 @@ func networkGet(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	projectName, reqProject, err := project.NetworkProject(s.DB.Cluster, request.ProjectParam(r))
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	networkName, err := pathVar(r, "networkName")
+	projectName, reqProject, err := project.NetworkProjectForName(s.DB.Cluster, request.ProjectParam(r), networkName)
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1151,7 +1231,7 @@ func doNetworkGet(s *state.State, r *http.Request, allNodes bool, projectName st
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    $ref: "#/responses/EmptySyncResponse"
@@ -1202,6 +1282,21 @@ func networkDelete(d *Daemon, r *http.Request) response.Response {
 		if inUse {
 			return response.BadRequest(errors.New("The network is currently in use"))
 		}
+
+		// If we are clustered, also notify all other nodes, if any.
+		if s.ServerClustered {
+			notifier, err := cluster.NewNotifier(s, s.Endpoints.NetworkCert(), s.ServerCert(), cluster.NotifyAll)
+			if err != nil {
+				return response.SmartError(err)
+			}
+
+			err = notifier(func(client incus.InstanceServer) error {
+				return client.UseProject(n.Project()).DeleteNetwork(n.Name())
+			})
+			if err != nil {
+				return response.SmartError(err)
+			}
+		}
 	}
 
 	// Also run the driver deletion for locally pending OVN networks on the client-facing request,
@@ -1221,21 +1316,6 @@ func networkDelete(d *Daemon, r *http.Request) response.Response {
 		return response.EmptySyncResponse
 	}
 
-	// If we are clustered, also notify all other nodes, if any.
-	if s.ServerClustered {
-		notifier, err := cluster.NewNotifier(s, s.Endpoints.NetworkCert(), s.ServerCert(), cluster.NotifyAll)
-		if err != nil {
-			return response.SmartError(err)
-		}
-
-		err = notifier(func(client incus.InstanceServer) error {
-			return client.UseProject(n.Project()).DeleteNetwork(n.Name())
-		})
-		if err != nil {
-			return response.SmartError(err)
-		}
-	}
-
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		// Remove the network from the database.
 		err = tx.DeleteNetwork(ctx, n.Project(), n.Name())
@@ -1249,6 +1329,13 @@ func networkDelete(d *Daemon, r *http.Request) response.Response {
 	err = s.Authorizer.DeleteNetwork(r.Context(), projectName, networkName)
 	if err != nil {
 		logger.Error("Failed to remove network from authorizer", logger.Ctx{"name": networkName, "project": projectName, "error": err})
+	}
+
+	// Notify the DNS peers of the zone change.
+	network.DNSNotifyZones(s, n.Config())
+
+	if projectName == api.ProjectDefaultName {
+		networkUpdateShares(r.Context(), s, networkName, false)
 	}
 
 	requestor := request.CreateRequestor(r)
@@ -1278,7 +1365,7 @@ func networkDelete(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: network
 //	    description: Network rename request
@@ -1362,6 +1449,11 @@ func networkPost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(fmt.Errorf("Invalid network name: %w", err))
 	}
 
+	// Prevent using the name of a network shared from the default project.
+	if project.NetworkSharedFromDefault(reqProject, req.Name) {
+		return response.BadRequest(fmt.Errorf("Network name %q is reserved for a network shared from the default project", req.Name))
+	}
+
 	// Check network isn't in use.
 	inUse, err := n.IsUsed(false)
 	if err != nil {
@@ -1399,6 +1491,11 @@ func networkPost(d *Daemon, r *http.Request) response.Response {
 		logger.Error("Failed to rename network in authorizer", logger.Ctx{"old_name": networkName, "new_name": req.Name, "project": projectName, "error": err})
 	}
 
+	if projectName == api.ProjectDefaultName {
+		networkUpdateShares(r.Context(), s, networkName, false)
+		networkUpdateShares(r.Context(), s, req.Name, true)
+	}
+
 	requestor := request.CreateRequestor(r)
 	lc := lifecycle.NetworkRenamed.Event(n, requestor, map[string]any{"old_name": networkName})
 	s.Events.SendLifecycle(projectName, lc)
@@ -1427,12 +1524,12 @@ func networkPost(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	  - in: body
 //	    name: network
 //	    description: Network configuration
@@ -1546,7 +1643,7 @@ func networkPut(d *Daemon, r *http.Request) response.Response {
 		}
 	}
 
-	resp = doNetworkUpdate(n, req, targetNode, clientType, r.Method, s.ServerClustered)
+	resp = doNetworkUpdate(s, n, req, targetNode, clientType, r.Method, s.ServerClustered)
 
 	// Send a single update event when the server is clustered.
 	if !s.ServerClustered || (s.ServerClustered && clientType == clusterRequest.ClientTypeNormal) {
@@ -1578,12 +1675,12 @@ func networkPut(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	  - in: body
 //	    name: network
 //	    description: Network configuration
@@ -1611,7 +1708,7 @@ func networkPatch(d *Daemon, r *http.Request) response.Response {
 
 // doNetworkUpdate loads the current local network config, merges with the requested network config, validates
 // and applies the changes. Will also notify other cluster nodes of non-node specific config if needed.
-func doNetworkUpdate(n network.Network, req api.NetworkPut, targetNode string, clientType clusterRequest.ClientType, httpMethod string, clustered bool) response.Response {
+func doNetworkUpdate(s *state.State, n network.Network, req api.NetworkPut, targetNode string, clientType clusterRequest.ClientType, httpMethod string, clustered bool) response.Response {
 	if req.Config == nil {
 		req.Config = map[string]string{}
 	}
@@ -1644,10 +1741,19 @@ func doNetworkUpdate(n network.Network, req api.NetworkPut, targetNode string, c
 		return response.BadRequest(err)
 	}
 
+	// Keep the old configuration around for zone change notifications.
+	oldConfig := n.Config()
+
 	// Apply the new configuration (will also notify other cluster nodes if needed).
 	err = n.Update(req, targetNode, clientType)
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	// Notify the DNS peers of both old and new zones.
+	if clientType == clusterRequest.ClientTypeNormal {
+		network.DNSNotifyZones(s, oldConfig)
+		network.DNSNotifyZones(s, req.Config)
 	}
 
 	return response.EmptySyncResponse
@@ -1672,12 +1778,12 @@ func doNetworkUpdate(n network.Network, req api.NetworkPut, targetNode string, c
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -1715,12 +1821,12 @@ func doNetworkUpdate(n network.Network, req api.NetworkPut, targetNode string, c
 func networkLeasesGet(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
-	projectName, reqProject, err := project.NetworkProject(s.DB.Cluster, request.ProjectParam(r))
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	networkName, err := pathVar(r, "networkName")
+	projectName, reqProject, err := project.NetworkProjectForName(s.DB.Cluster, request.ProjectParam(r), networkName)
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1757,15 +1863,10 @@ func networkStartup(s *state.State) error {
 		}
 	}
 
-	// Get a list of projects.
-	var projectNames []string
-
-	err = s.DB.Cluster.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
-		projectNames, err = dbCluster.GetProjectNames(ctx, tx.Tx())
-		return err
-	})
+	// Load all created networks from all projects in a single transaction.
+	loadedNetworks, err := network.LoadAllCreated(s.ShutdownCtx, s)
 	if err != nil {
-		return fmt.Errorf("Failed to load projects: %w", err)
+		return fmt.Errorf("Failed to load networks: %w", err)
 	}
 
 	// Build a list of networks to initialize, keyed by project and network name.
@@ -1778,31 +1879,40 @@ func networkStartup(s *state.State) error {
 		networkPriorityLogical:    make(map[network.ProjectNetwork]struct{}),
 	}
 
+	// Assume all networks are networkPriorityStandalone initially.
+	for pn := range loadedNetworks {
+		initNetworks[networkPriorityStandalone][pn] = struct{}{}
+	}
+
+	// Get the current network warnings for the local member so that warning resolution is only
+	// attempted for networks that actually have one.
+	networkWarnings := make(map[int]struct{})
+	resolveAllWarnings := false
+
+	// networkWarningsMu protects concurrent access to the networkWarnings map.
+	var networkWarningsMu sync.Mutex
+
 	err = s.DB.Cluster.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
-		for _, projectName := range projectNames {
-			networkNames, err := tx.GetCreatedNetworkNamesByProject(ctx, projectName)
-			if err != nil {
-				return fmt.Errorf("Failed to load networks for project %q: %w", projectName, err)
+		typeCode := warningtype.NetworkUnvailable
+		dbWarnings, err := dbCluster.GetWarnings(ctx, tx.Tx(), dbCluster.WarningFilter{Node: &s.ServerName, TypeCode: &typeCode})
+		if err != nil {
+			return err
+		}
+
+		for _, dbWarning := range dbWarnings {
+			if dbWarning.EntityTypeCode != dbCluster.TypeNetwork || dbWarning.Status == warningtype.StatusResolved {
+				continue
 			}
 
-			for _, networkName := range networkNames {
-				pn := network.ProjectNetwork{
-					ProjectName: projectName,
-					NetworkName: networkName,
-				}
-
-				// Assume all networks are networkPriorityStandalone initially.
-				initNetworks[networkPriorityStandalone][pn] = struct{}{}
-			}
+			networkWarnings[dbWarning.EntityID] = struct{}{}
 		}
 
 		return nil
 	})
 	if err != nil {
-		return err
+		logger.Warn("Failed loading existing network warnings", logger.Ctx{"err": err})
+		resolveAllWarnings = true
 	}
-
-	loadedNetworks := make(map[network.ProjectNetwork]network.Network)
 
 	// Limit the number of concurrent network starts to one per two runtime threads.
 	numParallel := max(runtime.NumCPU()/2, 1)
@@ -1811,13 +1921,18 @@ func networkStartup(s *state.State) error {
 	var initNetworksMu sync.Mutex
 
 	initNetwork := func(n network.Network, priority int) error {
-		err = n.Start()
+		// Use a local error variable as this runs concurrently.
+		err := n.Start()
 		if err != nil {
 			err = fmt.Errorf("Failed starting: %w", err)
 
 			_ = s.DB.Cluster.Transaction(s.ShutdownCtx, func(ctx context.Context, tx *db.ClusterTx) error {
-				return tx.UpsertWarningLocalNode(ctx, n.Project(), dbCluster.TypeNetwork, int(n.ID()), warningtype.NetworkUnvailable, err.Error())
+				return tx.UpsertWarning(ctx, s.ServerName, n.Project(), dbCluster.TypeNetwork, int(n.ID()), warningtype.NetworkUnvailable, err.Error())
 			})
+
+			networkWarningsMu.Lock()
+			networkWarnings[int(n.ID())] = struct{}{}
+			networkWarningsMu.Unlock()
 
 			return err
 		}
@@ -1834,7 +1949,15 @@ func networkStartup(s *state.State) error {
 		delete(initNetworks[priority], pn)
 		initNetworksMu.Unlock()
 
-		_ = warnings.ResolveWarningsByLocalNodeAndProjectAndTypeAndEntity(s.DB.Cluster, n.Project(), warningtype.NetworkUnvailable, dbCluster.TypeNetwork, int(n.ID()))
+		// Only resolve warnings for networks that have one.
+		networkWarningsMu.Lock()
+		_, resolveWarning := networkWarnings[int(n.ID())]
+		delete(networkWarnings, int(n.ID()))
+		networkWarningsMu.Unlock()
+
+		if resolveWarning || resolveAllWarnings {
+			_ = warnings.ResolveWarningsByNodeAndProjectAndTypeAndEntity(s.DB.Cluster, s.ServerName, n.Project(), warningtype.NetworkUnvailable, dbCluster.TypeNetwork, int(n.ID()))
+		}
 
 		return nil
 	}
@@ -2129,12 +2252,12 @@ func networkRestartOVN(s *state.State) error {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -2175,12 +2298,12 @@ func networkStateGet(d *Daemon, r *http.Request) response.Response {
 		return resp
 	}
 
-	projectName, reqProject, err := project.NetworkProject(s.DB.Cluster, request.ProjectParam(r))
+	networkName, err := pathVar(r, "networkName")
 	if err != nil {
 		return response.SmartError(err)
 	}
 
-	networkName, err := pathVar(r, "networkName")
+	projectName, reqProject, err := project.NetworkProjectForName(s.DB.Cluster, request.ProjectParam(r), networkName)
 	if err != nil {
 		return response.SmartError(err)
 	}

@@ -150,6 +150,20 @@ func (c *ClusterTx) imageFill(ctx context.Context, id int, image *api.Image, cre
 		image.UpdateSource = &source
 	}
 
+	// Get the locations
+	q = `
+SELECT nodes.name FROM nodes
+  JOIN images_nodes ON images_nodes.node_id = nodes.id
+WHERE images_nodes.image_id = ?
+ORDER BY nodes.name
+`
+	locations, err := query.SelectStrings(ctx, c.tx, q, id)
+	if err != nil {
+		return err
+	}
+
+	image.Locations = locations
+
 	return nil
 }
 
@@ -440,6 +454,7 @@ func (c *ClusterTx) GetImageFromAnyProject(ctx context.Context, fingerprint stri
 
 	object = images[0]
 
+	image.Project = object.Project
 	image.Fingerprint = object.Fingerprint
 	image.Filename = object.Filename
 	image.Size = object.Size
@@ -582,7 +597,8 @@ func (c *ClusterTx) AddImageToLocalNode(ctx context.Context, project, fingerprin
 		return err
 	}
 
-	_, err = c.tx.ExecContext(ctx, "INSERT INTO images_nodes(image_id, node_id) VALUES(?, ?)", imageID, c.nodeID)
+	// OR IGNORE as the member may have registered the image concurrently.
+	_, err = c.tx.ExecContext(ctx, "INSERT OR IGNORE INTO images_nodes(image_id, node_id) VALUES(?, ?)", imageID, c.nodeID)
 
 	return err
 }

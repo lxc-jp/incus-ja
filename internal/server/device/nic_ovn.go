@@ -79,7 +79,7 @@ func (d *nicOVN) UpdatableFields(oldDevice Type) []string {
 		return []string{}
 	}
 
-	return []string{"security.acls", "limits.ingress", "limits.egress", "limits.max", "limits.priority", "connected"}
+	return []string{"security.acls", "limits.ingress", "limits.egress", "limits.max", "limits.ingress.bucket", "limits.egress.bucket", "limits.max.bucket", "limits.priority", "connected", "ipv4.address.external", "ipv6.address.external"}
 }
 
 // validateConfig checks the supplied config for correctness.
@@ -325,6 +325,30 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		//  shortdesc: I/O limit in bit/s for both incoming and outgoing traffic. (same as setting both limits.ingress and limits.egress / mutually exclusive with limits.ingress and limits.egress)
 		"limits.max",
 
+		// gendoc:generate(entity=devices, group=nic_ovn, key=limits.ingress.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that incoming traffic may send in excess of `limits.ingress` (mutually exclusive with `limits.max.bucket`)
+		"limits.ingress.bucket",
+
+		// gendoc:generate(entity=devices, group=nic_ovn, key=limits.egress.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that outgoing traffic may send in excess of `limits.egress` (mutually exclusive with `limits.max.bucket`)
+		"limits.egress.bucket",
+
+		// gendoc:generate(entity=devices, group=nic_ovn, key=limits.max.bucket)
+		//
+		// ---
+		//  type: string
+		//  managed: no
+		//  shortdesc: Amount of data in bit that traffic may send in excess of the sustained limit (same as setting both `limits.ingress.bucket` and `limits.egress.bucket` / mutually exclusive with them)
+		"limits.max.bucket",
+
 		// gendoc:generate(entity=devices, group=nic_ovn, key=limits.priority)
 		//
 		// ---
@@ -363,7 +387,7 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 	}
 
 	// The NIC's network may be a non-default project, so lookup project and get network's project name.
-	networkProjectName, _, err := project.NetworkProject(d.state.DB.Cluster, instConf.Project().Name)
+	networkProjectName, _, err := project.NetworkProjectForName(d.state.DB.Cluster, instConf.Project().Name, d.config["network"])
 	if err != nil {
 		return fmt.Errorf("Failed loading network project name: %w", err)
 	}
@@ -587,6 +611,15 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 	// Avoid setting both ingress/egress and max to avoid confusion or implicit behavior.
 	if d.config["limits.max"] != "" && (d.config["limits.ingress"] != "" || d.config["limits.egress"] != "") {
 		return errors.New("limits.max is mutually exclusive with limits.ingress and limits.egress")
+	}
+
+	if d.config["limits.max.bucket"] != "" && (d.config["limits.ingress.bucket"] != "" || d.config["limits.egress.bucket"] != "") {
+		return errors.New("limits.max.bucket is mutually exclusive with limits.ingress.bucket and limits.egress.bucket")
+	}
+
+	err = nicValidateBurstLimits(d.config, false)
+	if err != nil {
+		return err
 	}
 
 	if d.config["limits.priority"] != "" {
@@ -1159,8 +1192,14 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 	}
 
-	// Apply any changes needed when assigned ACLs change.
-	if d.config["security.acls"] != oldConfig["security.acls"] {
+	// Apply any changes needed when assigned ACLs, external NAT addresses or nic limit changes.
+	if d.config["security.acls"] != oldConfig["security.acls"] ||
+		d.config["ipv4.address.external"] != oldConfig["ipv4.address.external"] ||
+		d.config["ipv6.address.external"] != oldConfig["ipv6.address.external"] ||
+		d.config["limits.ingress"] != oldConfig["limits.ingress"] ||
+		d.config["limits.egress"] != oldConfig["limits.egress"] ||
+		d.config["limits.max"] != oldConfig["limits.max"] ||
+		d.config["limits.priority"] != oldConfig["limits.priority"] {
 		// Work out which ACLs have been removed and remove logical port from those groups.
 		oldACLs := util.SplitNTrimSpace(oldConfig["security.acls"], ",", -1, true)
 		newACLs := util.SplitNTrimSpace(d.config["security.acls"], ",", -1, true)
@@ -1199,13 +1238,27 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 				uplinkConfig = uplink.Config
 			}
 
+			// Work out which external addresses have been removed or changed.
+			removedExternalIPs := []net.IP{}
+			for _, key := range []string{"ipv4.address.external", "ipv6.address.external"} {
+				if oldConfig[key] == "" || oldConfig[key] == d.config[key] {
+					continue
+				}
+
+				extIP := net.ParseIP(oldConfig[key])
+				if extIP != nil {
+					removedExternalIPs = append(removedExternalIPs, extIP)
+				}
+			}
+
 			// Update OVN logical switch port for instance.
 			_, _, err := d.network.InstanceDevicePortStart(&network.OVNInstanceNICSetupOpts{
-				InstanceUUID: d.inst.LocalConfig()["volatile.uuid"],
-				DNSName:      d.inst.Name(),
-				DeviceName:   d.name,
-				DeviceConfig: nicNormalizedAddressConfig(d.config),
-				UplinkConfig: uplinkConfig,
+				InstanceUUID:             d.inst.LocalConfig()["volatile.uuid"],
+				DNSName:                  d.inst.Name(),
+				DeviceName:               d.name,
+				DeviceConfig:             nicNormalizedAddressConfig(d.config),
+				UplinkConfig:             uplinkConfig,
+				RemovedExternalAddresses: removedExternalIPs,
 			}, removedACLs)
 			if err != nil {
 				return fmt.Errorf("Failed updating OVN port: %w", err)
@@ -1579,7 +1632,7 @@ func (d *nicOVN) Register() error {
 	}
 
 	// The NIC's network may be a non-default project, so lookup project and get network's project name.
-	networkProjectName, _, err := project.NetworkProject(d.state.DB.Cluster, d.inst.Project().Name)
+	networkProjectName, _, err := project.NetworkProjectForName(d.state.DB.Cluster, d.inst.Project().Name, d.config["network"])
 	if err != nil {
 		return fmt.Errorf("Failed loading network project name: %w", err)
 	}

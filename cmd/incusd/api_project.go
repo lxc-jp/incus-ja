@@ -78,7 +78,7 @@ var projectAccessCmd = APIEndpoint{
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -103,11 +103,9 @@ var projectAccessCmd = APIEndpoint{
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/projects/default",
-//                "/1.0/projects/foo"
-//              ]
+//            example:
+//              - /1.0/projects/default
+//              - /1.0/projects/foo
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -133,7 +131,7 @@ var projectAccessCmd = APIEndpoint{
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -393,6 +391,14 @@ func projectsPost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(err)
 	}
 
+	// Check that OVN is available if the project features its own networks.
+	if util.IsTrue(project.Config["features.networks"]) {
+		err = projectCheckOVNAvailable(s)
+		if err != nil {
+			return response.BadRequest(err)
+		}
+	}
+
 	var id int64
 	err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 		id, err = cluster.CreateProject(ctx, tx.Tx(), cluster.Project{Description: project.Description, Name: project.Name})
@@ -429,6 +435,8 @@ func projectsPost(d *Daemon, r *http.Request) response.Response {
 	if err != nil {
 		logger.Error("Failed to add project to authorizer", logger.Ctx{"name": project.Name, "error": err})
 	}
+
+	projectUpdateShares(r.Context(), s, project.Name, nil, project.Config)
 
 	requestor := request.CreateRequestor(r)
 	lc := lifecycle.ProjectCreated.Event(project.Name, requestor, nil)
@@ -624,10 +632,15 @@ func projectPut(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(err)
 	}
 
+	err = projectChange(r.Context(), s, project, req)
+	if err != nil {
+		return response.SmartError(err)
+	}
+
 	requestor := request.CreateRequestor(r)
 	s.Events.SendLifecycle(project.Name, lifecycle.ProjectUpdated.Event(project.Name, requestor, nil))
 
-	return projectChange(r.Context(), s, project, req)
+	return response.EmptySyncResponse
 }
 
 // swagger:operation PATCH /1.0/projects/{name} projects project_patch
@@ -749,14 +762,19 @@ func projectPatch(d *Daemon, r *http.Request) response.Response {
 		}
 	}
 
+	err = projectChange(r.Context(), s, project, req)
+	if err != nil {
+		return response.SmartError(err)
+	}
+
 	requestor := request.CreateRequestor(r)
 	s.Events.SendLifecycle(project.Name, lifecycle.ProjectUpdated.Event(project.Name, requestor, nil))
 
-	return projectChange(r.Context(), s, project, req)
+	return response.EmptySyncResponse
 }
 
 // Common logic between PUT and PATCH.
-func projectChange(ctx context.Context, s *state.State, project *api.Project, req api.ProjectPut) response.Response {
+func projectChange(ctx context.Context, s *state.State, project *api.Project, req api.ProjectPut) error {
 	// Make a list of config keys that have changed.
 	configChanged := []string{}
 	for key := range project.Config {
@@ -784,7 +802,7 @@ func projectChange(ctx context.Context, s *state.State, project *api.Project, re
 	// Quick checks.
 	if len(featuresChanged) > 0 {
 		if project.Name == api.ProjectDefaultName {
-			return response.BadRequest(errors.New("You can't change the features of the default project"))
+			return api.StatusErrorf(http.StatusBadRequest, "You can't change the features of the default project")
 		}
 
 		// Consider the project empty if it is only used by the default profile.
@@ -796,13 +814,13 @@ func projectChange(ctx context.Context, s *state.State, project *api.Project, re
 				// If feature is currently enabled, and it is being changed in the request, it
 				// must be being disabled. So prevent it on non-empty projects.
 				if util.IsTrue(project.Config[featureChanged]) {
-					return response.BadRequest(fmt.Errorf("Project feature %q cannot be disabled on non-empty projects", featureChanged))
+					return api.StatusErrorf(http.StatusBadRequest, "Project feature %q cannot be disabled on non-empty projects", featureChanged)
 				}
 
 				// If feature is currently disabled, and it is being changed in the request, it
 				// must be being enabled. So check if feature can be enabled on non-empty projects.
 				if util.IsFalse(project.Config[featureChanged]) && !cluster.ProjectFeatures[featureChanged].CanEnableNonEmpty {
-					return response.BadRequest(fmt.Errorf("Project feature %q cannot be enabled on non-empty projects", featureChanged))
+					return api.StatusErrorf(http.StatusBadRequest, "Project feature %q cannot be enabled on non-empty projects", featureChanged)
 				}
 			}
 		}
@@ -811,11 +829,34 @@ func projectChange(ctx context.Context, s *state.State, project *api.Project, re
 	// Validate the configuration.
 	err := projectValidateConfig(s, req.Config)
 	if err != nil {
-		return response.BadRequest(err)
+		return api.StatusErrorf(http.StatusBadRequest, "%v", err)
+	}
+
+	// Check that OVN is available when enabling project-specific networks.
+	if slices.Contains(featuresChanged, "features.networks") && util.IsTrue(req.Config["features.networks"]) {
+		err = projectCheckOVNAvailable(s)
+		if err != nil {
+			return api.StatusErrorf(http.StatusBadRequest, "%v", err)
+		}
 	}
 
 	// Update the database entry.
 	err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		// Prevent networks shared from the default project from conflicting with the project's own networks.
+		if util.IsTrue(req.Config["restricted"]) && util.IsTrue(req.Config["features.networks"]) && req.Config["restricted.networks.access"] != "" {
+			networks, err := tx.GetNetworks(ctx, project.Name)
+			if err != nil {
+				return err
+			}
+
+			allowedNetworks := util.SplitNTrimSpace(req.Config["restricted.networks.access"], ",", -1, false)
+			for _, networkName := range networks {
+				if slices.Contains(allowedNetworks, networkName) {
+					return api.StatusErrorf(http.StatusBadRequest, "Network %q in restricted.networks.access conflicts with an existing project network", networkName)
+				}
+			}
+		}
+
 		err := projecthelpers.AllowProjectUpdate(tx, project.Name, req.Config, configChanged)
 		if err != nil {
 			return err
@@ -851,10 +892,15 @@ func projectChange(ctx context.Context, s *state.State, project *api.Project, re
 		return nil
 	})
 	if err != nil {
-		return response.SmartError(err)
+		return err
 	}
 
-	return response.EmptySyncResponse
+	// Update the authorizer's network share entries.
+	if slices.Contains(configChanged, "restricted") || slices.Contains(configChanged, "features.networks") || slices.Contains(configChanged, "restricted.networks.access") {
+		projectUpdateShares(ctx, s, project.Name, project.Config, req.Config)
+	}
+
+	return nil
 }
 
 // swagger:operation POST /1.0/projects/{name} projects project_post
@@ -917,6 +963,7 @@ func projectPost(d *Daemon, r *http.Request) response.Response {
 	// Perform the rename.
 	run := func(op *operations.Operation) error {
 		var id int64
+		var projectConfig map[string]string
 		err := s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
 			project, err := cluster.GetProject(ctx, tx.Tx(), req.Name)
 			if err != nil && !response.IsNotFoundError(err) {
@@ -946,6 +993,11 @@ func projectPost(d *Daemon, r *http.Request) response.Response {
 				return fmt.Errorf("Failed getting project ID for project %q: %w", name, err)
 			}
 
+			projectConfig, err = cluster.GetProjectConfig(ctx, tx.Tx(), int(id))
+			if err != nil {
+				return fmt.Errorf("Failed getting project config for project %q: %w", name, err)
+			}
+
 			err = validate.IsAPIName(name, false)
 			if err != nil {
 				return fmt.Errorf("Invalid project name: %w", err)
@@ -966,6 +1018,10 @@ func projectPost(d *Daemon, r *http.Request) response.Response {
 		if err != nil {
 			logger.Error("Failed to rename project in authorizer", logger.Ctx{"name": name, "new_name": req.Name, "err": err})
 		}
+
+		// Move the network share entries over to the new project name.
+		projectUpdateShares(s.ShutdownCtx, s, name, projectConfig, nil)
+		projectUpdateShares(s.ShutdownCtx, s, req.Name, nil, projectConfig)
 
 		requestor := request.CreateRequestor(r)
 		s.Events.SendLifecycle(req.Name, lifecycle.ProjectRenamed.Event(req.Name, requestor, logger.Ctx{"old_name": name}))
@@ -1330,6 +1386,8 @@ func projectDelete(d *Daemon, r *http.Request) response.Response {
 		logger.Error("Failed to remove project from authorizer", logger.Ctx{"name": name, "err": err})
 	}
 
+	projectUpdateShares(r.Context(), s, name, projectConfig, nil)
+
 	requestor := request.CreateRequestor(r)
 	s.Events.SendLifecycle(name, lifecycle.ProjectDeleted.Event(name, requestor, nil))
 
@@ -1439,6 +1497,81 @@ func isEitherAllowOrBlockOrManaged(value string) error {
 	return validate.Optional(validate.IsOneOf("block", "allow", "managed"))(value)
 }
 
+// projectCheckOVNAvailable checks that OVN is usable as it's required for projects with their own networks.
+func projectCheckOVNAvailable(s *state.State) error {
+	ovnnb, _, err := s.OVN()
+	if err != nil || ovnnb == nil {
+		return errors.New(`OVN is required for projects with "features.networks" enabled`)
+	}
+
+	return nil
+}
+
+// projectSharedNetworks returns the default project networks shared into a project with the given config.
+func projectSharedNetworks(ctx context.Context, s *state.State, projectName string, config map[string]string) ([]string, error) {
+	// Quick check to avoid a database query.
+	if util.IsFalseOrEmpty(config["restricted"]) || util.IsFalseOrEmpty(config["features.networks"]) || config["restricted.networks.access"] == "" {
+		return nil, nil
+	}
+
+	p := api.Project{Name: projectName, ProjectPut: api.ProjectPut{Config: config}}
+
+	var sharedNetworks []string
+
+	err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		networks, err := tx.GetNetworks(ctx, api.ProjectDefaultName)
+		if err != nil {
+			return err
+		}
+
+		for _, networkName := range networks {
+			if projecthelpers.NetworkSharedFromDefault(&p, networkName) {
+				sharedNetworks = append(sharedNetworks, networkName)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return sharedNetworks, nil
+}
+
+// projectUpdateShares updates the authorizer's share entries when a project's shared networks change.
+func projectUpdateShares(ctx context.Context, s *state.State, projectName string, oldConfig map[string]string, newConfig map[string]string) {
+	oldShared, err := projectSharedNetworks(ctx, s, projectName, oldConfig)
+	if err != nil {
+		logger.Error("Failed loading old shared networks for project", logger.Ctx{"project": projectName, "error": err})
+		return
+	}
+
+	newShared, err := projectSharedNetworks(ctx, s, projectName, newConfig)
+	if err != nil {
+		logger.Error("Failed loading new shared networks for project", logger.Ctx{"project": projectName, "error": err})
+		return
+	}
+
+	for _, networkName := range newShared {
+		if !slices.Contains(oldShared, networkName) {
+			err = s.Authorizer.AddNetworkShare(ctx, projectName, networkName)
+			if err != nil {
+				logger.Error("Failed to add network share to authorizer", logger.Ctx{"network": networkName, "project": projectName, "error": err})
+			}
+		}
+	}
+
+	for _, networkName := range oldShared {
+		if !slices.Contains(newShared, networkName) {
+			err = s.Authorizer.DeleteNetworkShare(ctx, projectName, networkName)
+			if err != nil {
+				logger.Error("Failed to remove network share from authorizer", logger.Ctx{"network": networkName, "project": projectName, "error": err})
+			}
+		}
+	}
+}
+
 func projectValidateConfig(s *state.State, config map[string]string) error {
 	// Validate the project configuration.
 	projectConfigKeys := map[string]func(value string) error{
@@ -1487,7 +1620,7 @@ func projectValidateConfig(s *state.State, config map[string]string) error {
 		"features.storage.buckets": validate.Optional(validate.IsBool),
 
 		// gendoc:generate(entity=project, group=features, key=features.networks)
-		//
+		// This feature requires the server to be configured for OVN.
 		// ---
 		//  type: bool
 		//  defaultdesc: `false`
@@ -1852,6 +1985,10 @@ func projectValidateConfig(s *state.State, config map[string]string) error {
 		// gendoc:generate(entity=project, group=restricted, key=restricted.networks.access)
 		// Specify a comma-delimited list of network names that are allowed for use in this project.
 		// If this option is not set, all networks are accessible.
+		//
+		// In restricted projects with {config:option}`project-features:features.networks` enabled,
+		// the listed networks from the default project are shared into the project and their names
+		// can't be used for the project's own networks.
 		//
 		// Note that this setting depends on the {config:option}`project-restricted:restricted.devices.nic` setting.
 		// ---

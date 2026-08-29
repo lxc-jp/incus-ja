@@ -177,12 +177,16 @@ It requires the source to be an alias and for it to be public.`,
 	cli.AddBoolFlag(cmd.Flags(), &c.flagCopyAliases, "copy-aliases", i18n.G("Copy aliases from source"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagReuse, "reuse", i18n.G("If an alias already exists, delete and recreate it"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagAutoUpdate, "auto-update", i18n.G("Keep the image up to date after initial copy"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagAliases, "alias", i18n.G("New aliases to add to the image"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagAliases, "alias", i18n.G("New aliases to add to the image (may be passed multiple times)"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagVM, "vm", i18n.G("Copy virtual machine images"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagMode, "mode", "pull", "", i18n.G("Transfer mode. One of pull, push or relay"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagTargetProject, "target-project", "", "", i18n.G("Copy to a project different from the source"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the new image"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagProfile, "profile|p", i18n.G("Profile to apply to the new image (may be passed multiple times)"))
 	cmd.RunE = c.run
+
+	_ = cmd.RegisterFlagCompletionFunc("target-project", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return c.global.cmpTargetProjectNames(args)
+	})
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -701,7 +705,7 @@ Directory import is only available on Linux and must be performed as root.`,
 
 	cli.AddBoolFlag(cmd.Flags(), &c.flagPublic, "public", i18n.G("Make image public"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagReuse, "reuse", i18n.G("If the image alias already exists, delete and create a new one"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagAliases, "alias", i18n.G("New aliases to add to the image"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagAliases, "alias", i18n.G("New aliases to add to the image (may be passed multiple times)"))
 	cmd.RunE = c.run
 
 	cmd.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -1071,7 +1075,9 @@ Column shorthand chars:
     a - Architecture
     s - Size
     u - Upload date
-    t - Type`,
+    t - Type
+
+Custom columns are defined with "properties:key", e.g. "properties:os"`,
 	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagColumns, "columns|c", defaultImagesColumns, "", i18n.G("Columns"))
@@ -1122,6 +1128,22 @@ func (c *cmdImageList) parseColumns() ([]imageColumn, error) {
 	for _, columnEntry := range columnList {
 		if columnEntry == "" {
 			return nil, fmt.Errorf(i18n.G("Empty column entry (redundant, leading or trailing command) in '%s'"), c.flagColumns)
+		}
+
+		key, ok := strings.CutPrefix(columnEntry, "properties:")
+		if ok {
+			if key == "" {
+				return nil, fmt.Errorf(i18n.G("Empty property name in '%s'"), columnEntry)
+			}
+
+			columns = append(columns, imageColumn{
+				Name: strings.ToUpper(key),
+				Data: func(image api.Image) string {
+					return image.Properties[key]
+				},
+			})
+
+			continue
 		}
 
 		for _, columnRune := range columnEntry {
@@ -1269,6 +1291,11 @@ func (c *cmdImageList) imageShouldShow(filters []string, state *api.Image) bool 
 
 			val, ok := m[key]
 			if ok && fmt.Sprintf("%v", val) == value {
+				found = true
+			}
+
+			// Match architecture filters against the Incus architecture name too.
+			if !found && internalFilter.DotPrefixMatch(key, "architecture") && value == state.Architecture {
 				found = true
 			}
 		} else {

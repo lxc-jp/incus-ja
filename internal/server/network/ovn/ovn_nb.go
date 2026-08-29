@@ -4,14 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/cenkalti/backoff/v5"
+	"github.com/cenkalti/backoff/v7"
 	"github.com/go-logr/logr"
 	ovsdbClient "github.com/ovn-kubernetes/libovsdb/client"
 	ovsdbModel "github.com/ovn-kubernetes/libovsdb/model"
@@ -47,7 +46,7 @@ func NewNB(dbAddr string, sslCACert string, sslClientCert string, sslClientKey s
 	discard := logr.Discard()
 
 	options := []ovsdbClient.Option{ovsdbClient.WithLogger(&discard), ovsdbClient.WithInactivityCheck(20*time.Second, 5*time.Second, &backoff.ZeroBackOff{})}
-	for _, entry := range strings.Split(dbAddr, ",") {
+	for entry := range strings.SplitSeq(dbAddr, ",") {
 		options = append(options, ovsdbClient.WithEndpoint(entry))
 	}
 
@@ -75,21 +74,11 @@ func NewNB(dbAddr string, sslCACert string, sslClientCert string, sslClientKey s
 
 		// Add CA check if provided.
 		if sslCACert != "" {
-			tlsCAder, _ := pem.Decode([]byte(sslCACert))
-			if tlsCAder == nil {
-				return nil, errors.New("Couldn't parse CA certificate")
-			}
-
-			tlsCAcert, err := x509.ParseCertificate(tlsCAder.Bytes)
-			if err != nil {
-				return nil, err
-			}
-
-			tlsCAcert.IsCA = true
-			tlsCAcert.KeyUsage = x509.KeyUsageCertSign
-
 			clientCAPool := x509.NewCertPool()
-			clientCAPool.AddCert(tlsCAcert)
+			ok := clientCAPool.AppendCertsFromPEM([]byte(sslCACert))
+			if !ok {
+				return nil, errors.New("Invalid CA")
+			}
 
 			tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, chains [][]*x509.Certificate) error {
 				if len(rawCerts) < 1 {
@@ -150,7 +139,7 @@ func NewNB(dbAddr string, sslCACert string, sslClientCert string, sslClientKey s
 	}
 
 	// Add the client to the struct.
-	client.client = ovn
+	client.client = &timeoutClient{Client: ovn}
 	client.cookie = monitorCookie
 
 	// Set finalizer to stop the monitor.

@@ -138,6 +138,21 @@ rootディスクデバイスでは、インスタンスのrootボリュームを
 
 ```
 
+```{config:option} limits.max.burst devices-disk
+:required: "no"
+:shortdesc: "バースト時の読み取りと書き込み両方のbyte/sとIOPSによるI/O制限の片方か両方（`limits.read.burst`と`limits.write.burst`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.burst.length devices-disk
+:default: "`1s`"
+:required: "no"
+:shortdesc: "バースト時の制限が持続する期間（`limits.read.burst.length`と`limits.write.burst.length`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
 ```{config:option} limits.read devices-disk
 :required: "no"
 :shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）とIOPS（あとに`iops`と付けなければなりません）の片方か両方で指定する読み込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
@@ -145,9 +160,39 @@ rootディスクデバイスでは、インスタンスのrootボリュームを
 
 ```
 
+```{config:option} limits.read.burst devices-disk
+:required: "no"
+:shortdesc: "`limits.read.burst.length`の期間内で読み込みのバースト時のbytes/sとIOPSの片方か両方で指定するI/O制限値（仮想マシンのみ） - {ref}`storage-configure-IO`参照"
+:type: "string"
+
+```
+
+```{config:option} limits.read.burst.length devices-disk
+:default: "`1s`"
+:required: "no"
+:shortdesc: "持続的制限値に戻るまでに`limits.read.burst`の制限値が持続する期間"
+:type: "string"
+
+```
+
 ```{config:option} limits.write devices-disk
 :required: "no"
 :shortdesc: "byte/s（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）とIOPS（あとに`iops`と付けなければなりません）の片方か両方で指定する書き込みのI/O制限値 - {ref}`storage-configure-IO` も参照"
+:type: "string"
+
+```
+
+```{config:option} limits.write.burst devices-disk
+:required: "no"
+:shortdesc: "`limits.write.burst.length`の期間内で書き込みのバースト時のbytes/sとIOPSの片方か両方で指定するI/O制限値（仮想マシンのみ） - {ref}`storage-configure-IO`参照"
+:type: "string"
+
+```
+
+```{config:option} limits.write.burst.length devices-disk
+:default: "`1s`"
+:required: "no"
+:shortdesc: "持続的制限値に戻るまでに`limits.write.burst`の制限値が持続する期間"
 :type: "string"
 
 ```
@@ -564,7 +609,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv4.address devices-nic_bridged
 :managed: "no"
-:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にすべてのIPv4トラフィックを制限するには`none`と設定可能、またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv4アドレス（`security.ipv4_filtering`設定時にOCIコンテナ内でIPv4を無効にし、すべてのIPv4トラフィックを制限するには`none`と設定可能、またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
 :type: "string"
 
 ```
@@ -592,7 +637,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} ipv6.address devices-nic_bridged
 :managed: "no"
-:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にすべてのIPv6トラフィックを制限するには`none`と設定可能、またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
+:shortdesc: "DHCPでインスタンスに割り当てるIPv6アドレス（`security.ipv6_filtering`設定時にOCIコンテナ内でDHCPv6とSLAACを無効にし、すべてのIPv6トラフィックを制限するには`none`と設定可能、またはOCIコンテナ内部で静的にアドレスを設定するためにCIDR値を設定可能）"
 :type: "string"
 
 ```
@@ -625,6 +670,20 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} limits.egress.bucket devices-nic_bridged
+:managed: "no"
+:shortdesc: "`limits.egress`を超えて送れる外向きのトラフィックのビット単位のデータ量。設定時は`limits.egress.burst`も必要"
+:type: "string"
+
+```
+
+```{config:option} limits.egress.burst devices-nic_bridged
+:managed: "no"
+:shortdesc: "バースト時の外向きのトラフィックのbit/sでのI/O制限値。設定時は`limits.egress.bucket`も必要"
+:type: "string"
+
+```
+
 ```{config:option} limits.ingress devices-nic_bridged
 :managed: "no"
 :shortdesc: "内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
@@ -632,9 +691,37 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} limits.ingress.bucket devices-nic_bridged
+:managed: "no"
+:shortdesc: "`limits.ingress`を超えて送れる内向きのトラフィックのビット単位のデータ量。設定時は`limits.ingress.burst`も必要"
+:type: "string"
+
+```
+
+```{config:option} limits.ingress.burst devices-nic_bridged
+:managed: "no"
+:shortdesc: "バースト時の内向きのトラフィックのbit/sでのI/O制限値。設定時は`limits.ingress.bucket`も必要"
+:type: "string"
+
+```
+
 ```{config:option} limits.max devices-nic_bridged
 :managed: "no"
 :shortdesc: "内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.bucket devices-nic_bridged
+:managed: "no"
+:shortdesc: "持続的制限を超えて送れるトラフィックのビット単位のデータ量（`limits.ingress.bucket`と`limits.egress.bucket`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.burst devices-nic_bridged
+:required: "no"
+:shortdesc: "バースト時の内向きと外向き両方のトラフィックのbit/sによるI/O制限（`limits.ingress.burst`と`limits.egress.burst`の両方を設定するのと同じ）"
 :type: "string"
 
 ```
@@ -672,6 +759,21 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```{config:option} parent devices-nic_bridged
 :managed: "yes"
 :shortdesc: "ホストデバイスの名前（`nictype`を直接設定する場合は必須）"
+:type: "string"
+
+```
+
+```{config:option} queue.discipline devices-nic_bridged
+:managed: "no"
+:shortdesc: "NICに設定されるキューイング規律。制限が設定された場合にレートリミットクラスに適用される"
+:type: "string"
+
+```
+
+```{config:option} queue.discipline.attach devices-nic_bridged
+:default: "`queue`"
+:managed: "no"
+:shortdesc: "VMのみ：各転送キューにキューイング規律を付与する（`queue`）かインターフェースrootに付与する（`root`）"
 :type: "string"
 
 ```
@@ -1083,6 +1185,13 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} limits.egress.bucket devices-nic_ovn
+:managed: "no"
+:shortdesc: "`limits.egress`を超えて送れる外向きのトラフィックのビット単位のデータ量（`limits.max.bucket`と相互排他）"
+:type: "string"
+
+```
+
 ```{config:option} limits.ingress devices-nic_ovn
 :managed: "no"
 :shortdesc: "内向きトラフィックのI/O制限をbit/sで指定（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
@@ -1090,9 +1199,23 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} limits.ingress.bucket devices-nic_ovn
+:managed: "no"
+:shortdesc: "`limits.ingress`を超えて送れる内向きのトラフィックのビット単位のデータ量（`limits.max.bucket`と相互排他）"
+:type: "string"
+
+```
+
 ```{config:option} limits.max devices-nic_ovn
 :managed: "no"
 :shortdesc: "内向きと外向きの両方のトラフィックのI/O制限をbit/sで指定（`limits.ingress`と`limits.egress`の両方に設定するのと同じ／`limits.ingress`と`limits.egress`とは相互排他）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.bucket devices-nic_ovn
+:managed: "no"
+:shortdesc: "持続的制限を超えて送れるトラフィックのビット単位のデータ量（`limits.ingress.bucket`と`limits.egress.bucket`の両方を設定するのと同じ／それらと相互排他）"
 :type: "string"
 
 ```
@@ -1252,14 +1375,56 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} limits.egress.bucket devices-nic_p2p
+:managed: "no"
+:shortdesc: "`limits.egress`を超えて送れる外向きのトラフィックのビット単位のデータ量。設定時は`limits.egress.burst`も必要"
+:type: "string"
+
+```
+
+```{config:option} limits.egress.burst devices-nic_p2p
+:managed: "no"
+:shortdesc: "バースト時の外向きのトラフィックのbit/sでのI/O制限値。設定時は`limits.egress.bucket`も必要"
+:type: "string"
+
+```
+
 ```{config:option} limits.ingress devices-nic_p2p
 :shortdesc: "内向きトラフィックのI/O制限値（さまざまな単位が使用可能、{ref}`instances-limit-units`参照）"
 :type: "string"
 
 ```
 
+```{config:option} limits.ingress.bucket devices-nic_p2p
+:managed: "no"
+:shortdesc: "`limits.ingress`を超えて送れる内向きのトラフィックのビット単位のデータ量。設定時は`limits.ingress.burst`も必要"
+:type: "string"
+
+```
+
+```{config:option} limits.ingress.burst devices-nic_p2p
+:managed: "no"
+:shortdesc: "バースト時の内向きのトラフィックのbit/sでのI/O制限値。設定時は`limits.ingress.bucket`も必要"
+:type: "string"
+
+```
+
 ```{config:option} limits.max devices-nic_p2p
 :shortdesc: "内向きと外向きの両方のトラフィックI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.bucket devices-nic_p2p
+:managed: "no"
+:shortdesc: "持続的制限を超えて送れるトラフィックのビット単位のデータ量（`limits.ingress.bucket`と`limits.egress.bucket`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.burst devices-nic_p2p
+:required: "no"
+:shortdesc: "バースト時の内向きと外向き両方のトラフィックのbit/sによるI/O制限（`limits.ingress.burst`と`limits.egress.burst`の両方を設定するのと同じ）"
 :type: "string"
 
 ```
@@ -1280,6 +1445,21 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```{config:option} name devices-nic_p2p
 :default: "カーネルが割り当て"
 :shortdesc: "インスタンス内部でのインターフェース名"
+:type: "string"
+
+```
+
+```{config:option} queue.discipline devices-nic_p2p
+:managed: "no"
+:shortdesc: "NICに設定されるキューイング規律。制限が設定された場合にレートリミットクラスに適用される"
+:type: "string"
+
+```
+
+```{config:option} queue.discipline.attach devices-nic_p2p
+:default: "`queue`"
+:managed: "no"
+:shortdesc: "VMのみ：各転送キューにキューイング規律を付与する（`queue`）かインターフェースrootに付与する（`root`）"
 :type: "string"
 
 ```
@@ -1520,14 +1700,56 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} limits.egress.bucket devices-nic_routed
+:managed: "no"
+:shortdesc: "`limits.egress`を超えて送れる外向きのトラフィックのビット単位のデータ量。設定時は`limits.egress.burst`も必要"
+:type: "string"
+
+```
+
+```{config:option} limits.egress.burst devices-nic_routed
+:managed: "no"
+:shortdesc: "バースト時の外向きのトラフィックのbit/sでのI/O制限値。設定時は`limits.egress.bucket`も必要"
+:type: "string"
+
+```
+
 ```{config:option} limits.ingress devices-nic_routed
 :shortdesc: "内向きトラフィックに対するbit/sでのI/O制限値（さまざまな単位をサポート、{ref}`instances-limit-units`参照）"
 :type: "string"
 
 ```
 
+```{config:option} limits.ingress.bucket devices-nic_routed
+:managed: "no"
+:shortdesc: "`limits.ingress`を超えて送れる内向きのトラフィックのビット単位のデータ量。設定時は`limits.ingress.burst`も必要"
+:type: "string"
+
+```
+
+```{config:option} limits.ingress.burst devices-nic_routed
+:managed: "no"
+:shortdesc: "バースト時の内向きのトラフィックのbit/sでのI/O制限値。設定時は`limits.ingress.bucket`も必要"
+:type: "string"
+
+```
+
 ```{config:option} limits.max devices-nic_routed
 :shortdesc: "内向きと外向き両方のトラフィックのI/O制限値（`limits.ingress`と`limits.egress`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.bucket devices-nic_routed
+:managed: "no"
+:shortdesc: "持続的制限を超えて送れるトラフィックのビット単位のデータ量（`limits.ingress.bucket`と`limits.egress.bucket`の両方を設定するのと同じ）"
+:type: "string"
+
+```
+
+```{config:option} limits.max.burst devices-nic_routed
+:required: "no"
+:shortdesc: "バースト時の内向きと外向き両方のトラフィックのbit/sによるI/O制限（`limits.ingress.burst`と`limits.egress.burst`の両方を設定するのと同じ）"
 :type: "string"
 
 ```
@@ -1554,6 +1776,21 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```{config:option} parent devices-nic_routed
 :shortdesc: "インスタンスが参加するホストデバイス名"
+:type: "string"
+
+```
+
+```{config:option} queue.discipline devices-nic_routed
+:managed: "no"
+:shortdesc: "NICに設定されるキューイング規律。制限が設定された場合にレートリミットクラスに適用される"
+:type: "string"
+
+```
+
+```{config:option} queue.discipline.attach devices-nic_routed
+:default: "`queue`"
+:managed: "no"
+:shortdesc: "VMのみ：各転送キューにキューイング規律を付与する（`queue`）かインターフェースrootに付与する（`root`）"
 :type: "string"
 
 ```
@@ -2188,6 +2425,7 @@ VMでは、このオプションはファイルシステムディスクデバイ
     + マイグレーションに適さないデバイスがある場合、インスタンスはマイグレーションされません（停止のみされます）。
     + ライブマイグレーションは`migration.stateful`設定を有効にした仮想マシンでのみ実行され、仮想マシンのすべてのデバイスもマイグレートされます。
   - `live-migrate`: インスタンスが別のサーバーにライブマイグレートされます。つまりインスタンスはマイグレーションプロセス中にも稼働して操作可能なままになり、切断は最小限ですみます。
+  - `refresh-migrate`: 一連のインクリメンタルな転送でインスタンスが別のサーバーにマイグレートされます。インスタンスは最後の転送までは稼働中のままです。これはライブマイグレーションではないですが、ダウンタイムが最後の転送のみに限定されます。コンテナーのみサポートされます。
   - `migrate`: このモードでは、インスタンスはクラスター内の他のサーバーにマイグレートされます。マイグレーションプロセスはライブではありません。つまり、インスタンスはマイグレーション中に短時間ダウンタイムが発生します。
   -  `stop`: インスタンスはマイグレートされません。代わりに現在のサーバー上で停止されます。
   -  `stateful-stop`: インスタンスはマイグレートされません。代わりに現在のサーバー上で停止されますが、復元時にレジュームできるように実行状態（メモリ）をディスク上に保存します。
@@ -2298,7 +2536,8 @@ OCIコンテナのワーキングディレクトリを上書きします。
 :liveupdate: "no"
 :shortdesc: "DNSドメイン"
 :type: "string"
-初期の`resolv.conf`のドメイン名。
+`resolv.conf`のドメイン名。
+設定時は、DHCPで受け取るドメイン名は無視されます。
 ```
 
 ```{config:option} oci.dns.nameservers instance-oci
@@ -2306,7 +2545,8 @@ OCIコンテナのワーキングディレクトリを上書きします。
 :liveupdate: "no"
 :shortdesc: "DNSネームサーバー"
 :type: "string"
-初期の`resolv.conf`のネームサーバーアドレスのカンマ区切りリスト。
+`resolv.conf`のネームサーバーアドレスのカンマ区切りリスト。
+設定時は、DHCPで受け取るネームサーバーは無視されます。
 ```
 
 ```{config:option} oci.dns.search instance-oci
@@ -2314,7 +2554,8 @@ OCIコンテナのワーキングディレクトリを上書きします。
 :liveupdate: "no"
 :shortdesc: "DNSサーチドメイン"
 :type: "string"
-初期の`resolv.conf`のサーチドメインのカンマ区切りリスト。
+`resolv.conf`のサーチドメインのカンマ区切りリスト。
+設定時は、DHCPで受け取るサーチドメインは無視されます。
 ```
 
 ```{config:option} oci.entrypoint instance-oci
@@ -2343,6 +2584,22 @@ OCIコンテナ内で稼働するプロセスのUIDを上書きします。
 
 <!-- config group instance-oci end -->
 <!-- config group instance-raw start -->
+```{config:option} initial.nvram-binary.<GUID>.<name> instance-raw
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に、オプションで属性の接頭辞を付与して、設定するBase64エンコードされたNVRAM変数の値"
+:type: "blob"
+NVRAM生成時に、オプションで`<attributes>:`（`<attributes>`は整数）の接頭辞を付与して、設定するBase64エンコードされたNVRAM変数の値。
+```
+
+```{config:option} initial.nvram.<GUID>.<name> instance-raw
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に設定する、解析されたNVRAMの変数の値"
+:type: "blob"
+
+```
+
 ```{config:option} raw.apparmor instance-raw
 :liveupdate: "yes"
 :shortdesc: "AppArmorプロファイルのエントリ"
@@ -2608,6 +2865,53 @@ cgoup2のシステムではスワップの優先度の制御ができないた�
 
 <!-- config group instance-resource-limits end -->
 <!-- config group instance-security start -->
+```{config:option} initial.secureboot.db instance-security
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に登録する、初期状態で信頼された署名データベースエントリー（PEM証明書と署名のバンドル）"
+:type: "string"
+このオプションは証明書に加えて`SIGNATURE`で保護された署名を受け付けます。
+```
+
+```{config:option} initial.secureboot.dbt instance-security
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に登録する、初期状態で信頼されたタイムスタンプ署名データベース証明書（PEM証明書バンドル）"
+:type: "string"
+
+```
+
+```{config:option} initial.secureboot.dbx instance-security
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に登録する、初期状態で禁止された署名データベースエントリー（PEM証明書と署名バンドル）"
+:type: "string"
+このオプションは証明書に加えて`SIGNATURE`で保護された署名を受け付けます。
+```
+
+```{config:option} initial.secureboot.kek instance-security
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に登録する、初期鍵交換鍵（PEM証明書バンドル）"
+:type: "string"
+
+```
+
+```{config:option} initial.secureboot.mok instance-security
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に登録する、初期登録済みマシン所有者鍵エントリー（PEM証明書と署名バンドル）"
+:type: "string"
+このオプションは証明書に加えて`SIGNATURE`で保護された署名を受け付けます。
+```
+
+```{config:option} initial.secureboot.pk instance-security
+:condition: "virtual machine"
+:liveupdate: "yes"
+:shortdesc: "NVRAM生成時に登録する、初期登録済みプラットフォーム鍵（PEM証明書）"
+:type: "string"
+
+```
 ```{config:option} security.agent.metrics instance-security
 :condition: "virtual machine"
 :defaultdesc: "`true`"
@@ -2750,6 +3054,14 @@ BPFファイルシステムはいずれかの`security.bpffs.delegate_*`オプ�
 :shortdesc: "ファイルシステムでUID/GIDがシフトされるのを防ぐかどうか"
 :type: "bool"
 このオプションを`true`にするとインスタンスの起動時にファイルシステムでUID/GIDがシフトされなくなります。
+```
+
+```{config:option} security.protection.start instance-security
+:defaultdesc: "`false`"
+:liveupdate: "yes"
+:shortdesc: "インスタンスが起動するのを防ぐ"
+:type: "bool"
+
 ```
 
 ```{config:option} security.secureboot instance-security
@@ -3760,6 +4072,14 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```
 
+```{config:option} ipv6.ra network_bridge-common
+:condition: "IPv6アドレス"
+:default: "`true`"
+:shortdesc: "IPv6ルーター広告を送るかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} ipv6.routes network_bridge-common
 :condition: "IPv6アドレス"
 :default: "-"
@@ -3922,21 +4242,21 @@ NVIDIA仮想GPUインスタンスUUID。
 <!-- config group network_integration-ovn start -->
 ```{config:option} ovn.ca_cert network_integration-ovn
 :scope: "global"
-:shortdesc: "相互接続データベースのためのOVN SSL証明書認証局"
+:shortdesc: "相互接続データベースのためのOVN SSL証明書認証局（PEMバンドル）"
 :type: "string"
 
 ```
 
 ```{config:option} ovn.client_cert network_integration-ovn
 :scope: "global"
-:shortdesc: "OVN SSLクライアント証明書"
+:shortdesc: "OVN SSLクライアント証明書（PEMバンドル）"
 :type: "string"
 
 ```
 
 ```{config:option} ovn.client_key network_integration-ovn
 :scope: "global"
-:shortdesc: "OVN SSLクライアント鍵"
+:shortdesc: "OVN SSLクライアント鍵（PEM秘密鍵）"
 :type: "string"
 
 ```
@@ -4064,6 +4384,20 @@ NVIDIA仮想GPUインスタンスUUID。
 :default: "`1442`"
 :shortdesc: "ブリッジのMTU（デフォルトではホスト間のGeneveトンネルを許可）"
 :type: "integer"
+
+```
+
+```{config:option} bridge.multicast_relay network_ovn-common
+:default: "`false`"
+:shortdesc: "ネットワークの論理ルーターを通してマルチキャストのトラフィックをリレーするかどうか"
+:type: "bool"
+
+```
+
+```{config:option} bridge.multicast_snooping network_ovn-common
+:default: "`true`"
+:shortdesc: "仮想ネットワークでマルチキャストスヌーピングを有効にするかどうか"
+:type: "bool"
 
 ```
 
@@ -4227,6 +4561,14 @@ NVIDIA仮想GPUインスタンスUUID。
 :condition: "IPv6アドレス"
 :shortdesc: "送信時に使うソースアドレス（`ovn.ingress_mode=routed`であるアップリンクが必要）"
 :type: "string"
+
+```
+
+```{config:option} ipv6.ra network_ovn-common
+:condition: "IPv6アドレス"
+:default: "`true`"
+:shortdesc: "IPv6ルーター広告を送るかどうか"
+:type: "bool"
 
 ```
 
@@ -4609,7 +4951,7 @@ NVIDIA仮想GPUインスタンスUUID。
 :initialvaluedesc: "`false`"
 :shortdesc: "プロジェクトに異なる組のネットワークを使用するかどうか"
 :type: "bool"
-
+この機能の利用にはサーバーでOVNが設定されている必要があります。
 ```
 
 ```{config:option} features.networks.zones project-features
@@ -4876,6 +5218,8 @@ Possible values are `allow` or `block`.
 :type: "string"
 このプロジェクト内で使用できるネットワーク名のカンマ区切りリストを指定します。
 このオプションを設定しない場合、すべてのネットワークが使用できます。
+
+{config:option}`project-features:features.networks`が有効な制限されたプロジェクトでは、デフォルトプロジェクトでリストされたネットワークがプロジェクトに共有され、共有された名前はプロジェクト自身のネットワークでは利用できません。
 
 この設定は{config:option}`project-restricted:restricted.devices.nic`設定に依存することに注意してください。
 ```
@@ -5495,7 +5839,7 @@ See {ref}`cluster-https-address`.
 
 ```{config:option} logging.NAME.target.ca_cert server-logging
 :scope: "global"
-:shortdesc: "サーバーのCA証明書"
+:shortdesc: "サーバーのCA証明書（PEMバンドル）"
 :type: "string"
 
 ```
@@ -5563,7 +5907,7 @@ Lokiログエントリーのラベルとして使われる値のカンマ区切�
 <!-- config group server-loki start -->
 ```{config:option} loki.api.ca_cert server-loki
 :scope: "global"
-:shortdesc: "LokiサーバーのCA証明書"
+:shortdesc: "LokiサーバーのCA証明書（PEMバンドル）"
 :type: "string"
 
 ```
@@ -5666,7 +6010,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```{config:option} instances.tpm.platform_cert server-miscellaneous
 :scope: "global"
-:shortdesc: "TPM Endorsement Keysのプロビジョンに使うプラットフォームCA証明書"
+:shortdesc: "TPM Endorsement Keysのプロビジョンに使うプラットフォームCA証明書（PEMバンドル）"
 :type: "string"
 新しく作られるTPMデバイスのEndorsement Keyとプラットフォーム証明書を署名するのに使うPEM形式のプラットフォームCA証明書。
 `instances.tpm.platform_key`とともに設定する必要があります。
@@ -5674,7 +6018,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```{config:option} instances.tpm.platform_key server-miscellaneous
 :scope: "global"
-:shortdesc: "PMプラットフォームCA証明書の秘密鍵"
+:shortdesc: "PMプラットフォームCA証明書の秘密鍵（PEM秘密鍵）"
 :type: "string"
 `instances.tpm.platform_cert`に対応するPEM形式の秘密鍵。
 新しく作られるTPMデバイスのEndorsement Keyとプラットフォーム証明書を署名するのに使います。
@@ -5683,7 +6027,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```{config:option} network.ovn.ca_cert server-miscellaneous
 :defaultdesc: "存在する場合`/etc/ovn/ovn-central.crt`の中身"
 :scope: "global"
-:shortdesc: "OVN SSL証明書認証局"
+:shortdesc: "OVN SSL証明書認証局（PEMバンドル）"
 :type: "string"
 
 ```
@@ -5691,7 +6035,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```{config:option} network.ovn.client_cert server-miscellaneous
 :defaultdesc: "存在する場合`/etc/ovn/cert_host`の中身"
 :scope: "global"
-:shortdesc: "OVN SSLクライアント証明書"
+:shortdesc: "OVN SSLクライアント証明書（PEMバンドル）"
 :type: "string"
 
 ```
@@ -5699,7 +6043,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 ```{config:option} network.ovn.client_key server-miscellaneous
 :defaultdesc: "存在する場合`/etc/ovn/key_host`の中身"
 :scope: "global"
-:shortdesc: "OVN SSLクライアント鍵"
+:shortdesc: "OVN SSLクライアント鍵（PEM秘密鍵）"
 :type: "string"
 
 ```
@@ -5744,21 +6088,21 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```{config:option} storage.linstor.ca_cert server-miscellaneous
 :scope: "global"
-:shortdesc: "LINSTOR SSL証明書認証局"
+:shortdesc: "LINSTOR SSL証明書認証局（PEMバンドル）"
 :type: "string"
 
 ```
 
 ```{config:option} storage.linstor.client_cert server-miscellaneous
 :scope: "global"
-:shortdesc: "LINSTOR SSLクライアント証明書"
+:shortdesc: "LINSTOR SSLクライアント証明書（PEMバンドル）"
 :type: "string"
 
 ```
 
 ```{config:option} storage.linstor.client_key server-miscellaneous
 :scope: "global"
-:shortdesc: "LINSTOR SSLクライアント鍵"
+:shortdesc: "LINSTOR SSLクライアント鍵（PEM秘密鍵）"
 :type: "string"
 
 ```
@@ -5956,6 +6300,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```
 
+```{config:option} ceph.rbd.backend storage_ceph-common
+:default: "`krbd`"
+:scope: "global"
+:shortdesc: "RBDカーネルドライバーを使うか（`krbd`）、`qemu-nbd`経由で`librbd`を使うか（`librbd`）"
+:type: "string"
+
+```
+
 ```{config:option} ceph.rbd.clone_copy storage_ceph-common
 :default: "`true`"
 :scope: "global"
@@ -6112,10 +6464,10 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```
 
-```{config:option} cephobject.radosgw.endpoint_cert_file storage_cephobject-common
+```{config:option} cephobject.radosgw.endpoint_cert storage_cephobject-common
 :default: "-"
 :scope: "global"
-:shortdesc: "エンドポイント通信に使用するTLSクライアント証明書を含むファイルへのパス"
+:shortdesc: "エンドポイント通信に使用するTLS証明書（PEMバンドル）"
 :type: "string"
 
 ```

@@ -2,28 +2,40 @@ package uefi
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/lxc/incus/v7/shared/api"
 )
 
 func getDissector(guid string, name string) dissector {
 	switch guid {
-	case EfiGlobalVariableGuid:
-		hasFourDigits := false
-		n := len(name)
-		if n > 4 {
-			hasFourDigits = true
-			for _, c := range name[n-4:] {
-				if c < '0' || c > '9' {
-					hasFourDigits = false
-					break
-				}
-			}
+	case BmHardDriveBootVariableGuid:
+		switch name {
+		case "HDDP":
+			return devicePath
 		}
 
-		if hasFourDigits {
-			switch name[:n-4] {
+	case EdkiiVarErrorFlagGuid:
+		switch name {
+		case "VarErrorFlag":
+			return errorFlag
+		}
+
+	case EfiCertDbGuid:
+		switch name {
+		case "certdb":
+			return certDB
+		}
+
+	case EfiCustomModeEnableGuid:
+		switch name {
+		case "CustomMode":
+			return b8
+		}
+
+	case EfiGlobalVariableGuid:
+		bootPrefix, _, ok := ParseBootXXXX(name)
+		if ok {
+			switch bootPrefix {
 			case "Boot", "Driver", "SysPrep", "OsRecovery", "PlatformRecovery":
 				return boot
 			case "Key":
@@ -32,6 +44,8 @@ func getDissector(guid string, name string) dissector {
 		}
 
 		switch name {
+		case "BootNext":
+			return bootNext
 		case "BootOrder":
 			return bootOrder("Boot")
 		case "ConIn", "ConOut", "ErrOut":
@@ -48,30 +62,22 @@ func getDissector(guid string, name string) dissector {
 			return u16
 		}
 
-	case ShimLockGuid:
+	case EfiImageSecurityDatabaseGuid:
 		switch name {
-		case "MokList":
+		case "db", "dbr", "dbt", "dbx":
 			return esl
-		case "SbatLevel":
-			return z8
 		}
 
-	case EfiVendorKeysNvGuid:
+	case EfiMemoryOverwriteControlDataGuid:
 		switch name {
-		case "VendorKeysNv":
-			return b8
+		case "MemoryOverwriteRequestControl":
+			return morControl
 		}
 
-	case EfiCustomModeEnableGuid:
+	case EfiMemoryOverwriteRequestControlLockGuid:
 		switch name {
-		case "CustomMode":
-			return b8
-		}
-
-	case MtcVendorGuid:
-		switch name {
-		case "MTC":
-			return u32
+		case "MemoryOverwriteRequestControlLock":
+			return morControlLock
 		}
 
 	case EfiSecureBootEnableDisableGuid:
@@ -80,22 +86,36 @@ func getDissector(guid string, name string) dissector {
 			return b8
 		}
 
-	case EfiImageSecurityDatabaseGuid:
+	case EfiVendorKeysNvGuid:
 		switch name {
-		case "db", "dbr", "dbt", "dbx":
-			return esl
-		}
-
-	case EdkiiVarErrorFlagGuid:
-		switch name {
-		case "VarErrorFlag":
-			return errorFlag
+		case "VendorKeysNv":
+			return b8
 		}
 
 	case IScsiConfigGuid:
 		switch name {
 		case "InitialAttemptOrder":
 			return attemptOrder
+		}
+
+	case MtcVendorGuid:
+		switch name {
+		case "MTC":
+			return u32
+		}
+
+	case OvmfPlatformConfigGuid:
+		switch name {
+		case "PlatformConfig":
+			return platformConfig
+		}
+
+	case ShimLockGuid:
+		switch name {
+		case "MokList":
+			return esl
+		case "SbatLevel":
+			return z8
 		}
 
 	case Tcg2ConfigFormSetGuid:
@@ -105,30 +125,6 @@ func getDissector(guid string, name string) dissector {
 		case "TCG2_VERSION":
 			return tcg2Version
 		}
-
-	case EfiMemoryOverwriteRequestControlLockGuid:
-		switch name {
-		case "MemoryOverwriteRequestControlLock":
-			return morControlLock
-		}
-
-	case EfiMemoryOverwriteControlDataGuid:
-		switch name {
-		case "MemoryOverwriteRequestControl":
-			return morControl
-		}
-
-	case BmHardDriveBootVariableGuid:
-		switch name {
-		case "HDDP":
-			return devicePath
-		}
-
-	case EfiCertDbGuid:
-		switch name {
-		case "certdb":
-			return certDB
-		}
 	}
 
 	return dissector{
@@ -137,7 +133,7 @@ func getDissector(guid string, name string) dissector {
 	}
 }
 
-// Dissect dissects an UEFI variable.
+// Dissect dissects a UEFI variable.
 func Dissect(v *api.InstanceNVRAMVariable, guid string, name string) error {
 	dissected, err := getDissector(guid, name).dissect(v.Binary)
 	if err == nil {
@@ -147,11 +143,15 @@ func Dissect(v *api.InstanceNVRAMVariable, guid string, name string) error {
 	return nil
 }
 
-// Format formats an UEFI variable.
+// Format formats a UEFI variable.
 func Format(v *api.InstanceNVRAMVariable, guid string, name string) error {
 	raw, ok := v.Data.(json.RawMessage)
 	if !ok {
-		return fmt.Errorf("Unexpected type %T", v.Data)
+		var err error
+		raw, err = json.Marshal(v.Data)
+		if err != nil {
+			return err
+		}
 	}
 
 	formatted, err := getDissector(guid, name).format(raw)

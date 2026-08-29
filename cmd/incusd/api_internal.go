@@ -544,7 +544,7 @@ func internalVirtualMachineOnResize(d *Daemon, r *http.Request) response.Respons
 	}
 
 	// Update the local instance.
-	for _, dev := range strings.Split(devices, ",") {
+	for dev := range strings.SplitSeq(devices, ",") {
 		fields := strings.SplitN(dev, ":", 2)
 		if len(fields) != 2 {
 			return response.BadRequest(fmt.Errorf("Invalid device/size tuple: %s", dev))
@@ -645,31 +645,37 @@ func internalSQLPost(d *Daemon, r *http.Request) response.Response {
 		return response.SyncResponse(true, batch)
 	}
 
-	for _, statement := range strings.Split(req.Query, ";") {
+	for statement := range strings.SplitSeq(req.Query, ";") {
 		statement = strings.TrimLeft(statement, " ")
 
 		if statement == "" {
 			continue
 		}
 
-		result := internalSQL.SQLResult{}
+		var result internalSQL.SQLResult
 
-		tx, err := dbConn.Begin()
-		if err != nil {
-			return response.SmartError(err)
-		}
+		err := query.Retry(r.Context(), func(_ context.Context) error {
+			result = internalSQL.SQLResult{}
 
-		if strings.HasPrefix(strings.ToUpper(statement), "SELECT") {
-			err = internalSQLSelect(tx, statement, &result)
-			_ = tx.Rollback()
-		} else {
-			err = internalSQLExec(tx, statement, &result)
+			tx, err := dbConn.Begin()
 			if err != nil {
+				return err
+			}
+
+			if strings.HasPrefix(strings.ToUpper(statement), "SELECT") {
+				err = internalSQLSelect(tx, statement, &result)
 				_ = tx.Rollback()
 			} else {
-				err = tx.Commit()
+				err = internalSQLExec(tx, statement, &result)
+				if err != nil {
+					_ = tx.Rollback()
+				} else {
+					err = tx.Commit()
+				}
 			}
-		}
+
+			return err
+		})
 		if err != nil {
 			return response.SmartError(err)
 		}

@@ -11,6 +11,19 @@ S3 アドレスを設定するには、{config:option}`server-core:core.storage_
 
     incus config set core.storage_buckets_address=:8555
 
+(howto-storage-buckets-cluster)=
+## クラスター内のストレージバケット
+
+Incusはストレージバケットのデータをクラスター内でレプリケーションしません。
+ローカルストレージ（`dir`、`btrfs`、`lvm`、`zfs`プール）を使用する際、各ストレージバケットはそれが作られたクラスターメンバーに所属します。
+
+ストレージボリュームに関しては、バケットの名前がクラスター内でユニークである限り、バケットの操作はバケットを保管するサーバーに透過的にフォワードされます。
+複数のサーバーが同じバケット名を持つ場合は、正しい対象を選ぶために`--target`フラグを使う必要があります。
+
+S3 APIアクセスはバケットを保管するサーバーにのみ送ることができ、バケットの`s3_url`フィールドをそのサーバーに向けます。
+
+高可用性のオブジェクトストレージが必要なクラスターではCephオブジェクトストレージ（`cephobject`プール）を使うのがよいです。これは任意のクラスターメンバー経由で利用可能なS3 APIを提供します。
+
 ## ストレージバケットを管理する
 
 ストレージバケットは S3 プロトコルを使って公開されるオブジェクトストレージを提供します。
@@ -34,6 +47,7 @@ S3 アドレスを設定するには、{config:option}`server-core:core.storage_
 ```{note}
 ほとんどのストレージドライバでは、ストレージバケットはクラスタ間でリプリケートされず、作成されたメンバー上にのみ存在します。
 この挙動は `cephobject` ストレージプールでは異なります。 `cephobject` ではバケットはどのクラスタメンバーからも利用できます。
+詳細は{ref}`howto-storage-buckets-cluster`を参照してください。
 ```
 
 ### ストレージバケットを設定するには
@@ -42,11 +56,11 @@ S3 アドレスを設定するには、{config:option}`server-core:core.storage_
 
 ストレージバケットの設定オプションを設定するには以下のコマンドを使用します:
 
-    incus storage bucket set <pool_name> <bucket_name> <key> <value>
+    incus storage bucket set <pool_name> <bucket_name> <key>=<value>
 
 たとえば、バケットにクォータサイズを設定するには、以下のコマンドを使用します:
 
-    incus storage bucket set my-pool my-bucket size 1MiB
+    incus storage bucket set my-pool my-bucket size=1MiB
 
 以下のコマンドでストレージバケットの設定を編集することもできます:
 
@@ -74,7 +88,7 @@ S3 アドレスを設定するには、{config:option}`server-core:core.storage_
 
 ストレージバケットクォータを設定するには、サイズを設定します:
 
-    incus storage bucket set <pool_name> <bucket_name> size <new_size>
+    incus storage bucket set <pool_name> <bucket_name> size=<new_size>
 
 ```{important}
 - ストレージバケットの拡大は通常は正常に動作します（ストレージプールが十分なストレージを持つ場合）。

@@ -75,12 +75,12 @@ var storagePoolBucketBackupsExportCmd = APIEndpoint{
 //      name: project
 //      description: Project name
 //      type: string
-//      example: default
+//      x-example: default
 //    - in: query
 //      name: target
 //      description: Cluster member name
 //      type: string
-//      example: server01
+//      x-example: server01
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -105,11 +105,9 @@ var storagePoolBucketBackupsExportCmd = APIEndpoint{
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/storage-pools/local/buckets/foo/backups/backup0",
-//                "/1.0/storage-pools/local/buckets/foo/backups/backup1"
-//              ]
+//            example:
+//              - /1.0/storage-pools/local/buckets/foo/backups/backup0
+//              - /1.0/storage-pools/local/buckets/foo/backups/backup1
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -145,12 +143,12 @@ var storagePoolBucketBackupsExportCmd = APIEndpoint{
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -208,6 +206,11 @@ func storagePoolBucketBackupsGet(d *Daemon, r *http.Request) response.Response {
 	poolName, err := pathVar(r, "poolName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, projectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	// Get the storage pool itself.
@@ -293,12 +296,12 @@ func storagePoolBucketBackupsGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	  - in: body
 //	    name: bucket
 //	    description: Storage bucket backup
@@ -348,6 +351,11 @@ func storagePoolBucketBackupsPost(d *Daemon, r *http.Request) response.Response 
 	bucketName, err := pathVar(r, "bucketName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, projectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	targetMember := request.QueryParam(r, "target")
@@ -536,12 +544,12 @@ func storagePoolBucketBackupsPost(d *Daemon, r *http.Request) response.Response 
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    description: Storage bucket backup
@@ -610,6 +618,11 @@ func storagePoolBucketBackupGet(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, projectName, bucketName)
+	if resp != nil {
+		return resp
+	}
+
 	fullName := bucketName + internalInstance.SnapshotDelimiter + backupName
 
 	entry, err := storagePoolBucketBackupLoadByName(r.Context(), s, projectName, poolName, fullName)
@@ -651,12 +664,12 @@ func storagePoolBucketBackupGet(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	  - in: body
 //	    name: bucket rename
 //	    description: Storage bucket backup
@@ -711,6 +724,11 @@ func storagePoolBucketBackupPost(d *Daemon, r *http.Request) response.Response {
 	backupName, err := pathVar(r, "backupName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, projectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	req := api.StorageBucketBackupPost{}
@@ -788,12 +806,12 @@ func storagePoolBucketBackupPost(d *Daemon, r *http.Request) response.Response {
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "202":
 //	    $ref: "#/responses/Operation"
@@ -842,6 +860,11 @@ func storagePoolBucketBackupDelete(d *Daemon, r *http.Request) response.Response
 	backupName, err := pathVar(r, "backupName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, projectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	fullName := bucketName + internalInstance.SnapshotDelimiter + backupName
@@ -903,12 +926,12 @@ func storagePoolBucketBackupDelete(d *Daemon, r *http.Request) response.Response
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: query
 //	    name: target
 //	    description: Cluster member name
 //	    type: string
-//	    example: server01
+//	    x-example: server01
 //	responses:
 //	  "200":
 //	    description: Raw backup data
@@ -958,6 +981,11 @@ func storagePoolBucketBackupExportGet(d *Daemon, r *http.Request) response.Respo
 	backupName, err := pathVar(r, "backupName")
 	if err != nil {
 		return response.SmartError(err)
+	}
+
+	resp = forwardedResponseIfBucketIsRemote(s, r, poolName, projectName, bucketName)
+	if resp != nil {
+		return resp
 	}
 
 	targetMember := request.QueryParam(r, "target")

@@ -93,6 +93,7 @@ func (d *ceph) Info() Info {
 		OptimizedImages:              true,
 		PreservesInodes:              false,
 		Remote:                       d.isRemote(),
+		NearLiveMigration:            false,
 		VolumeTypes:                  []VolumeType{VolumeTypeCustom, VolumeTypeImage, VolumeTypeContainer, VolumeTypeVM},
 		VolumeMultiNode:              d.isRemote(),
 		BlockBacking:                 true,
@@ -367,6 +368,15 @@ func (d *ceph) Validate(config map[string]string) error {
 		//  default: -
 		//  shortdesc: Name of the OSD data pool
 		"ceph.osd.data_pool_name": validate.IsAny,
+
+		// gendoc:generate(entity=storage_ceph, group=common, key=ceph.rbd.backend)
+		//
+		// ---
+		//  type: string
+		//  scope: global
+		//  default: `krbd`
+		//  shortdesc: Whether to use the RBD kernel driver (`krbd`) or `librbd` through `qemu-nbd` (`librbd`)
+		"ceph.rbd.backend": validate.Optional(validate.IsOneOf("krbd", "librbd")),
 
 		// gendoc:generate(entity=storage_ceph, group=common, key=ceph.rbd.clone_copy)
 		//

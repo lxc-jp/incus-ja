@@ -114,8 +114,8 @@ func UsedByInstanceDevices(s *state.State, networkProjectName string, networkNam
 	for _, inst := range instances {
 		p := projects[inst.Project]
 
-		// Get the instance's effective network project name.
-		instNetworkProject := project.NetworkProjectFromRecord(&p)
+		// Get the effective network project name for this network name.
+		instNetworkProject := project.NetworkProjectForNameFromRecord(&p, networkName)
 
 		// Skip instances who's effective network project doesn't match this Network's project.
 		if instNetworkProject != networkProjectName {
@@ -297,7 +297,7 @@ func usedByProfileDevices(s *state.State, profileDevices map[string]cluster.Devi
 
 	// Skip profiles who's translated network project doesn't match the requested network's project.
 	// Because its devices can't be using this network.
-	profileNetworkProjectName := project.NetworkProjectFromRecord(profileProject)
+	profileNetworkProjectName := project.NetworkProjectForNameFromRecord(profileProject, networkName)
 	if networkProjectName != profileNetworkProjectName {
 		return false, nil
 	}
@@ -363,6 +363,23 @@ func GetTXQueueLength(devName string) (uint32, error) {
 	}
 
 	return uint32(txqlen), nil
+}
+
+// GetTXQueueCount retrieves the number of active transmit queues for a named network device.
+func GetTXQueueCount(devName string) (int, error) {
+	entries, err := os.ReadDir(fmt.Sprintf("/sys/class/net/%s/queues", devName))
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "tx-") {
+			count++
+		}
+	}
+
+	return count, nil
 }
 
 // DefaultGatewaySubnetV4 returns subnet of default gateway interface.
@@ -931,7 +948,7 @@ func GetLeaseAddresses(networkName string, hwaddr string) ([]net.IP, error) {
 
 	addresses := []net.IP{}
 
-	for _, lease := range strings.Split(string(content), "\n") {
+	for lease := range strings.SplitSeq(string(content), "\n") {
 		fields := strings.Fields(lease)
 		if len(fields) < 5 {
 			continue
@@ -1531,7 +1548,7 @@ func ProxyParseAddr(data string) (*deviceConfig.ProxyAddress, error) {
 }
 
 func validateExternalInterfaces(value string) error {
-	for _, entry := range strings.Split(value, ",") {
+	for entry := range strings.SplitSeq(value, ",") {
 		entry = strings.TrimSpace(entry)
 
 		// Test for extended configuration of external interface.
@@ -1660,4 +1677,17 @@ func ovnRouteExists(currentRoutes []networkOVN.OVNRouterRoute, route networkOVN.
 
 		return existing.NextHop.Equal(route.NextHop) && existing.Port == route.Port
 	})
+}
+
+// DNSNotifyZones triggers a DNS NOTIFY for all zones configured on the network.
+func DNSNotifyZones(s *state.State, netConfig map[string]string) {
+	if s == nil || s.DNS == nil {
+		return
+	}
+
+	for _, key := range []string{"dns.zone.forward", "dns.zone.reverse.ipv4", "dns.zone.reverse.ipv6"} {
+		for _, zoneName := range util.SplitNTrimSpace(netConfig[key], ",", -1, true) {
+			s.DNS.NotifyZone(zoneName)
+		}
+	}
 }

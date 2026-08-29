@@ -17,7 +17,7 @@
 
 次に `cloud-init.network-config` 設定キーを使ってインスタンスに `netplan` 設定を追加します:
 
-    cat <<EOF | incus config set bookworm cloud-init.network-config -
+    cat <<EOF | incus config set bookworm cloud-init.network-config=-
     network:
       version: 2
       ethernets:

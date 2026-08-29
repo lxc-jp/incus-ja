@@ -18,7 +18,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 
 	runTest := func(expected string, sections []cfg.Section) {
 		t.Run(expected, func(t *testing.T) {
-			actual := normalize(qemuStringifyCfgPredictably(sections...).String())
+			actual := normalize(qemuStringifyCfg(sections...).String())
 			expected = normalize(expected)
 			if actual != expected {
 				t.Errorf("Expected: %s. Got: %s", expected, actual)
@@ -93,6 +93,23 @@ func TestQemuConfigTemplates(t *testing.T) {
 
 		for _, tc := range testCases {
 			runTest(tc.expected, qemuBase(&tc.opts))
+		}
+	})
+
+	t.Run("qemu_sandbox", func(t *testing.T) {
+		testCases := []struct {
+			expected string
+		}{{
+			`# Syscall filtering
+			[sandbox]
+			elevateprivileges = "allow"
+			enable = "on"
+			obsolete = "deny"
+			resourcecontrol = "deny"
+			spawn = "allow"`,
+		}}
+		for _, tc := range testCases {
+			runTest(tc.expected, qemuSandbox())
 		}
 	})
 
@@ -747,11 +764,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			backend = "socket"
 			path = "/dev/shm/control-socket"
 			server = "on"
-			wait = "off"
-
-			[mon]
-			chardev = "monitor"
-			mode = "control"`,
+			wait = "off"`,
 		}}
 		for _, tc := range testCases {
 			runTest(tc.expected, qemuControlSocket(&tc.opts))

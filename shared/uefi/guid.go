@@ -51,12 +51,19 @@ const (
 	EfiVirtualCdGuid                         = "3d5abd30-4175-87ce-6d64-d2ade523c4bb"
 	EfiVirtualDiskGuid                       = "77ab535a-45fc-624b-5560-f7b281d1f96e"
 	IScsiConfigGuid                          = "4b47d616-a8d6-4552-9d44-ccad2e0f4cf9"
-	MtcVendorGuid                            = "eb704011-1402-11d3-8e77-00a0c969723b"
+	OvmfPlatformConfigGuid                   = "7235c51c-0c80-4cab-87ac-3b084a6304b1"
 	Tcg2ConfigFormSetGuid                    = "6339d487-26ba-424b-9a5d-687e25d740bc"
 
 	// EDK2 Module-local.
 
 	BmHardDriveBootVariableGuid = "fab7e9e1-39dd-4f2b-8408-e20e906cb6de"
+
+	// Vendors.
+
+	IncusVendorGuid     = "7b3743d8-4c1f-420a-b4d7-3654fa4792cc"
+	MicrosoftVendorGuid = "77fa9abd-0359-4d32-bd60-28f4e78f784b"
+	MtcVendorGuid       = "eb704011-1402-11d3-8e77-00a0c969723b"
+	OvmfVendorGuid      = "a0baa8a3-041d-48a8-bc87-c36d121b5e3d" // Non-standard.
 
 	// External.
 
@@ -108,12 +115,19 @@ var guidNames = map[string]string{
 	EfiVirtualCdGuid:                         "EFI_VIRTUAL_CD_GUID",
 	EfiVirtualDiskGuid:                       "EFI_VIRTUAL_DISK_GUID",
 	IScsiConfigGuid:                          "ISCSI_CONFIG_GUID",
-	MtcVendorGuid:                            "MTC_VENDOR_GUID",
+	OvmfPlatformConfigGuid:                   "OVMF_PLATFORM_CONFIG_GUID",
 	Tcg2ConfigFormSetGuid:                    "TCG2_CONFIG_FORM_SET_GUID",
 
 	// EDK2 Module-local.
 
 	BmHardDriveBootVariableGuid: "HD_BOOT_DEVICE_PATH_VARIABLE_GUID",
+
+	// Vendors.
+
+	IncusVendorGuid:     "INCUS_VENDOR_GUID",
+	MicrosoftVendorGuid: "MICROSOFT_VENDOR_GUID",
+	MtcVendorGuid:       "MTC_VENDOR_GUID",
+	OvmfVendorGuid:      "OVMF_VENDOR_GUID", // Non-standard.
 
 	// External.
 
@@ -154,6 +168,7 @@ func normalizeGUIDName(s string) string {
 	s = strings.ReplaceAll(s, "-", "")
 	s = strings.ReplaceAll(s, "_", "")
 	s = strings.TrimSuffix(s, "guid")
+	s = strings.TrimSuffix(s, "vendor")
 	return s
 }
 

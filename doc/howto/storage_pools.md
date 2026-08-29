@@ -194,11 +194,11 @@ Storage pool my-pool created
 
 ストレージプールに設定オプションを設定するには以下のコマンドを使用します:
 
-    incus storage set <pool_name> <key> <value>
+    incus storage set <pool_name> <key>=<value>
 
 たとえば、 `dir` ストレージプールでストレージプールのマイグレーション中に圧縮をオフにするには以下のコマンドを使用します:
 
-    incus storage set my-dir-pool rsync.compression false
+    incus storage set my-dir-pool rsync.compression=false
 
 ストレージプールの設定を編集するには以下のコマンドを使用します:
 

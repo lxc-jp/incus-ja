@@ -593,6 +593,52 @@ func clusterPutJoin(d *Daemon, r *http.Request, req api.ClusterPut) response.Res
 
 		d.events.SetLocalLocation(d.serverName)
 
+		// Apply the cluster's global configuration locally so it's in effect during member initialization.
+		clusterServer, _, err := client.GetServer()
+		if err != nil {
+			return fmt.Errorf("Failed to retrieve cluster configuration: %w", err)
+		}
+
+		globalConfigValues := map[string]string{}
+		for key, value := range clusterServer.Config {
+			_, ok := clusterConfig.ConfigSchema[key]
+			if ok {
+				globalConfigValues[key] = value
+			}
+		}
+
+		var joinGlobalConfig *clusterConfig.Config
+		err = s.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+			var err error
+
+			joinGlobalConfig, err = clusterConfig.Load(ctx, tx)
+			if err != nil {
+				return err
+			}
+
+			_, err = joinGlobalConfig.Patch(globalConfigValues)
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("Failed to apply cluster configuration: %w", err)
+		}
+
+		d.globalConfigMu.Lock()
+		oldGlobalConfig := d.globalConfig
+		d.globalConfig = joinGlobalConfig
+		d.globalConfigMu.Unlock()
+
+		reverter.Add(func() {
+			d.globalConfigMu.Lock()
+			d.globalConfig = oldGlobalConfig
+			d.globalConfigMu.Unlock()
+
+			_ = d.setupLinstor()
+		})
+
+		// Reset the Linstor client so it picks up the new configuration.
+		_ = d.setupLinstor()
+
 		// Create all storage pools and networks.
 		err = clusterInitMember(localClient, client, req.MemberConfig)
 		if err != nil {
@@ -1136,7 +1182,7 @@ func clusterAcceptMember(client incus.InstanceServer, name string, address strin
 //      name: filter
 //      description: Collection filter
 //      type: string
-//      example: default
+//      x-example: default
 //  responses:
 //    "200":
 //      description: API endpoints
@@ -1161,11 +1207,9 @@ func clusterAcceptMember(client incus.InstanceServer, name string, address strin
 //            description: List of endpoints
 //            items:
 //              type: string
-//            example: |-
-//              [
-//                "/1.0/cluster/members/server01",
-//                "/1.0/cluster/members/server02"
-//              ]
+//            example:
+//              - /1.0/cluster/members/server01
+//              - /1.0/cluster/members/server02
 //    "400":
 //      $ref: "#/responses/BadRequest"
 //    "403":
@@ -1191,7 +1235,7 @@ func clusterAcceptMember(client incus.InstanceServer, name string, address strin
 //	    name: filter
 //	    description: Collection filter
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	responses:
 //	  "200":
 //	    description: API endpoints
@@ -2678,39 +2722,86 @@ func handoverMemberRole(s *state.State, gateway *cluster.Gateway) error {
 
 	logCtx := logger.Ctx{"address": localClusterAddress}
 
-	// Find the cluster leader.
-findLeader:
-	leader, err := s.Cluster.LeaderAddress()
-	if err != nil {
-		return err
-	}
-
-	if leader == "" {
-		return errors.New("No leader address found")
-	}
-
-	if leader == localClusterAddress {
-		logger.Info("Transferring leadership", logCtx)
-		err := gateway.TransferLeadership()
-		if err != nil {
-			return fmt.Errorf("Failed to transfer leadership: %w", err)
+	// Retry for a while on transient errors (leader changes, unreachable
+	// leader or another configuration change in progress), as leaving
+	// without a successful handover can cost the cluster its quorum.
+	// Individual attempts can be slow (each internal call has its own
+	// timeout), so bound the retries by time rather than count to avoid
+	// hanging shutdown when the cluster has lost quorum.
+	var err error
+	deadline := time.Now().Add(30 * time.Second)
+	for i := 0; time.Now().Before(deadline); i++ {
+		if i > 0 {
+			time.Sleep(time.Second)
 		}
 
-		goto findLeader
+		// Find the cluster leader, which may change between attempts.
+		var leader string
+		leader, err = s.Cluster.LeaderAddress()
+		if err != nil {
+			continue
+		}
+
+		if leader == "" {
+			err = errors.New("No leader address found")
+			continue
+		}
+
+		if leader == localClusterAddress {
+			logger.Info("Transferring leadership", logCtx)
+			err = gateway.TransferLeadership()
+			if err != nil {
+				err = fmt.Errorf("Failed to transfer leadership: %w", err)
+
+				// Give up when there is nobody to hand over to.
+				if errors.Is(err, cluster.ErrNoOnlineVoter) {
+					return err
+				}
+
+				continue
+			}
+
+			leader, err = s.Cluster.LeaderAddress()
+			if err != nil {
+				continue
+			}
+
+			if leader == "" || leader == localClusterAddress {
+				err = errors.New("No leader address found")
+				continue
+			}
+		}
+
+		logger.Info("Handing over cluster member role", logCtx)
+		var client incus.InstanceServer
+		client, err = cluster.Connect(leader, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
+		if err != nil {
+			err = fmt.Errorf("Failed handing over cluster member role: %w", err)
+			continue
+		}
+
+		// Bound the request so an unresponsive leader can't hang shutdown.
+		httpClient, httpErr := client.GetHTTPClient()
+		if httpErr == nil {
+			httpClient.Timeout = 10 * time.Second
+		}
+
+		_, _, err = client.RawQuery("POST", "/internal/cluster/handover", post, "")
+		if err == nil {
+			return nil
+		}
+
+		// Give up right away on errors that won't resolve by retrying.
+		// The errors come back from the leader as text, usually wrapped in extra context and with
+		// inconsistent capitalization ("Not leader", "503 not leader", "not leader (10250)"), so
+		// case-insensitive substring matching is the best we can do.
+		errText := strings.ToLower(err.Error())
+		if !strings.Contains(errText, cluster.ErrClusterBusy.Error()) && !strings.Contains(errText, "not leader") && !strings.Contains(errText, "unable to connect") && !strings.Contains(errText, "client.timeout") {
+			return err
+		}
 	}
 
-	logger.Info("Handing over cluster member role", logCtx)
-	client, err := cluster.Connect(leader, s.Endpoints.NetworkCert(), s.ServerCert(), nil, true)
-	if err != nil {
-		return fmt.Errorf("Failed handing over cluster member role: %w", err)
-	}
-
-	_, _, err = client.RawQuery("POST", "/internal/cluster/handover", post, "")
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // Used to assign a new role to a the local cowsql node.

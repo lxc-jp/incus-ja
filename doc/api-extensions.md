@@ -3231,3 +3231,80 @@ ACME External Account Binding （EAB）をサポートするために以下の2�
 
 * `acme.eab.kid`
 * `acme.eab.hmac`
+
+## `instance_protection_start`
+
+`security.protection.start`インスタンス設定キーを追加します。`true`に設定するとインスタンスが起動するのを防ぎます。
+
+## `instance_nvram_bulk_update`
+
+NVRAMを一括で更新する`PATCH /1.0/instances/{name}/nvram`エンドポイントを追加します。
+
+## `instance_refresh_migration`
+
+リフレッシュマイグレーションのサポートを追加します。これは、稼働中のコンテナが一連のインクリメンタルな転送によって別のクラスターメンバーに移動し、最後の転送時にのみコンテナを停止する方式です。
+
+`POST /1.0/instances/{name}`に`refresh`フィールドを追加します。ステートレスマイグレーション（`migration`が`true`に設定され、かつ`live`が`false`に設定されている場合）で`refresh`フィールドを`true`に設定すると稼働中のコンテナがこの方式でマイグレートされます。
+
+さらに、`cluster.evacuate`の設定オプションおよび退避モードとして`refresh-migrate`を追加します。クラスター退避の際にインスタンスのリフレッシュマイグレーションを強制します。
+
+## `image_locations`
+
+イメージAPIに`locations`フィールドを追加します。イメージのローカルコピーを持つクラスターメンバーの名前を一覧表示します。
+
+## `network_ovn_multicast`
+
+以下の2つの設定キーをとおしてOVNネットワークにマルチキャストの設定を追加します：
+
+* `bridge.multicast_snooping`
+* `bridge.multicast_relay`
+
+## `device_burst_limits`
+
+`disk`と`nic`デバイスにI/Oリミットのバーストのサポートを追加します。
+
+`disk`デバイスでは（仮想マシンのみ）、`limits.read.burst`、`limits.write.burst`、`limits.max.burst`キーで持続的制限と同じ記法で値を指定し、バースト中にデバイスに許可するレートを設定します。
+
+`limits.read.burst.length`、`limits.write.burst.length`、`limits.max.burst.length`キーはバースト時のレートが持続する期間を定義します。デフォルトは1秒です。
+
+`nic`デバイス（`bridged`、`p2p`、`routed`、`ovn`）では`limits.ingress.bucket`、`limits.egress.bucket`、`limits.max.bucket`キーが持続的なリミットを超えてもよいデータ量をビット単位で指定します。
+
+`bridged`、`p2p`、`routed`タイプは`limits.ingress.burst`、`limits.egress.burst`、`limits.max.burst`も設定でき、バケットで使えるbit/sのレートを定義します。バーストを許可するには両方の向きを設定する必要があります。
+
+`ovn`タイプはバケットのキーだけが設定できます。OVNは分離したバーストレートがないためです。
+
+## `network_ipv6_ra`
+
+`bridge`と`ovn`ネットワークの両方に`ipv6.ra`設定キーを追加します。これはネットワークにIPv6ルーター広告を送るかどうかを制御します。
+
+## `qemu_scriptlet_nvram`
+
+NVRAMの情報を取得と編集する以下の関数をQEMUスクリプトレットの機能に追加します：
+
+* `get_nvram_var`
+* `has_nvram_var`
+* `set_nvram_var`
+* `unset_nvram_var`
+* `get_raw_nvram_var`
+* `set_raw_nvram_var`
+* `list_nvram_vars`
+
+## `storage_ceph_rbd_backend`
+
+Ceph RBDストレージドライバーに`ceph.rbd.backend`設定キーを追加します。
+
+`librbd`に設定すると、ボリュームはRBDカーネルドライバーではなく`librbd`でアクセスされ、ホスト上のブロックデバイスが必要な際は`qemu-nbd`が使われます。
+
+## `instance_nvram_config`
+
+初期設定オプションに`initial.nvram.*`、`initial.nvram-binary.*`、`initial.secureboot`という3つのカテゴリを追加します。デフォルトのNVRAM変数、NVRAMをリビルドする際のセキュアブートの証明書と鍵を設定できます。
+
+## `storage_cephobject_endpoint_cert`
+
+Cephオブジェクトストレージドライバーに`cephobject.radosgw.endpoint_cert`設定キーを追加します。`radosgw`エンドポイントで通信する際に信用するTLS証明書（PEMバンドル）を保持します。
+
+これは`cephobject.radosgw.endpoint_cert_file`を置き換えるもので、既存の設定値は自動で変換されます。
+
+## `device_queue_disc`
+
+`bridged`、`p2p`、`routed`タイプの`nic`デバイスに`queue.discipline`、`queue.discipline.attach`設定キーを追加します。NICのホスト側で使われるキューイング規律とNICがどこにアタッチされるかを制御します。

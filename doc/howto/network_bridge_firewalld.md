@@ -37,8 +37,8 @@ Incus のファイアウォールルールをどのように無効化し、 `fir
 
 指定のネットワークブリッジ（たとえば、`incusbr0`）に Incus がファイアウォールルールを設定しないようにするためには以下のコマンドを実行してください:
 
-    incus network set <network_bridge> ipv6.firewall false
-    incus network set <network_bridge> ipv4.firewall false
+    incus network set <network_bridge> ipv6.firewall=false
+    incus network set <network_bridge> ipv4.firewall=false
 
 ### `firewalld` で信頼されたゾーンにブリッジを追加する
 

@@ -121,6 +121,7 @@ func (r *ProtocolIncus) UseProject(name string) InstanceServer {
 		eventListeners:       make(map[string][]*EventListener), // New project specific listeners.
 		skipEvents:           r.skipEvents,
 		oidcClient:           r.oidcClient,
+		tempPath:             r.tempPath,
 	}
 }
 
@@ -146,6 +147,7 @@ func (r *ProtocolIncus) UseTarget(name string) InstanceServer {
 		skipEvents:           r.skipEvents,
 		oidcClient:           r.oidcClient,
 		clusterTarget:        name,
+		tempPath:             r.tempPath,
 	}
 }
 
@@ -287,8 +289,8 @@ func (r *ProtocolIncus) ApplyServerPreseed(config api.InitPreseed) error {
 	// Apply network configuration function.
 	applyNetwork := func(target api.InitNetworksProjectPost) error {
 		network, etag, err := r.UseProject(target.Project).GetNetwork(target.Name)
-		if err != nil {
-			// Create the network if doesn't exist.
+		if err != nil || !network.Managed {
+			// Create the network if it doesn't exist or is currently unmanaged.
 			err := r.UseProject(target.Project).CreateNetwork(target.NetworksPost)
 			if err != nil {
 				return fmt.Errorf("Failed to create local member network %q in project %q: %w", target.Name, target.Project, err)

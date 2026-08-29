@@ -4,14 +4,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
+	"strconv"
+	"strings"
 )
 
 // errUnexpectedData is a very generic error returned whenever something fails if the parser.
 var errUnexpectedData = errors.New("Unexpected data")
-
-// errNotImplemented is an error returned whenever part of a dissector is not implemented.
-var errNotImplemented = errors.New("Not implemented")
 
 // formatGUID formats a GUID.
 func formatGUID(guid []byte) string {
@@ -32,6 +31,33 @@ func formatIP(ip []byte, port ...uint16) string {
 	return fmt.Sprintf("%d.%d.%d.%d:%d", ip[0], ip[1], ip[2], ip[3], p)
 }
 
+// parseIP parses an IPv4 address.
+func parseIP(ip string, allowPort ...bool) ([]byte, uint16, error) {
+	var p uint64
+	if len(allowPort) == 0 || allowPort[0] {
+		parts := strings.SplitN(ip, ":", 2)
+		if len(parts) == 2 {
+			var err error
+			ip = parts[0]
+			p, err = strconv.ParseUint(parts[1], 10, 16)
+			if err != nil {
+				return nil, 0, fmt.Errorf("Couldn’t parse port %s: %w", parts[1], err)
+			}
+		}
+	}
+
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if !addr.Is4() {
+		return nil, 0, fmt.Errorf("%s is not a valid IPv4 address", ip)
+	}
+
+	return addr.AsSlice(), uint16(p), nil
+}
+
 // formatIP6 formats an IPv6 address.
 func formatIP6(ip6 []byte, port ...uint16) string {
 	var p uint16
@@ -39,12 +65,44 @@ func formatIP6(ip6 []byte, port ...uint16) string {
 		p = port[0]
 	}
 
-	ip := net.IP(ip6)
+	ip := netip.AddrFrom16([16]byte(ip6)).String()
 	if p == 0 {
-		return fmt.Sprintf("[%s]", ip)
+		return ip
 	}
 
-	return fmt.Sprintf("%s:%d", ip, p)
+	return fmt.Sprintf("[%s]:%d", ip, p)
+}
+
+// parseIP6 parses an IPv6 address.
+func parseIP6(ip string, allowPort ...bool) ([]byte, uint16, error) {
+	if strings.Contains(ip, "%") {
+		return nil, 0, fmt.Errorf("%s is not a valid IPv6 address", ip)
+	}
+
+	var p uint64
+	if len(allowPort) == 0 || allowPort[0] {
+		parts := strings.SplitN(ip, "]:", 2)
+		if len(parts) == 2 {
+			var err error
+			ip = parts[0] + "]"
+			p, err = strconv.ParseUint(parts[1], 10, 16)
+			if err != nil {
+				return nil, 0, fmt.Errorf("Couldn’t parse port %s: %w", parts[1], err)
+			}
+		}
+	}
+
+	if strings.HasPrefix(ip, "[") && strings.HasSuffix(ip, "]") {
+		ip = ip[1 : len(ip)-1]
+	}
+
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	b := addr.As16()
+	return b[:], uint16(p), nil
 }
 
 // ParseAttributes parses UEFI variable attributes and formats them.
@@ -122,4 +180,30 @@ func csum16(b []byte) uint16 {
 	}
 
 	return sum
+}
+
+// ParseBootXXXX tries to parse `Boot####` and related variable names.
+func ParseBootXXXX(name string) (string, uint16, bool) {
+	hasFourDigits := false
+	n := len(name)
+	if n > 4 {
+		hasFourDigits = true
+		for _, c := range name[n-4:] {
+			if (c < '0' || c > '9') && (c < 'A' || c > 'F') {
+				hasFourDigits = false
+				break
+			}
+		}
+	}
+
+	if !hasFourDigits {
+		return name, 0, false
+	}
+
+	i, err := strconv.ParseUint(name[n-4:], 16, 16)
+	if err != nil {
+		return name, 0, false
+	}
+
+	return name[:n-4], uint16(i), true
 }

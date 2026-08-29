@@ -525,35 +525,56 @@ func (m *Monitor) QueryMigrate() (*MigrationStatus, error) {
 // Returns nil if the migraton job reaches the specified status or an error if the migration job is in the failed
 // status.
 func (m *Monitor) MigrateWait(ctx context.Context, state string) error {
+	// Listen for status change events (sent when the "events" migration capability is set),
+	// falling back to polling when they're not available.
+	chEvent, cancel := m.listenForEvent(EventMigration)
+	defer cancel()
+
 	// Wait until it completes or fails.
 	for {
+		// Prepare the response.
+		var resp struct {
+			Return struct {
+				Status string `json:"status"`
+			} `json:"return"`
+		}
+
+		// Monitor timeouts are expected during switchover (QEMU main loop busy), keep polling.
+		err := m.Run("query-migrate", nil, &resp)
+		if err != nil && !errors.Is(err, ErrMonitorTimeout) {
+			return err
+		}
+
+		if resp.Return.Status == "failed" {
+			return errors.New("Migrate call failed")
+		}
+
+		if resp.Return.Status == state {
+			return nil
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-			// Prepare the response.
-			var resp struct {
-				Return struct {
-					Status string `json:"status"`
-				} `json:"return"`
-			}
+		case data := <-chEvent:
+			status, ok := data["status"].(string)
+			if ok {
+				if status == "failed" {
+					return errors.New("Migrate call failed")
+				}
 
-			err := m.Run("query-migrate", nil, &resp)
-			if err != nil {
-				return err
+				if status == state {
+					return nil
+				}
 			}
-
-			if resp.Return.Status == "failed" {
-				return errors.New("Migrate call failed")
-			}
-
-			if resp.Return.Status == state {
-				return nil
-			}
-
-			time.Sleep(1 * time.Second)
+		case <-time.After(1 * time.Second):
 		}
 	}
+}
+
+// MigrateCancel cancels an ongoing migration.
+func (m *Monitor) MigrateCancel() error {
+	return m.Run("migrate_cancel", nil, nil)
 }
 
 // MigrateContinue continues a migration stream.
@@ -608,8 +629,9 @@ func (m *Monitor) MigrateIncoming(ctx context.Context, name string) error {
 			} `json:"return"`
 		}
 
+		// Monitor timeouts are expected during switchover (QEMU main loop busy), keep polling.
 		err := m.Run("query-migrate", nil, &resp)
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrMonitorTimeout) {
 			return err
 		}
 
@@ -1657,18 +1679,18 @@ func (m *Monitor) BlockJobCancelWait(jobID string) error {
 // BlockJobComplete completes a block job that is in ready state.
 func (m *Monitor) BlockJobComplete(deviceNodeName string) error {
 	var args struct {
-		Device string `json:"device"`
+		ID string `json:"id"`
 	}
 
-	args.Device = deviceNodeName
+	args.ID = deviceNodeName
 
-	err := m.Run("block-job-complete", args, nil)
+	err := m.Run("job-complete", args, nil)
 	if err != nil {
 		return err
 	}
 
 	// Wait for the job to reach its final state and report its result.
-	_, err = m.blockJobWait(args.Device, false, true)
+	_, err = m.blockJobWait(args.ID, false, true)
 	if err != nil {
 		return err
 	}
@@ -1694,8 +1716,24 @@ func (m *Monitor) UpdateBlockSize(id string, size int64) error {
 	return nil
 }
 
+// BlockThrottle represents the I/O limits to apply on a disk.
+type BlockThrottle struct {
+	BytesRead  int
+	BytesWrite int
+	IOPsRead   int
+	IOPsWrite  int
+
+	BytesReadBurst  int
+	IOPsReadBurst   int
+	ReadBurstLength int
+
+	BytesWriteBurst  int
+	IOPsWriteBurst   int
+	WriteBurstLength int
+}
+
 // SetBlockThrottle applies an I/O limit on a disk.
-func (m *Monitor) SetBlockThrottle(id string, bytesRead int, bytesWrite int, iopsRead int, iopsWrite int) error {
+func (m *Monitor) SetBlockThrottle(id string, limits BlockThrottle) error {
 	var args struct {
 		ID string `json:"id"`
 
@@ -1705,13 +1743,44 @@ func (m *Monitor) SetBlockThrottle(id string, bytesRead int, bytesWrite int, iop
 		IOPs       int `json:"iops"`
 		IOPsRead   int `json:"iops_rd"`
 		IOPsWrite  int `json:"iops_wr"`
+
+		BytesReadBurst        int `json:"bps_rd_max,omitempty"`
+		BytesReadBurstLength  int `json:"bps_rd_max_length,omitempty"`
+		BytesWriteBurst       int `json:"bps_wr_max,omitempty"`
+		BytesWriteBurstLength int `json:"bps_wr_max_length,omitempty"`
+		IOPsReadBurst         int `json:"iops_rd_max,omitempty"`
+		IOPsReadBurstLength   int `json:"iops_rd_max_length,omitempty"`
+		IOPsWriteBurst        int `json:"iops_wr_max,omitempty"`
+		IOPsWriteBurstLength  int `json:"iops_wr_max_length,omitempty"`
 	}
 
 	args.ID = id
-	args.BytesRead = bytesRead
-	args.BytesWrite = bytesWrite
-	args.IOPsRead = iopsRead
-	args.IOPsWrite = iopsWrite
+	args.BytesRead = limits.BytesRead
+	args.BytesWrite = limits.BytesWrite
+	args.IOPsRead = limits.IOPsRead
+	args.IOPsWrite = limits.IOPsWrite
+
+	args.BytesReadBurst = limits.BytesReadBurst
+	args.BytesWriteBurst = limits.BytesWriteBurst
+	args.IOPsReadBurst = limits.IOPsReadBurst
+	args.IOPsWriteBurst = limits.IOPsWriteBurst
+
+	// The burst length is per-limit in QEMU but per-direction in Incus.
+	if limits.BytesReadBurst > 0 {
+		args.BytesReadBurstLength = limits.ReadBurstLength
+	}
+
+	if limits.IOPsReadBurst > 0 {
+		args.IOPsReadBurstLength = limits.ReadBurstLength
+	}
+
+	if limits.BytesWriteBurst > 0 {
+		args.BytesWriteBurstLength = limits.WriteBurstLength
+	}
+
+	if limits.IOPsWriteBurst > 0 {
+		args.IOPsWriteBurstLength = limits.WriteBurstLength
+	}
 
 	err := m.Run("block_set_io_throttle", args, nil)
 	if err != nil {

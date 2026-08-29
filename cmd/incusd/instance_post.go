@@ -32,6 +32,7 @@ import (
 	"github.com/lxc/incus/v7/shared/api"
 	apiScriptlet "github.com/lxc/incus/v7/shared/api/scriptlet"
 	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
 	"github.com/lxc/incus/v7/shared/util"
 )
 
@@ -62,7 +63,7 @@ import (
 //	    name: project
 //	    description: Project name
 //	    type: string
-//	    example: default
+//	    x-example: default
 //	  - in: body
 //	    name: migration
 //	    description: Migration request
@@ -193,12 +194,13 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 
 		// Check that the new isn't already in use.
 		var id int
-		err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+		_ = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
 			// Check that the name isn't already in use.
 			id, _ = tx.GetInstanceID(ctx, instProject, req.Name)
 
 			return nil
 		})
+
 		if id > 0 {
 			return response.Conflict(fmt.Errorf("Name %q already in use", req.Name))
 		}
@@ -233,12 +235,18 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(errors.New("Instance snapshots cannot be moved on their own"))
 	}
 
+	if req.Refresh && req.Live {
+		return response.BadRequest(errors.New("Refresh migration can't be used with a stateful migration"))
+	}
+
 	// Checks for running instances.
 	if inst.IsRunning() {
 		if req.Pool != "" || req.Project != "" || target != "" {
-			// Stateless migrations need the instance stopped.
-			if !req.Live {
-				return response.BadRequest(errors.New("Instance must be stopped to be moved statelessly"))
+			if !req.Live && req.Refresh {
+				err := nearLiveMigrationSupported(s, inst, req, target)
+				if err != nil {
+					return response.BadRequest(err)
+				}
 			}
 
 			// Storage pool changes require a target flag.
@@ -511,7 +519,7 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 	}
 
 	// Cross-server instance migration.
-	ws, err := newMigrationSource(inst, req.Live, req.InstanceOnly, req.AllowInconsistent, "", "", req.Devices, req.Target)
+	ws, err := newMigrationSource(inst, req.Live, req.InstanceOnly, req.AllowInconsistent, "", "", req.Devices, nil, req.Target)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -634,7 +642,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 	// Apply the config overrides.
 	maps.Copy(targetInstInfo.Config, req.Config)
 
-	// If "security.secureboot" has changed, force a NVRAM reset (VMs only).
+	// If "security.secureboot" has changed, force an NVRAM reset (VMs only).
 	if inst.Type() == instancetype.VM && util.IsTrueOrEmpty(inst.ExpandedConfig()["security.secureboot"]) != util.IsTrueOrEmpty(req.Config["security.secureboot"]) {
 		targetInstInfo.Config["volatile.apply_nvram"] = "true"
 	}
@@ -904,8 +912,58 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			return fmt.Errorf("Failed getting source instance snapshots: %w", err)
 		}
 
+		// A requested stateless move of a running container is performed as a near-live migration.
+		nearLiveRestart := false
+		nearLiveReverter := revert.New()
+		defer nearLiveReverter.Fail()
+
+		// Copy of the instance's dependent volumes on local storage, only started for a
+		// near-live migration onto shared storage.
+		localDiskTransfer := dependentDiskTransfer{s: s, inst: inst, target: target, sourceMemberInfo: sourceMemberInfo, op: op}
+
+		if req.Refresh && !req.Live && inst.IsRunning() {
+			err := nearLiveMigrationSupported(s, inst, req, targetMemberInfo.Name)
+			if err != nil {
+				return err
+			}
+
+			// On shared storage there is nothing to pre-copy.
+			if !sourcePool.Driver().Info().Remote {
+				return migrateInstanceNearLive(ctx, s, inst, target, targetInstInfo, sourceMemberInfo, req.Devices, op, progressHandler)
+			}
+
+			// Copy the dependent volumes on local storage while the instance runs.
+			err = localDiskTransfer.start(ctx, nearLiveReverter)
+			if err != nil {
+				return err
+			}
+
+			err = instanceShutdownOrForceStop(inst)
+			if err != nil {
+				return err
+			}
+
+			nearLiveRestart = true
+
+			nearLiveReverter.Add(func() {
+				err := inst.Start(false)
+				if err != nil {
+					logger.Error("Failed restarting instance after failed near-live migration", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
+				}
+			})
+
+			// Final transfer of local disks, with the instance stopped.
+			err = localDiskTransfer.finalTransfer(ctx)
+			if err != nil {
+				return err
+			}
+
+			// Prevent target instance start at this moment.
+			delete(targetInstInfo.Config, "volatile.last_state.power")
+		}
+
 		// Setup a new migration source.
-		sourceMigration, err := newMigrationSource(inst, req.Live, false, req.AllowInconsistent, inst.Name(), req.Pool, req.Devices, nil)
+		sourceMigration, err := newMigrationSource(inst, req.Live, false, req.AllowInconsistent, inst.Name(), req.Pool, req.Devices, localDiskTransfer.diskNames(), nil)
 		if err != nil {
 			return fmt.Errorf("Failed setting up instance migration on source: %w", err)
 		}
@@ -979,9 +1037,11 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			return fmt.Errorf("Instance move to destination failed on source: %w", err)
 		}
 
-		err = destOp.Wait()
-		if err != nil {
-			return fmt.Errorf("Instance move to destination failed: %w", err)
+		// A live migration on the same shared storage is handed over once the source succeeds,
+		// so the database record must follow the instance even if the destination reported an error.
+		destErr := destOp.Wait()
+		if destErr != nil && (!req.Live || !sourcePool.Driver().Info().Remote || req.Pool != "") {
+			return fmt.Errorf("Instance move to destination failed: %w", destErr)
 		}
 
 		// Update the database post-migration.
@@ -1054,6 +1114,9 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			return err
 		}
 
+		// The instance now belongs to the target member, so restarting the source is no longer the right thing to do on failure.
+		nearLiveReverter.Success()
+
 		// Cleanup instance paths on source member if using remote shared storage
 		// and there was no storage pool change.
 		if sourcePool.Driver().Info().Remote && req.Pool == "" {
@@ -1070,7 +1133,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 				// Delete the snapshots in reverse order.
 				k = snapshotCount - 1 - k
 
-				err = sourcePool.DeleteInstanceSnapshot(snapshots[k], nil)
+				err = sourcePool.DeleteInstanceSnapshot(snapshots[k], false, nil)
 				if err != nil {
 					return fmt.Errorf("Failed delete instance snapshot %q on source member: %w", snapshots[k].Name(), err)
 				}
@@ -1085,6 +1148,24 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		err = cleanupDependentDisks(s, inst, req.Devices, op)
 		if err != nil {
 			return fmt.Errorf("Failed deleting instance dependent volumes on source member: %w", err)
+		}
+
+		localDiskTransfer.deleteSnapshots()
+
+		// Start the target instance for a near-live migration onto shared storage.
+		if nearLiveRestart {
+			startOp, err := target.UpdateInstanceState(inst.Name(), api.InstanceStatePut{Action: "start"}, "")
+			if err == nil {
+				err = startOp.Wait()
+			}
+
+			if err != nil {
+				return fmt.Errorf("Failed starting instance on target member: %w", err)
+			}
+		}
+
+		if destErr != nil {
+			return fmt.Errorf("Instance moved to %q but destination reported an error: %w", targetMemberInfo.Name, destErr)
 		}
 	}
 

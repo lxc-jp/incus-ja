@@ -15,7 +15,6 @@ import (
 	"github.com/lxc/incus/v7/cmd/incus/color"
 	u "github.com/lxc/incus/v7/cmd/incus/usage"
 	"github.com/lxc/incus/v7/internal/i18n"
-	"github.com/lxc/incus/v7/shared/api"
 	cli "github.com/lxc/incus/v7/shared/cmd"
 )
 
@@ -55,7 +54,7 @@ incus monitor --type=lifecycle
 	cmd.RunE = c.run
 	cli.AddBoolFlag(cmd.Flags(), &c.flagPretty, "pretty", i18n.G("Pretty rendering (short for --format=pretty)"))
 	cli.AddBoolFlag(cmd.Flags(), &c.flagAllProjects, "all-projects", i18n.G("Show events from all projects"))
-	cli.AddStringArrayFlag(cmd.Flags(), &c.flagType, "type|t", i18n.G("Event type to listen for"))
+	cli.AddStringArrayFlag(cmd.Flags(), &c.flagType, "type|t", i18n.G("Event type to listen for (may be passed multiple times)"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagLogLevel, "loglevel", "", "", i18n.G("Minimum level for log messages (only available when using pretty format)"))
 	cli.AddStringFlag(cmd.Flags(), &c.flagFormat, "format|f", "yaml", "", i18n.G("Format (json|pretty|yaml)"))
 
@@ -102,15 +101,12 @@ func (c *cmdMonitor) run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	chError := make(chan error, 1)
-
-	handler := func(event api.Event) {
+	for event := range listener.AddChannel(c.flagType, 0) {
 		if c.flagFormat == "pretty" {
 			// Parse the event.
 			record, err := event.ToLogging()
 			if err != nil {
-				chError <- err
-				return
+				return err
 			}
 
 			if record.Lvl == "dbug" {
@@ -120,13 +116,12 @@ func (c *cmdMonitor) run(cmd *cobra.Command, args []string) error {
 			// Get the log level.
 			msgLevel, err := logrus.ParseLevel(record.Lvl)
 			if err != nil {
-				chError <- err
-				return
+				return err
 			}
 
 			// Check log level.
 			if msgLevel > logLevel {
-				return
+				continue
 			}
 
 			// Setup logrus.
@@ -149,27 +144,24 @@ func (c *cmdMonitor) run(cmd *cobra.Command, args []string) error {
 
 			line, err := format.Format(entry)
 			if err != nil {
-				chError <- err
-				return
+				return err
 			}
 
 			fmt.Print(string(line))
-			return
+			continue
 		}
 
 		// Render as JSON (to expand RawMessage)
 		jsonRender, err := json.Marshal(&event)
 		if err != nil {
-			chError <- err
-			return
+			return err
 		}
 
 		// Read back to a clean interface
 		var rawEvent any
 		err = json.Unmarshal(jsonRender, &rawEvent)
 		if err != nil {
-			chError <- err
-			return
+			return err
 		}
 
 		// And now print the result.
@@ -178,31 +170,20 @@ func (c *cmdMonitor) run(cmd *cobra.Command, args []string) error {
 		case "yaml":
 			render, err = yaml.Dump(&rawEvent, yaml.WithV2Defaults())
 			if err != nil {
-				chError <- err
-				return
+				return err
 			}
 
 		case "json":
 			render, err = json.Marshal(&rawEvent)
 			if err != nil {
-				chError <- err
-				return
+				return err
 			}
 		}
 
 		fmt.Printf("%s\n\n", render)
 	}
 
-	_, err = listener.AddHandler(c.flagType, handler)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		chError <- listener.Wait()
-	}()
-
-	return <-chError
+	return listener.Wait()
 }
 
 func (c *cmdMonitor) unpackCtx(ctx []any) logrus.Fields {

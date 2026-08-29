@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,6 +26,7 @@ import (
 	"github.com/lxc/incus/v7/internal/server/ip"
 	"github.com/lxc/incus/v7/internal/server/network"
 	"github.com/lxc/incus/v7/internal/server/state"
+	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/logger"
 	"github.com/lxc/incus/v7/shared/revert"
 	"github.com/lxc/incus/v7/shared/units"
@@ -148,6 +151,28 @@ func networkCreateVlanDeviceIfNeeded(s *state.State, parent string, vlanDevice s
 	}
 
 	return "existing", nil
+}
+
+// networkInterfaceCheckNotInUse checks that the interface isn't in use by the host as a bridge or bond
+// member or through assigned IP addresses.
+func networkInterfaceCheckNotInUse(nicName string) error {
+	// Check if the interface is a bridge or bond member.
+	masterPath, err := os.Readlink(fmt.Sprintf("/sys/class/net/%s/master", nicName))
+	if err == nil {
+		return fmt.Errorf("Interface %q is in use by the host (member of %q)", nicName, filepath.Base(masterPath))
+	}
+
+	// Check if the interface has IP addresses assigned.
+	addresses, _, err := network.InterfaceStatus(nicName)
+	if err != nil {
+		return err
+	}
+
+	if len(addresses) > 0 {
+		return fmt.Errorf("Interface %q is in use by the host (has assigned IP addresses)", nicName)
+	}
+
+	return nil
 }
 
 // networkSnapshotPhysicalNIC records properties of the NIC to volatile so they can be restored later.
@@ -539,6 +564,213 @@ func networkNICRouteDelete(routeDev string, viaIPv4 string, viaIPv6 string, rout
 	}
 }
 
+// nicLimitMax is the largest rate or bucket that can be represented, netlink storing both as a byte count in a uint32.
+const nicLimitMax = int64(math.MaxUint32) * 8
+
+// nicLimits represents the parsed rate limits of a nic device, rates in bit/s and buckets in bit.
+type nicLimits struct {
+	ingress       int64
+	egress        int64
+	ingressBurst  int64
+	ingressBucket int64
+	egressBurst   int64
+	egressBucket  int64
+}
+
+// nicParseLimits parses a nic device configuration for its rate limits.
+func nicParseLimits(config deviceConfig.Device) (*nicLimits, error) {
+	limits := &nicLimits{}
+
+	// parseValue parses a single bit or bit/s value, the max key taking precedence over the per-direction one.
+	parseValue := func(key string, maxKey string) (int64, error) {
+		value := config[key]
+
+		if config[maxKey] != "" {
+			key = maxKey
+			value = config[maxKey]
+		}
+
+		if value == "" {
+			return 0, nil
+		}
+
+		size, err := units.ParseBitSizeString(value)
+		if err != nil {
+			return -1, fmt.Errorf("Invalid %s value %q: %w", key, value, err)
+		}
+
+		return size, nil
+	}
+
+	fields := []struct {
+		key    string
+		maxKey string
+		target *int64
+	}{
+		{"limits.ingress", "limits.max", &limits.ingress},
+		{"limits.egress", "limits.max", &limits.egress},
+		{"limits.ingress.burst", "limits.max.burst", &limits.ingressBurst},
+		{"limits.egress.burst", "limits.max.burst", &limits.egressBurst},
+		{"limits.ingress.bucket", "limits.max.bucket", &limits.ingressBucket},
+		{"limits.egress.bucket", "limits.max.bucket", &limits.egressBucket},
+	}
+
+	for _, field := range fields {
+		value, err := parseValue(field.key, field.maxKey)
+		if err != nil {
+			return nil, err
+		}
+
+		*field.target = value
+	}
+
+	return limits, nil
+}
+
+// nicValidateBurstLimits checks that the burst limits of a device are consistent with its sustained limits.
+func nicValidateBurstLimits(config deviceConfig.Device, burstRate bool) error {
+	limits, err := nicParseLimits(config)
+	if err != nil {
+		return err
+	}
+
+	checks := []struct {
+		name      string
+		sustained int64
+		burst     int64
+		bucket    int64
+	}{
+		{"ingress", limits.ingress, limits.ingressBurst, limits.ingressBucket},
+		{"egress", limits.egress, limits.egressBurst, limits.egressBucket},
+	}
+
+	for _, check := range checks {
+		if check.burst == 0 && check.bucket == 0 {
+			continue
+		}
+
+		if check.sustained == 0 {
+			return fmt.Errorf("The %s burst limit requires a matching sustained limit", check.name)
+		}
+
+		if check.bucket == 0 {
+			return fmt.Errorf("The %s burst rate requires a matching burst bucket", check.name)
+		}
+
+		if burstRate && check.burst == 0 {
+			return fmt.Errorf("The %s burst bucket requires a matching burst rate", check.name)
+		}
+
+		if check.burst != 0 && check.burst < check.sustained {
+			return fmt.Errorf("The %s burst rate must be higher than the sustained limit", check.name)
+		}
+
+		if check.burst > nicLimitMax {
+			return fmt.Errorf("The %s burst rate must be at most %d bit/s", check.name, nicLimitMax)
+		}
+
+		if check.bucket < 1000 {
+			return fmt.Errorf("The %s burst bucket must be at least %d bit", check.name, 1000)
+		}
+
+		if check.bucket > nicLimitMax {
+			return fmt.Errorf("The %s burst bucket must be at most %d bit", check.name, nicLimitMax)
+		}
+	}
+
+	return nil
+}
+
+// nicValidateQdisc checks that the queuing discipline of a device is consistent with its other settings.
+func nicValidateQdisc(config deviceConfig.Device, instType instancetype.Type) error {
+	attach := config["queue.discipline.attach"]
+	if attach == "" {
+		return nil
+	}
+
+	if instType != instancetype.VM {
+		return errors.New("The queuing discipline attachment cannot be applied to containers")
+	}
+
+	if config["queue.discipline"] == "" {
+		return errors.New("The queuing discipline attachment requires a queuing discipline")
+	}
+
+	if attach == "queue" && (config["limits.ingress"] != "" || config["limits.max"] != "") {
+		return errors.New("The queuing discipline cannot be attached per queue when an ingress limit is set")
+	}
+
+	return nil
+}
+
+// nicQdiscQueueCount returns the number of transmit queues QEMU attaches to a VM NIC.
+func nicQdiscQueueCount(instConfig map[string]string) (int, error) {
+	cpus, err := instance.CPUUsage(instConfig, api.InstanceTypeVM)
+	if err != nil {
+		return 0, err
+	}
+
+	return max(int(cpus), 2), nil
+}
+
+// networkSetupQdisc puts a qdisc in place, replacing any existing one at the same location.
+func networkSetupQdisc(qdisc *ip.QdiscGeneric) error {
+	// A qdisc cannot change kind in place, so clear any existing one first.
+	err := qdisc.Delete()
+	if err != nil && !errors.Is(err, unix.ENOENT) {
+		return err
+	}
+
+	return qdisc.Add()
+}
+
+// networkSetupHostVethQdisc sets the configured queuing discipline on the host side of a NIC.
+// When a rate limit is in place the qdisc goes on the leaf of the limit's class, as that is where
+// packets actually queue. Otherwise it becomes the root qdisc of the device, or on a VM asking for
+// it, one qdisc per transmit queue underneath a multiqueue root.
+func networkSetupHostVethQdisc(d *deviceCommon, veth string, limited bool) error {
+	kind := d.config["queue.discipline"]
+	if kind == "" {
+		return nil
+	}
+
+	if limited {
+		return networkSetupQdisc(&ip.QdiscGeneric{Qdisc: ip.Qdisc{Dev: veth, Handle: "10:0", Parent: "1:10"}, Kind: kind})
+	}
+
+	if d.inst.Type() != instancetype.VM || d.config["queue.discipline.attach"] == "root" {
+		return networkSetupQdisc(&ip.QdiscGeneric{Qdisc: ip.Qdisc{Dev: veth, Handle: "1:0", Parent: "root"}, Kind: kind})
+	}
+
+	// The attached queues win, as limits.cpu may have changed since they were sized. Until
+	// QEMU attaches them the interface has one queue, so predict the count it will use.
+	queues, err := network.GetTXQueueCount(veth)
+	if err != nil {
+		return err
+	}
+
+	if queues <= 1 {
+		queues, err = nicQdiscQueueCount(d.inst.ExpandedConfig())
+		if err != nil {
+			return err
+		}
+	}
+
+	err = networkSetupQdisc(&ip.QdiscGeneric{Qdisc: ip.Qdisc{Dev: veth, Handle: "1:0", Parent: "root"}, Kind: "mq"})
+	if err != nil {
+		return err
+	}
+
+	for i := 1; i <= queues; i++ {
+		err = networkSetupQdisc(&ip.QdiscGeneric{Qdisc: ip.Qdisc{Dev: veth, Handle: fmt.Sprintf("%d:0", i+1), Parent: fmt.Sprintf("1:%d", i)}, Kind: kind})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // networkSetupHostVethLimits applies any network rate limits to the veth device specified in the config.
 func networkSetupHostVethLimits(d *deviceCommon, oldConfig deviceConfig.Device, bridged bool) error {
 	var err error
@@ -556,21 +788,13 @@ func networkSetupHostVethLimits(d *deviceCommon, oldConfig deviceConfig.Device, 
 	}
 
 	// Parse the values
-	var ingressInt int64
-	if d.config["limits.ingress"] != "" {
-		ingressInt, err = units.ParseBitSizeString(d.config["limits.ingress"])
-		if err != nil {
-			return err
-		}
+	limits, err := nicParseLimits(d.config)
+	if err != nil {
+		return err
 	}
 
-	var egressInt int64
-	if d.config["limits.egress"] != "" {
-		egressInt, err = units.ParseBitSizeString(d.config["limits.egress"])
-		if err != nil {
-			return err
-		}
-	}
+	ingressInt := limits.ingress
+	egressInt := limits.egress
 
 	// Clean any existing entry
 	qdiscIngress := &ip.QdiscIngress{Qdisc: ip.Qdisc{Dev: veth, Handle: "ffff:0"}}
@@ -594,6 +818,12 @@ func networkSetupHostVethLimits(d *deviceCommon, oldConfig deviceConfig.Device, 
 		}
 
 		classHTB := &ip.ClassHTB{Class: ip.Class{Dev: veth, Parent: "1:0", Classid: "1:10"}, Rate: fmt.Sprintf("%dbit", ingressInt)}
+
+		if limits.ingressBurst > 0 {
+			classHTB.Ceil = fmt.Sprintf("%dbit", limits.ingressBurst)
+			classHTB.Buffer = uint32(limits.ingressBucket / 8)
+		}
+
 		err = classHTB.Add()
 		if err != nil {
 			return fmt.Errorf("Failed to create limit tc class: %s", err)
@@ -614,11 +844,24 @@ func networkSetupHostVethLimits(d *deviceCommon, oldConfig deviceConfig.Device, 
 		}
 
 		police := &ip.ActionPolice{Rate: uint32(egressInt / 8), Burst: uint32(egressInt / 40), Mtu: 65535, Drop: true}
+
+		if limits.egressBurst > 0 {
+			police.PeakRate = uint32(limits.egressBurst / 8)
+
+			// Never go below the default bucket, police needs one large enough to pass a full packet.
+			police.Burst = max(police.Burst, uint32(limits.egressBucket/8))
+		}
+
 		filter := &ip.U32Filter{Filter: ip.Filter{Dev: veth, Parent: "ffff:0", Protocol: "all"}, Value: 0, Mask: 0, Actions: []ip.Action{police}}
 		err = filter.Add()
 		if err != nil {
 			return fmt.Errorf("Failed to create ingress tc filter: %s", err)
 		}
+	}
+
+	err = networkSetupHostVethQdisc(d, veth, d.config["limits.ingress"] != "")
+	if err != nil {
+		return err
 	}
 
 	var networkPriority uint64
