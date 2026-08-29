@@ -58,15 +58,15 @@ incus_disk_read_bytes_total{device="loop3",name="vm",project="default",type="vir
 
 たとえば、完全な API を`8443`ポートで公開するには、次のコマンドを入力します:
 
-    incus config set core.https_address ":8443"
+    incus config set core.https_address=":8443"
 
 メトリクス API エンドポイントのみを`8444`ポートで公開するには、次のコマンドを入力します:
 
-    incus config set core.metrics_address ":8444"
+    incus config set core.metrics_address=":8444"
 
 メトリクス API エンドポイントのみを指定した IP アドレスとポートで公開するには、次のようなコマンドを入力します:
 
-    incus config set core.metrics_address "192.0.2.101:8444"
+    incus config set core.metrics_address="192.0.2.101:8444"
 
 ### メトリクス用証明書の追加
 
@@ -90,7 +90,7 @@ incus_disk_read_bytes_total{device="loop3",name="vm",project="default",type="vir
 
 ```bash
 # Disable authentication (NOT RECOMMENDED)
-incus config set core.metrics_authentication false
+incus config set core.metrics_authentication=false
 ```
 
 ### メトリクス用証明書をPrometheusで利用可能にする

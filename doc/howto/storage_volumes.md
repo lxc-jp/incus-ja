@@ -92,6 +92,10 @@
 そのため、制限値を設定する際はファイルシステム自体のオーバーヘッドを考慮してください。
 キャッシュされたデータへのアクセスはこの制限値に影響されません。
 
+仮想マシンでは、`limits.read.burst`、`limits.write.burst`や`limits.max.burst`プロパティーを`limits.read.burst.length`、`limits.write.burst.length`や`limits.max.burst.length`とともに設定することで、ディスクが一時的に制限を超えることを許し、バーストがどれぐらい持続するか（デフォルトは1秒）を制御することができます。
+バースト制限はそれが適用される持続的制限より大きい必要があり、持続的制限とともに設定されたときのみ有効です。
+バースト制限はコンテナでは利用できません。
+
 (storage-volume-special)=
 ### バックアップやイメージにボリュームを使用する
 
@@ -114,7 +118,7 @@
 
 ストレージボリュームの設定オプションを設定するには以下のコマンドを使用します:
 
-    incus storage volume set <pool_name> [<volume_type>/]<volume_name> <key> <value>
+    incus storage volume set <pool_name> [<volume_type>/]<volume_name> <key>=<value>
 
 {ref}`ストレージボリュームタイプ <storage-volume-types>` のデフォルトは `custom` ですので、カスタムストレージボリュームを設定する際は `<volume_type>/` は省略できます。
 
@@ -124,7 +128,7 @@
 
 たとえば、仮想マシン `my-vm` のスナップショットの破棄期限を 1 ヶ月に設定するには以下のコマンドを使います:
 
-    incus storage volume set my-pool virtual-machine/my-vm snapshots.expiry 1M
+    incus storage volume set my-pool virtual-machine/my-vm snapshots.expiry=1M
 
 以下のコマンドでストレージボリューム設定を編集することもできます:
 
@@ -141,7 +145,7 @@
 
 たとえば、ストレージプールにデフォルトのボリュームサイズを設定するには以下のコマンドを使用します:
 
-    incus storage set [<remote>:]<pool_name> volume.size <value>
+    incus storage set [<remote>:]<pool_name> volume.size=<value>
 
 ## ストレージボリュームを表示する
 
@@ -177,7 +181,11 @@
 
 ストレージボリュームをリサイズするにはサイズ設定を設定します:
 
-    incus storage volume set <pool_name> <volume_name> size <new_size>
+    incus storage volume set <pool_name> <volume_name> size=<new_size>
+
+直接のボリュームのリサイズは常にサポートされるわけではありません。`virtual-machine/*`ボリュームをリサイズするには代わりに`root`デバイスを編集してください：
+
+    incus config device set my-vm root size=<new_size>
 
 ```{important}
 - ストレージボリュームの拡大は通常は正常に動作します（ストレージプールが十分なストレージを持つ場合）。

@@ -58,7 +58,7 @@ Incus はすべてのインスタンス、ネットワークゲートウェイ�
 ```{terminal}
 :input: dig @192.0.2.200 -p 1053 axfr incus.example.net
 
-incus.example.net.                        3600 IN SOA  incus.example.net. ns1.incus.example.net. 1669736788 120 60 86400 30
+incus.example.net.                        3600 IN SOA  incus.example.net. ns1.incus.example.net. 1669736788 900 60 86400 30
 incus.example.net.                        300  IN NS   ns1.incus.example.net.
 inctest.gw.incus.example.net.             300  IN A    192.0.2.1
 inctest.gw.incus.example.net.             300  IN AAAA fd42:4131:a53c:7211::1
@@ -67,7 +67,7 @@ default-ovntest.uplink.incus.example.net. 300  IN AAAA fd42:4131:a53c:7211:1266:
 c1.incus.example.net.                     300  IN AAAA fd42:4131:a53c:7211:1266:6aff:fe19:6ede
 c1.incus.example.net.                     300  IN A    192.0.2.125
 manualtest.incus.example.net.             300  IN A    8.8.8.8
-incus.example.net.                        3600 IN SOA  incus.example.net. ns1.incus.example.net. 1669736788 120 60 86400 30
+incus.example.net.                        3600 IN SOA  incus.example.net. ns1.incus.example.net. 1669736788 900 60 86400 30
 ```
 
 ### 逆引きレコード
@@ -79,12 +79,12 @@ incus.example.net.                        3600 IN SOA  incus.example.net. ns1.in
 ```{terminal}
 :input: dig @192.0.2.200 -p 1053 axfr 2.0.192.in-addr.arpa
 
-2.0.192.in-addr.arpa.                  3600 IN SOA  2.0.192.in-addr.arpa. ns1.2.0.192.in-addr.arpa. 1669736828 120 60 86400 30
+2.0.192.in-addr.arpa.                  3600 IN SOA  2.0.192.in-addr.arpa. ns1.2.0.192.in-addr.arpa. 1669736828 900 60 86400 30
 2.0.192.in-addr.arpa.                  300  IN NS   ns1.2.0.192.in-addr.arpa.
 1.2.0.192.in-addr.arpa.                300  IN PTR  inctest.gw.incus.example.net.
 20.2.0.192.in-addr.arpa.               300  IN PTR  default-ovntest.uplink.incus.example.net.
 125.2.0.192.in-addr.arpa.              300  IN PTR  c1.incus.example.net.
-2.0.192.in-addr.arpa.                  3600 IN SOA  2.0.192.in-addr.arpa. ns1.2.0.192.in-addr.arpa. 1669736828 120 60 86400 30
+2.0.192.in-addr.arpa.                  3600 IN SOA  2.0.192.in-addr.arpa. ns1.2.0.192.in-addr.arpa. 1669736828 900 60 86400 30
 ```
 
 (network-dns-server)=
@@ -103,6 +103,10 @@ Incus クラスタの場合、アドレスは各クラスタメンバーによ�
 外部の DNS サーバーが Incus からの全体のゾーンを転送し、有効期限を過ぎたら更新し、DNS 問い合わせに対する管理権限を持つ応答（authoritative answers）を提供します。
 
 ゾーン転送の認証はゾーン毎に設定され、各ゾーンでピアごとに IP アドレスと TSIG キーを設定して、TSIG キーベースの認証を行います。
+
+ゾーンの内容が変更された際、ゾーンを直ちにリフレッシュできるようにIncusはDNS NOTIFYメッセージをすべての設定されたピアーに送ります。
+通知はゾーン単位でレートリミットがかけられます。
+ゾーンのシリアル番号は時間ベースですので、SOAのリフレッシュ（15分毎）のたびにセカンダリーサーバーもゾーンを再転送します。
 ```
 
 ## ネットワークゾーンの作成と設定

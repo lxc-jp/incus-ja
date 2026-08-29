@@ -51,12 +51,12 @@
 
 Incus コンテナの内部で Docker を実行するには、コンテナの {config:option}`instance-security:security.nesting` プロパティを `true` にセットします:
 
-    incus config set <container> security.nesting true
+    incus config set <container> security.nesting=true
 
 Incus コンテナはカーネルモジュールをロードできないため、 Docker の設定によっては、ホストで追加のカーネルモジュールをロードする必要があるかもしれません。
 コンテナが必要とするカーネルモジュールのカンマ区切りのリストを設定することでこれを行うことができます:
 
-    incus config set <container_name> linux.kernel_modules <modules>
+    incus config set <container_name> linux.kernel_modules=<modules>
 
 さらに、コンテナ内に`/.dockerenv`ファイルを作成すると、Docker がネストした環境で実行されているために発生するいくつかのエラーを無視するのに役立ちます。
 

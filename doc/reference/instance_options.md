@@ -398,15 +398,24 @@ QEMUに渡す引数や設定ファイルを変更するのに`raw.qemu`と`raw.q
 
 以下のコマンドがスクリプトレットで利用可能です:
 
-- `log_info`は`INFO`メッセージをログ出力します
-- `log_warn`は`WARNING`メッセージをログ出力します
-- `log_error`は`ERROR`メッセージをログ出力します
-- `run_qmp`は任意のQMPコマンド（JSON形式で指定）を実行し、その出力を返します
-- `run_command`はオプショナルな引数のリストとともに指定したコマンドを実行し、その出力を返します
-- `get_qemu_cmdline`はQEMNUに渡されるコマンドライン引数の一覧を返します
-- `set_qemu_cmdline`はQEMNUに渡されるコマンドライン引数の一覧を設定します
-- `get_qemu_conf`はQEMNU設定をディクショナリとして返します
-- `set_qemu_conf`はディクショナリからQEMNU設定を設定します
+- `log_info(*message)`は`INFO`メッセージをログ出力します
+- `log_warn(*message)`は`WARNING`メッセージをログ出力します
+- `log_error(*message)`は`ERROR`メッセージをログ出力します
+- `run_qmp(command)`は任意のQMPコマンド（JSON形式で指定）を実行し、その出力を返します
+- `run_command(name, **args)`はオプショナルな引数のリストとともに指定したコマンドを実行し、その出力を返します
+- `get_qemu_cmdline()`はQEMUに渡されるコマンドライン引数の一覧を返します
+- `set_qemu_cmdline(args)`はQEMUに渡されるコマンドライン引数の一覧を設定します
+- `get_qemu_conf()`はQEMU設定をディクショナリとして返します
+- `set_qemu_conf(conf)`はディクショナリからQEMU設定を設定します
+- `get_nvram_var(guid, name)`はNVRAM変数を取得します
+- `has_nvram_var(guid, name)`は変数がNVRAMに存在するかどうかをチェックします
+- `set_nvram_var(guid, name, v)`はNVRAM変数を設定します
+- `unset_nvram_var(guid, name)`はNVRAM変数の設定を削除します
+- `get_raw_nvram_var(guid, name)`はバイナリーのNVRAM変数を取得します
+- `set_raw_nvram_var(guid, name, v, attributes=None, timestamp=None)`はバイナリーのNVRAM変数を設定します
+- `list_nvram_vars(guid=None)`はNVRAM変数を一覧表示します
+
+NVRAM関数はEDK2ファームウェアーでのみ利用可能で、レガシーBIOS（SeaBIOSで`security.csm=true`）やユニファイド・ファームウェアー・イメージ（AMD SEV）では失敗します。
 
 さらに以下のエイリアスコマンド（内部では`run_command`を使用）がスクリプトを単純化するために使えます:
 

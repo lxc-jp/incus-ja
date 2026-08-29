@@ -47,6 +47,15 @@ ZFS の 0.8 より前のバージョンを稼働していてトリミングを�
     zpool set autotrim=on ZPOOL-NAME
     zpool trim ZPOOL-NAME
 
+(storage-zfs-delegation)=
+### データセット委譲
+
+コンテナボリュームに[`zfs.delegate`](storage-zfs-vol-config)を設定すると、{spellexception}`dataset`をコンテナに委譲します。
+するとコンテナはその{spellexception}`dataset`に`zfs`コマンドを使って、その下に自身の{spellexception}`dataset`を作成したり、スナップショットをとったり、マウントしたりできます。
+
+これらの{spellexception}`dataset`はコンテナ内から、`zfs mount`でマウントするか`mountpoint=legacy`使用時は`/etc/fstab`を通してマウントできます。
+`zfs-mount-generator`で生成されたマウントユニットは委譲された{spellexception}`dataset`では利用できません。
+
 (storage-zfs-limitations)=
 ### 制限
 
