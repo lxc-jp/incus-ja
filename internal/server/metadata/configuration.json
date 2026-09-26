@@ -97,7 +97,7 @@
 					},
 					{
 						"initial.*": {
-							"longdesc": "For root disk devices, this is used to override the storage pool's default volume\nconfiguration when creating the instance's root volume.\n\nFor custom volumes, only `initial.uid`, `initial.gid` and `initial.mode` are\naccepted and they are used when auto-creating sub-directories inside the custom\nvolume (when the `source` includes a sub-path that doesn't exist).\n\n`initial.uid`, `initial.gid` and `initial.mode` are also used to set the ownership\nand mode of the file system when the `source` is `tmpfs:` or `tmpfs-overlay:`.",
+							"longdesc": "For root disk devices, this is used to override the storage pool's default volume\nconfiguration when creating the instance's root volume.\n\nFor custom volumes, only `initial.uid`, `initial.gid`, `initial.mode` and\n`initial.copy` are accepted. The first three are used when auto-creating\nsub-directories inside the custom volume (when the `source` includes a sub-path\nthat doesn't exist). `initial.copy` copies the container's existing content at\n`path` into the volume the first time it's used, if the volume is empty.\n\n`initial.uid`, `initial.gid` and `initial.mode` are also used to set the ownership\nand mode of the file system when the `source` is `tmpfs:` or `tmpfs-overlay:`.",
 							"required": "no",
 							"shortdesc": "Initial volume configuration for instance root disk devices",
 							"type": "string"
@@ -465,6 +465,14 @@
 							"longdesc": "",
 							"required": "no",
 							"shortdesc": "Mode of the device in the instance (container only)",
+							"type": "int"
+						}
+					},
+					{
+						"nvidia.clique": {
+							"longdesc": "",
+							"required": "no",
+							"shortdesc": "NVIDIA GPUDirect P2P clique ID (0 to 15) shared by GPUs allowed to DMA to each other (VM only)",
 							"type": "int"
 						}
 					},
@@ -3345,8 +3353,8 @@
 						"security.idmap.base": {
 							"condition": "unprivileged container",
 							"liveupdate": "no",
-							"longdesc": "Setting this option overrides auto-detection.",
-							"shortdesc": "The base host ID to use for the allocation",
+							"longdesc": "The range can be shared by other containers using the same base and can't be combined with `security.idmap.isolated`.",
+							"shortdesc": "The base host ID to use for the ID map",
 							"type": "integer"
 						}
 					},
@@ -3651,6 +3659,14 @@
 							"shortdesc": "Whether to handle the `sysinfo` system call",
 							"type": "bool"
 						}
+					},
+					{
+						"security.tags": {
+							"liveupdate": "yes",
+							"longdesc": "Tags are made of lowercase letters, digits, dots, dashes and underscores and are at most 64 characters long.\nThey are exposed to the authorization backend but don't affect Incus' own authorization decisions.",
+							"shortdesc": "Comma-separated list of security tags for the authorization backend",
+							"type": "string"
+						}
 					}
 				]
 			},
@@ -3952,8 +3968,15 @@
 					{
 						"volatile.last_state.agent": {
 							"longdesc": "",
-							"shortdesc": "Instance agent state as of last host shutdown",
+							"shortdesc": "Last recorded instance agent state",
 							"type": "string"
+						}
+					},
+					{
+						"volatile.last_state.agent.once": {
+							"longdesc": "",
+							"shortdesc": "Whether the agent has been seen at least once since last boot",
+							"type": "bool"
 						}
 					},
 					{
@@ -4293,6 +4316,15 @@
 							"longdesc": "",
 							"shortdesc": "Domain to advertise to DHCP clients and use for DNS resolution",
 							"type": "string"
+						}
+					},
+					{
+						"dns.include_hosts": {
+							"condition": "-",
+							"default": "`true`",
+							"longdesc": "",
+							"shortdesc": "Whether to serve records from the host's `/etc/hosts` file",
+							"type": "bool"
 						}
 					},
 					{
@@ -5146,6 +5178,13 @@
 						"network": {
 							"longdesc": "",
 							"shortdesc": "Uplink network to use for external network access or `none` to keep isolated",
+							"type": "string"
+						}
+					},
+					{
+						"parent": {
+							"longdesc": "",
+							"shortdesc": "Parent OVN network whose logical router and uplink to share",
 							"type": "string"
 						}
 					},
@@ -7121,7 +7160,7 @@
 					{
 						"ceph.rbd.clone_copy": {
 							"default": "`true`",
-							"longdesc": "",
+							"longdesc": "When disabled, new volumes are still cloned from their source but flattened in the\nbackground right after creation, so the source can only be fully removed once that\nhas completed.",
 							"scope": "global",
 							"shortdesc": "Whether to use RBD lightweight clones rather than full dataset copies",
 							"type": "bool"

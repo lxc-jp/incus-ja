@@ -224,6 +224,11 @@ func (d *ceph) CreateVolume(vol Volume, filler *VolumeFiller, op *operations.Ope
 					if err != nil {
 						return err
 					}
+
+					err = d.rbdRefreshDevice(vol, devPath)
+					if err != nil {
+						return err
+					}
 				}
 			}
 
@@ -405,67 +410,72 @@ func (d *ceph) CreateVolumeFromCopy(vol Volume, srcVol Volume, copySnapshots boo
 
 	// Copy without snapshots.
 	if !copySnapshots || len(snapshots) == 0 {
-		// If lightweight clone mode isn't enabled, perform a full copy of the volume.
-		if util.IsFalse(d.config["ceph.rbd.clone_copy"]) {
-			_, err = subprocess.RunCommand(
-				"rbd",
-				"--id", d.config["ceph.user.name"],
-				"--cluster", d.config["ceph.cluster_name"],
-				"cp",
-				d.getRBDVolumeName(srcVol, "", true),
-				d.getRBDVolumeName(vol, "", true),
-			)
-			if err != nil {
-				return err
-			}
+		parentVol := srcVol
+		snapshotName := "readonly"
 
-			reverter.Add(func() { _ = d.DeleteVolume(vol, op) })
+		if srcVol.volType != VolumeTypeImage {
+			snapshotName = fmt.Sprintf("zombie_snapshot_%s", uuid.New().String())
 
-			_, err = d.rbdMapVolume(vol)
-			if err != nil {
-				return err
-			}
-
-			reverter.Add(func() { _ = d.rbdUnmapVolume(vol, true) })
-		} else {
-			parentVol := srcVol
-			snapshotName := "readonly"
-
-			if srcVol.volType != VolumeTypeImage {
-				snapshotName = fmt.Sprintf("zombie_snapshot_%s", uuid.New().String())
-
-				if srcVol.IsSnapshot() {
-					srcParentName, srcSnapOnlyName, _ := api.GetParentAndSnapshotName(srcVol.name)
-					snapshotName = fmt.Sprintf("snapshot_%s", srcSnapOnlyName)
-					parentVol = NewVolume(d, d.name, srcVol.volType, srcVol.contentType, srcParentName, nil, nil)
-				} else {
-					// Create snapshot.
-					err := d.rbdCreateVolumeSnapshot(srcVol, snapshotName)
-					if err != nil {
-						return err
-					}
-				}
-
-				// Protect volume so we can create clones of it.
-				err = d.rbdProtectVolumeSnapshot(parentVol, snapshotName)
+			if srcVol.IsSnapshot() {
+				srcParentName, srcSnapOnlyName, _ := api.GetParentAndSnapshotName(srcVol.name)
+				snapshotName = fmt.Sprintf("snapshot_%s", srcSnapOnlyName)
+				parentVol = NewVolume(d, d.name, srcVol.volType, srcVol.contentType, srcParentName, nil, nil)
+			} else {
+				// Create snapshot.
+				err := d.rbdCreateVolumeSnapshot(srcVol, snapshotName)
 				if err != nil {
 					return err
 				}
 
-				reverter.Add(func() { _ = d.rbdUnprotectVolumeSnapshot(parentVol, snapshotName) })
+				reverter.Add(func() { _ = d.rbdDeleteVolumeSnapshot(srcVol, snapshotName) })
 			}
 
-			err = d.rbdCreateClone(parentVol, snapshotName, vol)
+			// Protect volume so we can create clones of it.
+			err = d.rbdProtectVolumeSnapshot(parentVol, snapshotName)
 			if err != nil {
 				return err
 			}
 
-			reverter.Add(func() { _ = d.DeleteVolume(vol, op) })
+			reverter.Add(func() { _ = d.rbdUnprotectVolumeSnapshot(parentVol, snapshotName) })
 		}
+
+		err = d.rbdCreateClone(parentVol, snapshotName, vol)
+		if err != nil {
+			return err
+		}
+
+		reverter.Add(func() { _ = d.DeleteVolume(vol, op) })
 
 		err = postCreateTasks(vol)
 		if err != nil {
 			return err
+		}
+
+		// Without lightweight clones, detach the copy from its source in the background.
+		if util.IsFalse(d.config["ceph.rbd.clone_copy"]) {
+			// Hold the lock until the flatten is done so a deletion waits for it.
+			unlock, err := locking.Lock(context.TODO(), d.flattenLockName(vol))
+			if err != nil {
+				return err
+			}
+
+			go func() {
+				defer unlock()
+
+				err := d.rbdFlattenVolume(vol)
+				if err != nil {
+					d.logger.Warn("Failed flattening volume", logger.Ctx{"volume": vol.name, "err": err})
+					return
+				}
+
+				// The source snapshot is only needed while clones depend on it.
+				if srcVol.volType != VolumeTypeImage {
+					err = d.rbdReleaseVolumeSnapshot(parentVol, snapshotName)
+					if err != nil {
+						d.logger.Warn("Failed releasing source snapshot", logger.Ctx{"volume": parentVol.name, "snapshot": snapshotName, "err": err})
+					}
+				}
+			}()
 		}
 
 		reverter.Success()
@@ -745,8 +755,16 @@ func (d *ceph) DeleteVolume(vol Volume, op *operations.Operation) error {
 			}
 		}
 	} else {
+		// Wait for any background flatten of the volume to finish.
+		unlock, err := locking.Lock(context.TODO(), d.flattenLockName(vol))
+		if err != nil {
+			return err
+		}
+
+		defer unlock()
+
 		// Unmount and unmap.
-		_, err := d.UnmountVolume(vol, false, op)
+		_, err = d.UnmountVolume(vol, false, op)
 		if err != nil {
 			return err
 		}
@@ -1218,8 +1236,13 @@ func (d *ceph) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, o
 			if err != nil {
 				return err
 			}
+
+			err = d.rbdRefreshDevice(vol, devPath)
+			if err != nil {
+				return err
+			}
 		} else if sizeBytes > oldSizeBytes {
-			// NBD devices don't reflect the new size until remapped, preventing online growth.
+			// NBD devices don't reflect the new size until reconnected, preventing online growth.
 			if inUse && strings.HasPrefix(devPath, "/dev/nbd") {
 				return ErrInUse
 			}
@@ -1230,17 +1253,9 @@ func (d *ceph) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, o
 				return err
 			}
 
-			// Remap NBD devices so that they pick up the new size.
-			if strings.HasPrefix(devPath, "/dev/nbd") {
-				err = d.rbdUnmapVolume(vol, true)
-				if err != nil {
-					return err
-				}
-
-				devPath, err = d.rbdMapVolume(vol)
-				if err != nil {
-					return err
-				}
+			err = d.rbdRefreshDevice(vol, devPath)
+			if err != nil {
+				return err
 			}
 
 			// Grow the filesystem to fill block device.
@@ -1268,22 +1283,14 @@ func (d *ceph) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, o
 			return err
 		}
 
+		err = d.rbdRefreshDevice(vol, devPath)
+		if err != nil {
+			return err
+		}
+
 		// Move the VM GPT alt header to end of disk if needed (not needed in unsafe resize mode as it is
 		// expected the caller will do all necessary post resize actions themselves).
 		if vol.IsVMBlock() && !allowUnsafeResize {
-			// Remap NBD devices so that they pick up the new size.
-			if strings.HasPrefix(devPath, "/dev/nbd") {
-				err = d.rbdUnmapVolume(vol, true)
-				if err != nil {
-					return err
-				}
-
-				devPath, err = d.rbdMapVolume(vol)
-				if err != nil {
-					return err
-				}
-			}
-
 			err = d.moveGPTAltHeader(devPath)
 			if err != nil {
 				return err
@@ -1448,6 +1455,11 @@ func (d *ceph) MountVolume(vol Volume, op *operations.Operation) error {
 				}
 			}
 
+			// VM config volumes are small and unmounted while stopped, so repair them when needed.
+			if vol.volType == VolumeTypeVM {
+				fsckIfErrors(volDevPath, fsType)
+			}
+
 			mountFlags, mountOptions := linux.ResolveMountOptions(strings.Split(vol.ConfigBlockMountOptions(), ","))
 			err = TryMount(volDevPath, mountPath, fsType, mountFlags, mountOptions)
 			if err != nil {
@@ -1550,7 +1562,15 @@ func (d *ceph) RenameVolume(vol Volume, newVolName string, op *operations.Operat
 		reverter := revert.New()
 		defer reverter.Fail()
 
-		err := d.rbdRenameVolume(vol, newVolName)
+		// Wait for any background flatten of the volume to finish.
+		unlock, err := locking.Lock(context.TODO(), d.flattenLockName(vol))
+		if err != nil {
+			return err
+		}
+
+		defer unlock()
+
+		err = d.rbdRenameVolume(vol, newVolName)
 		if err != nil {
 			if isRBDNotFoundExitError(err) {
 				return api.StatusErrorf(http.StatusNotFound, "Ceph RBD volume not found")

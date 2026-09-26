@@ -212,6 +212,11 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 		return response.SmartError(err)
 	}
 
+	// Pool and project changes are always migrations.
+	if req.Pool != "" || req.Project != "" {
+		req.Migration = true
+	}
+
 	// Handle simple instance renaming.
 	if !req.Migration {
 		run := func(op *operations.Operation) error {
@@ -249,6 +254,11 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 				}
 			}
 
+			// A stateless move to another member would leave the instance running on the source.
+			if target != "" && target != inst.Location() && !req.Live && !req.Refresh {
+				return response.BadRequest(errors.New("Instance must be stopped for a stateless move to another cluster member"))
+			}
+
 			// Storage pool changes require a target flag.
 			if req.Pool != "" {
 				if inst.Type() != instancetype.VM {
@@ -264,9 +274,23 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 				}
 			}
 
-			// Project changes require a stopped instance.
 			if req.Project != "" {
-				return response.BadRequest(errors.New("Instance must be stopped to be moved across projects"))
+				if !req.Live {
+					return response.BadRequest(errors.New("Instance must be stopped for a stateless move across projects"))
+				}
+
+				if !s.ServerClustered {
+					return response.BadRequest(errors.New("Live project changes aren't supported on standalone systems"))
+				}
+
+				if target == "" {
+					return response.BadRequest(errors.New("Live project changes require the instance be moved to another cluster member"))
+				}
+
+				err := checkProjectMoveLive(r.Context(), s, inst, req.Project, req)
+				if err != nil {
+					return response.BadRequest(err)
+				}
 			}
 
 			// Name changes require a stopped instance.
@@ -477,8 +501,17 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 		return response.BadRequest(errors.New("Requested target server is the same as current server"))
 	}
 
+	if req.Project != "" {
+		memberChange := targetMemberInfo != nil && targetMemberInfo.Name != inst.Location()
+
+		err = checkProjectMove(s, inst, req.Project, memberChange)
+		if err != nil {
+			return response.BadRequest(err)
+		}
+	}
+
 	// If the instance needs to move, make sure it doesn't have backups.
-	if targetMemberInfo != nil && targetMemberInfo.Name != inst.Location() {
+	if req.Project != "" || (targetMemberInfo != nil && targetMemberInfo.Name != inst.Location()) {
 		// Check if instance has backups.
 		var backups []string
 		err := s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
@@ -706,7 +739,8 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 	}
 
 	// Handle pool and project moves for stopped instances.
-	if (req.Project != "" || req.Pool != "") && !req.Live && (targetMemberInfo == nil || inst.Location() == targetMemberInfo.Name) {
+	sameMember := targetMemberInfo == nil || inst.Location() == targetMemberInfo.Name
+	if !req.Live && (req.Project != "" || (req.Pool != "" && sameMember)) {
 		// Get a local client.
 		args := &incus.ConnectionArgs{
 			SkipGetServer: true,
@@ -730,6 +764,10 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		}
 
 		target = target.UseProject(targetProject)
+
+		// The copy gets a new instance record, so its cluster group is set after the move.
+		instGroupName := targetInstInfo.Config["volatile.cluster.group"]
+		delete(targetInstInfo.Config, "volatile.cluster.group")
 
 		// Check if we have a root disk in local config.
 		_, _, err = internalInstance.GetRootDiskDevice(targetInstInfo.Devices)
@@ -861,7 +899,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			}
 		}
 
-		err = cleanupDependentDisks(s, inst, req.Devices, op)
+		err = cleanupDependentDisks(s, inst, req.Devices, req.Project, op)
 		if err != nil {
 			return fmt.Errorf("Failed deleting instance dependent volumes on source member: %w", err)
 		}
@@ -870,6 +908,35 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		inst, err = instance.LoadByProjectAndName(s, targetProject, inst.Name())
 		if err != nil {
 			return err
+		}
+
+		// Keep the recorded cluster group only if the new member is still part of it.
+		if targetGroupName != "" {
+			instGroupName = targetGroupName
+		} else if instGroupName != "" && targetMemberInfo != nil {
+			var groupMembers []string
+
+			err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+				var err error
+
+				groupMembers, err = tx.GetClusterGroupNodes(ctx, instGroupName)
+
+				return err
+			})
+			if err != nil {
+				return err
+			}
+
+			if !slices.Contains(groupMembers, targetMemberInfo.Name) {
+				instGroupName = ""
+			}
+		}
+
+		if instGroupName != "" {
+			err = inst.VolatileSet(map[string]string{"volatile.cluster.group": instGroupName})
+			if err != nil {
+				return err
+			}
 		}
 
 		// Clear the pool and project part of the request.
@@ -886,7 +953,15 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			return fmt.Errorf("Failed to connect to destination server %q: %w", targetMemberInfo.Address, err)
 		}
 
-		target = target.UseProject(inst.Project().Name)
+		// A project change can't reuse the instance record, so it goes over as a new instance.
+		targetProject := inst.Project().Name
+		clusterMoveSourceName := inst.Name()
+		if req.Project != "" {
+			targetProject = req.Project
+			clusterMoveSourceName = ""
+		}
+
+		target = target.UseProject(targetProject)
 		target = target.UseTarget(targetMemberInfo.Name)
 
 		// Get the source member info if missing.
@@ -963,7 +1038,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		}
 
 		// Setup a new migration source.
-		sourceMigration, err := newMigrationSource(inst, req.Live, false, req.AllowInconsistent, inst.Name(), req.Pool, req.Devices, localDiskTransfer.diskNames(), nil)
+		sourceMigration, err := newMigrationSource(inst, req.Live, false, req.AllowInconsistent, clusterMoveSourceName, req.Pool, req.Devices, localDiskTransfer.diskNames(), nil)
 		if err != nil {
 			return fmt.Errorf("Failed setting up instance migration on source: %w", err)
 		}
@@ -1018,7 +1093,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 				Websockets:  sourceSecrets,
 				Certificate: string(networkCert.PublicKey()),
 				Live:        req.Live,
-				Source:      inst.Name(),
+				Source:      clusterMoveSourceName,
 			},
 		})
 		if err != nil {
@@ -1040,19 +1115,21 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		// A live migration on the same shared storage is handed over once the source succeeds,
 		// so the database record must follow the instance even if the destination reported an error.
 		destErr := destOp.Wait()
-		if destErr != nil && (!req.Live || !sourcePool.Driver().Info().Remote || req.Pool != "") {
+		if destErr != nil && (!req.Live || !sourcePool.Driver().Info().Remote || req.Pool != "" || req.Project != "") {
 			return fmt.Errorf("Instance move to destination failed: %w", destErr)
 		}
 
 		// Update the database post-migration.
 		err = s.DB.Cluster.Transaction(context.Background(), func(ctx context.Context, tx *db.ClusterTx) error {
-			// Update instance DB record to indicate its location on the new cluster member.
-			err = tx.UpdateInstanceNode(ctx, inst.Project().Name, inst.Name(), inst.Name(), targetMemberInfo.Name, sourcePool.ID(), volDBType)
-			if err != nil {
-				return fmt.Errorf("Failed updating cluster member to %q for instance %q: %w", targetMemberInfo.Name, inst.Name(), err)
+			if req.Project == "" {
+				// Update instance DB record to indicate its location on the new cluster member.
+				err = tx.UpdateInstanceNode(ctx, inst.Project().Name, inst.Name(), inst.Name(), targetMemberInfo.Name, sourcePool.ID(), volDBType)
+				if err != nil {
+					return fmt.Errorf("Failed updating cluster member to %q for instance %q: %w", targetMemberInfo.Name, inst.Name(), err)
+				}
 			}
 
-			id, err := dbCluster.GetInstanceID(ctx, tx.Tx(), inst.Project().Name, inst.Name())
+			id, err := dbCluster.GetInstanceID(ctx, tx.Tx(), targetProject, inst.Name())
 			if err != nil {
 				return fmt.Errorf("Failed to get ID of moved instance: %w", err)
 			}
@@ -1066,7 +1143,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 
 				err = tx.CreateInstanceConfig(ctx, int(id), map[string]string{"volatile.cluster.group": targetGroupName})
 				if err != nil {
-					return fmt.Errorf("Failed to set volatile.apply_template config key: %w", err)
+					return fmt.Errorf("Failed to set volatile.cluster.group config key: %w", err)
 				}
 			} else if targetMemberInfo != nil {
 				config, err := dbCluster.GetInstanceConfig(ctx, tx.Tx(), inst.ID())
@@ -1117,9 +1194,23 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		// The instance now belongs to the target member, so restarting the source is no longer the right thing to do on failure.
 		nearLiveReverter.Success()
 
-		// Cleanup instance paths on source member if using remote shared storage
-		// and there was no storage pool change.
-		if sourcePool.Driver().Info().Remote && req.Pool == "" {
+		// A project change leaves a full instance record behind on the source member.
+		if req.Project != "" {
+			// The instance runs on the target member now, so the source is only a left-over copy.
+			if inst.IsRunning() {
+				err = inst.Stop(false)
+				if err != nil {
+					return fmt.Errorf("Failed stopping instance on source member: %w", err)
+				}
+			}
+
+			err = inst.Delete(true, false)
+			if err != nil {
+				return fmt.Errorf("Failed deleting instance on source member: %w", err)
+			}
+		} else if sourcePool.Driver().Info().Remote && req.Pool == "" {
+			// Cleanup instance paths on source member if using remote shared storage
+			// and there was no storage pool change.
 			err = sourcePool.CleanupInstancePaths(inst, nil)
 			if err != nil {
 				return fmt.Errorf("Failed cleaning up instance paths on source member: %w", err)
@@ -1145,7 +1236,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 			}
 		}
 
-		err = cleanupDependentDisks(s, inst, req.Devices, op)
+		err = cleanupDependentDisks(s, inst, req.Devices, req.Project, op)
 		if err != nil {
 			return fmt.Errorf("Failed deleting instance dependent volumes on source member: %w", err)
 		}
@@ -1173,8 +1264,24 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 }
 
 // cleanupDependentDisks removes dependent volumes from the source after migration if needed.
-func cleanupDependentDisks(s *state.State, inst instance.Instance, deviceOverrides api.DevicesMap, op *operations.Operation) error {
-	err := inst.ForEachDependentDiskType(func(dev deviceConfig.DeviceNamed) error {
+func cleanupDependentDisks(s *state.State, inst instance.Instance, deviceOverrides api.DevicesMap, targetProject string, op *operations.Operation) error {
+	volProject, err := project.StorageVolumeProject(s.DB.Cluster, inst.Project().Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	// A volume only left the source project if the two projects have separate storage volumes.
+	volumeProjectChanged := false
+	if targetProject != "" {
+		targetVolProject, err := project.StorageVolumeProject(s.DB.Cluster, targetProject, db.StoragePoolVolumeTypeCustom)
+		if err != nil {
+			return err
+		}
+
+		volumeProjectChanged = targetVolProject != volProject
+	}
+
+	err = inst.ForEachDependentDiskType(func(dev deviceConfig.DeviceNamed) error {
 		diskPool, err := storagePools.LoadByName(s, dev.Config["pool"])
 		if err != nil {
 			return fmt.Errorf("Failed loading storage pool: %w", err)
@@ -1187,16 +1294,16 @@ func cleanupDependentDisks(s *state.State, inst instance.Instance, deviceOverrid
 		if ok {
 			overrideVolName, _ := internalInstance.SplitVolumeSource(override["source"])
 			if (override["source"] != "" && overrideVolName != volName) || (override["pool"] != "" && override["pool"] != dev.Config["pool"]) {
-				_ = diskPool.DeleteCustomVolume(inst.Project().Name, volName, op)
+				_ = diskPool.DeleteCustomVolume(volProject, volName, op)
 			}
 		}
 
-		// Volumes on remote pools cannot be removed.
-		if diskPool.Driver().Info().Remote {
+		// Volumes on remote pools cannot be removed, unless they were copied into another project.
+		if diskPool.Driver().Info().Remote && !volumeProjectChanged {
 			return nil
 		}
 
-		_ = diskPool.DeleteCustomVolume(inst.Project().Name, volName, op)
+		_ = diskPool.DeleteCustomVolume(volProject, volName, op)
 
 		return nil
 	})
@@ -1205,4 +1312,158 @@ func cleanupDependentDisks(s *state.State, inst instance.Instance, deviceOverrid
 	}
 
 	return nil
+}
+
+// checkProjectMove validates that an instance can be moved to the given project.
+func checkProjectMove(s *state.State, inst instance.Instance, targetProject string, memberChange bool) error {
+	srcVolProject, err := project.StorageVolumeProject(s.DB.Cluster, inst.Project().Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	dstVolProject, err := project.StorageVolumeProject(s.DB.Cluster, targetProject, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	sharedVolumes := srcVolProject == dstVolProject
+
+	dependentDisks := []string{}
+	err = inst.ForEachDependentDiskType(func(dev deviceConfig.DeviceNamed) error {
+		dependentDisks = append(dependentDisks, dev.Name)
+
+		if !sharedVolumes {
+			return nil
+		}
+
+		// With a shared volume project, only a volume on a local pool can follow, onto another member.
+		diskPool, err := storagePools.LoadByName(s, dev.Config["pool"])
+		if err != nil {
+			return fmt.Errorf("Failed loading storage pool: %w", err)
+		}
+
+		if diskPool.Driver().Info().Remote || !memberChange {
+			return fmt.Errorf("Dependent disk %q can't follow the instance, as both projects share their storage volumes", dev.Name)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if sharedVolumes {
+		return nil
+	}
+
+	// Other attached custom volumes are left behind when the volume project changes.
+	for _, dev := range inst.ExpandedDevices().Sorted() {
+		if dev.Config["type"] != "disk" || dev.Config["path"] == "/" || dev.Config["pool"] == "" || dev.Config["source"] == "" {
+			continue
+		}
+
+		if slices.Contains(dependentDisks, dev.Name) {
+			continue
+		}
+
+		return fmt.Errorf("Device %q uses a custom volume which isn't available in project %q", dev.Name, targetProject)
+	}
+
+	return nil
+}
+
+// checkProjectMoveLive validates that a running instance can be handed over to the target project unchanged.
+func checkProjectMoveLive(ctx context.Context, s *state.State, inst instance.Instance, targetProject string, req api.InstancePost) error {
+	profileNames := req.Profiles
+	if profileNames == nil {
+		profileNames = make([]string, 0, len(inst.Profiles()))
+		for _, profile := range inst.Profiles() {
+			profileNames = append(profileNames, profile.Name)
+		}
+	}
+
+	profiles := make([]api.Profile, 0, len(profileNames))
+
+	err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		dbProfiles, err := dbCluster.GetProfilesIfEnabled(ctx, tx.Tx(), targetProject, profileNames)
+		if err != nil {
+			return err
+		}
+
+		profileConfigs, err := dbCluster.GetReferencedProfileConfigs(ctx, tx.Tx(), dbProfiles)
+		if err != nil {
+			return err
+		}
+
+		profileDevices, err := dbCluster.GetReferencedProfileDevices(ctx, tx.Tx(), dbProfiles)
+		if err != nil {
+			return err
+		}
+
+		profilesByName := make(map[string]dbCluster.Profile, len(dbProfiles))
+		for _, dbProfile := range dbProfiles {
+			profilesByName[dbProfile.Name] = dbProfile
+		}
+
+		// Expansion is order sensitive, so follow the instance's own profile order.
+		for _, profileName := range profileNames {
+			dbProfile, found := profilesByName[profileName]
+			if !found {
+				return fmt.Errorf("Requested profile %q doesn't exist in project %q", profileName, targetProject)
+			}
+
+			apiProfile, err := dbProfile.ToAPI(ctx, tx.Tx(), profileConfigs, profileDevices)
+			if err != nil {
+				return err
+			}
+
+			profiles = append(profiles, *apiProfile)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	localDevices := inst.LocalDevices().CloneNative()
+	maps.Copy(localDevices, req.Devices)
+
+	// A live hand-over can't apply a different device set to the running instance.
+	targetDevices := db.ExpandInstanceDevices(deviceConfig.NewDevices(localDevices), profiles)
+	currentDevices := inst.ExpandedDevices()
+
+	for name, dev := range targetDevices {
+		current, ok := currentDevices[name]
+		if !ok {
+			return fmt.Errorf("Device %q is only present in project %q, which a live migration can't apply", name, targetProject)
+		}
+
+		if !maps.Equal(current, dev) {
+			return fmt.Errorf("Device %q differs in project %q, which a live migration can't apply", name, targetProject)
+		}
+	}
+
+	for name := range currentDevices {
+		_, ok := targetDevices[name]
+		if !ok {
+			return fmt.Errorf("Device %q is missing from project %q, which a live migration can't apply", name, targetProject)
+		}
+	}
+
+	// The target member skips this check, as it receives the instance as a cluster notification.
+	localConfig := maps.Clone(inst.LocalConfig())
+	maps.Copy(localConfig, req.Config)
+
+	return s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		return project.AllowInstanceCreation(tx, targetProject, api.InstancesPost{
+			Name: inst.Name(),
+			Type: inst.Type().ToAPI(),
+			InstancePut: api.InstancePut{
+				Config:   localConfig,
+				Devices:  localDevices,
+				Profiles: profileNames,
+			},
+		})
+	})
 }

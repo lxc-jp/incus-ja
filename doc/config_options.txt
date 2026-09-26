@@ -86,7 +86,7 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 :type: "string"
 rootディスクデバイスでは、インスタンスのrootボリュームを作成する際にストレージプールのデフォルトのボリューム設定を上書きするのに使われます。
 
-カスタムボリュームでは、`initial.uid`、`initial.gid`、`initial.mode`のみが指定でき、カスタムボリューム内部でサブディレクトリーを自動で作成する際に使われます（`source`が存在しないサブパスを含む場合）。
+カスタムボリュームでは、`initial.uid`、`initial.gid`、`initial.mode`、`initial.copy`のみが指定できます。最初の3つはカスタムボリューム内部でサブディレクトリーを自動で作成する際に使われます（`source`が存在しないサブパスを含む場合）。`initial.copy`はコンテナー内でデバイスの`path`にすでに存在するコンテンツをボリュームが使われる初回にボリュームが空であればボリュームにコピーします。
 
 また、`initial.uid`、`initial.gid`、`initial.mode`は`source`が`tmpfs:`か`tmpfs-overlay:`の場合にファイルシステムのオーナーとパーミッションを設定するのにも使われます。
 ```
@@ -430,6 +430,13 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :default: "0660"
 :required: "no"
 :shortdesc: "インスタンス（コンテナのみ）内のデバイスのモード"
+:type: "int"
+
+```
+
+```{config:option} nvidia.clique devices-gpu_physical
+:required: "no"
+:shortdesc: "互いにDMAできるGPU間で共有するNVIDIA GPUDirect P2P clique ID （0から15）（VMのみ）"
 :type: "int"
 
 ```
@@ -2998,9 +3005,9 @@ BPFファイルシステムはいずれかの`security.bpffs.delegate_*`オプ�
 ```{config:option} security.idmap.base instance-security
 :condition: "unprivileged container"
 :liveupdate: "no"
-:shortdesc: "割り当てに使用するベースのホストID"
+:shortdesc: "IDマップに使用するベースのホストID"
 :type: "integer"
-このオプションを設定すると自動検出をオーバーライドします。
+範囲は同じベースを使用する他のコンテナーに共有でき、`security.idmap.isolated`とは結合できません。
 ```
 
 ```{config:option} security.idmap.isolated instance-security
@@ -3275,6 +3282,14 @@ FUSE実装にリダイレクトすべきファイルシステムのマウント�
 このシステムコールはcgroupベースのリソース消費情報を取得するのに使用できます。
 ```
 
+```{config:option} security.tags instance-security
+:liveupdate: "yes"
+:shortdesc: "認可バックエンドのセキュリティータグのカンマ区切りリスト"
+:type: "string"
+タグは文字、数字、ドット、ハイフンとアンダースコアーで構成され最大64文字です。
+タグは認可バックエンドに公開されますが、Incus自身の認可の決定には影響しません。
+```
+
 <!-- config group instance-security end -->
 <!-- config group instance-snapshots start -->
 ```{config:option} snapshots.expiry instance-snapshots
@@ -3547,8 +3562,14 @@ NVIDIA仮想GPUインスタンスUUID。
 ```
 
 ```{config:option} volatile.last_state.agent instance-volatile
-:shortdesc: "最後のホストのシャットダウン時のインスタンスのエージェントの状態"
+:shortdesc: "最後に記録されたインスタンスのエージェントの状態"
 :type: "string"
+
+```
+
+```{config:option} volatile.last_state.agent.once instance-volatile
+:shortdesc: "最後のブート以降に一度以上エージェントを見たかどうか"
+:type: "bool"
 
 ```
 
@@ -3837,6 +3858,14 @@ NVIDIA仮想GPUインスタンスUUID。
 :default: "`incus`"
 :shortdesc: "DHCPのクライアントに広告しDNSの名前解決に使用するドメイン"
 :type: "string"
+
+```
+
+```{config:option} dns.include_hosts network_bridge-common
+:condition: "-"
+:default: "`true`"
+:shortdesc: "ホスト`/etc/hosts`ファイルのレコードを応答するかどうか"
+:type: "bool"
 
 ```
 
@@ -4574,6 +4603,12 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```{config:option} network network_ovn-common
 :shortdesc: "外部ネットワークへのアクセスに使うアップリンクのネットワークまたは隔離する場合は`none`"
+:type: "string"
+
+```
+
+```{config:option} parent network_ovn-common
+:shortdesc: "論理ルーターとアップリンクを共有する親のOVNネットワーク"
 :type: "string"
 
 ```
@@ -6313,7 +6348,7 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :scope: "global"
 :shortdesc: "フルのデータセットコピーではなくRBDのライトウェイトクローンを使うかどうか"
 :type: "bool"
-
+無効にすると、新しいボリュームはソースからコピーされますが、作成直後にバックグラウンドでフラットにされ、完了後はソースは完全に削除されます。
 ```
 
 ```{config:option} ceph.rbd.du storage_ceph-common

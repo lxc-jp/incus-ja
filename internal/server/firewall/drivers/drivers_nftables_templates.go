@@ -5,6 +5,9 @@ import (
 )
 
 var nftablesCommonTable = template.Must(template.New("nftablesCommonTable").Parse(`
+{{ range .preamble }}
+{{.}}
+{{ end }}
 table {{.family}} {{.namespace}} {
 	{{ template "nftablesContent" . }}
 }
@@ -292,6 +295,7 @@ chain fwd{{.chainSeparator}}{{.deviceLabel}} {
 
 	# IPv4 filtering
 	{{ if .ipv4NetsList }}
+	iifname "{{.hostName}}" ether type ip ip saddr 0.0.0.0 ip daddr 255.255.255.255 udp dport 67 accept
 	iifname "{{.hostName}}" ether type arp arp saddr ip != { {{.ipv4NetsList}} } drop
 	iifname "{{.hostName}}" ether type ip ip saddr != { {{.ipv4NetsList}} } drop
 	{{ end }}

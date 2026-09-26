@@ -1114,7 +1114,7 @@ func clusterInitMember(d incus.InstanceServer, client incus.InstanceServer, memb
 						continue
 					}
 
-					if !db.IsNodeSpecificNetworkConfig(config.Key) {
+					if !db.IsNodeSpecificNetworkConfig(network.Type, config.Key) {
 						logger.Warnf("Ignoring config key %q for network %q in project %q", config.Key, config.Name, p.Name)
 						continue
 					}
@@ -2564,6 +2564,11 @@ type internalRaftNode struct {
 func internalClusterPostRebalance(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
 
+	// The cluster database isn't available until startup completes.
+	if s.DB.Cluster == nil {
+		return response.Unavailable(errors.New("Daemon is starting up"))
+	}
+
 	// Redirect all requests to the leader, which is the one with with
 	// up-to-date knowledge of what nodes are part of the raft cluster.
 	localClusterAddress := s.LocalConfig.ClusterAddress()
@@ -2844,6 +2849,12 @@ type internalClusterPostAssignRequest struct {
 // Used to to transfer the responsibilities of a member to another one.
 func internalClusterPostHandover(d *Daemon, r *http.Request) response.Response {
 	s := d.State()
+
+	// The cluster database isn't available until startup completes.
+	if s.DB.Cluster == nil {
+		return response.Unavailable(errors.New("Daemon is starting up"))
+	}
+
 	req := internalClusterPostHandoverRequest{}
 
 	// Parse the request
@@ -3009,8 +3020,8 @@ func clusterCheckNetworksMatch(ctx context.Context, clusterDB *db.Cluster, reqNe
 					}
 
 					// Exclude the keys which are node-specific.
-					networkConfigWithoutNodeSpecific := db.StripNodeSpecificNetworkConfig(network.Config)
-					reqNetworkConfigwithoutNodeSpecific := db.StripNodeSpecificNetworkConfig(reqNetwork.Config)
+					networkConfigWithoutNodeSpecific := db.StripNodeSpecificNetworkConfig(network.Type, network.Config)
+					reqNetworkConfigwithoutNodeSpecific := db.StripNodeSpecificNetworkConfig(reqNetwork.Type, reqNetwork.Config)
 					err = localUtil.CompareConfigs(networkConfigWithoutNodeSpecific, reqNetworkConfigwithoutNodeSpecific, nil)
 					if err != nil {
 						return fmt.Errorf("Mismatching config for network %q in project %q: %w", network.Name, networkProjectName, err)

@@ -554,10 +554,25 @@ func createFromMigration(ctx context.Context, s *state.State, r *http.Request, p
 }
 
 // validateDependentVolumes validates dependent volumes during copy.
-func validateDependentVolumes(source instance.Instance, req *api.InstancesPost) error {
+func validateDependentVolumes(s *state.State, source instance.Instance, targetProject string, req *api.InstancesPost) error {
+	srcVolProject, err := project.StorageVolumeProject(s.DB.Cluster, source.Project().Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	dstVolProject, err := project.StorageVolumeProject(s.DB.Cluster, targetProject, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	// Volume names can't collide when the two projects have separate storage volumes.
+	if srcVolProject != dstVolProject {
+		return nil
+	}
+
 	// Fetch all dependent devices belonging to the instance.
 	dependentVolumes := []string{}
-	err := source.ForEachDependentDiskType(func(dev deviceConfig.DeviceNamed) error {
+	err = source.ForEachDependentDiskType(func(dev deviceConfig.DeviceNamed) error {
 		dependentVolumes = append(dependentVolumes, dev.Name)
 		return nil
 	})
@@ -646,7 +661,7 @@ func createFromCopy(ctx context.Context, s *state.State, r *http.Request, projec
 		req.Config["volatile.apply_nvram"] = "true"
 	}
 
-	err = validateDependentVolumes(source, req)
+	err = validateDependentVolumes(s, source, targetProject, req)
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -1252,6 +1267,14 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 	// Special handling for instance refresh.
 	// For all other situations, we're headed towards the scheduler, but for this case, we can short circuit it.
 	if s.ServerClustered && !clusterNotification && req.Source.Type == "migration" && req.Source.Refresh {
+		// The regular path checks this through AllowInstanceCreation, which isn't run here.
+		err = s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+			return project.AllowInstanceMigrationSource(tx, targetProjectName, req)
+		})
+		if err != nil {
+			return response.SmartError(err)
+		}
+
 		client, err := cluster.ConnectIfInstanceIsRemote(s, targetProjectName, req.Name, r)
 		if err != nil && !response.IsNotFoundError(err) {
 			return response.SmartError(err)
@@ -1491,24 +1514,24 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 				return err
 			}
 
-			// If no architectures have been ascertained from the source then use the default
-			// architecture from project or global config if available.
-			if len(architectures) < 1 {
-				defaultArch := targetProject.Config["images.default_architecture"]
-				if defaultArch == "" {
-					defaultArch = s.GlobalConfig.ImagesDefaultArchitecture()
+			// Use the default architecture from project or global config when the source
+			// doesn't dictate one or offers several (multi-architecture image aliases).
+			defaultArch := targetProject.Config["images.default_architecture"]
+			if defaultArch == "" {
+				defaultArch = s.GlobalConfig.ImagesDefaultArchitecture()
+			}
+
+			if defaultArch != "" {
+				defaultArchID, err := osarch.ArchitectureID(defaultArch)
+				if err != nil {
+					return err
 				}
 
-				if defaultArch != "" {
-					defaultArchID, err := osarch.ArchitectureID(defaultArch)
-					if err != nil {
-						return err
-					}
-
-					architectures = append(architectures, defaultArchID)
-				} else {
-					architectures = nil // Don't exclude candidate members based on architecture.
+				if len(architectures) < 1 || slices.Contains(architectures, defaultArchID) {
+					architectures = []int{defaultArchID}
 				}
+			} else if len(architectures) < 1 {
+				architectures = nil // Don't exclude candidate members based on architecture.
 			}
 
 			clusterGroupsAllowed := project.GetRestrictedClusterGroups(targetProject)

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -191,14 +192,37 @@ func evacuateMigrateInstance(r *http.Request) evacuateMigrateFunc {
 	}
 }
 
-// evacuateWaitForCreations waits for local instance creation operations to complete.
-func evacuateWaitForCreations(ctx context.Context, op *operations.Operation) error {
+// evacuateWaitForOperations waits for local instance operations that would block a migration to complete.
+func evacuateWaitForOperations(ctx context.Context, op *operations.Operation) error {
+	// Bounded operations that hold the instance lock (exec, console and stop are excluded).
+	blockingTypes := []operationtype.Type{
+		operationtype.InstanceCreate,
+		operationtype.InstanceUpdate,
+		operationtype.InstanceRename,
+		operationtype.InstanceMigrate,
+		operationtype.InstanceLiveMigrate,
+		operationtype.InstanceFreeze,
+		operationtype.InstanceUnfreeze,
+		operationtype.InstanceDelete,
+		operationtype.InstanceStart,
+		operationtype.InstanceRestart,
+		operationtype.InstanceRebuild,
+		operationtype.SnapshotCreate,
+		operationtype.SnapshotRename,
+		operationtype.SnapshotRestore,
+		operationtype.SnapshotTransfer,
+		operationtype.SnapshotUpdate,
+		operationtype.SnapshotDelete,
+		operationtype.BackupCreate,
+		operationtype.BackupRestore,
+	}
+
 	lastCount := -1
 
 	for {
 		count := 0
 		for _, localOp := range operations.Clone() {
-			if localOp.Type() == operationtype.InstanceCreate && !localOp.Status().IsFinal() {
+			if slices.Contains(blockingTypes, localOp.Type()) && !localOp.Status().IsFinal() {
 				count++
 			}
 		}
@@ -209,7 +233,7 @@ func evacuateWaitForCreations(ctx context.Context, op *operations.Operation) err
 
 		if op != nil && count != lastCount {
 			lastCount = count
-			_ = op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Waiting for %d instance creation operations to complete", count)})
+			_ = op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Waiting for %d instance operations to complete", count)})
 		}
 
 		select {
@@ -235,9 +259,9 @@ func evacuateClusterMember(ctx context.Context, s *state.State, op *operations.O
 		_ = evacuateClusterSetState(s, name, db.ClusterMemberStateCreated)
 	})
 
-	// Wait for ongoing instance creations to complete (skipped when healing an offline member).
+	// Wait for ongoing instance operations to complete (skipped when healing an offline member).
 	if mode != "heal" {
-		err = evacuateWaitForCreations(ctx, op)
+		err = evacuateWaitForOperations(ctx, op)
 		if err != nil {
 			return err
 		}
@@ -412,6 +436,8 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 
 		return err
 	}
+
+	defer scriptlet.InstancePlacementPendingClear(instProject.Name, inst.Name())
 
 	// Start migrating the instance.
 	_ = opts.op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Migrating %q in project %q to %q", inst.Name(), instProject.Name, targetMemberInfo.Name)})
@@ -611,6 +637,9 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 		return fmt.Errorf("Failed to connect to source: %w", err)
 	}
 
+	// Close the event listener connections once done.
+	defer source.Disconnect()
+
 	source = source.UseProject(inst.Project().Name)
 
 	apiInst, _, err := source.GetInstance(inst.Name())
@@ -618,7 +647,13 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 		return fmt.Errorf("Failed to get instance %q: %w", inst.Name(), err)
 	}
 
-	isRunning := apiInst.StatusCode == api.Running
+	// Check for broken instances.
+	if apiInst.StatusCode == api.Error {
+		return fmt.Errorf("Instance %q in project %q is in error state", inst.Name(), inst.Project().Name)
+	}
+
+	// Anything other than a Stopped status needs the instance to be cleanly stopped first.
+	isRunning := apiInst.StatusCode != api.Stopped
 	if isRunning && !liveOrNearLive {
 		_ = op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Stopping %q in project %q", inst.Name(), inst.Project().Name)})
 
@@ -722,9 +757,15 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 	return nil
 }
 
+// evacuatePlacementMu serializes target selection so each placement sees the moves already decided.
+var evacuatePlacementMu sync.Mutex
+
 func evacuateClusterSelectTarget(ctx context.Context, s *state.State, inst instance.Instance) (*db.NodeInfo, *db.NodeInfo, error) {
 	var sourceMemberInfo *db.NodeInfo
 	var targetMemberInfo *db.NodeInfo
+
+	evacuatePlacementMu.Lock()
+	defer evacuatePlacementMu.Unlock()
 
 	// Get candidate cluster members to move instances to.
 	var candidateMembers []db.NodeInfo
@@ -755,6 +796,11 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, inst insta
 	})
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Nothing for the scriptlet to choose from, so stop the instance in place.
+	if len(candidateMembers) == 0 {
+		return nil, nil, api.StatusErrorf(http.StatusNotFound, "Couldn't find a cluster member for instance %q in project %q", inst.Name(), inst.Project().Name)
 	}
 
 	// Run instance placement scriptlet if enabled.
@@ -799,13 +845,12 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, inst insta
 
 	// If target member not specified yet, then find the least loaded cluster member which
 	// supports the instance's architecture.
-	if targetMemberInfo == nil && len(candidateMembers) > 0 {
+	if targetMemberInfo == nil {
 		targetMemberInfo = &candidateMembers[0]
 	}
 
-	if targetMemberInfo == nil {
-		return nil, nil, api.StatusErrorf(http.StatusNotFound, "Couldn't find a cluster member for instance %q in project %q", inst.Name(), inst.Project().Name)
-	}
+	// Let later placements account for this move until it completes.
+	scriptlet.InstancePlacementPendingSet(inst.Project().Name, inst.Name(), sourceMemberInfo.Name, targetMemberInfo.Name)
 
 	return sourceMemberInfo, targetMemberInfo, nil
 }

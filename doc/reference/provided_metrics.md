@@ -13,6 +13,14 @@ Incus は、数々のインスタンスメトリクスと内部メトリクス�
 
 * - メトリック
   - 説明
+* - `incus_cluster_member{member="<member>",architecture="<arch>",failure_domain="<domain>"}`
+  - クラスターメンバーについての情報（常に`1`）
+* - `incus_cluster_member_group{member="<member>",group="<group>"}`
+  - メンバーが属する各クラスターグループについて`1`と設定
+* - `incus_cluster_member_role{member="<member>",role="<role>"}`
+  - クラスターメンバーが保持する各ロールについて`1`と設定
+* - `incus_cluster_member_status{member="<member>",status="<status>"}`
+  - クラスターメンバーが指定の状態にあるかどうか（`1`か`0`）
 * - `incus_boot_time_seconds`
   - ゲストが起動した時点のUnixタイムスタンプ
 * - `incus_cpu_effective_total`

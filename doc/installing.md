@@ -267,6 +267,13 @@ Incus を以下のコマンドでインストールします:
 
 ````{tabs}
 
+```{group-tab} FreeBSD
+
+IncusクライアントはFreeBSD Ports内にパッケージされており、以下のコマンドでインストールできます：
+
+    pkg install incus-client
+```
+
 ```{group-tab} macOS
 
 **Homebrew**
@@ -317,8 +324,9 @@ Chocolatey または Winget を使ってインストールするには、以下�
 [GitHub](https://github.com/lxc/incus/actions)にも Incus クライアントのネイティブビルドがあります:
 
 - Linux 用 Incus クライアント: [`bin.linux.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.aarch64)、[`bin.linux.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.linux.incus.x86_64)
-- Windows 用 Incus クライアント: [`bin.windows.incus.aarch64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.aarch64.exe)、[`bin.windows.incus.x86_64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.x86_64.exe)
+- FreeBSD 用 Incus クライアント：[`bin.freebsd.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.freebsd.incus.aarch64)、[`bin.freebsd.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.freebsd.incus.x86_64)
 - macOS 用 Incus クライアント: [`bin.macos.incus.aarch64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.aarch64)、[`bin.macos.incus.x86_64`](https://github.com/lxc/incus/releases/latest/download/bin.macos.incus.x86_64)
+- Windows 用 Incus クライアント: [`bin.windows.incus.aarch64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.aarch64.exe)、[`bin.windows.incus.x86_64.exe`](https://github.com/lxc/incus/releases/latest/download/bin.windows.incus.x86_64.exe)
 
 (installing_from_source)=
 ## Incusをソースからインストールする

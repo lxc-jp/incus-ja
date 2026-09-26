@@ -39,3 +39,6 @@ Distrobuilder は既存のイメージを再パッケージするというより
 
 [The Cluster API provider for Incus](https://capn.linuxcontainers.org)はCluster APIのInfrastructure Providerで、Incusで運用されているインフラストラクチャー上にKuberneesクラスターのデプロイを可能にします。
 このプロバイダーは単一ノードの開発環境で評価や検証に使うこともできますが、複数ノードのIncusクラスターで本番環境のKubernetesクラスタをデプロイ、管理するのにも使えます。
+
+## Incant
+[Incant](https://github.com/lnussbaum/incant)は開発環境を宣言的に定義と管理する方法を提供するIncusのフロントエンドです。YAMLベースの設定ファイルを使って、Incusインスタンスの作成、設定、プロビジョニングを簡素化します。

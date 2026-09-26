@@ -68,6 +68,7 @@ type Monitor struct {
 	disconnected   bool
 	chDisconnect   chan struct{}
 	eventHandler   func(name string, data map[string]any)
+	handlerCleared bool
 	serialCharDev  string
 	initialized    bool
 	expectingReset bool
@@ -115,7 +116,7 @@ func (m *Monitor) start() error {
 		// Extract the last entry.
 		entries := strings.Split(resp.Return, "\n")
 		if len(entries) > 1 {
-			status := entries[len(entries)-2]
+			status := strings.TrimSuffix(entries[len(entries)-2], "\r")
 			var instanceState *api.InstanceState
 			if len(entries) > 2 {
 				var s api.InstanceState
@@ -125,7 +126,7 @@ func (m *Monitor) start() error {
 					instanceState = &s
 				}
 
-				status = entries[len(entries)-3]
+				status = strings.TrimSuffix(entries[len(entries)-3], "\r")
 			}
 
 			m.SetInstanceState(instanceState)
@@ -257,7 +258,12 @@ func (m *Monitor) ping() error {
 	_, err := m.qmp.run(fmt.Appendf([]byte{},
 		`{"execute": "query-version", "id": %d}`, id), id)
 	if err != nil {
-		m.Disconnect()
+		// A slow QEMU is still alive, keep the monitor cached.
+		if errors.Is(err, ErrMonitorTimeout) {
+			return err
+		}
+
+		m.teardown()
 		return ErrMonitorDisconnect
 	}
 
@@ -283,6 +289,12 @@ func (m *Monitor) RunJSON(request []byte, resp any, logCommand bool, id uint32) 
 	if err != nil {
 		// Keep the monitor cached on timeout so retries fail fast.
 		if errors.Is(err, ErrMonitorTimeout) {
+			return err
+		}
+
+		// An error reply came from QEMU itself, so it's alive.
+		var qmpErr *qmpError
+		if errors.As(err, &qmpErr) {
 			return err
 		}
 
@@ -441,6 +453,13 @@ func (m *Monitor) AgenStarted() bool {
 
 // Disconnect forces a disconnection from QEMU.
 func (m *Monitor) Disconnect() {
+	// A deliberate disconnect must not be reported as a VM shutdown.
+	m.SetInitialized(false)
+	m.teardown()
+}
+
+// teardown closes the socket and drops the monitor from the cache.
+func (m *Monitor) teardown() {
 	monitorsLock.Lock()
 	defer monitorsLock.Unlock()
 
@@ -498,9 +517,17 @@ func (m *Monitor) IsInitialized() bool {
 }
 
 // setEventHandler sets the current event handler (prevents race with getEventHandler).
+// setEventHandler sets the event handler. Clearing it is sticky so that the
+// caller taking over the shutdown of this QEMU isn't raced by re-arming connections.
 func (m *Monitor) setEventHandler(handler func(name string, data map[string]any)) {
 	m.stateMu.Lock()
 	defer m.stateMu.Unlock()
+
+	if handler == nil {
+		m.handlerCleared = true
+	} else if m.handlerCleared {
+		return
+	}
 
 	m.eventHandler = handler
 }

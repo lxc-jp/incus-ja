@@ -77,7 +77,11 @@ test_idmap() {
     [ "$(incus exec idmap -- cat /proc/self/uid_map | awk '{print $3}')" = "100000" ]
     [ "$(incus exec idmap -- cat /proc/self/gid_map | awk '{print $3}')" = "100000" ]
 
+    # A fixed base isn't compatible with isolation.
+    ! incus config set idmap security.idmap.base $((UID_BASE + 12345)) || false
+
     # Test using a custom base
+    incus config unset idmap security.idmap.isolated
     incus config set idmap security.idmap.base $((UID_BASE + 12345))
     incus config set idmap security.idmap.size 110000
     incus restart idmap --force
@@ -86,9 +90,16 @@ test_idmap() {
     [ "$(incus exec idmap -- cat /proc/self/uid_map | awk '{print $3}')" = "110000" ]
     [ "$(incus exec idmap -- cat /proc/self/gid_map | awk '{print $3}')" = "110000" ]
 
+    # A fixed range can be shared and is avoided by isolated containers.
+    incus launch testimage idmap-shared -c security.idmap.base=$((UID_BASE + 12345)) -c security.idmap.size=110000
+    [ "$(incus exec idmap-shared -- cat /proc/self/uid_map | awk '{print $2}')" = "$((UID_BASE + 12345))" ]
+    [ "$(incus exec idmap-shared -- cat /proc/self/uid_map | awk '{print $3}')" = "110000" ]
+    incus init testimage idmap-iso -c security.idmap.isolated=true
+    [ "$(incus config get idmap-iso volatile.idmap.base)" -ge "$((UID_BASE + 12345 + 110000))" ]
+    incus delete -f idmap-shared idmap-iso
+
     # Switch back to full Incus range
     incus config unset idmap security.idmap.base
-    incus config unset idmap security.idmap.isolated
     incus config unset idmap security.idmap.size
     incus restart idmap --force
     [ "$(incus exec idmap -- cat /proc/self/uid_map | awk '{print $2}')" = "${UID_BASE}" ]
@@ -111,6 +122,34 @@ test_idmap() {
     [ "$(incus exec idmap1 -- cat /proc/self/gid_map | awk '{print $2}')" = "$((GID_BASE + 131072))" ]
     [ "$(incus exec idmap1 -- cat /proc/self/uid_map | awk '{print $3}')" = "65536" ]
     [ "$(incus exec idmap1 -- cat /proc/self/gid_map | awk '{print $3}')" = "65536" ]
+
+    # Reuse an exact-sized gap between two isolated containers.
+    incus init testimage idmap-gap -c security.idmap.isolated=true
+    GAP_BASE=$(incus config get idmap-gap volatile.idmap.base)
+    incus init testimage idmap-after-gap -c security.idmap.isolated=true
+    incus delete idmap-gap
+    incus init testimage idmap-gap -c security.idmap.isolated=true
+    [ "$(incus config get idmap-gap volatile.idmap.base)" = "${GAP_BASE}" ]
+    incus delete idmap-gap idmap-after-gap
+
+    # Check that concurrent creations get distinct isolated ranges.
+    pids=""
+    for i in 1 2 3 4 5 6 7 8; do
+        incus init testimage "idmap-parallel-${i}" -c security.idmap.isolated=true &
+        pids="${pids} $!"
+    done
+
+    for pid in ${pids}; do
+        wait "${pid}"
+    done
+
+    bases=""
+    for i in 1 2 3 4 5 6 7 8; do
+        bases="${bases} $(incus config get "idmap-parallel-${i}" volatile.idmap.base)"
+        incus delete "idmap-parallel-${i}"
+    done
+
+    [ "$(echo "${bases}" | tr ' ' '\n' | sed '/^$/d' | sort -u | wc -l)" = "8" ]
 
     # Validate non-overlapping maps
     incus exec idmap -- touch /a

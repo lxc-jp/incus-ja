@@ -22,7 +22,7 @@ test_storage_vm() {
     GiB=1073741823
 
     for poolDriver in ${poolDriverList}; do
-        if ! storage_backend_available "${poolDriver%-thin}"; then
+        if ! storage_backend_available "${poolDriver%%-*}"; then
             # Fail when an explicitly requested driver isn't available.
             if [ -n "${INCUS_VM_STORAGE_DRIVERS:-}" ]; then
                 echo "==> FAIL: Storage driver ${poolDriver} not available"
@@ -40,6 +40,8 @@ test_storage_vm() {
 
         if [ "${poolDriver}" = "dir" ] || [ "${poolDriver}" = "ceph" ]; then
             incus storage create "${poolName}" "${poolDriver}"
+        elif [ "${poolDriver}" = "ceph-librbd" ]; then
+            incus storage create "${poolName}" ceph ceph.rbd.backend=librbd
         elif [ "${poolDriver}" = "linstor" ]; then
             incus storage create "${poolName}" "${poolDriver}" linstor.resource_group.place_count=1
         elif [ "${poolDriver}" = "lvm" ]; then
@@ -73,14 +75,15 @@ test_storage_vm() {
         echo "foo" | incus exec v1 -- tee /root/foo.txt
         incus exec v1 -- sync
         incus snapshot create v1
+        incus snapshot rename v1 snap0 snap1
 
         echo "==> Checking restore VM snapshot"
-        incus snapshot restore v1 snap0
+        incus snapshot restore v1 snap1
         incus wait v1 agent --timeout=90 --interval=1
         incus exec v1 -- cat /root/foo.txt | grep -Fx "foo"
 
         echo "==> Checking running copied VM snapshot"
-        incus copy v1/snap0 v2
+        incus copy v1/snap1 v2
         incus start v2
         incus wait v2 agent --timeout=90 --interval=1
         incus exec v2 -- cat /root/foo.txt | grep -Fx "foo"
@@ -88,7 +91,7 @@ test_storage_vm() {
         echo "==> Checking VM snapshot copy root disk size is 10GiB"
         [ $(($(incus exec v2 -- blockdev --getsize64 /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_root) / GiB)) -eq "10" ]
         incus delete -f v2
-        incus snapshot delete v1 snap0
+        incus snapshot delete v1 snap1
 
         echo "==> Check QEMU crash behavior and recovery"
         incus exec v1 -- fsfreeze --freeze /
@@ -317,6 +320,8 @@ test_storage_vm() {
         echo "==> Copy to different storage pool with same driver and check size"
         if [ "${poolDriver}" = "dir" ] || [ "${poolDriver}" = "ceph" ]; then
             incus storage create "${poolName}2" "${poolDriver}"
+        elif [ "${poolDriver}" = "ceph-librbd" ]; then
+            incus storage create "${poolName}2" ceph ceph.rbd.backend=librbd
         elif [ "${poolDriver}" = "linstor" ]; then
             incus storage create "${poolName}2" "${poolDriver}" linstor.resource_group.place_count=1
         elif [ "${poolDriver}" = "lvm" ]; then

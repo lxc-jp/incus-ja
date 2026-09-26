@@ -110,19 +110,24 @@ Incus ではクラウドのシンプルなインスタンスタイプが使え�
 ### ISOからブートする仮想マシンを起動する
 
 ```{note}
-Windows、macOS、FreeBSDの仮想マシンを作成する際は、`image.os`プロパティをそれぞれ`Windows`、`macOS`、`FreeBSD`から始まる値に確実に設定してください。
+FreeBSD、macOS、NetBSD、Windowsの仮想マシンを作成する際は、`image.os`プロパティをそれぞれ`FreeBSD`、`macOS`、`NetBSD`、`Windows`から始まる値に確実に設定してください。
 そうすることでIncusが仮想マシン内で正しいOSが稼働することを想定し挙動を適切に調整します。
 
 これは特に以下のことをもたらします:
+ - FreeBSDでは
+
+   - メモリーホットプラグは無効です
+
+ - NetBSDでは
+
+   - メモリーホットプラグは無効です
+   - マルチポートのVirtIOシリアルとSPICEは無効です
+
  - Windowsでは
 
    - いくつかの非サポートの仮想デバイスを無効化します
    - {abbr}`RTC (Real Time Clock)`クロックをUTCではなくシステムローカルタイムに基づかせます
    - Intel IOMMUコントローラへ切り替えるようにIOMMUをハンドリングします
-
- - FreeBSDでは
-
-   - メモリーホットプラグは無効です
 ```
 
 ISO からブートする仮想マシンを起動するには、まず仮想マシンを作成する必要があります。
@@ -176,7 +181,7 @@ Incusエージェントはホストとゲスト間の通信のためにTLS証明
 他の仮想マシンでは、手動でエージェントをインストールすることもできます。
 
 ```{note}
-Incus Agentは現状ではLinux、Windows、macOS、FreeBSDの仮想マシンでのみ利用可能です。
+Incus Agentは現状ではLinux、FreeBSD、macOS、NetBSD、Windowsの仮想マシンでのみ利用可能です。
 ```
 
 Incusはエージェントを主にマウント名`config`でリモートの`9p`ファイルシステムとして提供します。
@@ -227,6 +232,18 @@ CD-ROMドライブから`install.ps1`ファイルを実行する（ファイル�
     d:\
     .\incus-agent.exe
 
+#### FreeBSD上
+
+FreeBSDシステムでは、**rootで**以下のコマンドを実行し`9p`のマウントを使ってエージェントを手動でインストールできます（このモジュールがロードされていない場合は事前に`kldload virtio_p9fs`の実行が必要かもしれません）：
+
+    mount -t p9fs config /mnt
+    cd /mnt
+    ./install.sh
+
+```{warning}
+FreeBSDカーネルの動作の仕組み上、非インタラクティブなコマンドを`incus exec`のインタラクティブなモードで実行すると出力が途中で途切れます。非インタラクティブなコマンドは`-T`/`--force-noninteractive`を指定して実行してください。
+```
+
 #### macOS上
 
 macOSシステムでは、ターミナルを**rootユーザーで**開いて以下のコマンドを実行することで`9p`マウントを使って手動でエージェントをインストールできます:
@@ -242,11 +259,11 @@ Appleの追加のセキュリティーの制約を緩和することで、シス
 セキュリティーが弱まるのが心配であれば、毎回`incus-agent`を手動で実行してください。
 ```
 
-#### On FreeBSD
+#### NetBSD上
 
-FreeBSDシステムでは、**rootで**以下のコマンドを実行し`9p`のマウントを使ってエージェントを手動でインストールできます（このモジュールがロードされていない場合は事前に`kldload virtio_p9fs`の実行が必要かもしれません）：
+NetBSDシステムでは、ターミナルを**rootユーザーで**開いて以下のコマンドを実行することで`9p`マウントを使って手動でエージェントをインストールできます:
 
-    mount -t p9fs config /mnt
+    mount_9p -cu "/dev/$(dmesg | grep -o 'vio9p.*: tagged as config' | cut -d: -f1 | head -n1)" /mnt
     cd /mnt
     ./install.sh
 

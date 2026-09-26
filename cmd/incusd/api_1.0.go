@@ -420,13 +420,22 @@ func api10Get(d *Daemon, r *http.Request) response.Response {
 	fullSrv.AuthUserMethod = requestor.Protocol
 
 	err = s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectServer(), auth.EntitlementCanViewSensitive)
-	if err == nil {
-		fullSrv.Config = fullSrvConfig
-	} else if !api.StatusErrorCheck(err, http.StatusForbidden) {
+	if err != nil {
+		if !api.StatusErrorCheck(err, http.StatusForbidden) {
+			return response.SmartError(err)
+		}
+
+		return response.SyncResponseETag(true, fullSrv, nil)
+	}
+
+	fullSrv.Config = fullSrvConfig
+
+	etag, err := daemonConfigETag(s, r)
+	if err != nil {
 		return response.SmartError(err)
 	}
 
-	return response.SyncResponseETag(true, fullSrv, fullSrv.Config)
+	return response.SyncResponseETag(true, fullSrv, etag)
 }
 
 // swagger:operation PUT /1.0 server server_put
@@ -516,7 +525,7 @@ func api10Put(d *Daemon, r *http.Request) response.Response {
 		return response.EmptySyncResponse
 	}
 
-	render, err := daemonConfigRender(s)
+	render, err := daemonConfigETag(s, r)
 	if err != nil {
 		return response.SmartError(err)
 	}
@@ -579,7 +588,7 @@ func api10Patch(d *Daemon, r *http.Request) response.Response {
 	// Don't apply changes to settings until daemon is fully started.
 	<-d.waitReady.Done()
 
-	render, err := daemonConfigRender(s)
+	render, err := daemonConfigETag(s, r)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -816,9 +825,18 @@ func doAPI10Update(d *Daemon, r *http.Request, req api.ServerPut, patch bool) re
 
 	// Update the daemon config.
 	d.globalConfigMu.Lock()
+	oldGlobalConfig := d.globalConfig
+	oldLocalConfig := d.localConfig
 	d.globalConfig = newClusterConfig
 	d.localConfig = newNodeConfig
 	d.globalConfigMu.Unlock()
+
+	reverter.Add(func() {
+		d.globalConfigMu.Lock()
+		d.globalConfig = oldGlobalConfig
+		d.localConfig = oldLocalConfig
+		d.globalConfigMu.Unlock()
+	})
 
 	// Run any update triggers.
 	err = doAPI10UpdateTriggers(d, nodeChanged, clusterChanged, newNodeConfig, newClusterConfig)
@@ -1083,7 +1101,20 @@ func doAPI10UpdateTriggers(d *Daemon, nodeChanged, clusterChanged map[string]str
 	if ovnChanged {
 		err := d.setupOVN()
 		if err != nil {
-			return err
+			// Ignore the failure when the OVN connection is being unset and no OVN network exists.
+			value, ok := clusterChanged["network.ovn.northbound_connection"]
+			if !ok || value != "" {
+				return err
+			}
+
+			hasOVN, dbErr := d.hasOVNNetworks()
+			if dbErr != nil {
+				return dbErr
+			}
+
+			if hasOVN {
+				return err
+			}
 		}
 	}
 

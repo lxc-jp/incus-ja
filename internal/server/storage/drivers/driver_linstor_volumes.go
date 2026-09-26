@@ -772,6 +772,11 @@ func (d *linstor) MountVolume(vol Volume, op *operations.Operation) error {
 				}
 			}
 
+			// VM config volumes are small and unmounted while stopped, so repair them when needed.
+			if vol.volType == VolumeTypeVM {
+				fsckIfErrors(volDevPath, fsType)
+			}
+
 			mountFlags, mountOptions := linux.ResolveMountOptions(strings.Split(vol.ConfigBlockMountOptions(), ","))
 			l.Debug("Will try mount", logger.Ctx{"mountFlags": mountFlags, "mountOptions": mountOptions})
 			err = TryMount(volDevPath, mountPath, fsType, mountFlags, mountOptions)
@@ -1245,6 +1250,18 @@ func (d *linstor) UpdateVolume(vol Volume, changedConfig map[string]string) erro
 
 // GetVolumeUsage returns the disk space used by the volume.
 func (d *linstor) GetVolumeUsage(vol Volume) (int64, error) {
+	// If mounted, use the filesystem stats for pretty accurate usage information.
+	if !vol.IsSnapshot() && vol.contentType == ContentTypeFS && linux.IsMountPoint(vol.MountPath()) {
+		var stat unix.Statfs_t
+
+		err := unix.Statfs(vol.MountPath(), &stat)
+		if err != nil {
+			return -1, err
+		}
+
+		return int64(stat.Blocks-stat.Bfree) * int64(stat.Bsize), nil
+	}
+
 	usageInKiB, err := d.getVolumeUsage(vol)
 	if err != nil {
 		return 0, fmt.Errorf("Could not get volume usage: %w", err)
