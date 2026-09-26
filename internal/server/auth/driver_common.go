@@ -35,6 +35,7 @@ type requestDetails struct {
 
 	forwardedUsername string
 	forwardedProtocol string
+	forwardedClaims   map[string]any
 }
 
 func (r *requestDetails) isInternalOrUnix() bool {
@@ -65,12 +66,21 @@ func (r *requestDetails) authenticationProtocol() string {
 	return r.Protocol
 }
 
+func (r *requestDetails) claims() map[string]any {
+	if r.Protocol == "cluster" {
+		return r.forwardedClaims
+	}
+
+	return r.Claims
+}
+
 func (r *requestDetails) actualDetails() *common.RequestDetails {
 	return &common.RequestDetails{
 		Username:             r.username(),
 		Protocol:             r.authenticationProtocol(),
 		IsAllProjectsRequest: r.IsAllProjectsRequest,
 		ProjectName:          r.ProjectName,
+		Claims:               r.claims(),
 	}
 }
 
@@ -119,6 +129,24 @@ func (c *commonAuthorizer) requestDetails(r *http.Request) (*requestDetails, err
 		}
 	}
 
+	var claims map[string]any
+	val = r.Context().Value(request.CtxClaims)
+	if val != nil {
+		claims, ok = val.(map[string]any)
+		if !ok {
+			return nil, errors.New("Request context claims have incorrect type")
+		}
+	}
+
+	var forwardedClaims map[string]any
+	val = r.Context().Value(request.CtxForwardedClaims)
+	if val != nil {
+		forwardedClaims, ok = val.(map[string]any)
+		if !ok {
+			return nil, errors.New("Request context forwarded claims have incorrect type")
+		}
+	}
+
 	values, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse request query parameters: %w", err)
@@ -130,10 +158,12 @@ func (c *commonAuthorizer) requestDetails(r *http.Request) (*requestDetails, err
 			Protocol:             protocol,
 			IsAllProjectsRequest: util.IsTrue(values.Get("all-projects")),
 			ProjectName:          request.ProjectParam(r),
+			Claims:               claims,
 		},
 
 		forwardedUsername: forwardedUsername,
 		forwardedProtocol: forwardedProtocol,
+		forwardedClaims:   forwardedClaims,
 	}, nil
 }
 
@@ -224,6 +254,11 @@ func (c *commonAuthorizer) DeleteInstance(ctx context.Context, projectName strin
 
 // RenameInstance is a no-op.
 func (c *commonAuthorizer) RenameInstance(ctx context.Context, projectName string, oldInstanceName string, newInstanceName string) error {
+	return nil
+}
+
+// SetInstanceSecurityTags is a no-op.
+func (c *commonAuthorizer) SetInstanceSecurityTags(ctx context.Context, projectName string, instanceName string, tags []string) error {
 	return nil
 }
 

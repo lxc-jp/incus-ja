@@ -1,4 +1,4 @@
-//go:build darwin || freebsd || windows
+//go:build darwin || freebsd || netbsd || windows
 
 package main
 
@@ -7,7 +7,6 @@ import (
 	"io"
 	"math"
 	"net"
-	"os"
 	"sort"
 	"strconv"
 
@@ -22,7 +21,6 @@ import (
 )
 
 var (
-	osShutdownSignal   = os.Interrupt
 	osMetricsSupported = true
 	osGuestAPISupport  = false
 )

@@ -99,9 +99,9 @@ func AllowInstanceCreation(tx *db.ClusterTx, projectName string, req api.Instanc
 	}
 
 	if util.IsTrue(info.Project.Config["restricted"]) {
-		// Restricted projects aren't allowed to use pull migration.
-		if req.Source.Type == "migration" && req.Source.Mode == "pull" {
-			return errors.New("Restricted projects aren't allowed to use pull mode migration")
+		err = checkMigrationSource(info.Project, req)
+		if err != nil {
+			return err
 		}
 
 		// Check if we have image server restrictions.
@@ -154,6 +154,84 @@ func AllowInstanceCreation(tx *db.ClusterTx, projectName string, req api.Instanc
 	err = checkRestrictionsAndAggregateLimits(tx, info)
 	if err != nil {
 		return fmt.Errorf("Failed checking if instance creation allowed: %w", err)
+	}
+
+	return nil
+}
+
+// CheckLimits returns an error if the project's current instances and volumes exceed its limits.
+// It is meant to run inside the transaction recording a new instance or volume, closing the window
+// between the pre-creation check and the database insert.
+func CheckLimits(tx *db.ClusterTx, projectName string) error {
+	info, err := fetchProject(tx, projectName, true)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		return nil
+	}
+
+	count, limit, err := getTotalInstanceCountLimit(info)
+	if err != nil {
+		return err
+	}
+
+	if limit >= 0 && count > limit {
+		return fmt.Errorf("Reached maximum number of instances in project %q", projectName)
+	}
+
+	for _, instanceType := range []instancetype.Type{instancetype.Container, instancetype.VM} {
+		count, limit, err := getInstanceCountLimit(info, instanceType)
+		if err != nil {
+			return err
+		}
+
+		if limit >= 0 && count > limit {
+			return fmt.Errorf("Reached maximum number of instances of type %q in project %q", instanceType, projectName)
+		}
+	}
+
+	aggregateKeys := []string{}
+	for key := range info.Project.Config {
+		if slices.Contains(allAggregateLimits, key) || strings.HasPrefix(key, projectLimitDiskPool) {
+			aggregateKeys = append(aggregateKeys, key)
+		}
+	}
+
+	if len(aggregateKeys) == 0 {
+		return nil
+	}
+
+	instances, err := expandInstancesConfigAndDevices(info.Instances, info.Profiles)
+	if err != nil {
+		return err
+	}
+
+	info.Instances = instances
+
+	return checkAggregateLimits(info, aggregateKeys)
+}
+
+// AllowInstanceMigrationSource checks that the project restrictions allow the migration source of the request.
+func AllowInstanceMigrationSource(tx *db.ClusterTx, projectName string, req api.InstancesPost) error {
+	info, err := fetchProject(tx, projectName, true)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		return nil
+	}
+
+	return checkMigrationSource(info.Project, req)
+}
+
+// checkMigrationSource refuses pull mode migration in restricted projects, as the server would connect
+// to an arbitrary remote URL.
+func checkMigrationSource(project api.Project, req api.InstancesPost) error {
+	if util.IsTrue(project.Config["restricted"]) && req.Source.Type == "migration" && req.Source.Mode == "pull" {
+		return errors.New("Restricted projects aren't allowed to use pull mode migration")
 	}
 
 	return nil
@@ -232,10 +310,10 @@ func getInstanceCountLimit(info *projectInfo, instanceType instancetype.Type) (i
 	return instanceCount, -1, nil
 }
 
-// Check restrictions on setting volatile.* keys.
-func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instancetype.Type, instanceName string, config, currentConfig map[string]string, strip bool) error {
-	if project.Config["restrict"] == "false" {
-		return nil
+// isVolatileConfigRestricted returns whether the project restricts setting volatile.* keys.
+func isVolatileConfigRestricted(project api.Project, instanceType instancetype.Type) bool {
+	if util.IsFalseOrEmpty(project.Config["restricted"]) {
+		return false
 	}
 
 	var restrictedLowLevel string
@@ -246,31 +324,32 @@ func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instanc
 		restrictedLowLevel = "restricted.virtual-machines.lowlevel"
 	}
 
-	if project.Config[restrictedLowLevel] == "allow" {
-		return nil
+	return project.Config[restrictedLowLevel] != "allow"
+}
+
+// isSafeVolatileKey returns whether a volatile.* key may be set in restricted projects.
+func isSafeVolatileKey(key string) bool {
+	if slices.Contains([]string{"volatile.apply_template", "volatile.base_image", "volatile.last_state.power", "volatile.selinux.context"}, key) {
+		return true
 	}
 
-	// Checker for safe volatile keys.
-	isSafeKey := func(key string) bool {
-		if slices.Contains([]string{"volatile.apply_template", "volatile.base_image", "volatile.last_state.power"}, key) {
+	if strings.HasPrefix(key, instance.ConfigVolatilePrefix) {
+		if strings.HasSuffix(key, ".apply_quota") {
 			return true
 		}
 
-		if key == "volatile.selinux.context" {
+		if strings.HasSuffix(key, ".hwaddr") {
 			return true
 		}
+	}
 
-		if strings.HasPrefix(key, instance.ConfigVolatilePrefix) {
-			if strings.HasSuffix(key, ".apply_quota") {
-				return true
-			}
+	return false
+}
 
-			if strings.HasSuffix(key, ".hwaddr") {
-				return true
-			}
-		}
-
-		return false
+// Check restrictions on setting volatile.* keys.
+func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instancetype.Type, instanceName string, config, currentConfig map[string]string, strip bool) error {
+	if !isVolatileConfigRestricted(project, instanceType) {
+		return nil
 	}
 
 	for key, value := range config {
@@ -279,7 +358,7 @@ func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instanc
 		}
 
 		// Allow given safe volatile keys to be set
-		if isSafeKey(key) {
+		if isSafeVolatileKey(key) {
 			continue
 		}
 
@@ -301,6 +380,32 @@ func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instanc
 	return nil
 }
 
+// Replace unsafe volatile.* keys that can't be restored from a snapshot with the instance's current values.
+func restoreRestrictedVolatileConfig(project api.Project, instanceType instancetype.Type, config, currentConfig map[string]string) {
+	if !isVolatileConfigRestricted(project, instanceType) {
+		return
+	}
+
+	for key := range config {
+		if !strings.HasPrefix(key, instance.ConfigVolatilePrefix) || isSafeVolatileKey(key) {
+			continue
+		}
+
+		// Idmap keys describe the on-disk state of the snapshot and so must come from it.
+		if strings.HasPrefix(key, "volatile.idmap.") || key == "volatile.last_state.idmap" {
+			continue
+		}
+
+		currentValue, ok := currentConfig[key]
+		if !ok {
+			delete(config, key)
+			continue
+		}
+
+		config[key] = currentValue
+	}
+}
+
 // AllowVolumeCreation returns an error if any project-specific limit or
 // restriction is violated when creating a new custom volume in a project.
 func AllowVolumeCreation(tx *db.ClusterTx, projectName string, poolName string, req api.StorageVolumesPost) error {
@@ -318,17 +423,9 @@ func AllowVolumeCreation(tx *db.ClusterTx, projectName string, poolName string, 
 		return errors.New("Restricted projects aren't allowed to use pull mode migration")
 	}
 
-	// Restricted projects can't override low-level volume options that are passed to
-	// filesystem tooling running as root; they may only use the pool's configured default.
-	if util.IsTrue(info.Project.Config["restricted"]) {
-		_, pool, _, err := tx.GetStoragePool(context.Background(), poolName)
-		if err != nil {
-			return err
-		}
-
-		if req.Config["block.create_options"] != "" && req.Config["block.create_options"] != pool.Config["volume.block.create_options"] {
-			return errors.New(`Storage volume option "block.create_options" cannot be set in a restricted project`)
-		}
+	err = checkRestrictedVolumeConfig(tx, info, poolName, req.Config, nil)
+	if err != nil {
+		return err
 	}
 
 	// Add the volume being created.
@@ -341,6 +438,40 @@ func AllowVolumeCreation(tx *db.ClusterTx, projectName string, poolName string, 
 	err = checkRestrictionsAndAggregateLimits(tx, info)
 	if err != nil {
 		return fmt.Errorf("Failed checking if volume creation allowed: %w", err)
+	}
+
+	return nil
+}
+
+// AllowVolumeMove returns an error if moving the given custom volume into the target project would
+// violate the project's limits or restrictions.
+func AllowVolumeMove(tx *db.ClusterTx, srcProjectName string, srcPoolName string, projectName string, poolName string, vol *api.StorageVolume, newName string) error {
+	info, err := fetchProject(tx, projectName, true)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		return nil
+	}
+
+	// Drop the source volume from the totals when moving within the same project.
+	if srcProjectName == projectName {
+		info.Volumes = slices.DeleteFunc(info.Volumes, func(v db.StorageVolumeArgs) bool {
+			return v.Name == vol.Name && v.PoolName == srcPoolName
+		})
+	}
+
+	// Add the volume being moved.
+	info.Volumes = append(info.Volumes, db.StorageVolumeArgs{
+		Name:     newName,
+		Config:   vol.Config,
+		PoolName: poolName,
+	})
+
+	err = checkRestrictionsAndAggregateLimits(tx, info)
+	if err != nil {
+		return fmt.Errorf("Failed checking if volume move allowed: %w", err)
 	}
 
 	return nil
@@ -1078,6 +1209,15 @@ func isVMLowLevelOptionForbidden(key string) bool {
 // AllowInstanceUpdate returns an error if any project-specific limit or
 // restriction is violated when updating an existing instance.
 func AllowInstanceUpdate(tx *db.ClusterTx, projectName, instanceName string, req api.InstancePut, currentConfig map[string]string) error {
+	return allowInstanceUpdate(tx, projectName, instanceName, req, currentConfig, false)
+}
+
+// AllowSnapshotRestore checks project limits and restrictions for a snapshot restore, replacing unsafe volatile.* keys in req.Config.
+func AllowSnapshotRestore(tx *db.ClusterTx, projectName, instanceName string, req api.InstancePut, currentConfig map[string]string) error {
+	return allowInstanceUpdate(tx, projectName, instanceName, req, currentConfig, true)
+}
+
+func allowInstanceUpdate(tx *db.ClusterTx, projectName, instanceName string, req api.InstancePut, currentConfig map[string]string, restore bool) error {
 	var updatedInstance *api.Instance
 	info, err := fetchProject(tx, projectName, true)
 	if err != nil {
@@ -1105,6 +1245,11 @@ func AllowInstanceUpdate(tx *db.ClusterTx, projectName, instanceName string, req
 		return err
 	}
 
+	// Snapshots carry server-generated volatile.* keys that legitimately differ from the instance.
+	if restore {
+		restoreRestrictedVolatileConfig(info.Project, instType, req.Config, currentConfig)
+	}
+
 	// Special case restriction checks on volatile.* keys, since we want to
 	// detect if they were changed or added.
 	err = checkRestrictionsOnVolatileConfig(
@@ -1122,9 +1267,34 @@ func AllowInstanceUpdate(tx *db.ClusterTx, projectName, instanceName string, req
 	return nil
 }
 
-// AllowVolumeUpdate returns an error if any project-specific limit or
-// restriction is violated when updating an existing custom volume.
-func AllowVolumeUpdate(tx *db.ClusterTx, projectName, volumeName string, req api.StorageVolumePut, currentConfig map[string]string) error {
+// checkRestrictedVolumeConfig returns an error if a restricted project attempts to set
+// low-level volume options that are passed to filesystem tooling running as root.
+// Such projects may only use the pool's configured default or keep the volume's current value.
+func checkRestrictedVolumeConfig(tx *db.ClusterTx, info *projectInfo, poolName string, config map[string]string, currentConfig map[string]string) error {
+	if !util.IsTrue(info.Project.Config["restricted"]) {
+		return nil
+	}
+
+	value := config["block.create_options"]
+	if value == "" || value == currentConfig["block.create_options"] {
+		return nil
+	}
+
+	_, pool, _, err := tx.GetStoragePool(context.Background(), poolName)
+	if err != nil {
+		return err
+	}
+
+	if value != pool.Config["volume.block.create_options"] {
+		return errors.New(`Storage volume option "block.create_options" cannot be set in a restricted project`)
+	}
+
+	return nil
+}
+
+// AllowVolumeConfig returns an error if any project-specific restriction is
+// violated by the effective config of a custom volume being created.
+func AllowVolumeConfig(tx *db.ClusterTx, projectName string, poolName string, config map[string]string) error {
 	info, err := fetchProject(tx, projectName, true)
 	if err != nil {
 		return err
@@ -1132,6 +1302,26 @@ func AllowVolumeUpdate(tx *db.ClusterTx, projectName, volumeName string, req api
 
 	if info == nil {
 		return nil
+	}
+
+	return checkRestrictedVolumeConfig(tx, info, poolName, config, nil)
+}
+
+// AllowVolumeUpdate returns an error if any project-specific limit or
+// restriction is violated when updating an existing custom volume.
+func AllowVolumeUpdate(tx *db.ClusterTx, projectName string, poolName string, volumeName string, req api.StorageVolumePut, currentConfig map[string]string) error {
+	info, err := fetchProject(tx, projectName, true)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		return nil
+	}
+
+	err = checkRestrictedVolumeConfig(tx, info, poolName, req.Config, currentConfig)
+	if err != nil {
+		return err
 	}
 
 	// If "limits.disk" is not set, there's nothing to do.
@@ -1151,6 +1341,32 @@ func AllowVolumeUpdate(tx *db.ClusterTx, projectName, volumeName string, req api
 	err = checkRestrictionsAndAggregateLimits(tx, info)
 	if err != nil {
 		return fmt.Errorf("Failed checking if volume update allowed: %w", err)
+	}
+
+	return nil
+}
+
+// AllowProfileCreation checks that project limits and restrictions are not
+// violated when creating a profile.
+func AllowProfileCreation(tx *db.ClusterTx, projectName string, req api.ProfilesPost) error {
+	info, err := fetchProject(tx, projectName, true)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		return nil
+	}
+
+	// Add the profile being created.
+	info.Profiles = append(info.Profiles, api.Profile{
+		Name:       req.Name,
+		ProfilePut: req.ProfilePut,
+	})
+
+	err = checkRestrictionsAndAggregateLimits(tx, info)
+	if err != nil {
+		return fmt.Errorf("Failed checking if profile creation allowed: %w", err)
 	}
 
 	return nil

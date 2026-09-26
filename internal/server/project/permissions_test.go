@@ -163,6 +163,115 @@ func TestAllowInstanceCreation_AboveInstances(t *testing.T) {
 	assert.EqualError(t, err, `Reached maximum number of instances in project "p1"`)
 }
 
+// If the recorded instances fit within the limit, the post-insert check passes.
+func TestCheckLimits_AtLimit(t *testing.T) {
+	tx, cleanup := db.NewTestClusterTx(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	id, err := cluster.CreateProject(ctx, tx.Tx(), cluster.Project{Name: "p1"})
+	require.NoError(t, err)
+
+	err = cluster.CreateProjectConfig(ctx, tx.Tx(), id, map[string]string{"limits.instances": "1"})
+	require.NoError(t, err)
+
+	_, err = cluster.CreateInstance(ctx, tx.Tx(), cluster.Instance{
+		Project:      "p1",
+		Name:         "c1",
+		Type:         instancetype.Container,
+		Architecture: 1,
+		Node:         "none",
+	})
+	require.NoError(t, err)
+
+	err = project.CheckLimits(tx, "p1")
+	assert.NoError(t, err)
+}
+
+// If more instances got recorded than the limit allows, the post-insert check fails.
+func TestCheckLimits_AboveInstances(t *testing.T) {
+	tx, cleanup := db.NewTestClusterTx(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	id, err := cluster.CreateProject(ctx, tx.Tx(), cluster.Project{Name: "p1"})
+	require.NoError(t, err)
+
+	err = cluster.CreateProjectConfig(ctx, tx.Tx(), id, map[string]string{"limits.instances": "1"})
+	require.NoError(t, err)
+
+	for _, name := range []string{"c1", "c2"} {
+		_, err = cluster.CreateInstance(ctx, tx.Tx(), cluster.Instance{
+			Project:      "p1",
+			Name:         name,
+			Type:         instancetype.Container,
+			Architecture: 1,
+			Node:         "none",
+		})
+		require.NoError(t, err)
+	}
+
+	err = project.CheckLimits(tx, "p1")
+	assert.EqualError(t, err, `Reached maximum number of instances in project "p1"`)
+}
+
+// A profile with a forbidden low-level key can't be created in a restricted project.
+func TestAllowProfileCreation_Restricted(t *testing.T) {
+	tx, cleanup := db.NewTestClusterTx(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	id, err := cluster.CreateProject(ctx, tx.Tx(), cluster.Project{Name: "p1"})
+	require.NoError(t, err)
+
+	err = cluster.CreateProjectConfig(ctx, tx.Tx(), id, map[string]string{"restricted": "true"})
+	require.NoError(t, err)
+
+	req := api.ProfilesPost{
+		Name: "evil",
+		ProfilePut: api.ProfilePut{
+			Config: map[string]string{"raw.lxc": "lxc.hook.pre-start=/bin/true"},
+		},
+	}
+
+	err = project.AllowProfileCreation(tx, "p1", req)
+	assert.ErrorContains(t, err, `Use of low-level config "raw.lxc" on profile "evil"`)
+
+	req.Config = map[string]string{"limits.cpu": "1"}
+	err = project.AllowProfileCreation(tx, "p1", req)
+	assert.NoError(t, err)
+}
+
+// Pull mode migration is refused in a restricted project.
+func TestAllowInstanceMigrationSource_Restricted(t *testing.T) {
+	tx, cleanup := db.NewTestClusterTx(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	id, err := cluster.CreateProject(ctx, tx.Tx(), cluster.Project{Name: "p1"})
+	require.NoError(t, err)
+
+	err = cluster.CreateProjectConfig(ctx, tx.Tx(), id, map[string]string{"restricted": "true"})
+	require.NoError(t, err)
+
+	req := api.InstancesPost{
+		Name: "c1",
+		Type: api.InstanceTypeContainer,
+		Source: api.InstanceSource{
+			Type:    "migration",
+			Mode:    "pull",
+			Refresh: true,
+		},
+	}
+
+	err = project.AllowInstanceMigrationSource(tx, "p1", req)
+	assert.EqualError(t, err, "Restricted projects aren't allowed to use pull mode migration")
+
+	req.Source.Mode = "push"
+	err = project.AllowInstanceMigrationSource(tx, "p1", req)
+	assert.NoError(t, err)
+}
+
 // If a direct targeting is blocked, the check fails.
 func TestCheckClusterTargetRestriction_RestrictedTrue(t *testing.T) {
 	tx, cleanup := db.NewTestClusterTx(t)

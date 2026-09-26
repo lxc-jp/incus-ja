@@ -66,6 +66,23 @@ var ErrInstanceIsStopped error = api.StatusErrorf(http.StatusBadRequest, "The in
 // muNUMA is used to serialize NUMA node selection.
 var muNUMA sync.Mutex
 
+// numaReservation records the NUMA nodes and memory claimed by an instance until the database shows it running here.
+type numaReservation struct {
+	nodes  []uint64
+	memory int64
+}
+
+// numaReservations holds the pending NUMA reservations, keyed by project and name and guarded by muNUMA.
+var numaReservations = map[string]numaReservation{}
+
+// numaReservationClear drops the NUMA reservation of an instance that stopped before the database saw it.
+func (d *common) numaReservationClear() {
+	muNUMA.Lock()
+	defer muNUMA.Unlock()
+
+	delete(numaReservations, project.Instance(d.project.Name, d.name))
+}
+
 // deviceManager is an interface that allows managing device lifecycle.
 type deviceManager interface {
 	deviceAdd(dev device.Device, instanceRunning bool) error
@@ -1573,7 +1590,7 @@ func (d *common) deleteSnapshots(deleteFunc func(snapInst instance.Instance) err
 	return nil
 }
 
-// balanceNUMANodes looks at all other instances and picks the least used NUMA node(s).
+// balanceNUMANodes picks the NUMA node(s) with the most uncommitted memory, using as many as the instance needs.
 func (d *common) balanceNUMANodes() error {
 	muNUMA.Lock()
 	defer muNUMA.Unlock()
@@ -1584,21 +1601,38 @@ func (d *common) balanceNUMANodes() error {
 		return err
 	}
 
-	// Get a list of NUMA nodes.
-	nodes := []uint64{}
+	// Count the CPU threads per NUMA node.
+	cpusPerNode := map[uint64]int{}
 	for _, cpuSocket := range cpu.Sockets {
 		for _, cpuCore := range cpuSocket.Cores {
 			for _, cpuThread := range cpuCore.Threads {
-				if !slices.Contains(nodes, cpuThread.NUMANode) {
-					nodes = append(nodes, cpuThread.NUMANode)
-				}
+				cpusPerNode[cpuThread.NUMANode]++
 			}
 		}
 	}
 
+	nodes := slices.Sorted(maps.Keys(cpusPerNode))
+
 	// Shortcut on single-node systems.
 	if len(nodes) == 1 {
 		return d.VolatileSet(map[string]string{"volatile.cpu.nodes": fmt.Sprintf("%d", nodes[0])})
+	}
+
+	// Get the memory per NUMA node, falling back to an even split.
+	memory, err := resources.GetMemory()
+	if err != nil {
+		return err
+	}
+
+	memoryPerNode := map[uint64]int64{}
+	for _, node := range memory.Nodes {
+		memoryPerNode[node.NUMANode] = int64(node.Total)
+	}
+
+	for _, node := range nodes {
+		if memoryPerNode[node] == 0 {
+			memoryPerNode[node] = int64(memory.Total) / int64(len(nodes))
+		}
 	}
 
 	// Get all local instances.
@@ -1607,47 +1641,76 @@ func (d *common) balanceNUMANodes() error {
 		return err
 	}
 
-	// Record current NUMA assignment (number of instance).
-	numaUsage := map[int64]int{}
+	// Record the memory committed to each NUMA node by running instances.
+	committed := map[uint64]int64{}
+	usage := map[uint64]int{}
 	for _, inst := range insts {
 		conf := inst.ExpandedConfig()
 
-		// Ignore ourselves.
-		if inst.ID() == d.id {
+		// Ignore ourselves and instances without any NUMA pinning.
+		if inst.ID() == d.id || conf["limits.cpu.nodes"] == "" {
 			continue
 		}
 
-		// Ignore instances without any NUMA pinning.
-		if conf["limits.cpu.nodes"] == "" {
+		// Ignore stopped instances.
+		if !inst.IsRunning() {
 			continue
 		}
+
+		// The database is authoritative from here on.
+		delete(numaReservations, project.Instance(inst.Project().Name, inst.Name()))
 
 		// Parse the used NUMA nodes.
-		nodes := conf["limits.cpu.nodes"]
-		if nodes == "balanced" {
-			nodes = conf["volatile.cpu.nodes"]
+		instNodes := conf["limits.cpu.nodes"]
+		if instNodes == "balanced" {
+			instNodes = conf["volatile.cpu.nodes"]
 		}
 
-		numaNodeSet, err := resources.ParseNumaNodeSet(nodes)
-		if err != nil {
+		numaNodeSet, err := resources.ParseNumaNodeSet(instNodes)
+		if err != nil || len(numaNodeSet) == 0 {
 			continue
+		}
+
+		// Parse the memory limit.
+		instMemoryStr := conf["limits.memory"]
+		if instMemoryStr == "" && inst.Type() == instancetype.VM {
+			instMemoryStr = qemudefault.MemSize
+		}
+
+		instMemory := int64(0)
+		if instMemoryStr != "" {
+			instMemory, err = ParseMemoryStr(instMemoryStr)
+			if err != nil {
+				instMemory = 0
+			}
 		}
 
 		for _, numaNode := range numaNodeSet {
-			numaUsage[numaNode]++
+			usage[uint64(numaNode)]++
+			committed[uint64(numaNode)] += instMemory / int64(len(numaNodeSet))
 		}
 	}
 
-	// Sort NUMA nodes by usage.
+	// Add instances that are still starting or being migrated in, which the database doesn't show as running here.
+	selfKey := project.Instance(d.project.Name, d.name)
+	for key, reservation := range numaReservations {
+		if key == selfKey {
+			continue
+		}
+
+		for _, numaNode := range reservation.nodes {
+			usage[numaNode]++
+			committed[numaNode] += reservation.memory / int64(len(reservation.nodes))
+		}
+	}
+
+	// Sort NUMA nodes by uncommitted memory, then by instance count.
 	slices.SortFunc(nodes, func(i, j uint64) int {
-		return cmp.Compare(numaUsage[int64(i)], numaUsage[int64(j)])
+		return cmp.Or(cmp.Compare(memoryPerNode[j]-committed[j], memoryPerNode[i]-committed[i]), cmp.Compare(usage[i], usage[j]))
 	})
 
-	// If `limits.cpu` is greater than the number of CPUs per NUMA node,
-	// then figure out how many NUMA nodes to use.
+	// Get the instance CPU requirement.
 	conf := d.ExpandedConfig()
-	cpusPerNumaNode := int(cpu.Total) / len(nodes)
-
 	limitsCPU, err := strconv.Atoi(conf["limits.cpu"])
 	if err != nil && strings.Contains(conf["limits.cpu"], "=") {
 		// Compute the total from an explicit CPU topology.
@@ -1658,41 +1721,50 @@ func (d *common) balanceNUMANodes() error {
 		}
 	}
 
-	numaNodesToUse := 1
-	if err == nil && limitsCPU > cpusPerNumaNode {
-		numaNodesToUse = int(math.Ceil(float64(limitsCPU) / float64(cpusPerNumaNode)))
+	if err != nil {
+		limitsCPU = 0
 	}
 
-	// Similarly, if the effective memory limit is greater than the amount of memory per NUMA node,
-	// use as many NUMA nodes as needed to fit it.
+	// Get the instance memory requirement.
 	limitsMemoryStr := conf["limits.memory"]
 	if limitsMemoryStr == "" {
 		limitsMemoryStr = qemudefault.MemSize
 	}
 
-	limitsMemory, memoryErr := ParseMemoryStr(limitsMemoryStr)
-	defaultMemory, _ := ParseMemoryStr(qemudefault.MemSize)
-
-	// Never split anything at or below the default memory size.
-	if memoryErr == nil && limitsMemory > defaultMemory && len(nodes) > 0 {
-		memory, err := resources.GetMemory()
-		if err != nil {
-			return err
-		}
-
-		memoryPerNumaNode := int64(memory.Total) / int64(len(nodes))
-		if memoryPerNumaNode > 0 && limitsMemory > memoryPerNumaNode {
-			numaNodesToUse = max(numaNodesToUse, int(math.Ceil(float64(limitsMemory)/float64(memoryPerNumaNode))))
-		}
+	limitsMemory, err := ParseMemoryStr(limitsMemoryStr)
+	if err != nil {
+		limitsMemory = 0
 	}
 
-	// Cap at the number of available NUMA nodes.
-	numaNodesToUse = min(numaNodesToUse, len(nodes))
+	// Never split anything at or below the default memory size.
+	reservedMemory := limitsMemory
+	defaultMemory, _ := ParseMemoryStr(qemudefault.MemSize)
+	if limitsMemory <= defaultMemory {
+		limitsMemory = 0
+	}
+
+	// Use as many NUMA nodes as needed to fit the CPU and memory requirements.
+	numaNodesToUse := len(nodes)
+	cpuTotal := 0
+	memoryFree := int64(0)
+	for i, node := range nodes {
+		cpuTotal += cpusPerNode[node]
+		memoryFree += memoryPerNode[node] - committed[node]
+
+		if limitsCPU <= cpuTotal && limitsMemory <= memoryFree {
+			numaNodesToUse = i + 1
+			break
+		}
+	}
 
 	selectedNumaNodes := make([]string, numaNodesToUse)
 	for i, node := range nodes[:numaNodesToUse] {
 		selectedNumaNodes[i] = strconv.FormatUint(node, 10)
 	}
+
+	d.logger.Debug("Balanced NUMA node selection", logger.Ctx{"nodes": selectedNumaNodes, "memory": limitsMemory, "cpu": limitsCPU, "committed": committed})
+
+	numaReservations[selfKey] = numaReservation{nodes: nodes[:numaNodesToUse], memory: reservedMemory}
 
 	return d.VolatileSet(map[string]string{"volatile.cpu.nodes": strings.Join(selectedNumaNodes, ",")})
 }
@@ -1713,14 +1785,30 @@ func (d *common) processStartedAt(pid int) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	startedAt, err := stat.StartTime()
+	bootTime, err := systemBootTime()
 	if err != nil {
 		return time.Time{}, err
 	}
 
-	seconds, fraction := math.Modf(startedAt)
-	return time.Unix(int64(seconds), int64(fraction*float64(time.Second))), nil
+	// Process start time is expressed in clock ticks (USER_HZ, always 100) since boot.
+	seconds, fraction := math.Modf(float64(stat.Starttime) / 100)
+	return time.Unix(int64(bootTime)+int64(seconds), int64(fraction*float64(time.Second))), nil
 }
+
+// systemBootTime returns the system boot time, parsing /proc/stat only once.
+var systemBootTime = sync.OnceValues(func() (uint64, error) {
+	fs, err := procfs.NewDefaultFS()
+	if err != nil {
+		return 0, err
+	}
+
+	stat, err := fs.Stat()
+	if err != nil {
+		return 0, err
+	}
+
+	return stat.BootTime, nil
+})
 
 // ETag returns the instance configuration ETag data for pre-condition validation.
 func (d *common) ETag() []any {

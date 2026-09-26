@@ -506,6 +506,40 @@ func (o *NB) DeleteLogicalRouterNAT(ctx context.Context, routerName OVNRouter, n
 		return errors.New("Can't ask for all NAT rules to be deleted and specify specific addresses")
 	}
 
+	return o.deleteLogicalRouterNAT(ctx, routerName, natType, func(natRule ovnNB.NAT) bool {
+		if all {
+			return true
+		}
+
+		for _, extIP := range extIPs {
+			if natRule.ExternalIP == extIP.String() {
+				return true
+			}
+		}
+
+		return false
+	})
+}
+
+// DeleteLogicalRouterNATByLogicalIP deletes NAT rules of the given type whose logical IP matches the supplied networks.
+func (o *NB) DeleteLogicalRouterNATByLogicalIP(ctx context.Context, routerName OVNRouter, natType string, logicalIPs ...*net.IPNet) error {
+	if len(logicalIPs) == 0 {
+		return nil
+	}
+
+	return o.deleteLogicalRouterNAT(ctx, routerName, natType, func(natRule ovnNB.NAT) bool {
+		for _, logicalIP := range logicalIPs {
+			if logicalIP != nil && natRule.LogicalIP == logicalIP.String() {
+				return true
+			}
+		}
+
+		return false
+	})
+}
+
+// deleteLogicalRouterNAT deletes the NAT rules of the given type for which the supplied filter returns true.
+func (o *NB) deleteLogicalRouterNAT(ctx context.Context, routerName OVNRouter, natType string, filter func(natRule ovnNB.NAT) bool) error {
 	// Get the logical router.
 	logicalRouter, err := o.GetLogicalRouter(ctx, routerName)
 	if err != nil {
@@ -530,19 +564,8 @@ func (o *NB) DeleteLogicalRouterNAT(ctx context.Context, routerName OVNRouter, n
 			continue
 		}
 
-		// Check if the address matches.
-		if !all {
-			found := false
-			for _, extIP := range extIPs {
-				if natRule.ExternalIP == extIP.String() {
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				continue
-			}
+		if !filter(natRule) {
+			continue
 		}
 
 		// Delete the rule.
@@ -3834,7 +3857,7 @@ func (o *NB) CreateLoadBalancer(ctx context.Context, loadBalancerName OVNLoadBal
 				}
 
 				// Skip existing entries.
-				_, ok := lb.IPPortMappings[target]
+				_, ok := lb.IPPortMappings[ipToString(net.ParseIP(target))]
 				if ok {
 					continue
 				}
@@ -4037,8 +4060,14 @@ func (o *NB) GetLoadBalancersByStatusUpdate(ctx context.Context, mon ovnSB.Servi
 			return false
 		}
 
+		// IPv6 addresses are stored bracketed in the mappings but not in the service monitor.
 		for k, v := range lb.IPPortMappings {
-			if k == mon.IP && v == fmt.Sprintf("%s:%s", mon.LogicalPort, mon.SrcIP) {
+			if strings.Trim(k, "[]") != mon.IP {
+				continue
+			}
+
+			port, srcIP, ok := strings.Cut(v, ":")
+			if ok && port == mon.LogicalPort && strings.Trim(srcIP, "[]") == mon.SrcIP {
 				return true
 			}
 		}

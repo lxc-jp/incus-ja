@@ -1,4 +1,4 @@
-//go:build darwin || freebsd
+//go:build darwin || freebsd || netbsd
 
 package main
 
@@ -11,25 +11,16 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"syscall"
 	"unsafe"
 
+	"github.com/creack/pty"
 	"golang.org/x/sys/unix"
 
 	"github.com/lxc/incus/v7/internal/version"
 	"github.com/lxc/incus/v7/shared/api"
 	"github.com/lxc/incus/v7/shared/logger"
+	"github.com/lxc/incus/v7/shared/revert"
 )
-
-var (
-	osBaseWorkingDirectory = "/"
-	osAgentConfigPath      = "/usr/local/etc/incus-agent.yml"
-	osVioSerialPath        = "/dev/virtio-ports/org.linuxcontainers.incus"
-)
-
-func runService(name string, agentCmd *cmdAgent) error {
-	return errors.New("Not implemented.")
-}
 
 func parseBytes(b []byte) string {
 	n := bytes.IndexByte(b, 0)
@@ -87,28 +78,7 @@ func osGetInteractiveConsole(s *execWs) (*os.File, *os.File, error) {
 	return pty, tty, nil
 }
 
-func osPrepareExecCommand(s *execWs, cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{
-			Uid: s.uid,
-			Gid: s.gid,
-		},
-		// Creates a new session if the calling process is not a process group leader.
-		// The calling process is the leader of the new session, the process group leader of
-		// the new process group, and has no controlling terminal.
-		// This is important to allow remote shells to handle ctrl+c.
-		Setsid: true,
-	}
-
-	// Make the given terminal the controlling terminal of the calling process.
-	// The calling process must be a session leader and not have a controlling terminal already.
-	// This is important as allows ctrl+c to work as expected for non-shell programs.
-	if s.interactive {
-		cmd.SysProcAttr.Setctty = true
-	}
-}
-
-func osHandleExecControl(control api.InstanceExecControl, s *execWs, pty io.ReadWriteCloser, cmd *exec.Cmd, l logger.Logger) {
+func osHandleExecControl(control api.InstanceExecControl, s *execWs, pty io.ReadWriteCloser, proc execProcess, l logger.Logger) {
 	if control.Command == "window-resize" && s.interactive {
 		winchWidth, err := strconv.Atoi(control.Args["width"])
 		if err != nil {
@@ -131,7 +101,7 @@ func osHandleExecControl(control api.InstanceExecControl, s *execWs, pty io.Read
 			}
 		}
 	} else if control.Command == "signal" {
-		err := unix.Kill(cmd.Process.Pid, unix.Signal(control.Signal))
+		err := unix.Kill(proc.Pid(), unix.Signal(control.Signal))
 		if err != nil {
 			l.Debug("Failed forwarding signal", logger.Ctx{"err": err, "signal": control.Signal})
 			return
@@ -173,4 +143,57 @@ func osGetListener(port int64) (net.Listener, error) {
 	logger.Info("Started TCP listener")
 
 	return l, nil
+}
+
+// openPty is is the same as linux.OpenPty for BSDs.
+func openPty(uid, gid int64) (*os.File, *os.File, error) {
+	reverter := revert.New()
+	defer reverter.Fail()
+
+	pty, tty, err := pty.Open()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Configure both sides
+	for _, entry := range []*os.File{pty, tty} {
+		// Get termios.
+		t, err := unix.IoctlGetTermios(int(entry.Fd()), unix.TIOCGETA)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Set flags.
+		t.Cflag |= unix.IMAXBEL
+		t.Cflag |= unix.BRKINT
+		t.Cflag |= unix.IXANY
+		t.Cflag |= unix.HUPCL
+
+		// Set termios.
+		err = unix.IoctlSetTermios(int(entry.Fd()), unix.TIOCSETA, t)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Set the default window size.
+		sz := &unix.Winsize{
+			Col: 80,
+			Row: 25,
+		}
+
+		err = unix.IoctlSetWinsize(int(entry.Fd()), unix.TIOCSWINSZ, sz)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Set CLOEXEC.
+		_, _, errno := unix.Syscall(unix.SYS_FCNTL, uintptr(entry.Fd()), unix.F_SETFD, unix.FD_CLOEXEC)
+		if errno != 0 {
+			return nil, nil, unix.Errno(errno)
+		}
+	}
+
+	reverter.Success()
+
+	return pty, tty, nil
 }

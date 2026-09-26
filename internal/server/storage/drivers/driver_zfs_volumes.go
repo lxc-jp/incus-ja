@@ -1148,6 +1148,15 @@ func (d *zfs) CreateVolumeFromMigration(vol Volume, conn io.ReadWriteCloser, vol
 			}
 		}
 
+		// A full stream can't be received over an existing encrypted dataset,
+		// so remove the existing volume ahead of a full transfer.
+		if !volTargetArgs.Refresh {
+			err = d.DeleteVolume(vol, op)
+			if err != nil {
+				return err
+			}
+		}
+
 		migrationHeader = ZFSMetaDataHeader{}
 		migrationHeader.SnapshotDatasets = respSnapshots
 
@@ -1219,6 +1228,13 @@ func (d *zfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWriteCl
 	reverter := revert.New()
 	defer reverter.Fail()
 
+	// Receiving the first snapshot creates the parent dataset, so remove it on any failure.
+	if !volTargetArgs.Refresh {
+		reverter.Add(func() {
+			_ = d.DeleteVolume(vol, op)
+		})
+	}
+
 	// Handle zfs send/receive migration.
 	if len(volTargetArgs.Snapshots) > 0 {
 		// Create the parent directory.
@@ -1242,7 +1258,7 @@ func (d *zfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWriteCl
 
 			err = d.receiveDataset(snapVol, conn, wrapper)
 			if err != nil {
-				_ = d.DeleteVolume(snapVol, op)
+				_ = d.DeleteVolumeSnapshot(snapVol, op)
 				return fmt.Errorf("Failed receiving snapshot volume %q: %w", snapVol.Name(), err)
 			}
 
@@ -1250,12 +1266,6 @@ func (d *zfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWriteCl
 				_ = d.DeleteVolumeSnapshot(snapVol, op)
 			})
 		}
-	}
-
-	if !volTargetArgs.Refresh {
-		reverter.Add(func() {
-			_ = d.DeleteVolume(vol, op)
-		})
 	}
 
 	// Setup progress tracking.

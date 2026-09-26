@@ -64,12 +64,23 @@ test_dependent_volumes() {
     incus config device add c1 vol2 disk pool="${storage_pool}" source="${storage_volume2}" dependent=true path=/extra
     incus storage volume get "${storage_pool}" "${storage_volume2}" dependent | grep -Fx 'true'
 
-    # Export the instance and dependent volume.
+    # Snapshots on the instance and dependent volumes must survive export and import.
+    incus snapshot create c1 snap-export
+    [ "$(incus storage volume snapshot ls "${storage_pool}" "${storage_volume}" --format json | jq 'length == 1')" = "true" ]
+    [ "$(incus storage volume snapshot ls "${storage_pool}" "${storage_volume2}" --format json | jq 'length == 1')" = "true" ]
+
+    # Export the instance and dependent volumes.
     incus export c1 "${INCUS_DIR}/c1.tar.gz"
     incus delete -f c1
 
     # Import the instance from tarball.
     incus import "${INCUS_DIR}/c1.tar.gz"
+    [ "$(incus query /1.0/instances/c1/snapshots | jq 'length == 1')" = "true" ]
+    [ "$(incus storage volume snapshot ls "${storage_pool}" "${storage_volume}" --format json | jq 'length == 1')" = "true" ]
+    [ "$(incus storage volume snapshot ls "${storage_pool}" "${storage_volume2}" --format json | jq 'length == 1')" = "true" ]
+    incus storage volume get "${storage_pool}" "${storage_volume}" dependent | grep -Fx 'true'
+    incus storage volume get "${storage_pool}" "${storage_volume2}" dependent | grep -Fx 'true'
+    incus snapshot delete c1 snap-export
 
     # Detaching the volume removes the 'dependent' flag
     incus storage volume detach "${storage_pool}" "${storage_volume2}" c1
@@ -78,6 +89,18 @@ test_dependent_volumes() {
     # Deleting an instance deletes the volume
     incus delete --force c1
     [ "$(incus storage volume ls "${storage_pool}" "${storage_volume}" --format json | jq 'length == 0')" = "true" ]
+
+    # Dependent volumes work in a project using the default project's storage volumes
+    storage_volume3="${storage_pool}-vol3"
+    incus project create depvols -c features.storage.volumes=false -c features.images=false -c features.profiles=false
+    incus init testimage c3 --project depvols
+    incus storage volume create "${storage_pool}" "${storage_volume3}" --project depvols
+    incus config device add c3 vol3 disk pool="${storage_pool}" source="${storage_volume3}" path=/mnt dependent=true --project depvols
+    incus snapshot create c3 snap0 --project depvols
+    [ "$(incus storage volume snapshot ls "${storage_pool}" "${storage_volume3}" --format json | jq 'length == 1')" = "true" ]
+    incus delete --force c3 --project depvols
+    [ "$(incus storage volume ls "${storage_pool}" "${storage_volume3}" --format json | jq 'length == 0')" = "true" ]
+    incus project delete depvols
 
     # Cleanup
     rm "${INCUS_DIR}/c1.tar.gz"

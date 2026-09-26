@@ -247,6 +247,48 @@ EOF
     # Cleanup
     INCUS_DIR="${INCUS_ONE_DIR}" incus config unset instances.placement.scriptlet
 
+    # Perform cross-project move tests.
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project create proj1
+    INCUS_DIR="${INCUS_ONE_DIR}" incus init testimage c5 --target node1
+
+    # A project change requested alongside a member change must apply both.
+    INCUS_DIR="${INCUS_ONE_DIR}" incus move c5 --target node2 --target-project proj1
+    ! INCUS_DIR="${INCUS_ONE_DIR}" incus info c5 || false
+    INCUS_DIR="${INCUS_ONE_DIR}" incus --project proj1 info c5 | grep -q "Location: node2"
+
+    # The same in the other direction, targeting a cluster group.
+    INCUS_DIR="${INCUS_ONE_DIR}" incus --project proj1 move c5 --target @foobar3 --target-project default
+    ! INCUS_DIR="${INCUS_ONE_DIR}" incus --project proj1 info c5 || false
+    INCUS_DIR="${INCUS_ONE_DIR}" incus info c5 | grep -q "Location: node3"
+    INCUS_DIR="${INCUS_ONE_DIR}" incus config get c5 volatile.cluster.group | grep -Fx "foobar3"
+
+    INCUS_DIR="${INCUS_ONE_DIR}" incus delete -f c5
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project delete proj1
+
+    # A live project change needs a target member and an unchanged device set.
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project create sameprofiles -c features.profiles=false
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project create ownprofiles
+    INCUS_DIR="${INCUS_ONE_DIR}" incus launch testimage c6 --target node1
+
+    INCUS_DIR="${INCUS_ONE_DIR}" incus move c6 --target-project sameprofiles 2>&1 | grep -q "Live project changes require the instance be moved to another cluster member"
+    INCUS_DIR="${INCUS_ONE_DIR}" incus move c6 --target node2 --target-project ownprofiles 2>&1 | grep -q "which a live migration can't apply"
+
+    INCUS_DIR="${INCUS_ONE_DIR}" incus delete -f c6
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project delete ownprofiles
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project delete sameprofiles
+
+    # A dependent volume follows the instance across members and projects.
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project create depproject
+    INCUS_DIR="${INCUS_ONE_DIR}" incus storage volume create data depvol --target node1
+    INCUS_DIR="${INCUS_ONE_DIR}" incus init testimage c7 --target node1
+    INCUS_DIR="${INCUS_ONE_DIR}" incus config device add c7 dsk disk pool=data source=depvol path=/mnt dependent=true
+    INCUS_DIR="${INCUS_ONE_DIR}" incus move c7 --target node2 --target-project depproject
+    INCUS_DIR="${INCUS_ONE_DIR}" incus info c7 --project depproject | grep -q "Location: node2"
+    INCUS_DIR="${INCUS_ONE_DIR}" incus storage volume show data depvol --project depproject > /dev/null # Verify the volume moved.
+    ! INCUS_DIR="${INCUS_ONE_DIR}" incus storage volume show data depvol > /dev/null 2>&1 || false      # Verify it left the source project.
+    INCUS_DIR="${INCUS_ONE_DIR}" incus delete -f c7 --project depproject
+    INCUS_DIR="${INCUS_ONE_DIR}" incus project delete depproject
+
     # Perform near-live migration tests.
     if [ "${poolDriver}" = "zfs" ] || [ "${poolDriver}" = "btrfs" ]; then
         INCUS_DIR="${INCUS_ONE_DIR}" incus launch testimage c4 --target node1
