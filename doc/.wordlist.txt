@@ -69,6 +69,7 @@ diskful
 diskless
 Diskless
 Distrobuilder
+DMA
 DNAT
 DNS
 dnsmasq
@@ -111,6 +112,7 @@ Github
 Golang
 goroutines
 GPG
+GPUDirect
 GPUs
 Grafana
 GUID
@@ -130,6 +132,7 @@ ICMP
 idmap
 idmapped
 idmaps
+Incant
 incrementing
 Incus
 Incus'
@@ -189,6 +192,7 @@ MITM
 MTU
 Mullvad
 multicast
+multiport
 MyST
 namespace
 namespaced
@@ -196,6 +200,7 @@ namespaces
 NATed
 natively
 NDP
+NetBSD
 netmask
 NFS
 NIC

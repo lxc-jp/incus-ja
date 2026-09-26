@@ -64,6 +64,28 @@ openssl pkcs12 -clcerts -inkey client.key -in client.crt -export -out client.pfx
 
 上記のコマンドを実行し、（訳注：変換後の証明書をインポートしてから）ブラウザで[`https://127.0.0.1:8443/1.0`](https://127.0.0.1:8443/1.0)を開けば期待通り動くはずです。
 
+## `incusd`のプロファイリング
+
+`incusd`をGoの`pprof`でプロファイルするのは2つの方法があります：
+
+- `core.debug_address`を設定すると`/debug/pprof/`配下で応答するプレーンなHTTPリスナーが開始されます。
+  認証無しなので、信頼されたアドレスのみにバインドしてください。
+- APIは同じプロファイルを各リスナーの`/internal/debug/pprof/`配下で応答します。これはサーバーを管理するクライアントに限定されます。
+  これはサーバー設定の変更不要で、HTTPS経由でいつでも使えます。
+
+例えば、リモートのサーバーのヒープのプロファイルを`incus`クライアントで保存しローカルで開くには：
+
+```bash
+incus query --raw my-remote:/internal/debug/pprof/heap > heap.pprof
+go tool pprof heap.pprof
+```
+
+アップストリームの[`pprof`](https://github.com/google/pprof)ツールでもプロファイルをクライアント証明書で直接取得できます（`go tool pprof`はクライアント証明書をサポートしません）：
+
+```bash
+pprof -tls_cert ~/.config/incus/client.crt -tls_key ~/.config/incus/client.key "https+insecure://192.0.2.10:8443/internal/debug/pprof/profile?seconds=30"
+```
+
 ## Incusデータベースをデバッグ
 
 グローバル{ref}`データベース <database>`のファイルは Incus のデータディレクトリー（`/var/lib/incus/database/global`）の`./database/global`サブディレクトリーの下に格納されます。

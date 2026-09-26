@@ -3308,3 +3308,51 @@ Cephオブジェクトストレージドライバーに`cephobject.radosgw.endpo
 ## `device_queue_disc`
 
 `bridged`、`p2p`、`routed`タイプの`nic`デバイスに`queue.discipline`、`queue.discipline.attach`設定キーを追加します。NICのホスト側で使われるキューイング規律とNICがどこにアタッチされるかを制御します。
+
+## `network_bridge_dns_include_hosts`
+
+`bridge`ネットワークに`dns.include_hosts`設定キーを追加します。
+これはネットワークの`dnsmasq`がホストの`/etc/hosts`ファイルのレコードを返すかを制御します。
+`false`に設定すると、AppArmorの監禁は維持したまま、ホストのみのエントリーをインスタンスに見せるのは回避します。
+
+## `gpu_physical_clique`
+
+仮想マシンで使用する`physical`タイプの`gpu`デバイスに`nvidia.clique`設定キーを追加します。これは NVIDIA GPUDirect P2P clique ID （0から15）をゲストドライバーに広告し、GPU間のピアートゥーピアーDMAを同じclique IDを共有する仮想マシンにパススルーします。
+
+## `authorization_scriptlet_claims`
+
+認可スクリプトレットの`details`引数に`Claims`フィールドを追加します。
+クライアントのバリデーションされたOIDCトークンクレームを辞書形式で保持します。
+これにより`groups`などのクレームに基づいたルールを書くことができます。
+
+## `instance_project_move_live`
+
+稼働中のインスタンスが他のクラスターメンバーにライブマイグレーションする際にプロジェクトを変更できるようにします。また`dependent`ディスクがつけられたインスタンスもプロジェクトを変更できるようにします。
+
+## `metrics_cluster_members`
+
+`/1.0/metrics`エンドポイントにクラスターメンバーのメトリクスを追加します：
+
+* `incus_cluster_member` メンバーのアーキテクチャーと失敗のドメイン
+* `incus_cluster_member_status` とりえるステータス毎に1つのサンプル
+* `incus_cluster_member_role` 保持するロール毎に1つのサンプル
+* `incus_cluster_member_group` メンバーが属するグループ毎に1つのサンプル
+
+## `instance_security_tags`
+
+インスタンスに`security.tags`設定キーを追加します。タグのカンマ区切りリストを設定します。このタグは認可バックエンドに公開され、OpenFGAではタグを保持する各インスタンスとごにタグに加えて`security_tag`オブジェクトを維持します。
+
+## `network_ovn_parent`
+
+`ovn`ネットワークに`parent`設定キーを追加します。同じプロジェクトの別の`ovn`ネットワークを参照します。
+
+## `disk_initial_copy`
+
+カスタムストレージボリュームを持つ`disk`デバイスに`initial.copy`プロパティーを追加します。
+
+コンテナーで`true`に設定すると、コンテナー内でデバイスの`path`にすでに存在するコンテンツをボリュームが使われる初回にボリュームが空であればボリュームにコピーします。
+
+## `internal_debug_pprof`
+
+APIに`/internal/debug/pprof/`を追加します。
+`core.debug_address`リスナーと同じ`pprof`プロファイルを通常のリスナー経由で提供し、サーバーの管理権限を持つ信頼されたクライアントに限定します。

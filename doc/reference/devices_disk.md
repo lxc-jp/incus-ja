@@ -128,6 +128,24 @@ overlayfsの挙動を使ったTmpfs
 
 すべての場合で、`initial.uid`と`initial.gid`のデフォルトは`0`で、`initial.mode`のデフォルトは`0711`（8進数）です。
 
+(devices-disk-initial-copy)=
+## `initial.copy`
+
+`initial.copy`はコンテナに取り付けられたカスタムボリュームディスクに適用されます。
+
+`true`に設定すると、コンテナ自身のファイルシステム内部の`path`に存在するコンテンツがコンテナの起動時にボリューム（とそのサブパス）が空であればボリュームにコピーされます。これはアプリケーションコンテナがボリュームをマウントするディレクトリーにデータを届ける振る舞いに対応するものです。
+
+コピーはボリューム毎に一度だけ行われ、ボリュームの`volatile.initial.copied`キーに記録されます。
+既にコピーされたボリュームは変更されず、それはコピー後に空にされたボリュームでも同様です。
+所有者、パーミション、タイムスタンプと拡張属性は保持されコンテナーのIDマップで変換され、シンボリックリンクはそのままコピーされ、デバイスノードはスキップされます。
+
+コピーは停止したコンテナの起動時にのみ実行されますので、稼働中のコンテナに`initial.copy`でデバイスを追加することはできません。
+
+例：
+
+    incus storage volume create <pool_name> <volume_name>
+    incus config device add <instance_name> <device_name> disk pool=<pool_name> source=<volume_name> path=/var/lib/mysql initial.copy=true
+
 ## デバイスオプション
 
 `disk` デバイスには以下のデバイスオプションがあります:
