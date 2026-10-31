@@ -507,6 +507,26 @@ func IsNetworkMTU(value string) error {
 	return nil
 }
 
+// IsBGPCommunity validates whether the string is a standard BGP community (ASN:value).
+func IsBGPCommunity(value string) error {
+	asn, val, found := strings.Cut(value, ":")
+	if !found {
+		return fmt.Errorf("Invalid BGP community %q, expected ASN:value", value)
+	}
+
+	_, err := strconv.ParseUint(asn, 10, 16)
+	if err != nil {
+		return fmt.Errorf("Invalid ASN in BGP community %q: must be between 0 and 65535", value)
+	}
+
+	_, err = strconv.ParseUint(val, 10, 16)
+	if err != nil {
+		return fmt.Errorf("Invalid value in BGP community %q: must be between 0 and 65535", value)
+	}
+
+	return nil
+}
+
 // IsNetworkPort validates an IP port number >= 0 and <= 65535.
 func IsNetworkPort(value string) error {
 	port, err := strconv.ParseUint(value, 10, 32)
@@ -627,6 +647,26 @@ func IsAPIName(value string, allowSlashes bool) error {
 
 	if !match {
 		return errors.New("Names must start and end with an alphanumeric character")
+	}
+
+	return nil
+}
+
+// IsDeviceName checks whether the provided value is a suitable name for an instance device.
+func IsDeviceName(value string) error {
+	err := IsAPIName(value, false)
+	if err != nil {
+		return err
+	}
+
+	// Device names end up in QEMU identifiers, which only allow a limited character set.
+	match, err := regexp.MatchString(`^[A-Za-z0-9._-]+$`, value)
+	if err != nil {
+		return err
+	}
+
+	if !match {
+		return errors.New("Device names may only contain letters, digits, dots, dashes and underscores")
 	}
 
 	return nil

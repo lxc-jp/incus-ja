@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"math"
 	"net/http"
@@ -35,6 +36,7 @@ import (
 	"github.com/lxc/incus/v7/internal/server/locking"
 	"github.com/lxc/incus/v7/internal/server/operations"
 	"github.com/lxc/incus/v7/internal/server/project"
+	"github.com/lxc/incus/v7/internal/server/response"
 	"github.com/lxc/incus/v7/internal/server/selinux"
 	"github.com/lxc/incus/v7/internal/server/state"
 	storagePools "github.com/lxc/incus/v7/internal/server/storage"
@@ -534,6 +536,35 @@ func (d *common) TemplatesPath() string {
 	return filepath.Join(d.Path(), "templates")
 }
 
+// readRegularFileInRoot reads name from within dir, refusing to follow symlinks out of it.
+// Snapshots may carry symlinks from imported data, so only a regular file is accepted.
+func readRegularFileInRoot(dir string, name string) ([]byte, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = root.Close() }()
+
+	fi, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%q isn't a regular file", name)
+	}
+
+	f, err := root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = f.Close() }()
+
+	return io.ReadAll(f)
+}
+
 // StoragePool returns the storage pool name.
 func (d *common) StoragePool() (string, error) {
 	pool, err := d.getStoragePool()
@@ -547,6 +578,46 @@ func (d *common) StoragePool() (string, error) {
 //
 // SECTION: internal functions
 //
+
+// isInstanceVolatileKey returns whether a key belongs to the instance itself rather than to a device.
+func isInstanceVolatileKey(key string) bool {
+	for _, keys := range []map[string]func(value string) error{internalInstance.InstanceConfigKeysAny, internalInstance.InstanceConfigKeysContainer, internalInstance.InstanceConfigKeysVM} {
+		_, ok := keys[key]
+		if ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+// deviceVolatileKeys returns the volatile keys of the named device, leaving out instance keys and dotted sibling devices.
+func (d *common) deviceVolatileKeys(devName string) []string {
+	prefix := fmt.Sprintf("volatile.%s.", devName)
+
+	// Prefixes of devices whose keys also match, such as eth0.100 for eth0.
+	siblings := []string{}
+	for name := range d.expandedDevices {
+		if strings.HasPrefix(name, devName+".") {
+			siblings = append(siblings, fmt.Sprintf("volatile.%s.", name))
+		}
+	}
+
+	keys := []string{}
+	for k := range d.localConfig {
+		if !strings.HasPrefix(k, prefix) || isInstanceVolatileKey(k) {
+			continue
+		}
+
+		if slices.ContainsFunc(siblings, func(sibling string) bool { return strings.HasPrefix(k, sibling) }) {
+			continue
+		}
+
+		keys = append(keys, k)
+	}
+
+	return keys
+}
 
 // deviceVolatileReset resets a device's volatile data when its removed or updated in such a way
 // that it is removed then added immediately afterwards.
@@ -568,11 +639,7 @@ func (d *common) deviceVolatileReset(devName string, oldConfig, newConfig device
 	// This will occur if the newConfig is empty (i.e the device is actually being removed) or
 	// if the device type is being changed but keeping the same name.
 	if newConfig["type"] != oldConfig["type"] || newNICType != oldNICType {
-		for k := range d.localConfig {
-			if !strings.HasPrefix(k, devicePrefix) {
-				continue
-			}
-
+		for _, k := range d.deviceVolatileKeys(devName) {
 			volatileClear[k] = ""
 		}
 
@@ -582,11 +649,7 @@ func (d *common) deviceVolatileReset(devName string, oldConfig, newConfig device
 	// If the device type remains the same, then just remove any volatile keys that have
 	// the same key name present in the new config (i.e the new config is replacing the
 	// old volatile key).
-	for k := range d.localConfig {
-		if !strings.HasPrefix(k, devicePrefix) {
-			continue
-		}
-
+	for _, k := range d.deviceVolatileKeys(devName) {
 		devKey := strings.TrimPrefix(k, devicePrefix)
 		_, found := newConfig[devKey]
 		if found {
@@ -603,12 +666,10 @@ func (d *common) deviceVolatileGetFunc(devName string) func() map[string]string 
 	return func() map[string]string {
 		volatile := make(map[string]string)
 		prefix := fmt.Sprintf("volatile.%s.", devName)
-		for k, v := range d.localConfig {
-			after, ok := strings.CutPrefix(k, prefix)
-			if ok {
-				volatile[after] = v
-			}
+		for _, k := range d.deviceVolatileKeys(devName) {
+			volatile[strings.TrimPrefix(k, prefix)] = d.localConfig[k]
 		}
+
 		return volatile
 	}
 }
@@ -998,6 +1059,19 @@ func (d *common) validateStartup(stateful bool, statusCode api.StatusCode) error
 	return nil
 }
 
+// stopInheritableActions returns the operation locks a stop request may take over.
+func (d *common) stopInheritableActions() []operationlock.Action {
+	actions := []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}
+
+	// Only the migration itself may stop the instance while it's being migrated.
+	op := operationlock.Get(d.Project().Name, d.Name())
+	if op.Action() == operationlock.ActionMigrate && op.GetOperation() == d.op {
+		actions = append(actions, operationlock.ActionMigrate)
+	}
+
+	return actions
+}
+
 // onStopOperationSetup creates or picks up the relevant operation. This is used in the stopns and stop hooks to
 // ensure that a lock on their activities is held before the instance process is stopped. This prevents a start
 // request run at the same time from overlapping with the stop process.
@@ -1066,7 +1140,7 @@ func (d *common) canMigrate(inst instance.Instance) string {
 	for _, entry := range d.ExpandedDevices().Sorted() {
 		dev, err := d.deviceLoad(inst, entry.Name, entry.Config, false)
 		if err != nil {
-			logger.Warn("Instance will not be migrated due to a device error", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "device": dev.Name(), "err": err})
+			logger.Warn("Instance will not be migrated due to a device error", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "device": entry.Name, "err": err})
 			return "stop"
 		}
 
@@ -1810,6 +1884,31 @@ var systemBootTime = sync.OnceValues(func() (uint64, error) {
 	return stat.BootTime, nil
 })
 
+// tpmState returns the state of the instance's TPM devices, nil if it has none.
+func (d *common) tpmState() map[string]api.InstanceStateTPM {
+	var tpms map[string]api.InstanceStateTPM
+
+	for name, config := range d.ExpandedDevices() {
+		if config["type"] != "tpm" {
+			continue
+		}
+
+		tpmState, err := device.TPMState(d.Path(), name)
+		if err != nil {
+			d.logger.Warn("Failed getting TPM state", logger.Ctx{"device": name, "err": err})
+			continue
+		}
+
+		if tpms == nil {
+			tpms = map[string]api.InstanceStateTPM{}
+		}
+
+		tpms[name] = *tpmState
+	}
+
+	return tpms
+}
+
 // ETag returns the instance configuration ETag data for pre-condition validation.
 func (d *common) ETag() []any {
 	if d.IsSnapshot() {
@@ -1870,6 +1969,21 @@ func (d *common) setOOMPriority(pid int) error {
 	}
 
 	return nil
+}
+
+// isBeingDeleted returns true when the instance is being deleted or is already gone from the database.
+func (d *common) isBeingDeleted() bool {
+	op := operationlock.Get(d.project.Name, d.name)
+	if op != nil && op.ActionMatch(operationlock.ActionDelete) {
+		return true
+	}
+
+	err := d.state.DB.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
+		_, err := dbCluster.GetInstanceID(ctx, tx.Tx(), d.project.Name, d.name)
+		return err
+	})
+
+	return response.IsNotFoundError(err)
 }
 
 // HasDependentDisk checks whether the instance has any dependent volumes.

@@ -783,6 +783,13 @@ test_clustering_storage() {
         # The container can't be moved if it's running
         ! INCUS_DIR="${INCUS_TWO_DIR}" incus move foo --target node1 || false
 
+        # Copying the running container to node1 goes through node2 rather than mounting its volume twice
+        INCUS_DIR="${INCUS_ONE_DIR}" incus copy foo bar --target node1 --stateless
+        INCUS_DIR="${INCUS_TWO_DIR}" incus info bar | grep -q "Location: node1"
+        INCUS_DIR="${INCUS_TWO_DIR}" incus start bar
+        INCUS_DIR="${INCUS_ONE_DIR}" incus exec bar -- ls / | grep -qxF proc
+        INCUS_DIR="${INCUS_ONE_DIR}" incus delete -f bar
+
         # Stop the container and create a snapshot
         INCUS_DIR="${INCUS_ONE_DIR}" incus stop foo --force
         INCUS_DIR="${INCUS_ONE_DIR}" incus snapshot create foo snap-test
@@ -1669,6 +1676,64 @@ test_clustering_update_cert() {
     kill_incus "${INCUS_TWO_DIR}"
 }
 
+test_clustering_join_cert_chain() {
+    # shellcheck disable=2039,3043
+    local INCUS_DIR
+
+    setup_clustering_bridge
+    prefix="inc$$"
+    bridge="${prefix}"
+
+    # Bootstrap the first node
+    setup_clustering_netns 1
+    INCUS_ONE_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+    chmod +x "${INCUS_ONE_DIR}"
+    ns1="${prefix}1"
+    spawn_incus_and_bootstrap_cluster "${ns1}" "${bridge}" "${INCUS_ONE_DIR}"
+
+    # Turn the cluster certificate into a chain by appending an unrelated certificate
+    leaf_path=$(mktemp -p "${TEST_DIR}" XXX)
+    key_path=$(mktemp -p "${TEST_DIR}" XXX)
+    chain_path=$(mktemp -p "${TEST_DIR}" XXX)
+    issuer_cert_path=$(mktemp -p "${TEST_DIR}" XXX)
+    issuer_key_path=$(mktemp -p "${TEST_DIR}" XXX)
+    cp "${INCUS_ONE_DIR}/cluster.crt" "${leaf_path}"
+    cp "${INCUS_ONE_DIR}/cluster.key" "${key_path}"
+    openssl req -x509 -newkey rsa:2048 -sha256 -keyout "${issuer_key_path}" -nodes -out "${issuer_cert_path}" -days 1 -subj "/CN=issuer.local"
+    cat "${leaf_path}" "${issuer_cert_path}" > "${chain_path}"
+
+    INCUS_DIR="${INCUS_ONE_DIR}" incus cluster update-cert "${chain_path}" "${key_path}" -q
+    cmp -s "${INCUS_ONE_DIR}/cluster.crt" "${chain_path}" || false
+    [ "$(grep -c 'BEGIN CERTIFICATE' "${INCUS_ONE_DIR}/cluster.crt")" = "2" ]
+
+    # Join a second node using only the leaf certificate, as a join token would
+    cert=$(sed ':a;N;$!ba;s/\n/\n\n/g' "${leaf_path}")
+    setup_clustering_netns 2
+    INCUS_TWO_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+    chmod +x "${INCUS_TWO_DIR}"
+    ns2="${prefix}2"
+    spawn_incus_and_join_cluster "${ns2}" "${bridge}" "${cert}" 2 1 "${INCUS_TWO_DIR}" "${INCUS_ONE_DIR}"
+
+    # The joining member must have received the full chain
+    cmp -s "${INCUS_TWO_DIR}/cluster.crt" "${chain_path}" || false
+    cmp -s "${INCUS_TWO_DIR}/cluster.key" "${key_path}" || false
+
+    INCUS_DIR="${INCUS_ONE_DIR}" incus info --target node2 | grep -q "server_name: node2"
+    INCUS_DIR="${INCUS_TWO_DIR}" incus info --target node1 | grep -q "server_name: node1"
+
+    INCUS_DIR="${INCUS_TWO_DIR}" incus admin shutdown
+    INCUS_DIR="${INCUS_ONE_DIR}" incus admin shutdown
+    sleep 0.5
+    rm -f "${INCUS_TWO_DIR}/unix.socket"
+    rm -f "${INCUS_ONE_DIR}/unix.socket"
+
+    teardown_clustering_netns
+    teardown_clustering_bridge
+
+    kill_incus "${INCUS_ONE_DIR}"
+    kill_incus "${INCUS_TWO_DIR}"
+}
+
 test_clustering_update_cert_reversion() {
     # shellcheck disable=2039,3043
     local INCUS_DIR
@@ -2445,7 +2510,20 @@ test_clustering_rebalance() {
     # Respawn the second node. It won't be able to disrupt the current leader,
     # since cowsql uses pre-vote.
     respawn_incus_cluster_member "${ns2}" "${INCUS_TWO_DIR}"
-    sleep 12
+
+    # Local readiness does not imply that the leader has received a heartbeat
+    # yet, nor that the member has been promoted back to a database role, which
+    # only propagates to the leader's view on a subsequent heartbeat.
+    retries=30
+    while [ "${retries}" != "0" ]; do
+        member="$(INCUS_CLI_TIMEOUT=2 INCUS_DIR="${INCUS_ONE_DIR}" incus cluster show node2)"
+        if echo "${member}" | grep -q "status: Online" && echo "${member}" | grep -q "database: true"; then
+            break
+        fi
+
+        sleep 1
+        retries=$((retries - 1))
+    done
 
     INCUS_DIR="${INCUS_ONE_DIR}" incus cluster list
     INCUS_DIR="${INCUS_ONE_DIR}" incus cluster show node2 | grep -q "status: Online"
@@ -2837,6 +2915,13 @@ test_clustering_image_refresh() {
     echo 'select images.fingerprint from images join projects on images.project_id=projects.id where projects.name="bar"' | INCUS_DIR="${INCUS_ONE_DIR}" incus admin sql global - | grep "${new_fingerprint}"
     [ "$(INCUS_DIR="${INCUS_ONE_DIR}" incus admin sql global 'select images.fingerprint from images' | grep -c "${new_fingerprint}")" -eq 2 ] || false
 
+    # Project foo still uses the old image so its files must stay next to the new ones.
+    ls "${INCUS_ONE_DIR}/images/${old_fingerprint}"* > /dev/null
+    ls "${INCUS_ONE_DIR}/images/${new_fingerprint}"* > /dev/null
+    for incus_dir in "${INCUS_TWO_DIR}" "${INCUS_THREE_DIR}"; do
+        ! ls "${incus_dir}/images/${new_fingerprint}"* > /dev/null 2>&1 || ls "${incus_dir}/images/${old_fingerprint}"* > /dev/null
+    done
+
     pids=""
 
     # Trigger image refresh on all nodes. This shouldn't do anything as the image
@@ -2860,6 +2945,7 @@ test_clustering_image_refresh() {
     [ "$(INCUS_DIR="${INCUS_ONE_DIR}" incus admin sql global 'select images.fingerprint from images' | grep -c "${new_fingerprint}")" -eq 2 ] || false
 
     # Modify public testimage
+    mid_fingerprint="${new_fingerprint}"
     dd if=/dev/urandom count=32 | INCUS_DIR="${INCUS_REMOTE_DIR}" incus file push - c1/foo
     INCUS_DIR="${INCUS_REMOTE_DIR}" incus publish c1 --alias testimage --reuse --public
     new_fingerprint="$(INCUS_DIR="${INCUS_REMOTE_DIR}" incus image ls testimage -c f --format csv)"
@@ -2886,6 +2972,13 @@ test_clustering_image_refresh() {
     echo 'select images.fingerprint from images join projects on images.project_id=projects.id where projects.name="default"' | INCUS_DIR="${INCUS_ONE_DIR}" incus admin sql global - | grep "${new_fingerprint}"
     echo 'select images.fingerprint from images join projects on images.project_id=projects.id where projects.name="bar"' | INCUS_DIR="${INCUS_ONE_DIR}" incus admin sql global - | grep "${new_fingerprint}"
     [ "$(INCUS_DIR="${INCUS_ONE_DIR}" incus admin sql global 'select images.fingerprint from images' | grep -c "${new_fingerprint}")" -eq 2 ] || false
+
+    # Nothing uses the intermediate image anymore so its files must be gone from every member.
+    for incus_dir in "${INCUS_ONE_DIR}" "${INCUS_TWO_DIR}" "${INCUS_THREE_DIR}"; do
+        ! ls "${incus_dir}/images/${mid_fingerprint}"* > /dev/null 2>&1 || false
+    done
+    ls "${INCUS_ONE_DIR}/images/${old_fingerprint}"* > /dev/null
+    ls "${INCUS_ONE_DIR}/images/${new_fingerprint}"* > /dev/null
 
     # Clean up everything
     for project in default foo bar; do
@@ -2985,7 +3078,8 @@ test_clustering_evacuation() {
     INCUS_DIR="${INCUS_ONE_DIR}" incus launch testimage c2 --target=node1 -c cluster.evacuate=auto -s pool1
     INCUS_DIR="${INCUS_ONE_DIR}" incus config set c2 boot.host_shutdown_timeout=1
 
-    INCUS_DIR="${INCUS_ONE_DIR}" incus launch testimage c3 --target=node1 -c cluster.evacuate=stop
+    # A halt signal the busybox init ignores, so the evacuation has to force stop c3.
+    INCUS_DIR="${INCUS_ONE_DIR}" incus launch testimage c3 --target=node1 -c cluster.evacuate=stop -c raw.lxc=lxc.signal.halt=SIGXCPU
     INCUS_DIR="${INCUS_ONE_DIR}" incus config set c3 boot.host_shutdown_timeout=1
 
     INCUS_DIR="${INCUS_ONE_DIR}" incus launch testimage c4 --target=node1 -c cluster.evacuate=migrate -s pool1
@@ -3018,6 +3112,9 @@ test_clustering_evacuation() {
     INCUS_DIR="${INCUS_TWO_DIR}" incus info c3 | grep -q "Location: node1"
     INCUS_DIR="${INCUS_TWO_DIR}" incus info c4 | grep -q "Status: RUNNING"
     ! INCUS_DIR="${INCUS_TWO_DIR}" incus info c4 | grep -q "Location: node1" || false
+
+    # The forced stop of c3 was recorded against node1.
+    INCUS_DIR="${INCUS_TWO_DIR}" incus warning list --format json | jq -e '.[] | select(.type == "Instance forcefully stopped" and .location == "node1" and .entity_url == "/1.0/instances/c3" and .status == "new") | .last_message | contains("evacuation")'
     INCUS_DIR="${INCUS_TWO_DIR}" incus info c5 | grep -q "Status: STOPPED"
     ! INCUS_DIR="${INCUS_TWO_DIR}" incus info c5 | grep -q "Location: node1" || false
     INCUS_DIR="${INCUS_TWO_DIR}" incus info c6 | grep -q "Status: RUNNING"
@@ -3961,6 +4058,88 @@ test_clustering_openfga() {
     rm -f "${INCUS_ONE_DIR}/unix.socket"
     rm -f "${INCUS_TWO_DIR}/unix.socket"
     rm -f "${INCUS_THREE_DIR}/unix.socket"
+
+    teardown_clustering_netns
+    teardown_clustering_bridge
+
+    kill_incus "${INCUS_ONE_DIR}"
+    kill_incus "${INCUS_TWO_DIR}"
+    kill_incus "${INCUS_THREE_DIR}"
+}
+
+test_clustering_healing() {
+    # shellcheck disable=2039,3043
+    local INCUS_DIR
+
+    setup_clustering_bridge
+    prefix="inc$$"
+    bridge="${prefix}"
+
+    setup_clustering_netns 1
+    INCUS_ONE_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+    chmod +x "${INCUS_ONE_DIR}"
+    ns1="${prefix}1"
+    spawn_incus_and_bootstrap_cluster "${ns1}" "${bridge}" "${INCUS_ONE_DIR}"
+
+    cert=$(sed ':a;N;$!ba;s/\n/\n\n/g' "${INCUS_ONE_DIR}/cluster.crt")
+
+    setup_clustering_netns 2
+    INCUS_TWO_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+    chmod +x "${INCUS_TWO_DIR}"
+    ns2="${prefix}2"
+    spawn_incus_and_join_cluster "${ns2}" "${bridge}" "${cert}" 2 1 "${INCUS_TWO_DIR}" "${INCUS_ONE_DIR}"
+
+    setup_clustering_netns 3
+    INCUS_THREE_DIR=$(mktemp -d -p "${TEST_DIR}" XXX)
+    chmod +x "${INCUS_THREE_DIR}"
+    ns3="${prefix}3"
+    spawn_incus_and_join_cluster "${ns3}" "${bridge}" "${cert}" 3 1 "${INCUS_THREE_DIR}" "${INCUS_ONE_DIR}"
+
+    INCUS_DIR="${INCUS_ONE_DIR}" incus cluster list
+    INCUS_DIR="${INCUS_ONE_DIR}" incus config set cluster.offline_threshold=11 cluster.healing_threshold=11 cluster.healing_delay=30
+
+    # Watch the lifecycle events from the leader, the default CLI timeout is shorter than this test.
+    (INCUS_CLI_TIMEOUT=600 INCUS_DIR="${INCUS_ONE_DIR}" stdbuf -oL incus monitor --type=lifecycle --format=json > "${TEST_DIR}/events.log" 2>&1) &
+    MONITOR=$!
+    sleep 2
+
+    # Cut the network of the third member while its daemon keeps running.
+    ip link set "v${ns3}1" down
+    echo "==> Network cut at $(date +%T)"
+
+    for _ in $(seq 240); do
+        grep -q cluster-member-offline "${TEST_DIR}/events.log" && break
+        sleep 1
+    done
+    grep cluster-member-offline "${TEST_DIR}/events.log"
+    OFFLINE=$(date +%s)
+    echo "==> Offline event at $(date +%T)"
+    grep cluster-member-offline "${TEST_DIR}/events.log" | grep -q '"healing_delay": *30'
+    grep cluster-member-offline "${TEST_DIR}/events.log" | grep -q 'members/node3'
+    ! grep -q cluster-member-healed "${TEST_DIR}/events.log" || false
+    INCUS_DIR="${INCUS_ONE_DIR}" incus cluster list -f csv | grep node3 | grep -q OFFLINE
+
+    # The evacuation only starts once the delay has elapsed.
+    for _ in $(seq 240); do
+        grep -q cluster-member-healed "${TEST_DIR}/events.log" && break
+        sleep 1
+    done
+    grep cluster-member-healed "${TEST_DIR}/events.log"
+    HEALED=$(date +%s)
+    echo "==> Healed event at $(date +%T), $((HEALED - OFFLINE))s after the offline event"
+    [ "$((HEALED - OFFLINE))" -ge 25 ]
+    INCUS_DIR="${INCUS_ONE_DIR}" incus cluster list -f csv | grep node3 | grep -q EVACUATED
+
+    kill "${MONITOR}" || true
+    ip link set "v${ns3}1" up
+
+    INCUS_DIR="${INCUS_THREE_DIR}" incus admin shutdown || true
+    INCUS_DIR="${INCUS_TWO_DIR}" incus admin shutdown
+    INCUS_DIR="${INCUS_ONE_DIR}" incus admin shutdown
+    sleep 0.5
+    rm -f "${INCUS_THREE_DIR}/unix.socket"
+    rm -f "${INCUS_TWO_DIR}/unix.socket"
+    rm -f "${INCUS_ONE_DIR}/unix.socket"
 
     teardown_clustering_netns
     teardown_clustering_bridge

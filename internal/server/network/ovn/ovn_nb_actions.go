@@ -1345,7 +1345,7 @@ func (o *NB) UpdateLogicalSwitchIPAllocation(ctx context.Context, switchName OVN
 		delete(logicalSwitch.OtherConfig, "exclude_ips")
 	}
 
-	operations, err := o.client.Where(logicalSwitch).Update(logicalSwitch)
+	operations, err := o.client.Where(logicalSwitch).Update(logicalSwitch, &logicalSwitch.OtherConfig)
 	if err != nil {
 		return err
 	}
@@ -1379,7 +1379,7 @@ func (o *NB) UpdateLogicalSwitchMulticastSnooping(ctx context.Context, switchNam
 
 	logicalSwitch.OtherConfig["mcast_snoop"] = fmt.Sprintf("%v", snoop)
 
-	operations, err := o.client.Where(logicalSwitch).Update(logicalSwitch)
+	operations, err := o.client.Where(logicalSwitch).Update(logicalSwitch, &logicalSwitch.OtherConfig)
 	if err != nil {
 		return err
 	}
@@ -1422,7 +1422,7 @@ func (o *NB) UpdateLogicalSwitchDHCPv4Revervations(ctx context.Context, switchNa
 		delete(logicalSwitch.OtherConfig, "exclude_ips")
 	}
 
-	operations, err := o.client.Where(logicalSwitch).Update(logicalSwitch)
+	operations, err := o.client.Where(logicalSwitch).Update(logicalSwitch, &logicalSwitch.OtherConfig)
 	if err != nil {
 		return err
 	}
@@ -2289,6 +2289,44 @@ func (o *NB) UpdateLogicalSwitchPortEnabled(ctx context.Context, portName OVNSwi
 
 	// Update the record.
 	operations, err := o.client.Where(&lsp).Update(&lsp)
+	if err != nil {
+		return err
+	}
+
+	// Apply the changes.
+	resp, err := o.client.Transact(ctx, operations...)
+	if err != nil {
+		return err
+	}
+
+	_, err = ovsdb.CheckOperationResults(resp, operations)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UpdateLogicalSwitchPortSecurity sets the port security addresses of a logical switch port (empty clears them).
+func (o *NB) UpdateLogicalSwitchPortSecurity(ctx context.Context, portName OVNSwitchPort, portSecurity []string) error {
+	// Get the logical switch port.
+	lsp := ovnNB.LogicalSwitchPort{
+		Name: string(portName),
+	}
+
+	err := o.get(ctx, &lsp)
+	if err != nil {
+		return err
+	}
+
+	if slices.Equal(lsp.PortSecurity, portSecurity) {
+		return nil
+	}
+
+	lsp.PortSecurity = portSecurity
+
+	// Name the column explicitly so that an empty value clears it.
+	operations, err := o.client.Where(&lsp).Update(&lsp, &lsp.PortSecurity)
 	if err != nil {
 		return err
 	}

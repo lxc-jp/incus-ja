@@ -501,10 +501,11 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 		// gendoc:generate(entity=devices, group=disk, key=boot.priority)
 		//
 		// ---
-		//  type: integer
+		//  type: string
+		//  default: `0`
 		//  required: no
-		//  shortdesc: Boot priority for VMs (higher value boots first)
-		"boot.priority": validate.Optional(validate.IsUint32),
+		//  shortdesc: Boot priority for VMs (higher value boots first), `skip` to skip
+		"boot.priority": validate.Optional(validate.Or(validate.IsUint32, validate.IsOneOf("skip"))),
 
 		// gendoc:generate(entity=devices, group=disk, key=path)
 		// This controls which path inside the instance the disk should be mounted on.
@@ -703,6 +704,9 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 		return errors.New(`The "initial.copy" property can only be used with custom storage volumes`)
 	}
 
+	// Whether the custom volume follows the instance across cluster members.
+	followsInstance := false
+
 	if d.config["pool"] != "" {
 		if d.config["shift"] != "" {
 			return errors.New(`The "shift" property cannot be used with custom storage volumes (set "security.shifted=true" on the volume instead)`)
@@ -755,6 +759,24 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 				if count > 0 {
 					return errors.New("Cannot add dependent custom storage block volume to more than one instance")
 				}
+			}
+
+			// Check that a volume following its instance is attached to exactly one virtual machine.
+			if util.IsTrue(dbVolume.Config["migration.follow_instance"]) {
+				if instConf.Type() != instancetype.VM {
+					return errors.New("Custom storage volumes with migration.follow_instance can only be attached to virtual machines")
+				}
+
+				count, err := d.getAttachedInstanceCount(storageProjectName, dbVolume)
+				if err != nil {
+					return err
+				}
+
+				if count > 0 {
+					return errors.New("Cannot add custom storage volume with migration.follow_instance to more than one instance")
+				}
+
+				followsInstance = true
 			}
 
 			// Check that only shared custom storage block volume are added to profiles, or multiple instances.
@@ -951,13 +973,11 @@ func (d *disk) validateConfig(instConf instance.ConfigReader, partialValidation 
 		}
 
 		switch d.config["io.bus"] {
-		case "nvme":
-			return errors.New("NVME disks aren't supported with migration.stateful=true")
 		case "virtiofs":
 			return errors.New("Virtiofs mounts aren't supported with migration.stateful=true")
 		}
 
-		if d.config["path"] != "/" && d.pool != nil && !d.pool.Driver().Info().Remote && util.IsFalseOrEmpty(d.config["dependent"]) {
+		if d.config["path"] != "/" && d.pool != nil && !d.pool.Driver().Info().Remote && util.IsFalseOrEmpty(d.config["dependent"]) && !followsInstance {
 			return errors.New("Only additional disks coming from a shared storage pool are supported with migration.stateful=true")
 		}
 	}
@@ -1042,7 +1062,7 @@ func (d *disk) UpdatableFields(oldDevice Type) []string {
 		return []string{}
 	}
 
-	return []string{"limits.max", "limits.read", "limits.write", "limits.max.burst", "limits.read.burst", "limits.write.burst", "limits.read.burst.length", "limits.write.burst.length", "limits.max.burst.length", "size", "size.state", "dependent"}
+	return []string{"limits.max", "limits.read", "limits.write", "limits.max.burst", "limits.read.burst", "limits.write.burst", "limits.read.burst.length", "limits.write.burst.length", "limits.max.burst.length", "size", "size.state", "dependent", "boot.priority"}
 }
 
 // Register calls mount for the disk volume (which should already be mounted) to reinitialize the reference counter
@@ -1246,6 +1266,7 @@ func (d *disk) startContainer() (*deviceConfig.RunConfig, error) {
 				"/opt/incus/lib/lxc/rootfs/",
 				"/usr/lib/x86_64-linux-gnu/lxc/rootfs/",
 				"/usr/lib/aarch64-linux-gnu/lxc/rootfs/",
+				"/usr/lib/loongarch64-linux-gnu/lxc/rootfs/",
 			}
 
 			rootFsPath := ""

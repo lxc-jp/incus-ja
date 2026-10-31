@@ -256,7 +256,7 @@ func (c *cmdCopy) copyOrMove(cmd *cobra.Command, src *u.Parsed, dst *u.Parsed, k
 
 			if !keepVolatile {
 				for k := range entry.Config {
-					if !instance.InstanceIncludeWhenCopying(k, true) {
+					if !instance.InstanceIncludeWhenCopying(k, true, stateful) {
 						delete(entry.Config, k)
 					}
 				}
@@ -335,7 +335,7 @@ func (c *cmdCopy) copyOrMove(cmd *cobra.Command, src *u.Parsed, dst *u.Parsed, k
 		// Strip the volatile keys if requested
 		if !keepVolatile {
 			for k := range entry.Config {
-				if !instance.InstanceIncludeWhenCopying(k, true) {
+				if !instance.InstanceIncludeWhenCopying(k, true, stateful) {
 					delete(entry.Config, k)
 				}
 			}
@@ -401,6 +401,29 @@ func (c *cmdCopy) copyOrMove(cmd *cobra.Command, src *u.Parsed, dst *u.Parsed, k
 		destRootDiskDeviceKey, destRootDiskDevice, _ := instance.GetRootDiskDevice(inst.Devices)
 		if srcRootDiskDeviceKey != "" && srcRootDiskDeviceKey == destRootDiskDeviceKey {
 			writable.Devices[destRootDiskDeviceKey]["pool"] = destRootDiskDevice["pool"]
+		} else if srcRootDiskDeviceKey == "" && destRootDiskDeviceKey != "" {
+			// The target got its own root disk device (e.g. from --storage), keep it.
+			writable.Devices[destRootDiskDeviceKey] = destRootDiskDevice
+		}
+
+		// Ensure we don't change the target's dependent volumes unless overridden.
+		for devName, dstDev := range inst.Devices {
+			if dstDev["type"] != "disk" || !util.IsTrue(dstDev["dependent"]) || dstDev["path"] == "/" || dstDev["pool"] == "" {
+				continue
+			}
+
+			srcDev, ok := writable.Devices[devName]
+			if !ok {
+				continue
+			}
+
+			if deviceMap[devName]["source"] == "" {
+				srcDev["source"] = dstDev["source"]
+			}
+
+			if deviceMap[devName]["pool"] == "" {
+				srcDev["pool"] = dstDev["pool"]
+			}
 		}
 
 		op, err := dstServer.UpdateInstance(dstInstanceName, writable, etag)

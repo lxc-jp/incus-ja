@@ -31,6 +31,9 @@ var EventAgentStarted = "AGENT-STARTED"
 // EventAgentStopped is the event sent once the agent has stopped.
 var EventAgentStopped = "AGENT-STOPPED"
 
+// EventAgentTemplated is the event sent once the agent has applied the templates and is about to reboot.
+var EventAgentTemplated = "AGENT-TEMPLATED"
+
 // EventVMReset is the event sent when VM guest reboots.
 var EventVMReset = "RESET"
 
@@ -44,7 +47,7 @@ var EventVMShutdownReasonDisconnect = "disconnect"
 var EventVMShutdownReasonGuestShutdown = "guest-shutdown"
 
 // EventVMShutdownReasonQuit is set when QEMU exits as a result of the host issuing a QMP quit command.
-var EventVMShutdownReasonQuit = "quit"
+var EventVMShutdownReasonQuit = "host-qmp-quit"
 
 // EventDiskEjected is used to indicate that a disk device was ejected by the guest.
 var EventDiskEjected = "DEVICE_TRAY_MOVED"
@@ -242,6 +245,10 @@ func (m *Monitor) processAgentStatus(status string) {
 		}
 
 		m.agentStarted = false
+	case "TEMPLATED":
+		if handler != nil {
+			go handler(EventAgentTemplated, nil)
+		}
 	}
 }
 

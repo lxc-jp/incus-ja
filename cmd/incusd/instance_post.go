@@ -21,6 +21,7 @@ import (
 	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
 	"github.com/lxc/incus/v7/internal/server/instance"
 	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
+	"github.com/lxc/incus/v7/internal/server/instance/operationlock"
 	"github.com/lxc/incus/v7/internal/server/operations"
 	"github.com/lxc/incus/v7/internal/server/project"
 	"github.com/lxc/incus/v7/internal/server/request"
@@ -454,12 +455,14 @@ func instancePost(d *Daemon, r *http.Request) response.Response {
 				// Get a new target.
 				targetMemberInfo, err = scriptlet.InstancePlacementRun(r.Context(), logger.Log, s, &req, targetCandidates, leaderAddress)
 				if err != nil {
+					logger.Warn("Instance placement scriptlet refused the move", logger.Ctx{"project": instProject, "instance": name, "err": err})
 					return response.BadRequest(fmt.Errorf("Failed instance placement scriptlet: %w", err))
 				}
 			} else {
 				// Validate the current target.
 				_, err = scriptlet.InstancePlacementRun(r.Context(), logger.Log, s, &req, targetCandidates, leaderAddress)
 				if err != nil {
+					logger.Warn("Instance placement scriptlet refused the move", logger.Ctx{"project": instProject, "instance": name, "err": err})
 					return response.BadRequest(fmt.Errorf("Failed instance placement scriptlet: %w", err))
 				}
 			}
@@ -593,6 +596,17 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		progressHandler = func(newOp api.Operation) {
 			_ = op.UpdateMetadata(newOp.Metadata)
 		}
+	}
+
+	// Let an in-flight start, stop or restart finish before deciding how to migrate.
+	instOp := operationlock.Get(inst.Project().Name, inst.Name())
+	if instOp != nil && instOp.ActionMatch(operationlock.ActionStart, operationlock.ActionStop, operationlock.ActionRestart) {
+		_ = instOp.Wait(ctx)
+	}
+
+	// A stopped instance can't be migrated live.
+	if req.Live && !inst.IsRunning() {
+		req.Live = false
 	}
 
 	// Load the instance storage pool.
@@ -1013,7 +1027,7 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 				return err
 			}
 
-			err = instanceShutdownOrForceStop(inst)
+			err = instanceShutdownOrForceStop(s, inst, "cluster move")
 			if err != nil {
 				return err
 			}
@@ -1211,9 +1225,10 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		} else if sourcePool.Driver().Info().Remote && req.Pool == "" {
 			// Cleanup instance paths on source member if using remote shared storage
 			// and there was no storage pool change.
+			// The instance already belongs to the target, so leftovers here can't fail the move.
 			err = sourcePool.CleanupInstancePaths(inst, nil)
 			if err != nil {
-				return fmt.Errorf("Failed cleaning up instance paths on source member: %w", err)
+				logger.Warn("Failed cleaning up instance paths on source member", logger.Ctx{"project": inst.Project().Name, "instance": inst.Name(), "err": err})
 			}
 		} else {
 			// Delete the instance on source member if pool isn't remote shared storage.
@@ -1239,6 +1254,14 @@ func migrateInstance(ctx context.Context, s *state.State, inst instance.Instance
 		err = cleanupDependentDisks(s, inst, req.Devices, req.Project, op)
 		if err != nil {
 			return fmt.Errorf("Failed deleting instance dependent volumes on source member: %w", err)
+		}
+
+		// The volumes following the instance were only transferred on a cluster move.
+		if clusterMoveSourceName != "" {
+			err = cleanupFollowingDisks(s, inst, op)
+			if err != nil {
+				return fmt.Errorf("Failed deleting instance following volumes on source member: %w", err)
+			}
 		}
 
 		localDiskTransfer.deleteSnapshots()
@@ -1312,6 +1335,20 @@ func cleanupDependentDisks(s *state.State, inst instance.Instance, deviceOverrid
 	}
 
 	return nil
+}
+
+// cleanupFollowingDisks removes the volumes that followed the instance from the source member.
+func cleanupFollowingDisks(s *state.State, inst instance.Instance, op *operations.Operation) error {
+	volProject, err := project.StorageVolumeProject(s.DB.Cluster, inst.Project().Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	return storagePools.ForEachFollowingDisk(s, inst, func(dev deviceConfig.DeviceNamed, pool storagePools.Pool, dbVol *db.StorageVolume) error {
+		_ = pool.DeleteCustomVolume(volProject, dbVol.Name, op)
+
+		return nil
+	})
 }
 
 // checkProjectMove validates that an instance can be moved to the given project.

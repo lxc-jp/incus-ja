@@ -378,6 +378,11 @@ migration() {
     incus_remote copy l1:c1 l2:c2 --refresh
     ! incus_remote config show l2:c2/snap1 || false
 
+    # Refreshing back to the source keeps its matching snapshot.
+    created_at="$(incus_remote query l1:/1.0/instances/c1/snapshots/snap0 | jq -r .created_at)"
+    incus_remote copy l2:c2 l1:c1 --refresh
+    [ "$(incus_remote query l1:/1.0/instances/c1/snapshots/snap0 | jq -r .created_at)" = "${created_at}" ]
+
     incus_remote rm -f l1:c1 l2:c2
 
     # Perform near-live migration tests between two servers.
@@ -517,6 +522,37 @@ migration() {
     incus_remote storage volume delete l2:"$remote_pool2" bar
     incus_remote storage unset l1:"$remote_pool1" rsync.compression
 
+    # Test block volume migration through the generic transport
+    incus_remote storage create l1:"${remote_pool1}-dir" dir
+    incus_remote storage create l2:"${remote_pool2}-dir" dir
+    incus_remote storage volume create l1:"${remote_pool1}-dir" blockvol --type=block size=16MiB
+
+    block_vol1="${INCUS_DIR}/storage-pools/${remote_pool1}-dir/custom/default_blockvol/root.img"
+    block_vol2="${incus2_dir}/storage-pools/${remote_pool2}-dir/custom/default_blockvol/root.img"
+    dd if=/dev/urandom of="${block_vol1}" bs=1M seek=2 count=1 conv=notrunc
+    dd if=/dev/urandom of="${block_vol1}" bs=1M seek=12 count=1 conv=notrunc
+    incus_remote storage volume snapshot create l1:"${remote_pool1}-dir" blockvol snap0
+    dd if=/dev/urandom of="${block_vol1}" bs=1M seek=7 count=1 conv=notrunc
+
+    incus_remote storage volume copy l1:"${remote_pool1}-dir/blockvol" l2:"${remote_pool2}-dir/blockvol"
+    cmp "${block_vol1}" "${block_vol2}"
+    cmp "${INCUS_DIR}/storage-pools/${remote_pool1}-dir/custom-snapshots/default_blockvol/snap0/root.img" "${incus2_dir}/storage-pools/${remote_pool2}-dir/custom-snapshots/default_blockvol/snap0/root.img"
+    incus_remote storage volume delete l2:"${remote_pool2}-dir" blockvol
+
+    incus_remote storage volume copy l1:"${remote_pool1}-dir/blockvol" l2:"${remote_pool2}-dir/blockvol" --mode=push --volume-only
+    cmp "${block_vol1}" "${block_vol2}"
+    incus_remote storage volume delete l2:"${remote_pool2}-dir" blockvol
+
+    # Same transfer without compression
+    incus_remote storage set l1:"${remote_pool1}-dir" rsync.compression false
+    incus_remote storage volume copy l1:"${remote_pool1}-dir/blockvol" l2:"${remote_pool2}-dir/blockvol" --volume-only
+    cmp "${block_vol1}" "${block_vol2}"
+    incus_remote storage volume delete l2:"${remote_pool2}-dir" blockvol
+
+    incus_remote storage volume delete l1:"${remote_pool1}-dir" blockvol
+    incus_remote storage delete l1:"${remote_pool1}-dir"
+    incus_remote storage delete l2:"${remote_pool2}-dir"
+
     # Test some migration between projects
     incus_remote project create l1:proj -c features.images=false -c features.profiles=false
     incus_remote project switch l1:proj
@@ -566,6 +602,23 @@ migration() {
     incus_remote delete l2:c1 -f
     incus_remote storage volume delete l1:dir vol1
     incus_remote storage delete l1:dir
+
+    # Copying from a snapshot takes the dependent volume from the matching snapshot
+    incus_remote init testimage l1:c1
+    incus_remote storage volume create l1:"$remote_pool1" vol4
+    incus_remote config device add l1:c1 vol4 disk pool="$remote_pool1" source=vol4 path=/mnt/vol4 dependent=true
+    incus_remote start l1:c1
+    INC_LOCAL='' incus_remote exec l1:c1 -- sh -c 'echo before > /root/f; echo before > /mnt/vol4/f'
+    incus_remote stop l1:c1
+    incus_remote snapshot create l1:c1 snap0
+    incus_remote start l1:c1
+    INC_LOCAL='' incus_remote exec l1:c1 -- sh -c 'echo after > /root/f; echo after > /mnt/vol4/f'
+    incus_remote copy l1:c1/snap0 l2:c2 -s "$remote_pool2" -d vol4,pool="$remote_pool2" -d vol4,source=vol4-copy
+    incus_remote start l2:c2
+    [ "$(INC_LOCAL='' incus_remote exec l2:c2 -- cat /root/f)" = "before" ]
+    [ "$(INC_LOCAL='' incus_remote exec l2:c2 -- cat /mnt/vol4/f)" = "before" ]
+    incus_remote delete l1:c1 -f
+    incus_remote delete l2:c2 -f
 
     # Test optimized refresh
     incus_remote init testimage l1:c1

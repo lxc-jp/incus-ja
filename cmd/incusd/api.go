@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lxc/incus/v7/internal/server/cluster"
 	clusterConfig "github.com/lxc/incus/v7/internal/server/cluster/config"
 	clusterRequest "github.com/lxc/incus/v7/internal/server/cluster/request"
 	"github.com/lxc/incus/v7/internal/server/db"
@@ -122,6 +123,10 @@ func restServer(d *Daemon) *http.Server {
 		d.oidcVerifier.Logout(w, r)
 	})
 
+	// TLS JWT browser login (cookie based).
+	router.HandleFunc("/tls/login", d.tlsJWTLogin)
+	router.HandleFunc("/tls/logout", d.tlsJWTLogout)
+
 	router.HandleFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -135,7 +140,7 @@ func restServer(d *Daemon) *http.Server {
 		}
 	})
 
-	for endpoint, f := range d.gateway.HandlerFuncs(d.heartbeatHandler, d.getTrustedCertificates) {
+	for endpoint, f := range d.gateway.HandlerFuncs(d.gatewayAccess) {
 		router.HandleFunc(endpoint, f)
 	}
 
@@ -211,7 +216,7 @@ func metricsServer(d *Daemon) *http.Server {
 		_ = response.SyncResponse(true, []string{"/1.0"}).Render(w)
 	})
 
-	for endpoint, f := range d.gateway.HandlerFuncs(d.heartbeatHandler, d.getTrustedCertificates) {
+	for endpoint, f := range d.gateway.HandlerFuncs(d.gatewayAccess) {
 		router.HandleFunc(endpoint, f)
 	}
 
@@ -383,7 +388,7 @@ func serveLocalBucket(d *Daemon, w http.ResponseWriter, r *http.Request, bucket 
 		}
 	}()
 
-	srv := local.NewServer(bucketDir, creds)
+	srv := local.NewServer(bucketDir, bucket.Name, creds)
 
 	// Migrate any data left over from the legacy minio layout, but only
 	// once the request has cleared authentication. This is a no-op once
@@ -496,4 +501,21 @@ func (httpFS documentationHTTPDir) Open(name string) (http.File, error) {
 	}
 
 	return fsFile, err
+}
+
+func (d *Daemon) gatewayAccess(w http.ResponseWriter, r *http.Request) bool {
+	certs, err := d.getTrustedServerCertificates()
+	if err != nil {
+		http.Error(w, "403 failed to read trusted certificate cache", http.StatusForbidden)
+
+		return false
+	}
+
+	if !cluster.CheckCert(r, d.endpoints.NetworkCert(), d.serverCert(), certs) {
+		http.Error(w, "403 invalid client certificate", http.StatusForbidden)
+
+		return false
+	}
+
+	return true
 }

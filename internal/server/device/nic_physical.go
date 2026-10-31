@@ -73,9 +73,10 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 		// gendoc:generate(entity=devices, group=nic_physical, key=boot.priority)
 		//
 		// ---
-		//  type: integer
+		//  type: string
+		//  default: `skip`
 		//  managed: no
-		//  shortdesc: Boot priority for VMs (higher value boots first)
+		//  shortdesc: Boot priority for VMs (higher value boots first), `skip` to skip
 		"boot.priority",
 
 		// gendoc:generate(entity=devices, group=nic_physical, key=attached)
@@ -183,7 +184,7 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 		}
 
 		// Check if the parent is a bridge.
-		isParentBridge := d.config["parent"] != "" && util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))
+		isParentBridge := d.config["parent"] != "" && network.IsNativeBridge(d.config["parent"])
 		if isParentBridge {
 			// Validate the NIC as if bridged.
 			bridgedConfig := d.config.Clone()
@@ -215,7 +216,7 @@ func (d *nicPhysical) validateConfig(instConf instance.ConfigReader, partialVali
 
 // validateEnvironment checks the runtime environment for correctness.
 func (d *nicPhysical) validateEnvironment() error {
-	isParentBridge := util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))
+	isParentBridge := network.IsNativeBridge(d.config["parent"])
 	if d.inst.Type() == instancetype.VM && util.IsTrue(d.inst.ExpandedConfig()["migration.stateful"]) && !isParentBridge {
 		return errors.New("Network physical devices cannot be used when migration.stateful is enabled")
 	}
@@ -224,7 +225,7 @@ func (d *nicPhysical) validateEnvironment() error {
 		return errors.New("Requires name property to start")
 	}
 
-	if !util.PathExists(fmt.Sprintf("/sys/class/net/%s", d.config["parent"])) {
+	if !network.InterfaceExists(d.config["parent"]) {
 		return fmt.Errorf("Parent device '%s' doesn't exist", d.config["parent"])
 	}
 
@@ -244,7 +245,7 @@ func (d *nicPhysical) Start() (*deviceConfig.RunConfig, error) {
 	}
 
 	// Handle the case where the parent is a bridge.
-	isParentBridge := util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))
+	isParentBridge := network.IsNativeBridge(d.config["parent"])
 	if isParentBridge {
 		// Convert the device to a nictype=bridged internally.
 		bridgedConfig := d.config.Clone()
@@ -467,7 +468,7 @@ func (d *nicPhysical) startVMUSB(name string) (*deviceConfig.RunConfig, error) {
 // Stop is run when the device is removed from the instance.
 func (d *nicPhysical) Stop() (*deviceConfig.RunConfig, error) {
 	// Handle the case where the parent is a bridge.
-	isParentBridge := util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))
+	isParentBridge := network.IsNativeBridge(d.config["parent"])
 	if isParentBridge {
 		// Convert the device to a nictype=bridged internally.
 		bridgedConfig := d.config.Clone()
@@ -585,10 +586,21 @@ func IsPhysicalNICWithBridge(s *state.State, deviceProjectName string, d deviceC
 			return false
 		}
 
-		return util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", parent))
+		return network.IsNativeBridge(parent)
 	}
 
 	return false
+}
+
+// UpdatableFields returns a list of fields that can be updated without triggering a device remove & add.
+func (d *nicPhysical) UpdatableFields(oldDevice Type) []string {
+	// Check old and new device types match.
+	_, match := oldDevice.(*nicPhysical)
+	if !match {
+		return []string{}
+	}
+
+	return []string{"boot.priority"}
 }
 
 // Update applies configuration changes to a started device.

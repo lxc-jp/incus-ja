@@ -22,6 +22,7 @@ import (
 	backupConfig "github.com/lxc/incus/v7/internal/server/backup/config"
 	"github.com/lxc/incus/v7/internal/server/db"
 	"github.com/lxc/incus/v7/internal/server/db/cluster"
+	deviceConfig "github.com/lxc/incus/v7/internal/server/device/config"
 	"github.com/lxc/incus/v7/internal/server/instance"
 	"github.com/lxc/incus/v7/internal/server/instance/instancetype"
 	"github.com/lxc/incus/v7/internal/server/locking"
@@ -575,6 +576,7 @@ func validateVolumeCommonRules(vol drivers.Volume) map[string]func(string) error
 
 	if vol.Type() == drivers.VolumeTypeCustom {
 		rules["dependent"] = validate.Optional(validate.IsBool)
+		rules["migration.follow_instance"] = validate.Optional(validate.IsBool)
 	}
 
 	return rules
@@ -1172,17 +1174,7 @@ func InstanceDiskBlockSize(pool Pool, inst instance.Instance, op *operations.Ope
 
 	vol := pool.GetVolume(volType, InstanceContentType(inst), project.Instance(inst.Project().Name, inst.Name()), dbVol.Config)
 
-	// For qcow2 volumes, use the virtual size as the device is larger to hold the qcow2 metadata.
-	if drivers.IsQcow2Block(vol) {
-		imgInfo, err := drivers.Qcow2Info(mountInfo.DiskPath)
-		if err != nil {
-			return -1, err
-		}
-
-		return int64(imgInfo.VirtualSize), nil
-	}
-
-	blockDiskSize, err := drivers.BlockDiskSizeBytes(mountInfo.DiskPath)
+	blockDiskSize, err := drivers.VolumeBlockSizeBytes(vol, mountInfo.DiskPath)
 	if err != nil {
 		return -1, fmt.Errorf("Error getting block disk size %q: %w", mountInfo.DiskPath, err)
 	}
@@ -1224,6 +1216,7 @@ func CompareSnapshots(sourceSnapshots []ComparableSnapshot, targetSnapshots []Co
 	// Find the latest creation date among target snapshots.
 	var latestTargetSnapshotTime time.Time
 
+	// Creation dates are compared at second precision, which is all the migration protocol carries.
 	// If target snapshot doesn't exist in source, or its creation date or ID differ,
 	// then mark it for deletion on target.
 	for targetSnapIndex := range targetSnapshots {
@@ -1231,7 +1224,7 @@ func CompareSnapshots(sourceSnapshots []ComparableSnapshot, targetSnapshots []Co
 		targetSnapshotsByName[targetSnapshots[targetSnapIndex].Name] = &targetSnapshots[targetSnapIndex]
 
 		sourceSnap, sourceSnapExists := sourceSnapshotsByName[targetSnapshots[targetSnapIndex].Name]
-		if !sourceSnapExists || !sourceSnap.CreationDate.Equal(targetSnapshots[targetSnapIndex].CreationDate) || sourceSnap.ID != targetSnapshots[targetSnapIndex].ID {
+		if !sourceSnapExists || sourceSnap.CreationDate.Unix() != targetSnapshots[targetSnapIndex].CreationDate.Unix() || sourceSnap.ID != targetSnapshots[targetSnapIndex].ID {
 			deleteFromTarget = append(deleteFromTarget, targetSnapIndex)
 		} else if targetSnapshots[targetSnapIndex].CreationDate.After(latestTargetSnapshotTime) {
 			latestTargetSnapshotTime = targetSnapshots[targetSnapIndex].CreationDate
@@ -1242,7 +1235,7 @@ func CompareSnapshots(sourceSnapshots []ComparableSnapshot, targetSnapshots []Co
 	// then mark it for syncing to target.
 	for sourceSnapIndex := range sourceSnapshots {
 		targetSnap, targetSnapExists := targetSnapshotsByName[sourceSnapshots[sourceSnapIndex].Name]
-		if (!targetSnapExists && (!excludeOlder || sourceSnapshots[sourceSnapIndex].CreationDate.After(latestTargetSnapshotTime))) || (targetSnapExists && (!targetSnap.CreationDate.Equal(sourceSnapshots[sourceSnapIndex].CreationDate) || targetSnap.ID != sourceSnapshots[sourceSnapIndex].ID)) {
+		if (!targetSnapExists && (!excludeOlder || sourceSnapshots[sourceSnapIndex].CreationDate.After(latestTargetSnapshotTime))) || (targetSnapExists && (targetSnap.CreationDate.Unix() != sourceSnapshots[sourceSnapIndex].CreationDate.Unix() || targetSnap.ID != sourceSnapshots[sourceSnapIndex].ID)) {
 			syncFromSource = append(syncFromSource, sourceSnapIndex)
 		}
 	}
@@ -1272,6 +1265,17 @@ func CalculateVolumeSnapshotSize(projectName string, pool Pool, contentType driv
 	}
 
 	snapVol := pool.GetVolume(volumeType, contentType, fullSnapVolName, dbSnapVol.Config)
+
+	// Ask the driver first as mounting a snapshot can be slow.
+	volSize, err = pool.Driver().GetVolumeDiskSize(snapVol)
+	if err == nil {
+		return volSize, nil
+	}
+
+	if !errors.Is(err, drivers.ErrNotSupported) {
+		return 0, err
+	}
+
 	err = snapVol.MountTask(func(mountPath string, op *operations.Operation) error {
 		poolBackend, ok := pool.(*backend)
 		if !ok {
@@ -1283,7 +1287,7 @@ func CalculateVolumeSnapshotSize(projectName string, pool Pool, contentType driv
 			return err
 		}
 
-		volSize, err = drivers.BlockDiskSizeBytes(volDiskPath)
+		volSize, err = drivers.VolumeBlockSizeBytes(snapVol, volDiskPath)
 		if err != nil {
 			return err
 		}
@@ -1346,7 +1350,7 @@ func ClusterWideStorageConfig(driverName string) []string {
 
 // GenerateDependentVolumesOffer creates an offer header containing
 // all information required for dependent volume migration.
-func GenerateDependentVolumesOffer(s *state.State, config *backupConfig.Config, projectName string, snapshots bool, devices api.DevicesMap, skipDisks []string, clusterMove bool) ([]*migration.DependentVolume, error) {
+func GenerateDependentVolumesOffer(s *state.State, config *backupConfig.Config, srcDevices map[string]map[string]string, projectName string, snapshots bool, devices api.DevicesMap, skipDisks []string, clusterMove bool) ([]*migration.DependentVolume, error) {
 	result := make([]*migration.DependentVolume, 0, len(config.DependentVolumes))
 	if len(config.DependentVolumes) == 0 {
 		return result, nil
@@ -1357,7 +1361,11 @@ func GenerateDependentVolumesOffer(s *state.State, config *backupConfig.Config, 
 		return nil, err
 	}
 
+	// The config of a snapshot has no instance section, use the source devices instead.
 	devicesMap := DevicesMapFromBackupConfig(config)
+	if config.Container == nil {
+		devicesMap = DevicesMapFromDevices(srcDevices)
+	}
 
 	for _, volConfig := range config.DependentVolumes {
 		poolName := volConfig.Pool.Name
@@ -1409,7 +1417,7 @@ func GenerateDependentVolumesOffer(s *state.State, config *backupConfig.Config, 
 					return err
 				}
 
-				volSize, err = drivers.BlockDiskSizeBytes(volDiskPath)
+				volSize, err = drivers.VolumeBlockSizeBytes(vol, volDiskPath)
 				if err != nil {
 					return err
 				}
@@ -1441,22 +1449,167 @@ func GenerateDependentVolumesOffer(s *state.State, config *backupConfig.Config, 
 	return result, nil
 }
 
+// ForEachFollowingDisk executes the given function for each disk of a VM whose independent volume on
+// local storage follows the instance when it moves to another cluster member.
+func ForEachFollowingDisk(s *state.State, inst instance.Instance, diskAction func(dev deviceConfig.DeviceNamed, pool Pool, dbVol *db.StorageVolume) error) error {
+	if inst.Type() != instancetype.VM {
+		return nil
+	}
+
+	storageProjectName, err := project.StorageVolumeProject(s.DB.Cluster, inst.Project().Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return err
+	}
+
+	for _, dev := range inst.ExpandedDevices().Sorted() {
+		if dev.Config["type"] != "disk" || util.IsTrue(dev.Config["dependent"]) || dev.Config["path"] == "/" || dev.Config["pool"] == "" || dev.Config["source"] == "" {
+			continue
+		}
+
+		pool, err := LoadByName(s, dev.Config["pool"])
+		if err != nil {
+			return fmt.Errorf("Failed loading storage pool: %w", err)
+		}
+
+		// Volumes on shared storage remain reachable from every member.
+		if pool.Driver().Info().Remote {
+			continue
+		}
+
+		volName, _ := internalInstance.SplitVolumeSource(dev.Config["source"])
+		dbVol, err := VolumeDBGet(pool, storageProjectName, volName, drivers.VolumeTypeCustom)
+		if err != nil {
+			if response.IsNotFoundError(err) {
+				continue
+			}
+
+			return fmt.Errorf("Failed loading custom volume for device %q: %w", dev.Name, err)
+		}
+
+		if util.IsFalseOrEmpty(dbVol.Config["migration.follow_instance"]) {
+			continue
+		}
+
+		err = diskAction(dev, pool, dbVol)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GenerateFollowingVolumesBackupConfig returns the backup config of the volumes following the instance
+// to another cluster member, so they can be migrated alongside its dependent volumes.
+func GenerateFollowingVolumesBackupConfig(s *state.State, inst instance.Instance, snapshots bool, op *operations.Operation) ([]*backupConfig.Config, error) {
+	storageProjectName, err := project.StorageVolumeProject(s.DB.Cluster, inst.Project().Name, db.StoragePoolVolumeTypeCustom)
+	if err != nil {
+		return nil, err
+	}
+
+	result := []*backupConfig.Config{}
+	err = ForEachFollowingDisk(s, inst, func(dev deviceConfig.DeviceNamed, pool Pool, dbVol *db.StorageVolume) error {
+		// Moving the volume would break any other instance using it.
+		err := VolumeUsedByInstanceDevices(s, pool.Name(), storageProjectName, &dbVol.StorageVolume, true, func(dbInst db.InstanceArgs, p api.Project, usedByDevices []string) error {
+			if dbInst.Project == inst.Project().Name && dbInst.Name == inst.Name() {
+				return nil
+			}
+
+			return fmt.Errorf("Volume of device %q can't follow the instance as it's also used by instance %q in project %q", dev.Name, dbInst.Name, dbInst.Project)
+		})
+		if err != nil {
+			return err
+		}
+
+		volConfig, err := pool.GenerateCustomVolumeBackupConfig(storageProjectName, dbVol.Name, snapshots, op)
+		if err != nil {
+			return err
+		}
+
+		poolAPI := pool.ToAPI()
+		volConfig.Pool = &poolAPI
+		result = append(result, volConfig)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// GenerateMigrationVolumesOffer creates the dependent volumes offer of an instance migration, adding the
+// volumes following the instance on a cluster move, and reduces the config to the offered volumes.
+func GenerateMigrationVolumesOffer(s *state.State, inst instance.Instance, config *backupConfig.Config, snapshots bool, devices api.DevicesMap, skipDisks []string, clusterMove bool, op *operations.Operation) ([]*migration.DependentVolume, error) {
+	if clusterMove {
+		followingVolumes, err := GenerateFollowingVolumesBackupConfig(s, inst, snapshots, op)
+		if err != nil {
+			return nil, fmt.Errorf("Failed generating following volumes migration config: %w", err)
+		}
+
+		config.DependentVolumes = append(config.DependentVolumes, followingVolumes...)
+	}
+
+	offer, err := GenerateDependentVolumesOffer(s, config, inst.ExpandedDevices().CloneNative(), inst.Project().Name, snapshots, devices, skipDisks, clusterMove)
+	if err != nil {
+		return nil, err
+	}
+
+	// The target matches the volume configs to the offer by position, so only send the offered ones.
+	offeredVolumes := make([]*backupConfig.Config, 0, len(offer))
+	for _, volConfig := range config.DependentVolumes {
+		for _, vol := range offer {
+			if vol.GetPool() == volConfig.Pool.Name && vol.GetName() == volConfig.Volume.Name {
+				offeredVolumes = append(offeredVolumes, volConfig)
+				break
+			}
+		}
+	}
+
+	config.DependentVolumes = offeredVolumes
+
+	return offer, nil
+}
+
 // DependentVolumeWithType represents a volume and its supported migration types.
 type DependentVolumeWithType struct {
 	Volume      *migration.DependentVolume
 	VolumeTypes []localMigration.Type
 }
 
-// DependentVolumesMatchMigrationType returns the transport type matching the dependent volumes.
-func DependentVolumesMatchMigrationType(s *state.State, migrationDependentVolumes []*migration.DependentVolume, snapshots bool, overrides api.DevicesMap, source bool, clusterMove bool) ([]DependentVolumeWithType, error) {
+// ValidateDependentVolumesAgainstOffer rejects a migration response whose dependent volumes don't
+// match the ones the source offered, so a malicious target can't redefine their identity.
+func ValidateDependentVolumesAgainstOffer(offer []*migration.DependentVolume, resp []*migration.DependentVolume) error {
+	offered := make(map[string]*migration.DependentVolume, len(offer))
+	for _, vol := range offer {
+		offered[vol.GetDeviceName()] = vol
+	}
+
+	for _, vol := range resp {
+		match, ok := offered[vol.GetDeviceName()]
+		if !ok {
+			return fmt.Errorf("Dependent volume %q was not offered", vol.GetDeviceName())
+		}
+
+		if vol.GetName() != match.GetName() || vol.GetPool() != match.GetPool() || vol.GetContentType() != match.GetContentType() {
+			return fmt.Errorf("Dependent volume %q doesn't match the offer", vol.GetDeviceName())
+		}
+	}
+
+	return nil
+}
+
+// DependentVolumesMatchMigrationType returns the transport type matching the header's dependent volumes.
+func DependentVolumesMatchMigrationType(s *state.State, header *migration.MigrationHeader, snapshots bool, overrides api.DevicesMap, source bool, clusterMove bool) ([]DependentVolumeWithType, error) {
 	dependentVolumes := []DependentVolumeWithType{}
-	for _, vol := range migrationDependentVolumes {
-		contentType := drivers.ContentType(*vol.ContentType)
-		poolName := *vol.Pool
+	for _, vol := range header.DependentVolumes {
+		contentType := drivers.ContentType(vol.GetContentType())
+		poolName := vol.GetPool()
 		storageMove := false
 
-		if overrides != nil && overrides[*vol.DeviceName] != nil {
-			newPoolName, ok := overrides[*vol.DeviceName]["pool"]
+		if overrides != nil && overrides[vol.GetDeviceName()] != nil {
+			newPoolName, ok := overrides[vol.GetDeviceName()]["pool"]
 			if ok {
 				storageMove = newPoolName != poolName
 				poolName = newPoolName
@@ -1473,14 +1626,21 @@ func DependentVolumesMatchMigrationType(s *state.State, migrationDependentVolume
 			return nil, errors.New("No migration types available")
 		}
 
+		// Older targets echo the offered block features back, only trust them from targets reporting their own.
+		if source && header.BlockFeatures == nil {
+			vol.BlockFeatures = nil
+		}
+
 		migrationTypes, err := localMigration.MatchTypes(localMigration.HeaderFromDependentVolume(vol), FallbackMigrationType(contentType), poolMigrationTypes)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to negotiate migration type: %w", err)
 		}
 
-		// Update header on target.
+		// Build a fresh header on the target rather than echoing the offered one back.
 		if !source {
-			localMigration.DependentVolumeUpdateHeader(localMigration.TypesToHeader(migrationTypes...), vol)
+			respVol := localMigration.DependentVolumeFromHeader(localMigration.TypesToHeader(migrationTypes...), *vol.Name, *vol.Pool, *vol.ContentType, vol.GetVolumeSize(), vol.GetDeviceName())
+			respVol.Snapshots = vol.Snapshots
+			vol = respVol
 		}
 
 		dependentVolumes = append(dependentVolumes, DependentVolumeWithType{Volume: vol, VolumeTypes: migrationTypes})
@@ -1596,8 +1756,17 @@ func DeviceByPoolAndVolume(deviceMap map[string]map[string]string, poolName stri
 
 // DevicesMapFromBackupConfig builds a map of instance devices indexed by pool and volume name.
 func DevicesMapFromBackupConfig(config *backupConfig.Config) map[string]map[string]string {
+	if config.Container == nil {
+		return map[string]map[string]string{}
+	}
+
+	return DevicesMapFromDevices(config.Container.ExpandedDevices)
+}
+
+// DevicesMapFromDevices builds a map of the given devices indexed by pool and volume name.
+func DevicesMapFromDevices(devices map[string]map[string]string) map[string]map[string]string {
 	devicesMap := map[string]map[string]string{}
-	for devName, dev := range config.Container.ExpandedDevices {
+	for devName, dev := range devices {
 		_, hasPool := devicesMap[dev["pool"]]
 		if !hasPool {
 			devicesMap[dev["pool"]] = map[string]string{}
@@ -1623,4 +1792,50 @@ func nbdOperationLock(projectName string, instanceName string) (locking.UnlockFu
 	}
 
 	return unlock, nil
+}
+
+// UnmountStaleSnapshots unmounts snapshot mount paths left behind on the pool, typically by an
+// operation interrupted by a daemon restart. It must only run while no snapshot can be in use.
+func UnmountStaleSnapshots(pool Pool) error {
+	for _, volType := range pool.Driver().Info().VolumeTypes {
+		snapshotsDir := drivers.GetVolumeTypeSnapshotsDir(pool.Name(), volType)
+
+		volumes, err := os.ReadDir(snapshotsDir)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+
+			return err
+		}
+
+		for _, volume := range volumes {
+			volumeDir := filepath.Join(snapshotsDir, volume.Name())
+
+			snapshots, err := os.ReadDir(volumeDir)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+
+				return err
+			}
+
+			for _, snapshot := range snapshots {
+				mountPath := filepath.Join(volumeDir, snapshot.Name())
+				if !linux.IsMountPoint(mountPath) {
+					continue
+				}
+
+				err = drivers.TryUnmount(mountPath, 0)
+				if err != nil {
+					return err
+				}
+
+				logger.Warn("Unmounted stale snapshot", logger.Ctx{"pool": pool.Name(), "path": mountPath})
+			}
+		}
+	}
+
+	return nil
 }
