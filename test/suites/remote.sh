@@ -30,19 +30,136 @@ test_remote_url() {
     done
 }
 
+test_remote_generate_certificate() {
+    # shellcheck disable=SC2039,3043
+    local INCUS_CONF token cert_path key_path
+
+    # Use separate configurations to preserve the suite's client credentials.
+    INCUS_CONF=$(mktemp -d -p "${TEST_DIR}" XXX)
+    export INCUS_CONF
+
+    # Generate and use an unencrypted shared key.
+    incus_remote remote generate-certificate
+
+    [ -f "${INCUS_CONF}/client.crt" ]
+    [ "$(stat -c '%a' "${INCUS_CONF}/client.key")" = 600 ]
+
+    token="$(incus config trust add foo -q)"
+    incus_remote remote add test "https://${INCUS_ADDR}" \
+        --accept-certificate --token "${token}"
+
+    incus_remote list test:
+
+    incus config trust remove "$(cert_fingerprint "${INCUS_CONF}/client.crt")"
+    incus_remote remote remove test
+    rm -rf "${INCUS_CONF}"
+
+    # Generate and import an unencrypted key from an arbitrary path.
+    INCUS_CONF=$(mktemp -d -p "${TEST_DIR}" XXX)
+    cert_path="${INCUS_CONF}/certificates/client.pem"
+    key_path="${INCUS_CONF}/keys/private.pem"
+
+    ! incus_remote remote generate-certificate --tls-cert "${cert_path}" || false
+    ! incus_remote remote generate-certificate --tls-key "${key_path}" || false
+
+    (
+        cd "${INCUS_CONF}" || exit 1
+        incus_remote remote generate-certificate \
+            --tls-cert certificates/client.pem --tls-key keys/private.pem
+    )
+
+    [ ! -e "${INCUS_CONF}/client.key" ]
+    [ "$(stat -c '%a' "${key_path}")" = 600 ]
+
+    ! incus_remote remote generate-certificate --tls-cert "${cert_path}" --tls-key "${key_path}" || false
+
+    token="$(incus config trust add foo -q)"
+    incus_remote remote add test "https://${INCUS_ADDR}" \
+        --accept-certificate --token "${token}" \
+        --tls-cert "${cert_path}" --tls-key "${key_path}"
+
+    incus_remote list test:
+
+    incus config trust remove "$(cert_fingerprint "${cert_path}")"
+    incus_remote remote remove test
+    rm -rf "${INCUS_CONF}"
+
+    # Generate and use an encrypted shared key.
+    INCUS_CONF=$(mktemp -d -p "${TEST_DIR}" XXX)
+    printf '%s\n' test-password test-password |
+        timeout --preserve-status "${INCUS_CLI_TIMEOUT:-120}" script -qefc \
+            "incus remote generate-certificate --encrypt" /dev/null
+
+    grep -Fx -- "-----BEGIN OPENSSH PRIVATE KEY-----" "${INCUS_CONF}/client.key"
+    [ "$(stat -c '%a' "${INCUS_CONF}/client.key")" = 600 ]
+
+    token="$(incus config trust add foo -q)"
+    printf '%s\n' test-password |
+        timeout --preserve-status "${INCUS_CLI_TIMEOUT:-120}" script -qefc \
+            "incus remote add test 'https://${INCUS_ADDR}' --accept-certificate --token '${token}'" \
+            /dev/null
+
+    printf '%s\n' test-password |
+        timeout --preserve-status "${INCUS_CLI_TIMEOUT:-120}" script -qefc \
+            "incus list test:" /dev/null
+
+    incus config trust remove "$(cert_fingerprint "${INCUS_CONF}/client.crt")"
+    incus_remote remote remove test
+    rm -rf "${INCUS_CONF}"
+
+    # Generate and import an encrypted key from an arbitrary path.
+    INCUS_CONF=$(mktemp -d -p "${TEST_DIR}" XXX)
+    cert_path="${INCUS_CONF}/certificates/client.pem"
+    key_path="${INCUS_CONF}/keys/private.pem"
+    printf '%s\n' test-password test-password |
+        timeout --preserve-status "${INCUS_CLI_TIMEOUT:-120}" script -qefc \
+            "incus remote generate-certificate --tls-cert '${cert_path}' --tls-key '${key_path}' --encrypt" /dev/null
+
+    [ ! -e "${INCUS_CONF}/client.key" ]
+    grep -Fx -- "-----BEGIN OPENSSH PRIVATE KEY-----" "${key_path}"
+    [ "$(stat -c '%a' "${key_path}")" = 600 ]
+
+    ! printf '%s\n' wrong-password |
+        timeout --preserve-status "${INCUS_CLI_TIMEOUT:-120}" script -qefc \
+            "incus remote add test 'https://${INCUS_ADDR}' --accept-certificate --tls-cert '${cert_path}' --tls-key '${key_path}'" \
+            /dev/null || false
+    [ ! -e "${INCUS_CONF}/clientcerts/test.key" ]
+
+    token="$(incus config trust add foo -q)"
+    printf '%s\n' test-password |
+        timeout --preserve-status "${INCUS_CLI_TIMEOUT:-120}" script -qefc \
+            "incus remote add test '${token}' --tls-cert '${cert_path}' --tls-key '${key_path}'" \
+            /dev/null
+
+    printf '%s\n' test-password |
+        timeout --preserve-status "${INCUS_CLI_TIMEOUT:-120}" script -qefc \
+            "incus list test:" /dev/null
+
+    [ "$(stat -c '%a' "${INCUS_CONF}/clientcerts/test.key")" = 600 ]
+
+    incus config trust remove "$(cert_fingerprint "${cert_path}")"
+    incus_remote remote remove test
+    rm -rf "${INCUS_CONF}"
+}
+
 test_remote_url_with_token() {
     # Try adding remote using a correctly constructed but invalid token
     invalid_token="eyJjbGllbnRfbmFtZSI6IiIsImZpbmdlcnByaW50IjoiMWM0MmMzOTgxOWIyNGJiYjQxNGFhYTY2NDUwNzlmZGY2NDQ4MTUzMDcxNjA0YTFjODJjMjVhN2JhNjBkZmViMCIsImFkZHJlc3NlcyI6WyIxOTIuMTY4LjE3OC4yNDo4NDQzIiwiWzIwMDM6Zjc6MzcxMToyMzAwOmQ5ZmY6NWRiMDo3ZTA2OmQ1ODldOjg0NDMiLCIxMC41OC4yLjE6ODQ0MyIsIjEwLjAuMy4xOjg0NDMiLCIxOTIuMTY4LjE3OC43MDo4NDQzIiwiWzIwMDM6Zjc6MzcxMToyMzAwOjQwMTY6ODVkNDo2M2FlOjNhYWVdOjg0NDMiLCIxMC4xMjQuODYuMTo4NDQzIiwiW2ZkNDI6ZTY5Zjo3OTczOjIyMjU6OjFdOjg0NDMiXSwic2VjcmV0IjoiODVlMGU5YmViODk0ZTFhMTU3YmYxODI4YTk0Y2IwYTdjY2YxMzQ4NzMyN2ZjMTY3MDcyY2JlNjQ3NmVmOGJkMiJ9"
     ! incus_remote remote add test "${invalid_token}" || false
 
+    # Revoke the pending tokens left behind by other tests
+    incus config trust list-tokens -f json | jq -r '.[].client_name' | while read -r name; do
+        incus config trust revoke-token "${name}"
+    done
+
     # Generate token for client foo
     incus config trust add foo -q
 
     # Listing all tokens should show only a single one
-    [ "$(incus config trust list-tokens -f json | jq '[.[] | select(.ClientName == "foo")] |  length')" -eq 1 ]
+    [ "$(incus config trust list-tokens -f json | jq '[.[] | select(.client_name == "foo")] |  length')" -eq 1 ]
 
     # Extract token
-    token="$(incus config trust list-tokens -f json | jq '.[].Token')"
+    token="$(incus config trust list-tokens -f csv -c t)"
 
     # Invalidate token so that it cannot be used again
     incus config trust revoke-token foo
@@ -58,7 +175,7 @@ test_remote_url_with_token() {
     incus config trust add -q --projects foo --restricted foo
 
     # Extract the token
-    token="$(incus config trust list-tokens -f json | jq -r '.[].Token')"
+    token="$(incus config trust list-tokens -f csv -c t)"
 
     # Add the valid token
     incus_remote remote add test "${token}"
@@ -71,15 +188,15 @@ test_remote_url_with_token() {
 
     # Clean up
     incus_remote remote remove test
-    incus incus config trust list -cf -fcsv | while read -r line; do
-        incus config trust remove "\"${line}\""
+    incus config trust list -cf -fcsv | while read -r line; do
+        incus config trust remove "${line}"
     done
 
     # Generate new token
     incus config trust add -q foo
 
     # Extract token
-    token="$(incus config trust list-tokens -f json | jq '.[].Token')"
+    token="$(incus config trust list-tokens -f csv -c t)"
 
     # create new certificate
     gen_cert_and_key "${TEST_DIR}/token-client.key" "${TEST_DIR}/token-client.crt" "incus.local"
@@ -88,32 +205,53 @@ test_remote_url_with_token() {
     [ "$(curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" "https://${INCUS_ADDR}/1.0/instances" | jq '.error_code')" -eq 403 ]
 
     # Add valid token
-    curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" -X POST -d "{\"token\": ${token}}" "https://${INCUS_ADDR}/1.0/certificates"
+    curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" -X POST -d "{\"trust_token\": \"${token}\"}" "https://${INCUS_ADDR}/1.0/certificates"
 
     # Check if we can see instances
     [ "$(curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" "https://${INCUS_ADDR}/1.0/instances" | jq '.status_code')" -eq 200 ]
 
-    incus incus config trust list -cf -fcsv | while read -r line; do
-        incus config trust remove "\"${line}\""
+    incus config trust list -cf -fcsv | while read -r line; do
+        incus config trust remove "${line}"
     done
 
     # Generate new token
     incus config trust add -q --projects foo --restricted foo
 
     # Extract token
-    token="$(incus config trust list-tokens -f json | jq '.[].Token')"
+    token="$(incus config trust list-tokens -f csv -c t)"
 
     # Add valid token but override projects
-    curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" -X POST -d "{\"token\":${token},\"projects\":[\"default\",\"foo\"],\"restricted\":false}" "https://${INCUS_ADDR}/1.0/certificates"
+    curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" -X POST -d "{\"trust_token\":\"${token}\",\"projects\":[\"default\",\"foo\"],\"restricted\":false}" "https://${INCUS_ADDR}/1.0/certificates"
 
     # Check if we can see instances in the foo project
     [ "$(curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" "https://${INCUS_ADDR}/1.0/instances?project=foo" | jq '.status_code')" -eq 200 ]
 
-    # Check if we can see instances in the default project (this should fail)
-    [ "$(curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" "https://${INCUS_ADDR}/1.0/instances" | jq '.error_code')" -eq 403 ]
+    # The restrictions come from the token, not from the request
+    incus config trust show "$(cert_fingerprint "${TEST_DIR}/token-client.crt")" | grep -xF "restricted: true"
+    [ "$(curl -k -s --key "${TEST_DIR}/token-client.key" --cert "${TEST_DIR}/token-client.crt" "https://${INCUS_ADDR}/1.0/projects/default" | jq '.error_code')" -eq 403 ]
 
-    incus incus config trust list -cf -fcsv | while read -r line; do
-        incus config trust remove "\"${line}\""
+    incus config trust list -cf -fcsv | while read -r line; do
+        incus config trust remove "${line}"
+    done
+
+    # Generate new token
+    incus config trust add -q foo
+
+    # Extract token
+    token="$(incus config trust list-tokens -f csv -c t)"
+
+    # Enroll a certificate sent in the request body over a connection without a client certificate
+    gen_cert_and_key "${TEST_DIR}/token-client2.key" "${TEST_DIR}/token-client2.crt" "incus.local"
+    cert="$(sed ':a;N;$!ba;s/\n/\\n/g' "${TEST_DIR}/token-client2.crt")"
+    [ "$(curl -k -s -X POST -d "{\"trust_token\":\"${token}\",\"certificate\":\"${cert}\"}" "https://${INCUS_ADDR}/1.0/certificates" | jq '.status_code')" -eq 200 ]
+    incus config trust show "$(cert_fingerprint "${TEST_DIR}/token-client2.crt")" | grep -xF "name: foo"
+
+    # The enrolled certificate can authenticate and the token is gone
+    [ "$(curl -k -s --key "${TEST_DIR}/token-client2.key" --cert "${TEST_DIR}/token-client2.crt" "https://${INCUS_ADDR}/1.0/instances" | jq '.status_code')" -eq 200 ]
+    [ "$(curl -k -s -X POST -d "{\"trust_token\":\"${token}\",\"certificate\":\"${cert}\"}" "https://${INCUS_ADDR}/1.0/certificates" | jq '.error_code')" -eq 403 ]
+
+    incus config trust list -cf -fcsv | while read -r line; do
+        incus config trust remove "${line}"
     done
 
     # Set token expiry to 5 seconds
@@ -126,8 +264,8 @@ test_remote_url_with_token() {
     incus_remote remote add test "${token}"
 
     # Remove all trusted clients
-    incus incus config trust list -cf -fcsv | while read -r line; do
-        incus config trust remove "\"${line}\""
+    incus config trust list -cf -fcsv | while read -r line; do
+        incus config trust remove "${line}"
     done
 
     # Remove remote
@@ -419,4 +557,52 @@ test_list_all_remotes() {
     incus_remote delete incus2:c2
     incus_remote remote remove incus2
     kill_incus "${INCUS2_DIR}"
+}
+
+test_remote_keepalive() {
+    ensure_import_testimage
+    ensure_has_localhost_remote "${INCUS_ADDR}"
+
+    incus_remote launch testimage localhost:c1
+    incus_remote remote set-keepalive localhost 10
+
+    # Concurrent commands without a running proxy share a single one.
+    for _ in 1 2 3 4 5; do
+        incus exec localhost:c1 -- true &
+    done
+    sleep 5
+    incus exec localhost:c1 -- true
+    [ "$(pgrep -fc "incus remote proxy localhost: ${INCUS_CONF}/keepalive/localhost.socket")" -eq 1 ]
+
+    # Input, output and exit codes go through the proxy.
+    [ "$(echo hello | incus exec localhost:c1 -- cat)" = "hello" ]
+    incus exec localhost:c1 -- sh -c 'echo err >&2' 2> "${TEST_DIR}/keepalive.err"
+    grep -qx err "${TEST_DIR}/keepalive.err"
+    ! incus exec localhost:c1 -- false || false
+
+    # Event streams are served from the proxy's shared upstream connection.
+    incus_remote monitor localhost: --type=lifecycle > "${TEST_DIR}/keepalive.log" &
+    monitorPID=$!
+    sleep 1
+    incus exec localhost:c1 -- true
+    for _ in $(seq 20); do
+        if grep -q instance-exec "${TEST_DIR}/keepalive.log"; then
+            break
+        fi
+
+        sleep 0.5
+    done
+    grep -q instance-exec "${TEST_DIR}/keepalive.log"
+    kill -9 ${monitorPID} || true
+
+    # The proxy keeps working once an events client is gone.
+    incus exec localhost:c1 -- true
+    [ "$(pgrep -fc "incus remote proxy localhost: ${INCUS_CONF}/keepalive/localhost.socket")" -eq 1 ]
+
+    incus_remote remote set-keepalive localhost 0
+    for pid in $(pgrep -f "incus remote proxy localhost: ${INCUS_CONF}/keepalive/localhost.socket"); do
+        kill -9 "${pid}" || true
+    done
+
+    incus_remote delete -f localhost:c1
 }

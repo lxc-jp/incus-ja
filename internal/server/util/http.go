@@ -199,6 +199,52 @@ func CheckTrustState(cert x509.Certificate, trustedCerts map[string]x509.Certifi
 	return false, ""
 }
 
+// CheckTrustStateIssuer checks whether the first certificate in the chain was issued by a CA certificate from
+// the trust store and returns the fingerprint of that trust store entry.
+func CheckTrustStateIssuer(chain []*x509.Certificate, trustedCerts map[string]x509.Certificate, networkCert *localtls.CertInfo) (bool, string) {
+	if len(chain) == 0 {
+		return false, ""
+	}
+
+	// Never trust a certificate that the revocation list rejects.
+	if networkCert != nil {
+		ca := networkCert.CA()
+		crl := networkCert.CRL()
+		if ca != nil && crl != nil && chain[0].CheckSignatureFrom(ca) == nil && crl.CheckSignatureFrom(ca) == nil {
+			for _, revoked := range crl.RevokedCertificateEntries {
+				if chain[0].SerialNumber.Cmp(revoked.SerialNumber) == 0 {
+					return false, ""
+				}
+			}
+		}
+	}
+
+	intermediates := x509.NewCertPool()
+	for _, cert := range chain[1:] {
+		intermediates.AddCert(cert)
+	}
+
+	for fingerprint, v := range trustedCerts {
+		// Only CA certificates can vouch for other certificates.
+		if !v.BasicConstraintsValid || !v.IsCA {
+			continue
+		}
+
+		roots := x509.NewCertPool()
+		roots.AddCert(&v)
+
+		_, err := chain[0].Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}})
+		if err != nil {
+			continue
+		}
+
+		logger.Debug("Matched trusted CA cert", logger.Ctx{"fingerprint": fingerprint, "subject": chain[0].Subject})
+		return true, fingerprint
+	}
+
+	return false, ""
+}
+
 // IsRecursionRequest checks whether the given HTTP request is marked with the
 // "recursion" flag in its form values.
 func IsRecursionRequest(r *http.Request) bool {
@@ -293,24 +339,40 @@ func IsJSONRequest(r *http.Request) bool {
 	return false
 }
 
+// BearerToken returns the bearer token from the request's Authorization header, if any.
+func BearerToken(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		return ""
+	}
+
+	parts := strings.Split(auth, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return ""
+	}
+
+	return parts[1]
+}
+
 // CheckJwtToken checks whether the given request has JWT token that is valid and
 // signed with client certificate from the trusted certificates.
+// The token is taken from the Authorization header, the access_token query parameter or the tls_jwt cookie.
 // Returns whether or not the token is valid, the fingerprint of the certificate and the certificate.
 func CheckJwtToken(r *http.Request, trustedCerts map[string]x509.Certificate) (bool, string, *x509.Certificate) {
-	var tokenString string
-
 	// Try to get token from Authorization header.
-	auth := r.Header.Get("Authorization")
-	if auth != "" {
-		parts := strings.Split(auth, " ")
-		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-			tokenString = parts[1]
-		}
-	}
+	tokenString := BearerToken(r)
 
 	// If no token from header, check access_token query parameter.
 	if tokenString == "" {
 		tokenString = r.URL.Query().Get("access_token")
+	}
+
+	// If still no token, check the cookie set through the TLS JWT login endpoint.
+	if tokenString == "" {
+		cookie, err := r.Cookie("tls_jwt")
+		if err == nil {
+			tokenString = cookie.Value
+		}
 	}
 
 	// Return if no token found.
@@ -318,45 +380,68 @@ func CheckJwtToken(r *http.Request, trustedCerts map[string]x509.Certificate) (b
 		return false, "", nil
 	}
 
+	cert, _, err := VerifyJwtToken(tokenString, trustedCerts)
+	if err != nil {
+		return false, "", nil
+	}
+
+	return true, localtls.CertFingerprint(cert), cert
+}
+
+// VerifyJwtToken checks that the JWT token is currently valid and signed by one of the trusted certificates.
+// Returns the signing certificate and the token expiry, if any.
+func VerifyJwtToken(tokenString string, trustedCerts map[string]x509.Certificate) (*x509.Certificate, *time.Time, error) {
 	// Get a new JWT parser.
 	jwtParser := jwt.NewParser()
 
 	// Parse the token.
 	token, tokenParts, err := jwtParser.ParseUnverified(tokenString, &jwt.RegisteredClaims{})
-	if err != nil || len(tokenParts) != 3 {
-		return false, "", nil
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(tokenParts) != 3 {
+		return nil, nil, errors.New("Malformed token")
 	}
 
 	// Make sure this isn't an OIDC JWT.
 	issuer, err := token.Claims.GetIssuer()
-	if err != nil || issuer != "" {
-		return false, "", nil
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if issuer != "" {
+		return nil, nil, errors.New("Token has an issuer")
 	}
 
 	// Check if the token is valid (not before / expiration).
 	notBefore, err := token.Claims.GetNotBefore()
 	if err != nil {
-		return false, "", nil
+		return nil, nil, err
 	}
 
 	expiresAt, err := token.Claims.GetExpirationTime()
 	if err != nil {
-		return false, "", nil
+		return nil, nil, err
 	}
 
-	if (notBefore != nil && time.Now().Before(notBefore.Time)) || (expiresAt != nil && time.Now().After(expiresAt.Time)) {
-		return false, "", nil
+	if notBefore != nil && time.Now().Before(notBefore.Time) {
+		return nil, nil, errors.New("Token isn't valid yet")
+	}
+
+	if expiresAt != nil && time.Now().After(expiresAt.Time) {
+		return nil, nil, errors.New("Token has expired")
 	}
 
 	// Find the certificate by the token subject.
 	subject, err := token.Claims.GetSubject()
 	if err != nil {
-		return false, "", nil
+		return nil, nil, err
 	}
 
 	tokenCert, ok := trustedCerts[subject]
 	if !ok {
-		return false, "", nil
+		return nil, nil, errors.New("Token subject isn't a trusted certificate")
 	}
 
 	// Verify token signature against the original signing input.
@@ -364,15 +449,20 @@ func CheckJwtToken(r *http.Request, trustedCerts map[string]x509.Certificate) (b
 	// yield a different string than the one that was actually signed.
 	tokenSignature, err := base64.RawURLEncoding.DecodeString(tokenParts[2])
 	if err != nil {
-		return false, "", nil
+		return nil, nil, err
 	}
 
 	tokenSigningString := tokenParts[0] + "." + tokenParts[1]
 
 	err = token.Method.Verify(tokenSigningString, tokenSignature, tokenCert.PublicKey)
 	if err != nil {
-		return false, "", nil
+		return nil, nil, err
 	}
 
-	return true, subject, &tokenCert
+	var expiry *time.Time
+	if expiresAt != nil {
+		expiry = &expiresAt.Time
+	}
+
+	return &tokenCert, expiry, nil
 }

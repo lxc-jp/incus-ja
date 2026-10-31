@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,6 +26,10 @@ import (
 	"time"
 
 	cowsqlClient "github.com/cowsql/go-cowsql/client"
+	cowsqlcluster "github.com/cowsql/go-cowsql/cluster"
+	cowsqllogging "github.com/cowsql/go-cowsql/cluster/logging"
+	"github.com/cowsql/go-cowsql/cluster/membership"
+	"github.com/cowsql/go-cowsql/cluster/options"
 	"github.com/cowsql/go-cowsql/driver"
 	liblxc "github.com/lxc/go-lxc"
 	"golang.org/x/sys/unix"
@@ -116,7 +121,7 @@ type Daemon struct {
 
 	config    *DaemonConfig
 	endpoints *endpoints.Endpoints
-	gateway   *cluster.Gateway
+	gateway   cowsqlcluster.Gateway
 	seccomp   *seccomp.Server
 
 	proxy func(req *http.Request) (*url.URL, error)
@@ -145,9 +150,6 @@ type Daemon struct {
 
 	// Device monitor for watching filesystem events
 	devmonitor fsmonitor.FSMonitor
-
-	// Keep track of skews.
-	timeSkew bool
 
 	// Configuration.
 	globalConfig   *clusterConfig.Config
@@ -182,13 +184,16 @@ type Daemon struct {
 	// Linstor client.
 	linstor   *linstor.Client
 	linstorMu sync.Mutex
+
+	// ACME challenge listener used by non-leader cluster members.
+	acmeListener   *http.Server
+	acmeListenerMu sync.Mutex
 }
 
 // DaemonConfig holds configuration values for Daemon.
 type DaemonConfig struct {
 	Group              string        // Group name the local unix socket should be chown'ed to
 	Trace              []string      // List of sub-systems to trace
-	RaftLatency        float64       // Coarse grain measure of the cluster latency
 	CowsqlSetupTimeout time.Duration // How long to wait for the cluster database to be up
 }
 
@@ -225,7 +230,6 @@ func newDaemon(config *DaemonConfig, osInfo *sys.OS) *Daemon {
 // defaultDaemonConfig returns a DaemonConfig object with default values.
 func defaultDaemonConfig() *DaemonConfig {
 	return &DaemonConfig{
-		RaftLatency:        3.0,
 		CowsqlSetupTimeout: 36 * time.Hour, // Account for snap refresh lag
 	}
 }
@@ -342,8 +346,24 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 				return projectName
 			}
 
-			// Object types that are always addressed in the requested project.
-			if slices.Contains([]auth.ObjectType{auth.ObjectTypeProject, auth.ObjectTypeInstance}, objectType) {
+			// Instances are always addressed in the requested project.
+			if objectType == auth.ObjectTypeInstance {
+				return projectName
+			}
+
+			// Project entitlements apply to the requested project, except for the creation of
+			// resources which may be inherited from the default project.
+			if objectType == auth.ObjectTypeProject && !slices.Contains([]auth.Entitlement{
+				auth.EntitlementCanCreateImages,
+				auth.EntitlementCanCreateImageAliases,
+				auth.EntitlementCanCreateNetworks,
+				auth.EntitlementCanCreateNetworkACLs,
+				auth.EntitlementCanCreateNetworkAddressSets,
+				auth.EntitlementCanCreateNetworkZones,
+				auth.EntitlementCanCreateProfiles,
+				auth.EntitlementCanCreateStorageBuckets,
+				auth.EntitlementCanCreateStorageVolumes,
+			}, entitlement) {
 				return projectName
 			}
 
@@ -364,6 +384,24 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 			})
 			if err != nil {
 				return projectName
+			}
+
+			// Resource creation is checked against the project the resource will be created in.
+			if objectType == auth.ObjectTypeProject {
+				switch entitlement {
+				case auth.EntitlementCanCreateImages, auth.EntitlementCanCreateImageAliases:
+					return project.ImageProjectFromRecord(p)
+				case auth.EntitlementCanCreateNetworks, auth.EntitlementCanCreateNetworkACLs, auth.EntitlementCanCreateNetworkAddressSets:
+					return project.NetworkProjectFromRecord(p)
+				case auth.EntitlementCanCreateNetworkZones:
+					return project.NetworkZoneProjectFromRecord(p)
+				case auth.EntitlementCanCreateProfiles:
+					return project.ProfileProjectFromRecord(p)
+				case auth.EntitlementCanCreateStorageBuckets:
+					return project.StorageBucketProjectFromRecord(p)
+				case auth.EntitlementCanCreateStorageVolumes:
+					return project.StorageVolumeProjectFromRecord(p, db.StoragePoolVolumeTypeCustom)
+				}
 			}
 
 			if objectType == auth.ObjectTypeProfile {
@@ -494,6 +532,16 @@ func allowPermission(objectType auth.ObjectType, entitlement auth.Entitlement, m
 			return response.SmartError(err)
 		}
 
+		// Objects inherited from another project are served with the requested project's restrictions and
+		// data, so also require access to that project (project endpoints take it from their own path).
+		requestProjectName := request.ProjectParam(r)
+		if objectType != auth.ObjectTypeProject && objectName.Project() != "" && objectName.Project() != requestProjectName {
+			err = s.Authorizer.CheckPermission(r.Context(), r, auth.ObjectProject(requestProjectName), auth.EntitlementCanView)
+			if err != nil {
+				return response.SmartError(err)
+			}
+		}
+
 		return response.EmptySyncResponse
 	}
 }
@@ -510,6 +558,15 @@ func (d *Daemon) checkTrustedClient(r *http.Request) error {
 	}
 
 	return nil
+}
+
+func (d *Daemon) getTrustedServerCertificates() (map[string]x509.Certificate, error) {
+	c, err := d.getTrustedCertificates()
+	if err != nil {
+		return nil, err
+	}
+
+	return c[certificate.TypeServer], nil
 }
 
 // getTrustedCertificates returns trusted certificates key on DB type and fingerprint.
@@ -562,13 +619,18 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 		return false, "", "", nil, err
 	}
 
+	// The TLS listener only proves possession of the first peer certificate's key, so the rest of
+	// the presented chain is attacker-controlled and must never be matched against the trust store.
+	var peerCert *x509.Certificate
+	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+		peerCert = r.TLS.PeerCertificates[0]
+	}
+
 	// Allow internal cluster traffic by checking against the trusted certfificates.
-	if r.TLS != nil {
-		for _, i := range r.TLS.PeerCertificates {
-			trusted, fingerprint := localUtil.CheckTrustState(*i, trustedCerts[certificate.TypeServer], d.endpoints.NetworkCert(), false)
-			if trusted {
-				return true, fingerprint, "cluster", nil, nil
-			}
+	if peerCert != nil {
+		trusted, fingerprint := localUtil.CheckTrustState(*peerCert, trustedCerts[certificate.TypeServer], d.endpoints.NetworkCert(), false)
+		if trusted {
+			return true, fingerprint, "cluster", nil, nil
 		}
 	}
 
@@ -634,21 +696,30 @@ func (d *Daemon) Authenticate(w http.ResponseWriter, r *http.Request) (bool, str
 	}
 
 	// Validate metrics TLS certificates.
-	if r.URL.Path == "/1.0/metrics" {
-		for _, i := range r.TLS.PeerCertificates {
-			trusted, username := localUtil.CheckTrustState(*i, trustedCerts[certificate.TypeMetrics], d.endpoints.NetworkCert(), trustCACertificates)
-			if trusted {
-				return true, username, api.AuthenticationMethodTLS, nil, nil
-			}
+	if r.URL.Path == "/1.0/metrics" && peerCert != nil {
+		trusted, username := localUtil.CheckTrustState(*peerCert, trustedCerts[certificate.TypeMetrics], d.endpoints.NetworkCert(), trustCACertificates)
+		if trusted {
+			return true, username, api.AuthenticationMethodTLS, nil, nil
+		}
+
+		trusted, username = localUtil.CheckTrustStateIssuer(r.TLS.PeerCertificates, trustedCerts[certificate.TypeMetrics], d.endpoints.NetworkCert())
+		if trusted {
+			return true, username, api.AuthenticationMethodTLS, nil, nil
 		}
 	}
 
 	// Validate regular TLS certificates.
-	for _, i := range r.TLS.PeerCertificates {
-		trusted, username := localUtil.CheckTrustState(*i, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert(), trustCACertificates)
+	if peerCert != nil {
+		trusted, username := localUtil.CheckTrustState(*peerCert, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert(), trustCACertificates)
 		if trusted {
 			return true, username, api.AuthenticationMethodTLS, nil, nil
 		}
+	}
+
+	// Validate TLS certificates issued by a trusted CA certificate.
+	trusted, username := localUtil.CheckTrustStateIssuer(r.TLS.PeerCertificates, trustedCerts[certificate.TypeClient], d.endpoints.NetworkCert())
+	if trusted {
+		return true, username, api.AuthenticationMethodTLS, nil, nil
 	}
 
 	// Reject unauthorized.
@@ -765,7 +836,7 @@ func (d *Daemon) createCmd(restAPI *http.ServeMux, apiVersion string, c APIEndpo
 				}
 
 				// Allow select endpoints (unstable API but CLI supported).
-				if slices.Contains([]string{"debug/pprof/{name...}", "recover/import", "recover/validate", "sql"}, c.Path) {
+				if slices.Contains([]string{"debug/pprof/{name...}", "recover/import", "recover/validate", "server-certificate", "sql"}, c.Path) {
 					return true
 				}
 
@@ -1116,7 +1187,9 @@ func (d *Daemon) init() error {
 
 	// Detect LXC features
 	d.os.LXCFeatures = map[string]bool{}
-	lxcExtensions := []string{}
+	lxcExtensions := []string{
+		"environment_runtime_hooks",
+	}
 
 	for _, extension := range lxcExtensions {
 		d.os.LXCFeatures[extension] = liblxc.HasAPIExtension(extension)
@@ -1216,24 +1289,19 @@ func (d *Daemon) init() error {
 	}
 
 	/* Setup cowsql */
-	clusterLogLevel := "ERROR"
-	if slices.Contains(trace, "dqlite") {
-		clusterLogLevel = "TRACE"
-	}
-
-	d.gateway, err = cluster.NewGateway(
-		d.shutdownCtx,
-		d.db.Node,
-		networkCert,
-		d.State,
-		cluster.Latency(d.config.RaftLatency),
-		cluster.LogLevel(clusterLogLevel),
+	d.gateway, err = cluster.NewGateway(d.shutdownCtx, d.db.Node, d.State, networkCert, d.serverCert,
+		options.Logger(slog.New(logger.NewSlogHandler(logger.DefaultSlogLogger("cowsql:")))),
+		options.Version(version.Version),
+		options.MaxStandby(func() int64 { return d.globalConfig.MaxStandBy() }),
+		options.MaxVoters(func() int64 { return d.globalConfig.MaxVoters() }),
+		options.PreUpdateCheck(func() (func() error, error) { return cluster.PreUpdateCheck(d.State()) }),
+		options.RestrictTLS(!util.IsFalseOrEmpty(os.Getenv("INCUS_INSECURE_TLS"))),
 	)
 	if err != nil {
 		return err
 	}
 
-	d.gateway.HeartbeatNodeHook = d.nodeRefreshTask
+	d.gateway.SetHeartbeatNodeHook(d.nodeRefreshTask)
 
 	logger.Info("Loading daemon configuration")
 	err = d.db.Node.Transaction(context.TODO(), func(ctx context.Context, tx *db.NodeTx) error {
@@ -1299,19 +1367,19 @@ func (d *Daemon) init() error {
 			contextTimeout = time.Minute
 		}
 
-		options := []driver.Option{
+		driverOptions := []driver.Option{
 			driver.WithDialFunc(d.gateway.DialFunc()),
-			driver.WithContext(d.gateway.Context()),
-			driver.WithConnectionTimeout(10 * time.Second),
-			driver.WithContextTimeout(contextTimeout),
-			driver.WithLogFunc(cluster.CowsqlLog),
+			driver.WithContext(d.gateway.Context()),        //nolint:staticcheck
+			driver.WithConnectionTimeout(10 * time.Second), //nolint:staticcheck
+			driver.WithContextTimeout(contextTimeout),      //nolint:staticcheck
+			driver.WithLogFunc(cowsqllogging.CowsqlLog),
 		}
 
 		if slices.Contains(trace, "database") {
-			options = append(options, driver.WithTracing(cowsqlClient.LogDebug))
+			driverOptions = append(driverOptions, driver.WithTracing(cowsqlClient.LogDebug))
 		}
 
-		d.db.Cluster, err = db.OpenCluster(context.Background(), "db.bin", store, localClusterAddress, dir, d.config.CowsqlSetupTimeout, options...)
+		d.db.Cluster, err = db.OpenCluster(context.Background(), "db.bin", store, localClusterAddress, dir, d.config.CowsqlSetupTimeout, driverOptions...)
 		if err == nil {
 			logger.Info("Initialized global database")
 			break
@@ -1325,14 +1393,15 @@ func (d *Daemon) init() error {
 			// The only thing we want to still do on this node is
 			// to run the heartbeat task, in case we are the raft
 			// leader.
-			d.gateway.Cluster = d.db.Cluster
+			cluster.SetClusterDB(d.gateway, d.db.Cluster)
 			taskFunc, taskSchedule := cluster.HeartbeatTask(d.gateway)
 			hbGroup := task.Group{}
 			d.taskClusterHeartbeat = hbGroup.Add(taskFunc, taskSchedule)
 			hbGroup.Start(d.shutdownCtx)
 			d.gateway.WaitUpgradeNotification()
 			_ = hbGroup.Stop(time.Second)
-			d.gateway.Cluster = nil
+
+			cluster.SetClusterDB(d.gateway, nil)
 
 			_ = d.db.Cluster.Close()
 
@@ -1345,6 +1414,7 @@ func (d *Daemon) init() error {
 	d.firewall = firewall.New()
 	logger.Info("Firewall loaded driver", logger.Ctx{"driver": d.firewall})
 
+	cluster.SetClusterDB(d.gateway, d.db.Cluster)
 	err = cluster.NotifyUpgradeCompleted(d.State(), networkCert, d.serverCert())
 	if err != nil {
 		// Ignore the error, since it's not fatal for this particular
@@ -1352,8 +1422,6 @@ func (d *Daemon) init() error {
 		// offline.
 		logger.Warn("Could not notify all nodes of database upgrade", logger.Ctx{"err": err})
 	}
-
-	d.gateway.Cluster = d.db.Cluster
 
 	// Setup the user-agent.
 	if d.serverClustered {
@@ -1456,7 +1524,7 @@ func (d *Daemon) init() error {
 
 	d.proxy = proxy.FromConfig(d.globalConfig.ProxyHTTPS(), d.globalConfig.ProxyHTTP(), d.globalConfig.ProxyIgnoreHosts())
 
-	d.gateway.HeartbeatOfflineThreshold = d.globalConfig.OfflineThreshold()
+	d.gateway.SetHeartbeatOfflineThreshold(d.globalConfig.OfflineThreshold())
 	oidcIssuer, oidcClientID, oidcScope, oidcAudience, oidcClaim := d.globalConfig.OIDCServer()
 	syslogSocketEnabled := d.localConfig.SyslogSocket()
 	instancePlacementScriptlet := d.globalConfig.InstancesPlacementScriptlet()
@@ -1553,6 +1621,14 @@ func (d *Daemon) init() error {
 	err = networkZone.StartLeasesWatcher(d.shutdownCtx, d.State())
 	if err != nil {
 		logger.Warn("Failed to start network zones watcher", logger.Ctx{"err": err})
+	}
+
+	// Revert any evacuation state left by an interrupted operation, those only ever run on the member itself.
+	if d.serverClustered {
+		err = evacuateReconcileState(d.State(), d.serverName)
+		if err != nil {
+			logger.Warn("Failed reconciling cluster member evacuation state", logger.Ctx{"err": err})
+		}
 	}
 
 	// Setup the networks.
@@ -1833,7 +1909,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 		err := handoverMemberRole(d.State(), d.gateway)
 		if err != nil {
 			logger.Warn("Could not handover member's responsibilities", logger.Ctx{"err": err})
-			d.gateway.Kill()
+			d.gateway.Cancel()
 
 			if d.db.Cluster != nil {
 				closeGlobalDatabase(d.db.Cluster)
@@ -1856,7 +1932,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 			}
 
 			// Make all future queries fail fast as DB is not available.
-			d.gateway.Kill()
+			d.gateway.Cancel()
 			closeGlobalDatabase(d.db.Cluster)
 		}
 
@@ -1898,7 +1974,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 		// Full shutdown requested.
 		if sig == unix.SIGPWR {
 			if !evacuated {
-				instancesShutdown(ctx, instances, s.GlobalConfig.ShutdownTimeout())
+				instancesShutdown(ctx, s, instances, s.GlobalConfig.ShutdownTimeout())
 
 				logger.Info("Stopping networks")
 				networkShutdown(s)
@@ -1937,7 +2013,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 	}
 
 	if d.gateway != nil {
-		d.gateway.Kill()
+		d.gateway.Cancel()
 	}
 
 	errs := []error{}
@@ -1966,7 +2042,7 @@ func (d *Daemon) Stop(ctx context.Context, sig os.Signal) error {
 		// Shut down the gateway with a timeout as its raft cleanup can get stuck on unreachable cluster members.
 		gatewayErr := make(chan error, 1)
 		go func() {
-			gatewayErr <- d.gateway.Shutdown()
+			gatewayErr <- d.gateway.ShutdownServer()
 		}()
 
 		select {
@@ -2100,7 +2176,7 @@ func (d *Daemon) setupOpenFGA(apiURL string, apiToken string, storeID string, tl
 
 		leaderAddress, err := d.gateway.LeaderAddress()
 		if err != nil {
-			if !errors.Is(err, cluster.ErrNodeIsNotClustered) {
+			if !errors.Is(err, membership.ErrNodeIsNotClustered) {
 				return nil, err
 			}
 
@@ -2432,125 +2508,6 @@ func initializeDbObject(d *Daemon) error {
 	return nil
 }
 
-// hasMemberStateChanged returns true if the number of members, their addresses or state has changed.
-func (d *Daemon) hasMemberStateChanged(heartbeatData *cluster.APIHeartbeat) bool {
-	// No previous heartbeat data.
-	if d.lastNodeList == nil {
-		return true
-	}
-
-	// Member count has changed.
-	if len(d.lastNodeList.Members) != len(heartbeatData.Members) {
-		return true
-	}
-
-	// Check for member address or state changes.
-	for lastMemberID, lastMember := range d.lastNodeList.Members {
-		if heartbeatData.Members[lastMemberID].Address != lastMember.Address {
-			return true
-		}
-
-		if heartbeatData.Members[lastMemberID].Online != lastMember.Online {
-			return true
-		}
-	}
-
-	return false
-}
-
-// heartbeatHandler handles heartbeat requests from other cluster members.
-func (d *Daemon) heartbeatHandler(w http.ResponseWriter, _ *http.Request, isLeader bool, hbData *cluster.APIHeartbeat) {
-	var err error
-
-	// Look for time skews.
-	now := time.Now().UTC()
-
-	if hbData.Time.Add(5*time.Second).Before(now) || hbData.Time.Add(-5*time.Second).After(now) {
-		if !d.timeSkew {
-			logger.Warn("Time skew detected between leader and local", logger.Ctx{"leaderTime": hbData.Time, "localTime": now})
-
-			if d.db.Cluster != nil {
-				err := d.db.Cluster.Transaction(context.TODO(), func(ctx context.Context, tx *db.ClusterTx) error {
-					return tx.UpsertWarning(ctx, d.serverName, "", -1, -1, warningtype.ClusterTimeSkew, fmt.Sprintf("leaderTime: %s, localTime: %s", hbData.Time, now))
-				})
-				if err != nil {
-					logger.Warn("Failed to create cluster time skew warning", logger.Ctx{"err": err})
-				}
-			}
-		}
-
-		d.timeSkew = true
-	} else {
-		if d.timeSkew {
-			logger.Warn("Time skew resolved")
-
-			if d.db.Cluster != nil {
-				err := warnings.ResolveWarningsByNodeAndType(d.db.Cluster, d.serverName, warningtype.ClusterTimeSkew)
-				if err != nil {
-					logger.Warn("Failed to resolve cluster time skew warning", logger.Ctx{"err": err})
-				}
-			}
-
-			d.timeSkew = false
-		}
-	}
-
-	// Extract the raft nodes from the heartbeat info.
-	raftNodes := make([]db.RaftNode, 0)
-	for _, member := range hbData.Members {
-		if member.RaftID > 0 {
-			raftNodes = append(raftNodes, db.RaftNode{
-				NodeInfo: cowsqlClient.NodeInfo{
-					ID:      member.RaftID,
-					Address: member.Address,
-					Role:    db.RaftRole(member.RaftRole),
-				},
-				Name: member.Name,
-			})
-		}
-	}
-
-	// Check we have been sent at least 1 raft node before wiping our set.
-	if len(raftNodes) <= 0 {
-		logger.Error("Empty raft member set received")
-		http.Error(w, "400 Empty raft member set received", http.StatusBadRequest)
-		return
-	}
-
-	// Accept raft node list from any heartbeat type so that we get freshest data quickly.
-	logger.Debug("Replace current raft nodes", logger.Ctx{"raftMembers": raftNodes})
-	err = d.db.Node.Transaction(context.TODO(), func(ctx context.Context, tx *db.NodeTx) error {
-		return tx.ReplaceRaftNodes(raftNodes)
-	})
-	if err != nil {
-		logger.Error("Error updating raft members", logger.Ctx{"err": err})
-		http.Error(w, "500 failed to update raft nodes", http.StatusInternalServerError)
-		return
-	}
-
-	if hbData.FullStateList {
-		// If there is an ongoing heartbeat round (and by implication this is the leader), then this could
-		// be a problem because it could be broadcasting the stale member state information which in turn
-		// could lead to incorrect decisions being made. So calling heartbeatRestart will request any
-		// ongoing heartbeat round to cancel itself prematurely and restart another one. If there is no
-		// ongoing heartbeat round or this member isn't the leader then this function call is a no-op and
-		// will return false. If the heartbeat is restarted, then the heartbeat refresh task will be called
-		// at the end of the heartbeat so no need to do it here.
-		if !isLeader || !d.gateway.HeartbeatRestart() {
-			// Run heartbeat refresh task async so heartbeat response is sent to leader straight away.
-			go d.nodeRefreshTask(hbData, isLeader, nil)
-		}
-	} else {
-		if isLeader {
-			logger.Error("Partial heartbeat should not be sent to leader")
-			http.Error(w, "400 Partial heartbeat should not be sent to leader", http.StatusBadRequest)
-			return
-		}
-
-		logger.Debug("Partial heartbeat received")
-	}
-}
-
 // nodeRefreshTask is run when a full state heartbeat is sent (on the leader) or received (by a non-leader member).
 // Is is used to check for member state changes and trigger refreshes of the certificate cache.
 // It also triggers member role promotion when run on the isLeader is true.
@@ -2578,7 +2535,7 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 
 	// If the max version of the cluster has changed, check whether we need to upgrade.
 	if d.lastNodeList == nil || d.lastNodeList.Version.APIExtensions != heartbeatData.Version.APIExtensions || d.lastNodeList.Version.Schema != heartbeatData.Version.Schema {
-		err := cluster.MaybeUpdate(s)
+		err := membership.MaybeUpdate(d.gateway)
 		if err != nil {
 			logger.Error("Error updating", logger.Ctx{"err": err})
 			return
@@ -2592,13 +2549,6 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 	if err != nil {
 		stateChangeTaskFailure = true
 		logger.Error("Error restarting OVN networks", logger.Ctx{"err": err})
-	}
-
-	if d.hasMemberStateChanged(heartbeatData) {
-		logger.Info("Cluster status has changed, refreshing")
-
-		// Refresh cluster certificates cached.
-		updateCertificateCache(d)
 	}
 
 	// Refresh event listeners from heartbeat members (after certificates refreshed if needed).
@@ -2641,7 +2591,7 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 				}
 
 				// Check if a 'database-client' node currently has a raft role other than 'spare'.
-				if slices.Contains(member.Roles, db.ClusterRoleDatabaseClient) && member.RaftRole != int(db.RaftSpare) {
+				if slices.Contains(member.Roles, string(db.ClusterRoleDatabaseClient)) && member.RaftRole != int(db.RaftSpare) {
 					hasDbClientToProcess = true
 				}
 			} else if role != db.RaftSpare {
@@ -2659,7 +2609,7 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 			d.clusterMembershipMutex.Lock()
 			logger.Debug("Rebalancing member roles in heartbeat", logger.Ctx{"local": localClusterAddress})
 			err := rebalanceMemberRoles(d.State(), d.gateway, nil, unavailableMembers)
-			if err != nil && !errors.Is(err, cluster.ErrNotLeader) {
+			if err != nil && !errors.Is(err, membership.ErrNotLeader) {
 				logger.Warn("Could not rebalance cluster member roles", logger.Ctx{"err": err, "local": localClusterAddress})
 			}
 
@@ -2670,7 +2620,7 @@ func (d *Daemon) nodeRefreshTask(heartbeatData *cluster.APIHeartbeat, isLeader b
 			d.clusterMembershipMutex.Lock()
 			logger.Debug("Upgrading members without raft role in heartbeat", logger.Ctx{"local": localClusterAddress})
 			err := upgradeNodesWithoutRaftRole(d.State(), d.gateway)
-			if err != nil && !errors.Is(err, cluster.ErrNotLeader) {
+			if err != nil && !errors.Is(err, membership.ErrNotLeader) {
 				logger.Warn("Failed upgrading raft roles:", logger.Ctx{"err": err, "local": localClusterAddress})
 			}
 
@@ -2699,6 +2649,10 @@ func (d *Daemon) setupOVN() error {
 	ovnSBAddr, err := vswitch.GetOVNSouthboundDBRemoteAddress(d.shutdownCtx)
 	if err != nil {
 		return fmt.Errorf("Failed to get OVN southbound connection string: %w", err)
+	}
+
+	if ovnSBAddr == "" {
+		return errors.New("OVN southbound connection string isn't set in Open vSwitch (external_ids:ovn-remote)")
 	}
 
 	// Get the OVN northbound address.
@@ -2868,13 +2822,18 @@ func (d *Daemon) clusterSyncCertificate() error {
 		return nil
 	}
 
-	// Retrieve the leader's certificate.
-	leaderCert, err := localtls.GetRemoteCertificate(fmt.Sprintf("https://%s", leaderAddress), version.UserAgent)
+	// Retrieve the leader's certificate chain.
+	leaderCerts, err := localtls.GetRemoteCertificates(fmt.Sprintf("https://%s", leaderAddress), version.UserAgent)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve cluster certificate from leader: %w", err)
 	}
 
-	leaderCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaderCert.Raw})
+	leaderCert := leaderCerts[0]
+
+	var leaderCertPEM []byte
+	for _, cert := range leaderCerts {
+		leaderCertPEM = append(leaderCertPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})...)
+	}
 
 	// Skip if the leader certificate doesn't match our private key (full cluster renewal).
 	networkCert := d.endpoints.NetworkCert()

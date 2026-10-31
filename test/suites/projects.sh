@@ -484,6 +484,18 @@ test_projects_storage() {
 
     incus storage volume list "${pool}" | grep custom | grep -q vol
 
+    # Profiles using the volume are listed from both projects and with all projects.
+    incus profile create volprofile
+    incus profile device add volprofile vol disk pool="${pool}" source=vol path=/mnt/vol
+    incus profile create volprofile --project default
+    incus profile device add volprofile vol disk pool="${pool}" source=vol path=/mnt/vol --project default
+    expected="/1.0/profiles/volprofile /1.0/profiles/volprofile?project=foo"
+    [ "$(incus query "/1.0/storage-pools/${pool}/volumes/custom/vol?project=foo" | jq -r '.used_by | sort | join(" ")')" = "${expected}" ]
+    [ "$(incus query "/1.0/storage-pools/${pool}/volumes/custom/vol?project=default" | jq -r '.used_by | sort | join(" ")')" = "${expected}" ]
+    [ "$(incus query "/1.0/storage-pools/${pool}/volumes?recursion=1&all-projects=true" | jq -r '.[] | select(.type == "custom" and .name == "vol") | .used_by | sort | join(" ")')" = "${expected}" ]
+    incus profile delete volprofile
+    incus profile delete volprofile --project default
+
     incus storage volume delete "${pool}" vol
 
     incus project switch default
@@ -942,6 +954,13 @@ test_projects_restrictions() {
 
     # Enable all restrictions.
     incus project set p1 restricted=true
+
+    # Restricting image servers still allows local images and refuses other servers.
+    incus project set p1 restricted.images.servers=images.example.net
+    incus init testimage c1
+    incus delete c1
+    incus query -X POST "/1.0/instances?project=p1" -d '{\"name\":\"c1\",\"source\":{\"type\":\"image\",\"server\":\"https://other.example.net\",\"protocol\":\"simplestreams\",\"alias\":\"foo\"}}' 2>&1 | grep -F "Image server \"other.example.net\" isn't allowed in this project"
+    incus project unset p1 restricted.images.servers
 
     # It's not possible to create nested containers.
     ! incus profile set default security.nesting=true || false

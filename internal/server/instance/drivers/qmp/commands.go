@@ -156,18 +156,6 @@ type BlockDirtyInfo struct {
 	Inconsistent bool   `json:"inconsistent"`
 }
 
-// BlockDeviceInfo contains information about the backing device for a block device.
-type BlockDeviceInfo struct {
-	NodeName     string           `json:"node-name"`
-	DirtyBitmaps []BlockDirtyInfo `json:"dirty-bitmaps"`
-}
-
-// BlockInfo contains information about a virtual block device.
-type BlockInfo struct {
-	Device   string          `json:"device"`
-	Inserted BlockDeviceInfo `json:"inserted"`
-}
-
 // QueryCPUs returns a list of CPUs.
 func (m *Monitor) QueryCPUs() ([]CPU, error) {
 	// Prepare the response.
@@ -478,33 +466,12 @@ func (m *Monitor) MigrateSetParameters(parameters map[string]any) error {
 
 // Migrate starts a migration stream.
 func (m *Monitor) Migrate(name string) error {
-	// Query the status.
+	return m.Run("migrate", migrateChannels(migrateFDAddress(name)), nil)
+}
 
-	type migrateArgsChannel struct {
-		ChannelType string            `json:"channel-type"`
-		Address     map[string]string `json:"addr"`
-	}
-
-	type migrateArgs struct {
-		Channels []migrateArgsChannel `json:"channels"`
-	}
-
-	args := migrateArgs{}
-	args.Channels = []migrateArgsChannel{{
-		ChannelType: "main",
-		Address: map[string]string{
-			"transport": "socket",
-			"type":      "fd",
-			"str":       name,
-		},
-	}}
-
-	err := m.Run("migrate", args, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
+// MigrateUnix starts a migration to the given unix socket path, QEMU connects once per channel.
+func (m *Monitor) MigrateUnix(path string) error {
+	return m.Run("migrate", migrateChannels(migrateUnixAddress(path)), nil)
 }
 
 // QueryMigrate gets the current migration status.
@@ -593,34 +560,55 @@ func (m *Monitor) MigrateContinue(fromState string) error {
 	return nil
 }
 
-// MigrateIncoming starts the receiver of a migration stream.
-func (m *Monitor) MigrateIncoming(ctx context.Context, name string) error {
+// migrateChannels builds the channel list used by the migrate commands.
+func migrateChannels(addr map[string]any) any {
 	type migrateArgsChannel struct {
-		ChannelType string            `json:"channel-type"`
-		Address     map[string]string `json:"addr"`
+		ChannelType string         `json:"channel-type"`
+		Address     map[string]any `json:"addr"`
 	}
 
 	type migrateArgs struct {
 		Channels []migrateArgsChannel `json:"channels"`
 	}
 
-	args := migrateArgs{}
-	args.Channels = []migrateArgsChannel{{
-		ChannelType: "main",
-		Address: map[string]string{
-			"transport": "socket",
-			"type":      "fd",
-			"str":       name,
-		},
-	}}
+	return migrateArgs{Channels: []migrateArgsChannel{{ChannelType: "main", Address: addr}}}
+}
 
-	// Query the status.
-	err := m.Run("migrate-incoming", args, nil)
-	if err != nil {
-		return err
+// migrateFDAddress returns the channel address for a file descriptor previously sent through SendFile.
+func migrateFDAddress(name string) map[string]any {
+	return map[string]any{
+		"transport": "socket",
+		"type":      "fd",
+		"str":       name,
 	}
+}
 
-	// Wait until it completes or fails.
+// migrateUnixAddress returns the channel address for a unix socket path, multifd channels all use the same socket.
+func migrateUnixAddress(path string) map[string]any {
+	return map[string]any{
+		"transport": "socket",
+		"type":      "unix",
+		"path":      path,
+	}
+}
+
+// MigrateIncoming starts the receiver of a migration stream on the given file descriptor.
+func (m *Monitor) MigrateIncoming(name string) error {
+	return m.Run("migrate-incoming", migrateChannels(migrateFDAddress(name)), nil)
+}
+
+// MigrateIncomingUnix starts the receiver of a migration stream listening on the given unix socket path.
+func (m *Monitor) MigrateIncomingUnix(path string) error {
+	return m.Run("migrate-incoming", migrateChannels(migrateUnixAddress(path)), nil)
+}
+
+// MigrateIncomingWait waits for the incoming migration to complete or fail.
+func (m *Monitor) MigrateIncomingWait(ctx context.Context) error {
+	// Listen for status change events (sent when the "events" migration capability is set),
+	// falling back to polling when they're not available.
+	chEvent, cancel := m.listenForEvent(EventMigration)
+	defer cancel()
+
 	for {
 		// Prepare the response.
 		var resp struct {
@@ -651,7 +639,23 @@ func (m *Monitor) MigrateIncoming(ctx context.Context, name string) error {
 			return err
 		}
 
-		time.Sleep(1 * time.Second)
+		select {
+		case <-ctx.Done():
+			// Query the job one last time before giving up.
+			continue
+		case data := <-chEvent:
+			status, ok := data["status"].(string)
+			if ok {
+				if status == "failed" {
+					return errors.New("Migrate incoming call failed")
+				}
+
+				if status == "completed" {
+					return nil
+				}
+			}
+		case <-time.After(1 * time.Second):
+		}
 	}
 }
 
@@ -698,6 +702,27 @@ func (m *Monitor) GetCPUs() ([]int, error) {
 	}
 
 	return pids, nil
+}
+
+// GetIOThreads returns the IDs of the iothread objects.
+func (m *Monitor) GetIOThreads() ([]string, error) {
+	var resp struct {
+		Return []struct {
+			ID string `json:"id"`
+		} `json:"return"`
+	}
+
+	err := m.Run("query-iothreads", nil, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(resp.Return))
+	for _, thread := range resp.Return {
+		ids = append(ids, thread.ID)
+	}
+
+	return ids, nil
 }
 
 // GetMemorySizeBytes returns the current size of the base memory in bytes.
@@ -1181,65 +1206,46 @@ func (m *Monitor) NBDServerStart(listenPath string, maxConnections int) (net.Con
 		MaxConnections int `json:"max-connections"`
 	}
 
-	listenAddress := listenPath
-	if listenAddress == "" {
-		// Create abstract unix listener.
-		listener, err := net.Listen("unix", "")
-		if err != nil {
-			return nil, fmt.Errorf("Failed creating unix listener: %w", err)
-		}
+	// QEMU may have dropped privileges, bind the socket ourselves and pass the FD.
+	err := os.Remove(listenPath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("Failed to remove stale socket %q: %w", listenPath, err)
+	}
 
-		// Get the random address, and then close the listener, and pass the address for use with nbd-server-start.
-		listenAddress = listener.Addr().String()
-		_ = listener.Close()
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: listenPath, Net: "unix"})
+	if err != nil {
+		return nil, fmt.Errorf("Failed creating unix listener: %w", err)
+	}
 
-		args.Addr.Type = "unix"
-		args.Addr.Data = map[string]any{
-			"path":     strings.TrimPrefix(listenAddress, "@"),
-			"abstract": true,
-		}
-	} else {
-		// QEMU may have dropped privileges, bind the socket ourselves and pass the FD.
-		err := os.Remove(listenPath)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("Failed to remove stale socket %q: %w", listenPath, err)
-		}
+	listener.SetUnlinkOnClose(false)
 
-		listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: listenPath, Net: "unix"})
-		if err != nil {
-			return nil, fmt.Errorf("Failed creating unix listener: %w", err)
-		}
+	listenerFile, err := listener.File()
+	_ = listener.Close()
+	if err != nil {
+		return nil, fmt.Errorf("Failed getting listener file descriptor: %w", err)
+	}
 
-		listener.SetUnlinkOnClose(false)
+	defer func() { _ = listenerFile.Close() }()
 
-		listenerFile, err := listener.File()
-		_ = listener.Close()
-		if err != nil {
-			return nil, fmt.Errorf("Failed getting listener file descriptor: %w", err)
-		}
+	err = m.SendFile(listenPath, listenerFile)
+	if err != nil {
+		return nil, fmt.Errorf("Failed sending listener file descriptor: %w", err)
+	}
 
-		defer func() { _ = listenerFile.Close() }()
-
-		err = m.SendFile(listenPath, listenerFile)
-		if err != nil {
-			return nil, fmt.Errorf("Failed sending listener file descriptor: %w", err)
-		}
-
-		args.Addr.Type = "fd"
-		args.Addr.Data = map[string]any{
-			"str": listenPath,
-		}
+	args.Addr.Type = "fd"
+	args.Addr.Data = map[string]any{
+		"str": listenPath,
 	}
 
 	args.MaxConnections = maxConnections
 
-	err := m.Run("nbd-server-start", args, nil)
+	err = m.Run("nbd-server-start", args, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Connect to the NBD server and return the connection.
-	conn, err := net.Dial("unix", listenAddress)
+	conn, err := net.Dial("unix", listenPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed connecting to NBD server: %w", err)
 	}
@@ -1322,20 +1328,6 @@ func (m *Monitor) NBDBlockExportAdd(deviceNodeName string, exportName string, wr
 	}
 
 	return nil
-}
-
-// QueryBlock returns a list of all virtual block devices.
-func (m *Monitor) QueryBlock() ([]BlockInfo, error) {
-	var resp struct {
-		Return []BlockInfo `json:"return"`
-	}
-
-	err := m.Run("query-block", nil, &resp)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Return, nil
 }
 
 // QueryBlockExports returns exported blocks.
@@ -1491,6 +1483,109 @@ func (m *Monitor) BlockNodeSize(nodeName string) (int64, error) {
 	}
 
 	return 0, fmt.Errorf("Block node %q not found", nodeName)
+}
+
+// BlockNodeDirtyBitmaps returns the dirty bitmaps of the given block node.
+func (m *Monitor) BlockNodeDirtyBitmaps(nodeName string) ([]BlockDirtyInfo, error) {
+	var resp struct {
+		Return []struct {
+			NodeName     string           `json:"node-name"`
+			DirtyBitmaps []BlockDirtyInfo `json:"dirty-bitmaps"`
+		} `json:"return"`
+	}
+
+	err := m.Run("query-named-block-nodes", nil, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, node := range resp.Return {
+		if node.NodeName == nodeName {
+			return node.DirtyBitmaps, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Block node %q not found", nodeName)
+}
+
+// BlockNodeProtocol represents the protocol node holding the data of a block node.
+type BlockNodeProtocol struct {
+	NodeName string
+	Direct   bool
+	NoFlush  bool
+}
+
+// GetBlockNodeProtocol returns the protocol node under a block node.
+func (m *Monitor) GetBlockNodeProtocol(nodeName string) (*BlockNodeProtocol, error) {
+	var resp struct {
+		Return []struct {
+			NodeName string `json:"node-name"`
+			Driver   string `json:"drv"`
+			File     string `json:"file"`
+			Cache    struct {
+				Direct  bool `json:"direct"`
+				NoFlush bool `json:"no-flush"`
+			} `json:"cache"`
+		} `json:"return"`
+	}
+
+	err := m.Run("query-named-block-nodes", nil, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	file := ""
+	for _, node := range resp.Return {
+		if node.NodeName == nodeName {
+			file = node.File
+			break
+		}
+	}
+
+	if file == "" {
+		return nil, fmt.Errorf("Block node %q not found", nodeName)
+	}
+
+	// Nodes with a backing or non-default options are described as "json:{...}".
+	jsonFile, isJSON := strings.CutPrefix(file, "json:")
+	if isJSON {
+		var desc struct {
+			File struct {
+				Filename string `json:"filename"`
+			} `json:"file"`
+		}
+
+		err = json.Unmarshal([]byte(jsonFile), &desc)
+		if err != nil {
+			return nil, fmt.Errorf("Failed parsing description of block node %q: %w", nodeName, err)
+		}
+
+		file = desc.File.Filename
+	}
+
+	for _, node := range resp.Return {
+		if node.File == file && (node.Driver == "host_device" || node.Driver == "file") {
+			return &BlockNodeProtocol{NodeName: node.NodeName, Direct: node.Cache.Direct, NoFlush: node.Cache.NoFlush}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Protocol node of block node %q not found", nodeName)
+}
+
+// BlockDevReopen reopens block nodes with new options.
+func (m *Monitor) BlockDevReopen(options []map[string]any) error {
+	var args struct {
+		Options []map[string]any `json:"options"`
+	}
+
+	args.Options = options
+
+	err := m.Run("blockdev-reopen", args, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // blockJobDismiss dismisses a concluded block job.

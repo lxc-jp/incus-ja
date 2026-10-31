@@ -165,7 +165,28 @@ func DiskMount(srcPath string, dstPath string, recursive bool, propagation strin
 
 	// Remount bind mounts in readonly mode if requested
 	if readonly && flags&unix.MS_BIND == unix.MS_BIND {
+		// A bind remount replaces all the mount flags, so keep nosuid, nodev and noexec from the source.
+		var st *unix.Statfs_t
+
+		st, err = linux.StatVFS(dstPath)
+		if err != nil {
+			return fmt.Errorf("Unable to get mount flags of %q: %w", dstPath, err)
+		}
+
 		flags = unix.MS_RDONLY | unix.MS_BIND | unix.MS_REMOUNT
+
+		if st.Flags&unix.ST_NOSUID != 0 {
+			flags |= unix.MS_NOSUID
+		}
+
+		if st.Flags&unix.ST_NODEV != 0 {
+			flags |= unix.MS_NODEV
+		}
+
+		if st.Flags&unix.ST_NOEXEC != 0 {
+			flags |= unix.MS_NOEXEC
+		}
+
 		err = unix.Mount("", dstPath, fsName, uintptr(flags), "")
 		if err != nil {
 			return fmt.Errorf("Unable to mount %q in readonly mode: %w", dstPath, err)
@@ -311,6 +332,35 @@ func virtiofsdHasFeature(cmd string, feature string) bool {
 	return slices.Contains(caps.Features, feature)
 }
 
+// DiskVMVirtiofsSupported checks whether the instance can use virtiofs and returns the path to virtiofsd.
+func DiskVMVirtiofsSupported(inst instance.Instance) (string, error) {
+	// Locate virtiofsd.
+	cmd, err := exec.LookPath("virtiofsd")
+	if err != nil {
+		if util.PathExists("/usr/lib/qemu/virtiofsd") {
+			cmd = "/usr/lib/qemu/virtiofsd"
+		} else if util.PathExists("/usr/libexec/virtiofsd") {
+			cmd = "/usr/libexec/virtiofsd"
+		} else if util.PathExists("/usr/lib/virtiofsd") {
+			cmd = "/usr/lib/virtiofsd"
+		}
+	}
+
+	if cmd == "" {
+		return "", ErrMissingVirtiofsd
+	}
+
+	if util.IsTrue(inst.ExpandedConfig()["migration.stateful"]) {
+		return "", UnsupportedError{"Stateful migration unsupported"}
+	}
+
+	if util.IsTrue(inst.ExpandedConfig()["security.sev"]) || util.IsTrue(inst.ExpandedConfig()["security.sev.policy.es"]) {
+		return "", UnsupportedError{"SEV unsupported"}
+	}
+
+	return cmd, nil
+}
+
 // DiskVMVirtiofsdStart starts a new virtiofsd process.
 // If the idmaps slice is supplied then the proxy process is run inside a user namespace using the supplied maps.
 // Returns UnsupportedError error if the host system or instance does not support virtiosfd, returns normal error
@@ -327,28 +377,10 @@ func DiskVMVirtiofsdStart(execPath string, inst instance.Instance, socketPath st
 	// Remove old socket if needed.
 	_ = os.Remove(socketPath)
 
-	// Locate virtiofsd.
-	cmd, err := exec.LookPath("virtiofsd")
+	// Check virtiofs can be used.
+	cmd, err := DiskVMVirtiofsSupported(inst)
 	if err != nil {
-		if util.PathExists("/usr/lib/qemu/virtiofsd") {
-			cmd = "/usr/lib/qemu/virtiofsd"
-		} else if util.PathExists("/usr/libexec/virtiofsd") {
-			cmd = "/usr/libexec/virtiofsd"
-		} else if util.PathExists("/usr/lib/virtiofsd") {
-			cmd = "/usr/lib/virtiofsd"
-		}
-	}
-
-	if cmd == "" {
-		return nil, nil, ErrMissingVirtiofsd
-	}
-
-	if util.IsTrue(inst.ExpandedConfig()["migration.stateful"]) {
-		return nil, nil, UnsupportedError{"Stateful migration unsupported"}
-	}
-
-	if util.IsTrue(inst.ExpandedConfig()["security.sev"]) || util.IsTrue(inst.ExpandedConfig()["security.sev.policy.es"]) {
-		return nil, nil, UnsupportedError{"SEV unsupported"}
+		return nil, nil, err
 	}
 
 	// Trickery to handle paths > 107 chars.

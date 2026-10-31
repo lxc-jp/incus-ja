@@ -286,8 +286,22 @@ func TestQemuConfigTemplates(t *testing.T) {
 			`,
 		}}
 		for _, tc := range testCases {
-			runTest(tc.expected, qemuSCSI(&tc.opts, 4))
+			runTest(tc.expected, qemuSCSI(&tc.opts, 4, ""))
 		}
+
+		runTest(`# SCSI controller
+			[device "qemu_scsi"]
+			addr = "00.0"
+			bus = "qemu_pcie1"
+			driver = "virtio-scsi-pci"
+			iothread = "qemu_iothread0"
+			num_queues = "4"
+			`, qemuSCSI(&qemuDevOpts{"pci", "qemu_pcie1", "00.0", false}, 4, "qemu_iothread0"))
+
+		runTest(`# Disk I/O thread
+			[object "qemu_iothread0"]
+			qom-type = "iothread"
+			`, qemuIOThreads(1))
 	})
 
 	t.Run("qemu_balloon", func(t *testing.T) {
@@ -301,6 +315,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			addr = "00.0"
 			bus = "qemu_pcie0"
 			driver = "virtio-balloon-pci"
+			free-page-reporting = "on"
 			multifunction = "on"
 			`,
 		}, {
@@ -308,6 +323,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			`# Balloon driver
 			[device "qemu_balloon"]
 			driver = "virtio-balloon-ccw"
+			free-page-reporting = "on"
 			`,
 		}}
 		for _, tc := range testCases {
@@ -493,6 +509,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuNumaHostNodes: []uint64{},
 				hugepages:        "",
 				memory:           7629,
+				sharedMemory:     true,
 			},
 			`# CPU
 			[smp-opts]
@@ -524,6 +541,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuNumaHostNodes: []uint64{8, 9, 10},
 				hugepages:        "/hugepages/path",
 				memory:           12000,
+				sharedMemory:     true,
 			},
 			`# CPU
 			[smp-opts]
@@ -597,6 +615,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuNumaHostNodes: []uint64{8, 9, 10},
 				hugepages:        "",
 				memory:           12000,
+				sharedMemory:     true,
 			},
 			`# CPU
 			[smp-opts]
@@ -609,6 +628,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			host-nodes.0 = "8"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
+			share = "on"
 			size = "12000M"
 
 			[numa]
@@ -620,6 +640,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			host-nodes.0 = "9"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
+			share = "on"
 			size = "12000M"
 
 			[numa]
@@ -631,6 +652,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			host-nodes.0 = "10"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
+			share = "on"
 			size = "12000M"
 
 			[numa]
@@ -659,6 +681,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuNumaHostNodes: []uint64{8, 9, 10},
 				hugepages:        "",
 				memory:           12000,
+				sharedMemory:     true,
 			},
 			`# CPU
 			[smp-opts]
@@ -671,6 +694,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			host-nodes.0 = "8"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
+			share = "on"
 			size = "12000M"
 
 			[numa]
@@ -682,6 +706,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			host-nodes.0 = "9"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
+			share = "on"
 			size = "12000M"
 
 			[numa]
@@ -693,6 +718,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 			host-nodes.0 = "10"
 			policy = "bind"
 			qom-type = "memory-backend-memfd"
+			share = "on"
 			size = "12000M"
 
 			[numa]
@@ -728,6 +754,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuNumaHostNodes: []uint64{8, 9, 10},
 				hugepages:        "/hugepages",
 				memory:           12000,
+				sharedMemory:     true,
 			},
 			`# CPU
 			[smp-opts]
@@ -745,6 +772,34 @@ func TestQemuConfigTemplates(t *testing.T) {
 			size = "12000M"`,
 		}, {
 			qemuCPUOpts{
+				architecture:     osarch.ARCH_64BIT_INTEL_X86,
+				cpuCount:         8,
+				cpuSockets:       1,
+				cpuCores:         4,
+				cpuThreads:       2,
+				cpuNumaNodes:     []uint64{},
+				cpuNumaMapping:   []qemuNumaEntry{},
+				cpuNumaHostNodes: []uint64{},
+				hugepages:        "",
+				memory:           7629,
+			},
+			`# CPU
+			[smp-opts]
+			cores = "4"
+			cpus = "8"
+			sockets = "1"
+			threads = "2"
+
+			[object "mem0"]
+			qom-type = "memory-backend-ram"
+			size = "7629M"
+
+			[numa]
+			memdev = "mem0"
+			nodeid = "0"
+			type = "node"`,
+		}, {
+			qemuCPUOpts{
 				architecture:    osarch.ARCH_64BIT_ARMV8_LITTLE_ENDIAN,
 				cpuCount:        2,
 				cpuSockets:      1,
@@ -752,6 +807,7 @@ func TestQemuConfigTemplates(t *testing.T) {
 				cpuThreads:      1,
 				memory:          4096,
 				memoryHostNodes: []int64{0},
+				sharedMemory:    true,
 			},
 			`# CPU
 			[smp-opts]

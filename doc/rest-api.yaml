@@ -60,6 +60,14 @@ definitions:
                 example: S3
                 type: string
                 x-go-name: Protocol
+            region:
+                description: |-
+                    Region is the S3 region, derived from the URL when empty
+
+                    API extension: backup_s3_region
+                example: eu-west-1
+                type: string
+                x-go-name: Region
             secret_key:
                 description: SecretKey is the S3 API access key
                 example: secret123
@@ -797,6 +805,62 @@ definitions:
                 type: string
                 x-go-name: Name
         title: DebugKernelModule represents a loaded kernel module.
+        type: object
+        x-go-package: github.com/lxc/incus-os/incus-osd/api
+    DebugLVM:
+        properties:
+            lvs:
+                items:
+                    additionalProperties: {}
+                    type: object
+                type: array
+                x-go-name: LVs
+            pvs:
+                items:
+                    additionalProperties: {}
+                    type: object
+                type: array
+                x-go-name: PVs
+            vgs:
+                items:
+                    additionalProperties: {}
+                    type: object
+                type: array
+                x-go-name: VGs
+        title: DebugLVM represents LVM debug information for the system.
+        type: object
+        x-go-package: github.com/lxc/incus-os/incus-osd/api
+    DebugReport:
+        properties:
+            media_type:
+                type: string
+                x-go-name: MediaType
+            metrics:
+                items:
+                    $ref: '#/definitions/DebugReportMetric'
+                type: array
+                x-go-name: Metrics
+            timestamp:
+                type: string
+                x-go-name: Timestamp
+        title: DebugReport represents a systemd-report report.
+        type: object
+        x-go-package: github.com/lxc/incus-os/incus-osd/api
+    DebugReportMetric:
+        properties:
+            fields:
+                additionalProperties: {}
+                type: object
+                x-go-name: Fields
+            name:
+                type: string
+                x-go-name: Name
+            object:
+                type: string
+                x-go-name: Object
+            value:
+                x-go-name: Value
+        title: DebugReportMetric represents a single metric from a systemd-report report.
         type: object
         x-go-package: github.com/lxc/incus-os/incus-osd/api
     DevicesMap:
@@ -2601,6 +2665,15 @@ definitions:
                 x-go-name: Status
             status_code:
                 $ref: '#/definitions/StatusCode'
+            tpm:
+                additionalProperties:
+                    $ref: '#/definitions/InstanceStateTPM'
+                description: |-
+                    TPM devices information.
+
+                    API extension: instances_state_tpm.
+                type: object
+                x-go-name: TPM
         title: InstanceState represents an instance's state.
         type: object
         x-go-package: github.com/lxc/incus/v7/shared/api
@@ -2626,6 +2699,8 @@ definitions:
         x-go-package: github.com/lxc/incus/v7/shared/api
     InstanceStateDisk:
         properties:
+            counters:
+                $ref: '#/definitions/InstanceStateDiskCounters'
             total:
                 description: |-
                     Total size in bytes
@@ -2642,6 +2717,37 @@ definitions:
                 type: integer
                 x-go-name: Usage
         title: InstanceStateDisk represents the disk information section of an instance's state.
+        type: object
+        x-go-package: github.com/lxc/incus/v7/shared/api
+    InstanceStateDiskCounters:
+        description: |-
+            InstanceStateDiskCounters represents I/O counters as part of the disk section of an
+            instance's state.
+        properties:
+            bytes_read:
+                description: Number of bytes read
+                example: 3567021
+                format: int64
+                type: integer
+                x-go-name: BytesRead
+            bytes_written:
+                description: Number of bytes written
+                example: 1748969
+                format: int64
+                type: integer
+                x-go-name: BytesWritten
+            reads_completed:
+                description: Number of read operations completed
+                example: 3844
+                format: int64
+                type: integer
+                x-go-name: ReadsCompleted
+            writes_completed:
+                description: Number of write operations completed
+                example: 2071
+                format: int64
+                type: integer
+                x-go-name: WritesCompleted
         type: object
         x-go-package: github.com/lxc/incus/v7/shared/api
     InstanceStateMemory:
@@ -2857,6 +2963,42 @@ definitions:
                 type: integer
                 x-go-name: Timeout
         title: InstanceStatePut represents the modifiable fields of an instance's state.
+        type: object
+        x-go-package: github.com/lxc/incus/v7/shared/api
+    InstanceStateTPM:
+        properties:
+            endorsement_keys:
+                description: Endorsement keys, when known.
+                items:
+                    $ref: '#/definitions/InstanceStateTPMKey'
+                type: array
+                x-go-name: EndorsementKeys
+        title: InstanceStateTPM represents the state of a TPM device.
+        type: object
+        x-go-package: github.com/lxc/incus/v7/shared/api
+    InstanceStateTPMKey:
+        properties:
+            fingerprint:
+                description: SHA-256 fingerprint of the DER encoded public key.
+                example: 9ba3cb7ba7ac7f6a45cf0d21c8b5ebc0d1f9e1d3d1d7a4e0f1c1e7d1c3a2b5c6
+                type: string
+                x-go-name: Fingerprint
+            public_key:
+                description: PEM encoded public key.
+                type: string
+                x-go-name: PublicKey
+            size:
+                description: Key size in bits.
+                example: 2048
+                format: int64
+                type: integer
+                x-go-name: Size
+            type:
+                description: Key type (`rsa` or `ecc`).
+                example: rsa
+                type: string
+                x-go-name: Type
+        title: InstanceStateTPMKey represents a TPM key.
         type: object
         x-go-package: github.com/lxc/incus/v7/shared/api
     InstanceType:
@@ -7541,6 +7683,9 @@ definitions:
         x-go-package: github.com/lxc/incus-os/incus-osd/api
     SystemKernelConfigCPU:
         properties:
+            disable_thermal_protection:
+                type: boolean
+                x-go-name: DisableThermalProtection
             scaling_governor:
                 type: string
                 x-go-name: ScalingGovernor
@@ -7861,8 +8006,22 @@ definitions:
                     specified timeout has elapsed unless those changes are confirmed before then.
                 type: string
                 x-go-name: ConfirmationTimeout
+            default_confirmation_timeout:
+                description: |-
+                    If defined and no confirmation timeout provided, automatically roll
+                    back the new network changes after the specified timeout has elapsed unless those
+                    changes are confirmed before then.
+                type: string
+                x-go-name: DefaultConfirmationTimeout
             dns:
                 $ref: '#/definitions/SystemNetworkDNS'
+            ignore_service_checks:
+                description: |-
+                    If true, when bringing up the network don't wait for DNS and NTP to be configured and
+                    available before continuing. Most systems shouldn't need to set this, and when enabled
+                    initial update checks may fail due to being unable to resolve hostnames.
+                type: boolean
+                x-go-name: IgnoreServiceChecks
             interfaces:
                 items:
                     $ref: '#/definitions/SystemNetworkInterface'
@@ -8367,6 +8526,18 @@ definitions:
         title: SystemNetworkWireguardState holds state information about a specific wireguard interface.
         type: object
         x-go-package: github.com/lxc/incus-os/incus-osd/api
+    SystemNextBootVersion:
+        properties:
+            next_boot_version:
+                description: |-
+                    If not specified or "newest", the system will attempt to boot into the newest installed OS version.
+                    Values of "current" or "oldest" will change the boot target to reboot into the same version or
+                    the prior installed version.
+                type: string
+                x-go-name: NextBootVersion
+        title: SystemNextBootVersion defines a struct that is used to specify what version of IncusOS to boot the next time the system starts.
+        type: object
+        x-go-package: github.com/lxc/incus-os/incus-osd/api
     SystemProvider:
         properties:
             config:
@@ -8612,6 +8783,10 @@ definitions:
                 format: int64
                 type: integer
                 x-go-name: SeekErrorRate
+            temperature_celsius:
+                format: int64
+                type: integer
+                x-go-name: TemperatureCelsius
         title: SystemStorageDriveSMART defines a struct to return basic SMART information about a specific device.
         type: object
         x-go-package: github.com/lxc/incus-os/incus-osd/api
@@ -8736,6 +8911,9 @@ definitions:
             encryption_key:
                 type: string
                 x-go-name: EncryptionKey
+            force:
+                type: boolean
+                x-go-name: Force
             name:
                 type: string
                 x-go-name: Name
@@ -9442,7 +9620,7 @@ paths:
                 - application/json
             description: |-
                 Adds a certificate to the trust store as an untrusted user.
-                In this mode, the `token` property must be set to the correct value.
+                In this mode, the `trust_token` property must be set to the correct value.
 
                 The `certificate` field can be omitted in which case the TLS client
                 certificate in use for the connection will be retrieved and added to the
@@ -13267,7 +13445,7 @@ paths:
     /1.0/instances/{name}/nbd:
         get:
             description: |-
-                Upgrades the request to an NBD connection exposing all of the instance's block devices.
+                Upgrades the request to an NBD connection exposing the instance's root disk and dependent disks.
                 Each disk is exported under an NBD export named after its Incus device name.
 
                 This is only available on running virtual machines. For stopped instances, access the disks
@@ -13308,7 +13486,7 @@ paths:
                     $ref: '#/responses/Conflict'
                 "500":
                     $ref: '#/responses/InternalServerError'
-            summary: Get an NBD connection for all of the instance's disks
+            summary: Get an NBD connection for the instance's root and dependent disks
             tags:
                 - instances
     /1.0/instances/{name}/nvram:

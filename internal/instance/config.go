@@ -3,6 +3,7 @@ package instance
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,15 @@ func IsUserConfig(key string) bool {
 func isNvidiaConfigValue(value string) error {
 	if strings.ContainsAny(value, "\r\n") {
 		return errors.New("NVIDIA configuration values cannot contain line breaks")
+	}
+
+	return nil
+}
+
+// isOCIConfigValue rejects line breaks that would allow injecting arbitrary lines into the LXC config.
+func isOCIConfigValue(value string) error {
+	if strings.ContainsAny(value, "\r\n") {
+		return errors.New("OCI configuration values cannot contain line breaks")
 	}
 
 	return nil
@@ -334,6 +344,7 @@ var InstanceConfigKeysAny = map[string]func(value string) error{
 	// gendoc:generate(entity=instance, group=security, key=security.nesting)
 	// For containers, this controls whether Incus (nested) can be run inside of the instance.
 	// For virtual machines, setting this to `false` disables nested virtualization (turns off the `svm` and `vmx` CPU flags).
+	// Explicitly setting this to `true` on a virtual machine also makes it use non-shared memory (allowing transparent huge pages) unless a device requires shared memory, see {ref}`performance-tuning-vm-memory`.
 	// ---
 	//  type: bool
 	//  defaultdesc: `false` (containers), `true` (VMs)
@@ -828,7 +839,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  liveupdate: no
 	//  condition: OCI container
 	//  shortdesc: Entry point
-	"oci.entrypoint": validate.IsAny,
+	"oci.entrypoint": isOCIConfigValue,
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.cwd)
 	// Override the working directory of an OCI container.
@@ -837,7 +848,7 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 	//  liveupdate: no
 	//  condition: OCI container
 	//  shortdesc: Working directory
-	"oci.cwd": validate.Optional(validate.IsAbsFilePath),
+	"oci.cwd": validate.Optional(validate.IsAbsFilePath, isOCIConfigValue),
 
 	// gendoc:generate(entity=instance, group=oci, key=oci.gid)
 	// Override the GID of the process run in an OCI container.
@@ -1203,6 +1214,15 @@ var InstanceConfigKeysContainer = map[string]func(value string) error{
 
 // InstanceConfigKeysVM is a map of config key to validator. (keys applying to VM only).
 var InstanceConfigKeysVM = map[string]func(value string) error{
+	// gendoc:generate(entity=instance, group=boot, key=boot.pxe)
+	//
+	// ---
+	//  type: bool
+	//  defaultdesc: no
+	//  liveupdate: yes
+	//  shortdesc: Whether to enable PXE boot
+	"boot.pxe": validate.Optional(validate.IsBool),
+
 	// gendoc:generate(entity=instance, group=security, key=initial.secureboot.pk)
 	//
 	// ---
@@ -1473,6 +1493,249 @@ var InstanceConfigKeysVM = map[string]func(value string) error{
 	"volatile.vm.hotplug.memory": validate.Optional(validate.IsAny),
 }
 
+// ConfigDeviceVolatileKeys holds the validators of the volatile keys kept per device under volatile.<device>.
+var ConfigDeviceVolatileKeys = map[string]func(value string) error{
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.apply_quota)
+	// The disk quota is applied the next time the instance starts.
+	// ---
+	//  type: string
+	//  shortdesc: Disk quota
+	"apply_quota": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.ceph_rbd)
+	//
+	// ---
+	//  type: string
+	//  shortdesc: RBD device path for Ceph disk devices
+	"ceph_rbd": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.host_name)
+	//
+	// ---
+	//  type: string
+	//  shortdesc: Network device name on the host
+	"host_name": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.hwaddr)
+	// The network device MAC address is used when no `hwaddr` property is set on the device itself.
+	// ---
+	//  type: string
+	//  shortdesc: Network device MAC address
+	"hwaddr": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.io.bus)
+	// The IO bus stores the actual IO bus being used, checked in case `io.bus=auto`.
+	// ---
+	//  type: string
+	//  shortdesc: IO bus in use
+	"io.bus": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.mig.uuid)
+	// The NVIDIA MIG instance UUID.
+	// ---
+	//  type: string
+	//  shortdesc: MIG instance UUID
+	"mig.uuid": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.name)
+	// The network interface name inside of the instance when no `name` property is set on the device itself.
+	// ---
+	//  type: string
+	//  shortdesc: Network interface name inside of the instance
+	"name": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.vgpu.uuid)
+	// The NVIDIA virtual GPU instance UUID.
+	// ---
+	//  type: string
+	//  shortdesc: virtual GPU instance UUID
+	"vgpu.uuid": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.created)
+	// Possible values are `true` or `false`.
+	// ---
+	//  type: string
+	//  shortdesc: Whether the network device physical device was created
+	"last_state.created": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.hwaddr)
+	// The original MAC that was used when moving a physical device into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: Network device original MAC
+	"last_state.hwaddr": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.ip_addresses)
+	// Comma-separated list of the last used IP addresses of the network device.
+	// ---
+	//  type: string
+	//  shortdesc: Last used IP addresses
+	"last_state.ip_addresses": validate.IsListOf(validate.IsNetworkAddress),
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.mtu)
+	// The original MTU that was used when moving a physical device into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: Network device original MTU
+	"last_state.mtu": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.pci.driver)
+	// The original host driver for the PCI device.
+	// ---
+	//  type: string
+	//  shortdesc: PCI original host driver
+	"last_state.pci.driver": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.pci.parent)
+	// The parent host device used when allocating a PCI device to an instance.
+	// ---
+	//  type: string
+	//  shortdesc: PCI parent host device
+	"last_state.pci.parent": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.pci.slot.name)
+	// The parent host device PCI slot name.
+	// ---
+	//  type: string
+	//  shortdesc: PCI parent slot name
+	"last_state.pci.slot.name": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.usb.bus)
+	// The original USB bus address.
+	// ---
+	//  type: string
+	//  shortdesc: USB bus address
+	"last_state.usb.bus": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.usb.device)
+	// The original USB device identifier.
+	// ---
+	//  type: string
+	//  shortdesc: USB device identifier
+	"last_state.usb.device": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vdpa.name)
+	// The VDPA device name used when moving a VDPA device file descriptor into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: VDPA device name
+	"last_state.vdpa.name": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.hwaddr)
+	// The original MAC used when moving a VF into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: SR-IOV virtual function original MAC
+	"last_state.vf.hwaddr": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.id)
+	// The ID used when moving a VF into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: SR-IOV virtual function ID
+	"last_state.vf.id": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.parent)
+	// The parent host device used when allocating a VF into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: SR-IOV parent host device
+	"last_state.vf.parent": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.spoofcheck)
+	// The original spoof check setting used when moving a VF into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: SR-IOV virtual function original spoof check setting
+	"last_state.vf.spoofcheck": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.trusted)
+	// The original trusted setting used when moving a VF into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: SR-IOV virtual function original trusted setting
+	"last_state.vf.trusted": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.vlan)
+	// The original VLAN used when moving a VF into an instance.
+	// ---
+	//  type: string
+	//  shortdesc: SR-IOV virtual function original VLAN
+	"last_state.vf.vlan": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.representor)
+	// The representor port name
+	// ---
+	//  type: string
+	//  shortdesc: Representor name
+	"last_state.representor": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.representor.mtu)
+	// The original representor MTU
+	// ---
+	//  type: string
+	//  shortdesc: Representor original MTU
+	"last_state.representor.mtu": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.representor.pvid)
+	// The original representor PVID
+	// ---
+	//  type: string
+	//  shortdesc: Representor original PVID
+	"last_state.representor.pvid": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.representor.tagged)
+	// The original representor tagged VLANs
+	// ---
+	//  type: string
+	//  shortdesc: Representor original tagged VLANs
+	"last_state.representor.tagged": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.representor.untagged)
+	// The original representor untagged VLANs
+	// ---
+	//  type: string
+	//  shortdesc: Representor original untagged VLANs
+	"last_state.representor.untagged": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.representor.up)
+	// The original representor state
+	// ---
+	//  type: string
+	//  shortdesc: Representor original state
+	"last_state.representor.up": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.migratable)
+	// The original NIC migratable capability
+	// ---
+	//  type: string
+	//  shortdesc: NIC original migratable capability
+	"last_state.migratable": validate.IsAny,
+
+	// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.failover.host_name)
+	//
+	// ---
+	//  type: string
+	//  shortdesc: Network device name on the host for the failover interface
+	"failover.host_name": validate.IsAny,
+}
+
+// DeviceVolatileKeyConflict returns whether a device of that name would own volatile keys of the other device, such as eth0.last_state next to eth0.
+func DeviceVolatileKeyConflict(devName string, otherName string) bool {
+	rest, ok := strings.CutPrefix(devName, otherName+".")
+	if !ok {
+		return false
+	}
+
+	for key := range ConfigDeviceVolatileKeys {
+		if strings.HasPrefix(key, rest+".") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ConfigKeyChecker returns a function that will check whether or not
 // a provide value is valid for the associate config key.  Returns an
 // error if the key is not known.  The checker function only performs
@@ -1555,220 +1818,10 @@ func ConfigKeyChecker(key string, instanceType api.InstanceType) (func(value str
 	}
 
 	if strings.HasPrefix(key, ConfigVolatilePrefix) {
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.apply_quota)
-		// The disk quota is applied the next time the instance starts.
-		// ---
-		//  type: string
-		//  shortdesc: Disk quota
-		if strings.HasSuffix(key, ".apply_quota") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.ceph_rbd)
-		//
-		// ---
-		//  type: string
-		//  shortdesc: RBD device path for Ceph disk devices
-		if strings.HasSuffix(key, ".ceph_rbd") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.host_name)
-		//
-		// ---
-		//  type: string
-		//  shortdesc: Network device name on the host
-		if strings.HasSuffix(key, ".host_name") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.hwaddr)
-		// The network device MAC address is used when no `hwaddr` property is set on the device itself.
-		// ---
-		//  type: string
-		//  shortdesc: Network device MAC address
-		if strings.HasSuffix(key, ".hwaddr") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.io.bus)
-		// The IO bus stores the actual IO bus being used, checked in case `io.bus=auto`.
-		// ---
-		//  type: string
-		//  shortdesc: IO bus in use
-		if strings.HasSuffix(key, ".io.bus") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.mig.uuid)
-		// The NVIDIA MIG instance UUID.
-		// ---
-		//  type: string
-		//  shortdesc: MIG instance UUID
-		if strings.HasSuffix(key, ".mig.uuid") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.name)
-		// The network interface name inside of the instance when no `name` property is set on the device itself.
-		// ---
-		//  type: string
-		//  shortdesc: Network interface name inside of the instance
-		if strings.HasSuffix(key, ".name") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.vgpu.uuid)
-		// The NVIDIA virtual GPU instance UUID.
-		// ---
-		//  type: string
-		//  shortdesc: virtual GPU instance UUID
-		if strings.HasSuffix(key, ".vgpu.uuid") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.created)
-		// Possible values are `true` or `false`.
-		// ---
-		//  type: string
-		//  shortdesc: Whether the network device physical device was created
-		if strings.HasSuffix(key, ".last_state.created") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.hwaddr)
-		// The original MAC that was used when moving a physical device into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: Network device original MAC
-		if strings.HasSuffix(key, ".last_state.hwaddr") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.ip_addresses)
-		// Comma-separated list of the last used IP addresses of the network device.
-		// ---
-		//  type: string
-		//  shortdesc: Last used IP addresses
-		if strings.HasSuffix(key, ".last_state.ip_addresses") {
-			return validate.IsListOf(validate.IsNetworkAddress), nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.mtu)
-		// The original MTU that was used when moving a physical device into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: Network device original MTU
-		if strings.HasSuffix(key, ".last_state.mtu") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.pci.driver)
-		// The original host driver for the PCI device.
-		// ---
-		//  type: string
-		//  shortdesc: PCI original host driver
-		if strings.HasSuffix(key, ".last_state.pci.driver") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.pci.parent)
-		// The parent host device used when allocating a PCI device to an instance.
-		// ---
-		//  type: string
-		//  shortdesc: PCI parent host device
-		if strings.HasSuffix(key, ".last_state.pci.parent") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.pci.slot.name)
-		// The parent host device PCI slot name.
-		// ---
-		//  type: string
-		//  shortdesc: PCI parent slot name
-		if strings.HasSuffix(key, ".last_state.pci.slot.name") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.usb.bus)
-		// The original USB bus address.
-		// ---
-		//  type: string
-		//  shortdesc: USB bus address
-		if strings.HasSuffix(key, ".last_state.usb.bus") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.usb.device)
-		// The original USB device identifier.
-		// ---
-		//  type: string
-		//  shortdesc: USB device identifier
-		if strings.HasSuffix(key, ".last_state.usb.device") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vdpa.name)
-		// The VDPA device name used when moving a VDPA device file descriptor into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: VDPA device name
-		if strings.HasSuffix(key, ".last_state.vdpa.name") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.hwaddr)
-		// The original MAC used when moving a VF into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: SR-IOV virtual function original MAC
-		if strings.HasSuffix(key, ".last_state.vf.hwaddr") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.id)
-		// The ID used when moving a VF into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: SR-IOV virtual function ID
-		if strings.HasSuffix(key, ".last_state.vf.id") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.parent)
-		// The parent host device used when allocating a VF into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: SR-IOV parent host device
-		if strings.HasSuffix(key, ".last_state.vf.parent") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.spoofcheck)
-		// The original spoof check setting used when moving a VF into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: SR-IOV virtual function original spoof check setting
-		if strings.HasSuffix(key, ".last_state.vf.spoofcheck") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.trusted)
-		// The original trusted setting used when moving a VF into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: SR-IOV virtual function original trusted setting
-		if strings.HasSuffix(key, ".last_state.vf.trusted") {
-			return validate.IsAny, nil
-		}
-
-		// gendoc:generate(entity=instance, group=volatile, key=volatile.<name>.last_state.vf.vlan)
-		// The original VLAN used when moving a VF into an instance.
-		// ---
-		//  type: string
-		//  shortdesc: SR-IOV virtual function original VLAN
-		if strings.HasSuffix(key, ".last_state.vf.vlan") {
-			return validate.IsAny, nil
+		for devKey, validator := range ConfigDeviceVolatileKeys {
+			if strings.HasSuffix(key, "."+devKey) {
+				return validator, nil
+			}
 		}
 	}
 
@@ -1966,9 +2019,14 @@ func ConfigKeyChecker(key string, instanceType api.InstanceType) (func(value str
 	return nil, fmt.Errorf("Unknown configuration key: %s", key)
 }
 
+// IsVMBootStateKey returns whether the key records the QEMU layout a VM was started with.
+func IsVMBootStateKey(configKey string) bool {
+	return slices.Contains([]string{"volatile.vm.boot_state", "volatile.vm.definition", "volatile.vm.hotplug.memory"}, configKey)
+}
+
 // InstanceIncludeWhenCopying is used to decide whether to include a config item or not when copying an instance.
 // The remoteCopy argument indicates if the copy is remote (i.e between servers) as this affects the keys kept.
-func InstanceIncludeWhenCopying(configKey string, remoteCopy bool) bool {
+func InstanceIncludeWhenCopying(configKey string, remoteCopy bool, stateful bool) bool {
 	if configKey == "volatile.apply_nvram" {
 		return true // Include volatile.apply_nvram to also reset the NVRAM in copied instances.
 	}
@@ -1979,6 +2037,10 @@ func InstanceIncludeWhenCopying(configKey string, remoteCopy bool) bool {
 
 	if configKey == "volatile.last_state.idmap" && !remoteCopy {
 		return true // Include volatile.last_state.idmap when doing local copy to avoid needless remapping.
+	}
+
+	if stateful && IsVMBootStateKey(configKey) {
+		return true // The saved VM state can only be restored with the layout it was started with.
 	}
 
 	if strings.HasPrefix(configKey, ConfigVolatilePrefix) {

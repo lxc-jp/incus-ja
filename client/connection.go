@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -113,8 +114,6 @@ func ConnectIncusHTTP(args *ConnectionArgs, client *http.Client) (InstanceServer
 
 // ConnectIncusHTTPWithContext lets you connect to a VM agent over a VM socket with context.Context.
 func ConnectIncusHTTPWithContext(ctx context.Context, args *ConnectionArgs, client *http.Client) (InstanceServer, error) {
-	logger.Debug("Connecting to a VM agent over a VM socket")
-
 	// Use empty args if not specified
 	if args == nil {
 		args = &ConnectionArgs{}
@@ -162,16 +161,87 @@ func ConnectIncusHTTPWithContext(ctx context.Context, args *ConnectionArgs, clie
 //
 // If the path argument is empty, then $INCUS_SOCKET will be used, if
 // unset $INCUS_DIR/unix.socket will be used and if that one isn't set
-// either, then the path will default to /var/lib/incus/unix.socket or /run/incus/unix.socket.
+// either, then the path will default to an active or default socket.
 func ConnectIncusUnix(path string, args *ConnectionArgs) (InstanceServer, error) {
 	return ConnectIncusUnixWithContext(context.Background(), path, args)
+}
+
+var defaultSocketDirs = []string{"/run/incus", "/var/lib/incus"}
+
+func socketForDir(dir string) (string, string) {
+	path := filepath.Join(dir, "unix.socket")
+	userPath := filepath.Join(dir, "unix.socket.user")
+	if !util.PathIsWritable(path) && util.PathIsWritable(userPath) {
+		return userPath, fmt.Sprintf("user-%d", os.Geteuid())
+	}
+
+	return path, ""
+}
+
+func probeActiveUnixSocket(sock string) bool {
+	conn, err := net.DialTimeout("unix", sock, 200*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		return true
+	}
+
+	return false
+}
+
+// ResolveUnixSocket returns the Unix socket path and optional project name for a local Unix connection.
+// If path is empty, it automatically resolves to an active or default socket.
+func ResolveUnixSocket(path string) (string, string) {
+	if path != "" {
+		return path, ""
+	}
+
+	envSocket := os.Getenv("INCUS_SOCKET")
+	if envSocket != "" {
+		return envSocket, ""
+	}
+
+	envDir := os.Getenv("INCUS_DIR")
+	if envDir != "" {
+		return socketForDir(envDir)
+	}
+
+	// Collect the sockets present on disk.
+	type candidate struct {
+		path    string
+		project string
+	}
+
+	candidates := []candidate{}
+	for _, dir := range defaultSocketDirs {
+		sock, proj := socketForDir(dir)
+
+		_, err := os.Lstat(sock)
+		if err == nil {
+			candidates = append(candidates, candidate{path: sock, project: proj})
+		}
+	}
+
+	if len(candidates) == 0 {
+		return socketForDir(defaultSocketDirs[len(defaultSocketDirs)-1])
+	}
+
+	// Connecting wakes up socket-activated daemons, so only do it to tell a stale socket from an active one.
+	if len(candidates) > 1 {
+		for _, c := range candidates {
+			if probeActiveUnixSocket(c.path) {
+				return c.path, c.project
+			}
+		}
+	}
+
+	return candidates[0].path, candidates[0].project
 }
 
 // ConnectIncusUnixWithContext lets you connect to a remote Incus daemon over a local unix socket with context.Context.
 //
 // If the path argument is empty, then $INCUS_SOCKET will be used, if
 // unset $INCUS_DIR/unix.socket will be used and if that one isn't set
-// either, then the path will default to /var/lib/incus/unix.socket or /run/incus/unix.socket.
+// either, then the path will default to an active or default socket.
 func ConnectIncusUnixWithContext(ctx context.Context, path string, args *ConnectionArgs) (InstanceServer, error) {
 	logger.Debug("Connecting to a local Incus over a Unix socket")
 
@@ -188,32 +258,7 @@ func ConnectIncusUnixWithContext(ctx context.Context, path string, args *Connect
 	ctxConnected, ctxConnectedCancel := context.WithCancel(context.Background())
 
 	// Determine the socket path
-	var projectName string
-	if path == "" {
-		path = os.Getenv("INCUS_SOCKET")
-		if path == "" {
-			incusDir := os.Getenv("INCUS_DIR")
-			if incusDir == "" {
-				_, err := os.Lstat("/run/incus/unix.socket")
-				if err == nil {
-					incusDir = "/run/incus"
-				} else {
-					incusDir = "/var/lib/incus"
-				}
-			}
-
-			path = filepath.Join(incusDir, "unix.socket")
-			userPath := filepath.Join(incusDir, "unix.socket.user")
-			if !util.PathIsWritable(path) && util.PathIsWritable(userPath) {
-				// Handle the use of incus-user.
-				path = userPath
-
-				// When using incus-user, the project list is typically restricted.
-				// So let's try to be smart about the project we're using.
-				projectName = fmt.Sprintf("user-%d", os.Geteuid())
-			}
-		}
-	}
+	path, projectName := ResolveUnixSocket(path)
 
 	// Initialize the client struct
 	server := ProtocolIncus{

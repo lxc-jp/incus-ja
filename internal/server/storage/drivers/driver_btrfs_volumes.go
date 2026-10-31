@@ -772,8 +772,15 @@ func (d *btrfs) createVolumeFromMigrationOptimized(vol Volume, conn io.ReadWrite
 			return err
 		}
 
-		// Clear the target for the subvol to use.
-		_ = os.Remove(op.dest)
+		// Clear the target. os.Remove can't remove an existing same-named subvolume.
+		if d.isSubvolume(op.dest) {
+			err = d.deleteSubvolume(op.dest, true)
+			if err != nil {
+				return err
+			}
+		} else {
+			_ = os.Remove(op.dest)
+		}
 
 		err = os.Rename(op.src, op.dest)
 		if err != nil {
@@ -1084,6 +1091,14 @@ func (d *btrfs) ValidateVolume(vol Volume, removeUnknownKeys bool) error {
 	//  default: same as `volume.initial.uid` or `0`
 	//  shortdesc: UID of the volume owner in the instance
 
+	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=migration.follow_instance)
+	//
+	// ---
+	//  type: bool
+	//  condition: custom volume
+	//  default: `false`
+	//  shortdesc: Move the volume along with the virtual machine it's attached to when it moves to another cluster member
+
 	// gendoc:generate(entity=storage_volume_btrfs, group=common, key=security.shared)
 	//
 	// ---
@@ -1204,6 +1219,11 @@ func (d *btrfs) SetVolumeQuota(vol Volume, size string, allowUnsafeResize bool, 
 	sizeBytes, err := units.ParseByteSizeString(size)
 	if err != nil {
 		return err
+	}
+
+	// ISO volumes are read-only and sized to their image, a quota would be exceeded right away.
+	if vol.contentType == ContentTypeISO {
+		return nil
 	}
 
 	// For VM block files, resize the file if needed.
@@ -1676,11 +1696,26 @@ func (d *btrfs) migrateVolumeOptimized(vol Volume, conn io.ReadWriteCloser, volS
 			lastVolPath = snapVol.MountPath()
 		}
 
-		// If no snapshots are to be copied (because they are on the target already), but snapshots
-		// exist on the source, use the latest snapshot as the parent in order to speed up
-		// optimized refresh.
-		if volSrcArgs.Refresh && len(volSrcArgs.Snapshots) == 0 && len(snapshots) > 0 {
-			lastVolPath = snapshots[len(snapshots)-1].MountPath()
+		// Only a snapshot the target still holds, not one being re-sent, can be the main volume's btrfs parent.
+		if volSrcArgs.Refresh {
+			lastVolPath = ""
+
+			if slices.Contains(volSrcArgs.MigrationType.Features, migration.BTRFSFeatureSubvolumeUUIDs) {
+				resent := make(map[string]struct{}, len(volSrcArgs.Snapshots))
+				for _, snapName := range volSrcArgs.Snapshots {
+					resent[snapName] = struct{}{}
+				}
+
+				for i := len(snapshots) - 1; i >= 0; i-- {
+					_, snapName, _ := api.GetParentAndSnapshotName(snapshots[i].name)
+
+					_, ok := resent[snapName]
+					if !ok {
+						lastVolPath = snapshots[i].MountPath()
+						break
+					}
+				}
+			}
 		}
 	}
 

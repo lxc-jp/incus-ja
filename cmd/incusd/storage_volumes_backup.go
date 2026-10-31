@@ -48,7 +48,7 @@ var storagePoolVolumeTypeCustomBackupCmd = APIEndpoint{
 var storagePoolVolumeTypeCustomBackupExportCmd = APIEndpoint{
 	Path: "storage-pools/{poolName}/volumes/{type}/{volumeName}/backups/{backupName}/export",
 
-	Get: APIEndpointAction{Handler: storagePoolVolumeTypeCustomBackupExportGet, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanView, "poolName", "type", "volumeName", "location")},
+	Get: APIEndpointAction{Handler: storagePoolVolumeTypeCustomBackupExportGet, AccessHandler: allowPermission(auth.ObjectTypeStorageVolume, auth.EntitlementCanManageBackups, "poolName", "type", "volumeName", "location")},
 }
 
 // swagger:operation GET /1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}/backups storage storage_pool_volumes_type_backups_get
@@ -537,7 +537,7 @@ func storagePoolVolumeTypeCustomBackupsPost(d *Daemon, r *http.Request) response
 			args.ExpiryDate = req.ExpiresAt
 		}
 
-		uploadRes := make(chan error)
+		uploadRes := make(chan error, 1)
 
 		// Start the upload in the background if requested.
 		if req.Target != nil {
@@ -567,6 +567,14 @@ func storagePoolVolumeTypeCustomBackupsPost(d *Daemon, r *http.Request) response
 			}
 
 			return err
+		}
+
+		// The upload only completes once the last part has been sent.
+		if req.Target != nil {
+			err = <-uploadRes
+			if err != nil {
+				return err
+			}
 		}
 
 		s.Events.SendLifecycle(projectName, lifecycle.StorageVolumeBackupCreated.Event(poolName, volumeTypeName, args.Name, projectName, op.Requestor(), logger.Ctx{"type": volumeTypeName}))

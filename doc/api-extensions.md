@@ -3356,3 +3356,90 @@ Cephオブジェクトストレージドライバーに`cephobject.radosgw.endpo
 
 APIに`/internal/debug/pprof/`を追加します。
 `core.debug_address`リスナーと同じ`pprof`プロファイルを通常のリスナー経由で提供し、サーバーの管理権限を持つ信頼されたクライアントに限定します。
+
+## `instance_state_disk_counters`
+
+インスタンスの状態の`disk`セクションの各エントリーに`counters`フィールドを追加します。
+このフィールドは`bytes_read`、`bytes_written`、`reads_completed`、`writes_completed`を持ちます。
+
+これらは、QEMUで報告されるブロックI/Oの統計を使って、仮想マシンでのみ値が設定されます。
+コンテナーでは報告されません。これはcgroupのI/O計測はIncusのデバイス名ではなくホストのブロックデバイスで計測され、コンテナのrootファイルシステムとカスタムボリュームは通常はホストの単一のブロックデバイスを共有するので、デバイス毎の計測ができないからです。
+
+## `instances_state_tpm`
+
+インスタンスの状態に`tpm`セクションを追加し、すべての`tpm`デバイスをエンドースメントキーとともに含みます。それぞれのエンドースメントキーには種別、サイズ、SHA-256フィンガープリント、PEMエンコードされた公開鍵を保持します。
+
+エンドースメントキーはIncusでプロビジョンしたTPMデバイスのみに知らされています。具体的にはデバイスの初回の起動時に`instances.tpm.platform_cert`が設定されていたデバイスです。
+
+## `ovn_nic_security_filtering`
+
+OVN NICに`security.mac_filtering`、`security.ipv4_filtering`、`security.ipv6_filtering`オプションを追加します。
+
+これらはインスタンスの論理スイッチポートのOVNポートセキュリティーで実装され、送信元のMACアドレスと、IPフィルタリングが有効な場合は、インスタンスが使うかもしれない（静的ルートも含めた）IPアドレスを制限します。
+
+## `authorization_scriptlet_request`
+
+認可スクリプトレット`details`引数に以下のフィールドを追加します：
+
+* `URL`、生のクライアントリクエストURLを保持（`<path>?<query>`）
+* `Path`、クライアントにリクエストされたAPIパスを保持
+* `Query`、クエリパラメーターのディクショナリーを保持（注意：値は単一の文字列ではなく文字列のリスト）
+* `Method`、リクエストに使われたHTTPメソッドを保持
+
+## `vm_boot_priority_skip`
+
+NICとディスクデバイスで`boot.priority`を`skip`に設定できるようにします。するとブートシーケンスでスキップされます。NICの新しいデフォルト値は`skip`です。
+また`boot.pxe`というVMの設定キーも追加します。デフォルトは`false`です。これはブートシーケンスに含まれるすべてのNICでPXEを有効にするものです。これはHTTPブートには関係しません。HTTPブートはNICでは常に有効です。
+
+## `network_ovn_nat_address_l2proxy`
+
+アップリンクで`ovn.ingress_mode=l2proxy`を使う`ovn`ネットワークで`ipv4.nat.address`と`ipv6.nat.address`を使えるようにします。従来は`ovn.ingress_mode=routed`でのみ使えました。
+
+## `oidc_id_token`
+
+不透明な（JWTでない）アクセストークンを発行するOIDCプロバイダーのサポートを追加します。
+
+アクセストークンがJWTでない場合、Incusは代わりにIDトークンを検証し、設定されたクライアントIDに対して設定されたイシュアーによりIDトークンが発行されたことを確認します。
+クライアントはIDトークンを`X-Incus-OIDC-idtoken`ヘッダーで不透明なアクセストークンとともに送ります。
+
+## `certificate_ca_trust`
+
+トラストストアーに追加されたCA証明書が発行したクライアント証明書も信頼するようになります。
+これらのクライアントはCAエントリーのフィンガープリントで特定され、タイプ、制限とプロジェクトを継承します。
+
+## `network_bgp_communities`
+`bridge`と`ovn`ネットワークに`bgp.communities`ネットワーク設定キーを追加します。
+値はネットワークで広告されるすべてのプリフィクスにアタッチされたカンマ区切りの標準のGBPコミュニティー（`ASN:value`）です。
+
+## `instances_migration_bwlimit`
+`instances.migration.bwlimit`サーバー設定キーを追加します。これは仮想マシンのライブマイグレーションで使われるメモリーと状態転送のバンド幅を制限します。
+
+## `backup_s3_region`
+インスタンスやボリュームのバックアップをアップロードする際に使われるS3バックアップターゲットに`region`フィールドを追加します。これはURLからregionを抽出できないS3互換オブジェクトストレージ用です。
+
+## `nic_sriov_migration`
+
+`sriov`ネットワークとNICの両方に`failover`設定キーを追加します。（マネージドとそうでない）ブリッジのネットワーク名を設定できます。これは指定のブリッジにいわゆるフェイルオーバー`virtio-net` NICを作成するかを制御します。フェイルオーバーNICは`virtio-net`フェイルオーバーの機構を使ってSR-IOV NICをライブマイグレートするのに使われ、この機能をサポートするゲストで使用できます。
+
+## `auth_tls_jwt_cookie`
+
+ブラウザーベースのクライアントに`/tls/login`と`/tls/logout`エンドポイントを追加します。
+
+有効なTLS `JWT`を`Authorization`ヘッダーに指定した`/tls/login`への`POST`は`tls_jwt`クッキーにそのトークンを保管します。このクッキーはすべてのAPIエンドポイントとWebSocket接続で受理されます。クッキーは`Secure`、`HttpOnly`、`SameSite=Strict`であり、トークンの有効期限で切れます。
+`/tls/logout`はこのクッキーをクリアします。
+
+## `cluster_healing_delay`
+
+`cluster.healing_delay`サーバー設定キーと`cluster-member-offline`イベントを追加します。
+
+クラスターヒーリングがオフラインメンバーを検出すると、即座にイベントが送られ指定の待ち時間が過ぎてからのみ退避を開始します。これにより外部のツールにメンバーの電源をオフにする時間を与えます。
+
+## `storage_volume_migration_follow_instance`
+
+カスタムストレージボリュームに`migration.follow_instance`設定キーを追加します。
+
+単一の仮想マシンにアタッチされたローカルストレージプール内にボリュームを作成する際、仮想マシンが別のクラスターメンバーに移動する場合にボリュームも一緒に移動するようにします。
+
+## `nic_sriov_migration_native`
+
+`sriov`ネットワークとNICに`variant`設定キーを追加します。使用するVFIOドライバーを設定できます（設定なしだと汎用の`vfio-pci`ドライバー、`mlx5`だと`mlx5_vfio_pci`）。これによりSR-IOV NICのネイティブなVFIOライブマイグレーションが可能になります。

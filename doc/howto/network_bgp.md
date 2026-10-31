@@ -57,6 +57,14 @@ incus config set core.bgp_routerid=192.0.2.50
 
 別のアドレスに設定するには、 `bgp.ipv4.nexthop` または `bgp.ipv6.nexthop` を設定してください。
 
+### BGPコミュニティーをアタッチする（`bridge`と`ovn`）
+
+ネットワークで広告されるすべてのプリフィクスにスタンダードなBGPコミュニティーをアタッチするには、`bgp.communities`を`ASN:value`ペアーのカンマ区切りの値に設定します。
+
+```bash
+incus network set incusbr0 bgp.communities=65000:100,65000:200
+```
+
 ### 個々のインスタンスアドレスを広告する（`bridge` のみ）
 
 デフォルトでは、ブリッジネットワークは自身のサブネット（あるいはNATアドレス）のみを広告します。

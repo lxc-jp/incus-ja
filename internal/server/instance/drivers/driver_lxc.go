@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"sort"
@@ -33,6 +34,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/kballard/go-shellquote"
 	liblxc "github.com/lxc/go-lxc"
+	ociSpecs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/sftp"
 	yaml "go.yaml.in/yaml/v4"
 	"golang.org/x/sync/errgroup"
@@ -155,12 +157,36 @@ func lxcSetConfigItem(c *liblxc.Container, key string, value string) error {
 		}
 	}
 
+	if key == "lxc.environment.runtime" && !liblxc.HasAPIExtension("environment_runtime_hooks") {
+		key = "lxc.environment"
+	}
+
+	if key == "lxc.environment.hooks" && !liblxc.HasAPIExtension("environment_runtime_hooks") {
+		return nil
+	}
+
+	// The config file is line based, so a line break in the key or value would inject additional directives.
+	if strings.ContainsAny(key, "\r\n") || strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("Failed to set LXC config: %s: Key and value cannot contain line breaks", key)
+	}
+
 	err := c.SetConfigItem(key, value)
 	if err != nil {
 		return fmt.Errorf("Failed to set LXC config: %s=%s", key, value)
 	}
 
 	return nil
+}
+
+// forklxcBlockedEnv returns whether an instance or image environment variable must be kept out of
+// the root forklxc process, as it would alter the behavior of the dynamic loader or of glibc.
+func forklxcBlockedEnv(name string) bool {
+	return strings.HasPrefix(name, "LD_") || slices.Contains([]string{"GCONV_PATH", "GLIBC_TUNABLES"}, name)
+}
+
+// isOCI returns whether the container was created from an OCI image.
+func (d *lxc) isOCI() bool {
+	return util.IsTrue(d.expandedConfig["volatile.container.oci"]) || d.localConfig["image.type"] == "oci"
 }
 
 // lxcEncodeCmd encodes a command for lxc.init.cmd/lxc.execute.cmd, whose
@@ -187,6 +213,27 @@ func lxcEncodeCmd(args []string) (string, error) {
 	}
 
 	return strings.Join(words, " "), nil
+}
+
+var ociTmpfsOptionValue = regexp.MustCompile(`^(gid|mode|nr_blocks|nr_inodes|size|uid)=[0-9a-zA-Z%]+$`)
+
+// lxcEncodeOCITmpfs encodes an OCI tmpfs mount as a lxc.mount.entry value from validated parts only.
+// The config comes from the image, so nothing that could turn the entry into another kind of mount is kept.
+func lxcEncodeOCITmpfs(destination string, options []string) (string, error) {
+	target := strings.TrimLeft(destination, "/")
+	if target == "" || strings.ContainsAny(target, " \t\n\v\f\r\\") {
+		return "", fmt.Errorf("Invalid OCI mount destination: %q", destination)
+	}
+
+	flags := []string{"async", "atime", "defaults", "dev", "diratime", "dirsync", "exec", "noatime", "nodev", "nodiratime", "noexec", "norelatime", "nostrictatime", "nosuid", "relatime", "ro", "rw", "strictatime", "suid", "sync"}
+
+	for _, option := range options {
+		if !slices.Contains(flags, option) && !ociTmpfsOptionValue.MatchString(option) {
+			return "", fmt.Errorf("Invalid OCI mount option for %q: %q", destination, option)
+		}
+	}
+
+	return fmt.Sprintf("none %s tmpfs %s 0 0", target, strings.Join(append(slices.Clone(options), "create=dir"), ",")), nil
 }
 
 func lxcStatusCode(lxcState liblxc.State) api.StatusCode {
@@ -1112,14 +1159,24 @@ func (d *lxc) initLXC(config bool) (*liblxc.Container, error) {
 		after, ok := strings.CutPrefix(k, "environment.")
 		if ok {
 			// LXC supports quoting the value between " even if the value itself contains ".
-			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("\"%s=%s\"", after, v))
+			err = lxcSetConfigItem(cc, "lxc.environment.runtime", fmt.Sprintf("\"%s=%s\"", after, v))
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	err = lxcSetConfigItem(cc, "lxc.environment", "CREDENTIALS_DIRECTORY=/dev/.incus-systemd-credentials")
+	err = lxcSetConfigItem(cc, "lxc.environment.runtime", "CREDENTIALS_DIRECTORY=/dev/.incus-systemd-credentials")
+	if err != nil {
+		return nil, err
+	}
+
+	hostPath := os.Getenv("PATH")
+	if hostPath == "" {
+		hostPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	}
+
+	err = lxcSetConfigItem(cc, "lxc.environment.hooks", fmt.Sprintf("\"PATH=%s\"", hostPath))
 	if err != nil {
 		return nil, err
 	}
@@ -1716,7 +1773,7 @@ func (d *lxc) deviceDetachNIC(configCopy map[string]string, netIF []deviceConfig
 		// that device doesn't already exist on the host as if a device exists on the host
 		// we can't know whether that is because liblxc has moved it back already or whether
 		// it is a conflicting device.
-		if !util.PathExists(fmt.Sprintf("/sys/class/net/%s", devName)) {
+		if !network.InterfaceExists(devName) {
 			if stopHookNetnsPath == "" {
 				return fmt.Errorf("Cannot detach NIC device %q without stopHookNetnsPath being provided", devName)
 			}
@@ -2102,8 +2159,9 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			return "", nil, err
 		}
 
-		// Check if we need to change idmap.
-		if nextMap != nil && d.state.OS.IdmapSet != nil && !d.state.OS.IdmapSet.Includes(nextMap) {
+		// Allocate a map when missing (e.g. after a rebuild of a never-started
+		// instance) or when the current one is outside the host's allowed range.
+		if d.state.OS.IdmapSet != nil && (nextMap == nil || !d.state.OS.IdmapSet.Includes(nextMap)) {
 			// Update the idmap, keeping the allocation locked until it's persisted.
 			err = func() error {
 				idmapLock.Lock()
@@ -2495,9 +2553,12 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 	}
 
 	// Handle application containers.
-	config, err := instance.OCISpec(d.Path())
-	if err != nil {
-		return "", nil, err
+	var config *ociSpecs.Spec
+	if d.isOCI() {
+		config, err = instance.OCISpec(d.Path())
+		if err != nil {
+			return "", nil, err
+		}
 	}
 
 	if config != nil {
@@ -2513,7 +2574,7 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 				continue
 			}
 
-			err = lxcSetConfigItem(cc, "lxc.environment", fmt.Sprintf("\"%s=%s\"", k, v))
+			err = lxcSetConfigItem(cc, "lxc.environment.runtime", fmt.Sprintf("\"%s=%s\"", k, v))
 			if err != nil {
 				return "", nil, err
 			}
@@ -2533,6 +2594,10 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 				idMap, err := d.CurrentIdmap()
 				if err != nil {
 					return "", nil, err
+				}
+
+				if idMap == nil {
+					return "", nil, errors.New("No ID map found for unprivileged container")
 				}
 
 				for _, entry := range idMap.Entries {
@@ -2641,16 +2706,23 @@ func (d *lxc) startCommon() (string, []func() error, error) {
 			}
 
 			// Skip all our own mounts.
-			if slices.Contains(lxcMounts, filepath.Clean(mount.Destination)) {
+			destination := filepath.Clean("/" + mount.Destination)
+			if slices.Contains(lxcMounts, destination) {
 				continue
 			}
 
-			err := lxcSetConfigItem(cc, "lxc.mount.entry", fmt.Sprintf("%s %s %s %s 0 0", mount.Source, strings.TrimLeft(mount.Destination, "/"), mount.Type, strings.Join(append(mount.Options, "create=dir"), ",")))
+			// Never pass the image's own source, type or options through to liblxc.
+			entry, err := lxcEncodeOCITmpfs(destination, mount.Options)
 			if err != nil {
 				return "", nil, err
 			}
 
-			lxcMounts = append(lxcMounts, mount.Destination)
+			err = lxcSetConfigItem(cc, "lxc.mount.entry", entry)
+			if err != nil {
+				return "", nil, err
+			}
+
+			lxcMounts = append(lxcMounts, destination)
 		}
 
 		// Mount /run as a tmpfs if it isn't already mounted and the image's /run is empty.
@@ -3024,6 +3096,11 @@ func (d *lxc) detachInterfaceRename(netns string, ifName string, hostName string
 
 // Start starts the instance.
 func (d *lxc) Start(stateful bool) error {
+	return d.start(stateful, nil)
+}
+
+// start starts the instance and can use an existing InstanceOperation lock.
+func (d *lxc) start(stateful bool, op *operationlock.InstanceOperation) error {
 	// Check that migration.stateful is set for stateful actions.
 	if stateful && !d.CanLiveMigrate() {
 		return errors.New("Stateful start requires that the instance migration.stateful be set to true")
@@ -3040,15 +3117,17 @@ func (d *lxc) Start(stateful bool) error {
 		return err
 	}
 
-	// Setup a new operation.
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStart, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
-	if err != nil {
-		if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
-			// An existing matching operation has now succeeded, return.
-			return nil
-		}
+	// Setup a new operation if needed.
+	if op == nil {
+		op, err = operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStart, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore}, false, false)
+		if err != nil {
+			if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
+				// An existing matching operation has now succeeded, return.
+				return nil
+			}
 
-		return fmt.Errorf("Failed to create instance start operation: %w", err)
+			return fmt.Errorf("Failed to create instance start operation: %w", err)
+		}
 	}
 
 	defer op.Done(nil)
@@ -3142,28 +3221,30 @@ func (d *lxc) Start(stateful bool) error {
 
 	for k, v := range d.expandedConfig {
 		after, ok := strings.CutPrefix(k, "environment.")
-		if ok {
+		if ok && !forklxcBlockedEnv(after) {
 			envDict[after] = v
 		}
 	}
 
 	// Add the image environment of application containers.
-	spec, err := instance.OCISpec(d.Path())
-	if err != nil {
-		op.Done(err)
-		return err
-	}
+	if d.isOCI() {
+		spec, err := instance.OCISpec(d.Path())
+		if err != nil {
+			op.Done(err)
+			return err
+		}
 
-	ociEnv, err := instance.OCIEnvironment(spec)
-	if err != nil {
-		op.Done(err)
-		return err
-	}
+		ociEnv, err := instance.OCIEnvironment(spec)
+		if err != nil {
+			op.Done(err)
+			return err
+		}
 
-	for k, v := range ociEnv {
-		_, ok := envDict[k]
-		if !ok {
-			envDict[k] = v
+		for k, v := range ociEnv {
+			_, ok := envDict[k]
+			if !ok && !forklxcBlockedEnv(k) {
+				envDict[k] = v
+			}
 		}
 	}
 
@@ -3359,7 +3440,7 @@ func (d *lxc) Stop(stateful bool) error {
 	}
 
 	// Setup a new operation
-	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStop, []operationlock.Action{operationlock.ActionRestart, operationlock.ActionRestore, operationlock.ActionMigrate}, false, true)
+	op, err := operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionStop, d.stopInheritableActions(), false, true)
 	if err != nil {
 		if errors.Is(err, operationlock.ErrNonReusuableSucceeded) {
 			// An existing matching operation has now succeeded, return.
@@ -3849,9 +3930,10 @@ func (d *lxc) onStop(args map[string]string) error {
 			// Mark current shutdown as complete.
 			op.Done(nil)
 
-			// Create a new restart operation.
-			op, err = operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionRestart, nil, true, false)
+			// Create a new restart operation, kept private so that other requests can't join it.
+			op, err = operationlock.CreateWaitGet(d.Project().Name, d.Name(), d.op, operationlock.ActionRestart, nil, false, false)
 			if err == nil {
+				op.SetInstanceInitiated(true)
 				defer op.Done(nil)
 			} else {
 				d.logger.Error("Failed to setup new restart operation", logger.Ctx{"err": err})
@@ -3872,10 +3954,10 @@ func (d *lxc) onStop(args map[string]string) error {
 			d.state.Events.SendLifecycle(d.project.Name, lifecycle.InstanceShutdown.Event(d, nil))
 		}
 
-		// Reboot the container
+		// Reboot the container on our own lock, other requests must not join it.
 		if target == "reboot" || autoRestart {
 			// Start the container again
-			err = d.Start(false)
+			err = d.start(false, op)
 			if err != nil {
 				op.Done(fmt.Errorf("Failed restarting instance: %w", err))
 				return
@@ -4150,7 +4232,7 @@ func (d *lxc) Render() (any, any, error) {
 }
 
 // RenderFull renders the full state of the instance.
-func (d *lxc) RenderFull(hostInterfaces []net.Interface) (*api.InstanceFull, any, error) {
+func (d *lxc) RenderFull() (*api.InstanceFull, any, error) {
 	if d.IsSnapshot() {
 		return nil, nil, errors.New("RenderFull only works with containers")
 	}
@@ -4165,7 +4247,7 @@ func (d *lxc) RenderFull(hostInterfaces []net.Interface) (*api.InstanceFull, any
 	ct := api.InstanceFull{Instance: *base.(*api.Instance)}
 
 	// Add the ContainerState
-	ct.State, err = d.renderState(ct.StatusCode, hostInterfaces)
+	ct.State, err = d.renderState(ct.StatusCode)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -4209,7 +4291,7 @@ func (d *lxc) RenderFull(hostInterfaces []net.Interface) (*api.InstanceFull, any
 }
 
 // renderState renders just the running state of the instance.
-func (d *lxc) renderState(statusCode api.StatusCode, hostInterfaces []net.Interface) (*api.InstanceState, error) {
+func (d *lxc) renderState(statusCode api.StatusCode) (*api.InstanceState, error) {
 	status := api.InstanceState{
 		Status:     statusCode.String(),
 		StatusCode: statusCode,
@@ -4228,7 +4310,7 @@ func (d *lxc) renderState(statusCode api.StatusCode, hostInterfaces []net.Interf
 
 		status.CPU = d.cpuState()
 		status.Memory = d.memoryState()
-		status.Network = d.networkState(hostInterfaces)
+		status.Network = d.networkState()
 		status.Pid = int64(pid)
 		status.Processes = processesState
 
@@ -4239,6 +4321,7 @@ func (d *lxc) renderState(statusCode api.StatusCode, hostInterfaces []net.Interf
 	}
 
 	status.Disk = d.diskState()
+	status.TPM = d.tpmState()
 
 	d.release()
 
@@ -4246,8 +4329,8 @@ func (d *lxc) renderState(statusCode api.StatusCode, hostInterfaces []net.Interf
 }
 
 // RenderState renders just the running state of the instance.
-func (d *lxc) RenderState(hostInterfaces []net.Interface) (*api.InstanceState, error) {
-	return d.renderState(d.statusCode(), hostInterfaces)
+func (d *lxc) RenderState() (*api.InstanceState, error) {
+	return d.renderState(d.statusCode())
 }
 
 // snapshot creates a snapshot of the instance.
@@ -4596,10 +4679,11 @@ func (d *lxc) Delete(force bool, cleanupDependencies bool) error {
 		return fmt.Errorf("Failed to create instance delete operation: %w", err)
 	}
 
-	defer op.Done(nil)
+	defer func() { op.Done(err) }()
 
 	if d.IsRunning() {
-		return api.StatusErrorf(http.StatusBadRequest, "Instance is running")
+		err = api.StatusErrorf(http.StatusBadRequest, "Instance is running")
+		return err
 	}
 
 	err = d.delete(force, cleanupDependencies)
@@ -4612,7 +4696,9 @@ func (d *lxc) Delete(force bool, cleanupDependencies bool) error {
 		parentName, _, _ := api.GetParentAndSnapshotName(d.name)
 
 		// Load the parent.
-		parent, err := instance.LoadByProjectAndName(d.state, d.project.Name, parentName)
+		var parent instance.Instance
+
+		parent, err = instance.LoadByProjectAndName(d.state, d.project.Name, parentName)
 		if err != nil {
 			return fmt.Errorf("Invalid parent: %w", err)
 		}
@@ -4655,6 +4741,11 @@ func (d *lxc) delete(force bool, cleanupDependencies bool) error {
 	err := d.warningsDelete()
 	if err != nil {
 		return err
+	}
+
+	// Run device removal function for each device while the instance volume still exists.
+	if !d.IsSnapshot() {
+		d.devicesRemove(d, cleanupDependencies)
 	}
 
 	pool, err := storagePools.LoadByInstance(d.state, d)
@@ -4725,9 +4816,6 @@ func (d *lxc) delete(force bool, cleanupDependencies bool) error {
 				return err
 			}
 		}
-
-		// Run device removal function for each device.
-		d.devicesRemove(d, cleanupDependencies)
 
 		// Clean things up.
 		d.cleanup()
@@ -5921,8 +6009,8 @@ func (d *lxc) Export(metaWriter io.Writer, rootfsWriter io.Writer, properties ma
 	fnam := filepath.Join(cDir, "metadata.yaml")
 
 	if util.PathExists(fnam) {
-		// Parse the metadata.
-		content, err := os.ReadFile(fnam)
+		// Parse the metadata, confined to the instance directory so an imported snapshot's symlink isn't followed.
+		content, err := readRegularFileInRoot(cDir, "metadata.yaml")
 		if err != nil {
 			_ = metaTarWriter.Close()
 			if rootfsTarWriter != nil {
@@ -6304,7 +6392,7 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 
 	// On a cluster move the dependent volumes on shared storage are taken over by the target
 	// rather than transferred, so they're kept out of the offer.
-	dependentVolumesOffer, err := storagePools.GenerateDependentVolumesOffer(d.state, srcConfig, d.Project().Name, args.Snapshots, args.Devices, args.SkipDependentVolumes, clusterMove)
+	dependentVolumesOffer, err := storagePools.GenerateDependentVolumesOffer(d.state, srcConfig, d.ExpandedDevices().CloneNative(), d.Project().Name, args.Snapshots, args.Devices, args.SkipDependentVolumes, clusterMove)
 	if err != nil {
 		err := fmt.Errorf("Failed generating instance depending volumes offer: %w", err)
 		op.Done(err)
@@ -6353,7 +6441,14 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 		return err
 	}
 
-	volumesWithTypes, err := storagePools.DependentVolumesMatchMigrationType(d.state, respHeader.DependentVolumes, args.Snapshots, nil, true, clusterMove)
+	// The target can only negotiate types for the volumes we offered, not redefine them.
+	err = storagePools.ValidateDependentVolumesAgainstOffer(offerHeader.DependentVolumes, respHeader.DependentVolumes)
+	if err != nil {
+		op.Done(err)
+		return err
+	}
+
+	volumesWithTypes, err := storagePools.DependentVolumesMatchMigrationType(d.state, respHeader, args.Snapshots, nil, true, clusterMove)
 	if err != nil {
 		err := fmt.Errorf("Failed to negotiate migration types for dependent volumes: %w", err)
 		op.Done(err)
@@ -6361,9 +6456,17 @@ func (d *lxc) MigrateSend(args instance.MigrateSendArgs) error {
 	}
 
 	d.logger.Debug("Generate dependent volumes args")
+	_, srcSnapName, _ := api.GetParentAndSnapshotName(d.name)
 	dependentVolumes := []localMigration.DependentVolumeArgs{}
 	for _, volWithType := range volumesWithTypes {
-		dependentVolumes = append(dependentVolumes, localMigration.ProtobufToDependentVolume(volWithType.Volume, volWithType.VolumeTypes[0], nil))
+		vol := localMigration.ProtobufToDependentVolume(volWithType.Volume, volWithType.VolumeTypes[0], nil)
+
+		// Copying from an instance snapshot, send the matching volume snapshots.
+		if d.IsSnapshot() {
+			vol.Name = fmt.Sprintf("%s/%s", vol.Name, srcSnapName)
+		}
+
+		dependentVolumes = append(dependentVolumes, vol)
 	}
 
 	volSourceArgs := &localMigration.VolumeSourceArgs{
@@ -6945,7 +7048,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 	respHeader.Criu = criuType
 
 	localDevices := d.LocalDevices().CloneNative()
-	volumesWithTypes, err := storagePools.DependentVolumesMatchMigrationType(d.state, offerHeader.DependentVolumes, args.Snapshots, localDevices, false, clusterMove)
+	volumesWithTypes, err := storagePools.DependentVolumesMatchMigrationType(d.state, offerHeader, args.Snapshots, localDevices, false, clusterMove)
 	if err != nil {
 		return fmt.Errorf("Failed to negotiate migration types for dependent volumes: %w", err)
 	}
@@ -6953,7 +7056,7 @@ func (d *lxc) MigrateReceive(args instance.MigrateReceiveArgs) error {
 	dependentVolumes := []localMigration.DependentVolumeArgs{}
 	for _, volWithType := range volumesWithTypes {
 		respHeader.DependentVolumes = append(respHeader.DependentVolumes, volWithType.Volume)
-		vol := localMigration.ProtobufToDependentVolume(volWithType.Volume, volWithType.VolumeTypes[0], localDevices[*volWithType.Volume.DeviceName])
+		vol := localMigration.ProtobufToDependentVolume(volWithType.Volume, volWithType.VolumeTypes[0], localDevices[volWithType.Volume.GetDeviceName()])
 		dependentVolumes = append(dependentVolumes, vol)
 	}
 
@@ -8235,12 +8338,12 @@ func (d *lxc) stopForkfile(force bool) {
 }
 
 // Console attaches to the instance console.
-func (d *lxc) Console(protocol string) (*os.File, chan error, error) {
+func (d *lxc) Console(protocol string) (*os.File, chan struct{}, error) {
 	if protocol != instance.ConsoleTypeConsole {
 		return nil, nil, fmt.Errorf("Container instances don't support %q output", protocol)
 	}
 
-	chDisconnect := make(chan error, 1)
+	chDisconnect := make(chan struct{})
 
 	args := []string{
 		d.state.OS.ExecPath,
@@ -8503,14 +8606,17 @@ func (d *lxc) diskState() map[string]api.InstanceStateDisk {
 		if internalInstance.IsRootDiskDevice(dev.Config) {
 			pool, err := d.getStoragePool()
 			if err != nil {
-				d.logger.Error("Error loading storage pool", logger.Ctx{"err": err})
+				if !d.isBeingDeleted() {
+					d.logger.Warn("Error loading storage pool", logger.Ctx{"err": err})
+				}
+
 				continue
 			}
 
 			usage, err = pool.GetInstanceUsage(d)
 			if err != nil {
-				if !errors.Is(err, storageDrivers.ErrNotSupported) {
-					d.logger.Error("Error getting disk usage", logger.Ctx{"err": err})
+				if !errors.Is(err, storageDrivers.ErrNotSupported) && !d.isBeingDeleted() {
+					d.logger.Warn("Error getting disk usage", logger.Ctx{"err": err})
 				}
 
 				continue
@@ -8518,7 +8624,10 @@ func (d *lxc) diskState() map[string]api.InstanceStateDisk {
 		} else if dev.Config["pool"] != "" {
 			pool, err := storagePools.LoadByName(d.state, dev.Config["pool"])
 			if err != nil {
-				d.logger.Error("Error loading storage pool", logger.Ctx{"poolName": dev.Config["pool"], "err": err})
+				if !d.isBeingDeleted() {
+					d.logger.Warn("Error loading storage pool", logger.Ctx{"poolName": dev.Config["pool"], "err": err})
+				}
+
 				continue
 			}
 
@@ -8609,7 +8718,7 @@ func (d *lxc) memoryState() api.InstanceStateMemory {
 	return memory
 }
 
-func (d *lxc) networkState(hostInterfaces []net.Interface) map[string]api.InstanceStateNetwork {
+func (d *lxc) networkState() map[string]api.InstanceStateNetwork {
 	result := map[string]api.InstanceStateNetwork{}
 
 	pid := d.InitPID()
@@ -8617,7 +8726,7 @@ func (d *lxc) networkState(hostInterfaces []net.Interface) map[string]api.Instan
 		return result
 	}
 
-	nw, err := netutils.NetnsGetifaddrs(int32(pid), hostInterfaces)
+	nw, err := netutils.NetnsGetifaddrs(int32(pid))
 	if err != nil {
 		d.logger.Error("Failed to retrieve network information via netlink", logger.Ctx{"err": err, "pid": pid})
 		return result
@@ -9469,7 +9578,7 @@ func (d *lxc) Info() instance.Info {
 }
 
 // Metrics returns the metrics set for the instance.
-func (d *lxc) Metrics(hostInterfaces []net.Interface) (*metrics.MetricSet, error) {
+func (d *lxc) Metrics() (*metrics.MetricSet, error) {
 	out := metrics.NewMetricSet(map[string]string{"project": d.project.Name, "name": d.name, "type": instancetype.Container.String()})
 
 	if !d.IsRunning() {
@@ -9612,7 +9721,7 @@ func (d *lxc) Metrics(hostInterfaces []net.Interface) (*metrics.MetricSet, error
 	}
 
 	// Get network stats
-	networkState := d.networkState(hostInterfaces)
+	networkState := d.networkState()
 
 	for name, netState := range networkState {
 		labels := map[string]string{"device": name}

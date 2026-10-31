@@ -97,6 +97,12 @@ func storageStartup(s *state.State) error {
 			return false
 		}
 
+		// Clear any snapshot mount left behind by a previous daemon.
+		err = storagePools.UnmountStaleSnapshots(pool)
+		if err != nil {
+			logger.Warn("Failed clearing stale snapshot mounts", logger.Ctx{"pool": poolName, "err": err})
+		}
+
 		logger.Info("Initialized storage pool", logger.Ctx{"pool": poolName})
 		_ = warnings.ResolveWarningsByNodeAndProjectAndTypeAndEntity(s.DB.Cluster, s.ServerName, "", warningtype.StoragePoolUnvailable, cluster.TypeStoragePool, int(pool.ID()))
 
@@ -116,7 +122,7 @@ func storageStartup(s *state.State) error {
 	if len(initPools) > 0 {
 		go func() {
 			for {
-				t := time.NewTimer(time.Duration(time.Minute))
+				t := time.NewTimer(15 * time.Second)
 
 				select {
 				case <-s.ShutdownCtx.Done():
@@ -126,13 +132,13 @@ func storageStartup(s *state.State) error {
 					t.Stop()
 
 					// Try initializing remaining storage pools in random order.
-					tryInstancesStart := false
+					var initializedPools []string
 					for poolName := range initPools {
 						if initPool(poolName) {
 							// Storage pool initialized successfully or deleted so
 							// remove it from the list so its not retried.
 							delete(initPools, poolName)
-							tryInstancesStart = true
+							initializedPools = append(initializedPools, poolName)
 						}
 					}
 
@@ -140,13 +146,14 @@ func storageStartup(s *state.State) error {
 						logger.Info("All storage pools initialized")
 					}
 
-					// At least one remaining storage pool was initialized, check if any
-					// instances can now start.
-					if tryInstancesStart {
+					// At least one remaining storage pool was initialized, re-register the disks of
+					// instances that kept running through the restart and check if any instances can now start.
+					if len(initializedPools) > 0 {
 						instances, err := instance.LoadNodeAll(s, instancetype.Any)
 						if err != nil {
 							logger.Error("Failed loading instances to start", logger.Ctx{"err": err})
 						} else {
+							devicesRegisterPools(s, instances, initializedPools)
 							instancesStart(s, instances)
 						}
 					}

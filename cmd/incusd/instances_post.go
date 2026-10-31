@@ -610,6 +610,37 @@ func validateDependentVolumes(s *state.State, source instance.Instance, targetPr
 // ErrPoolNotRemote indicates the pool is not remote.
 var ErrPoolNotRemote = errors.New("Pool is not remote")
 
+// instanceRunningOnMember asks the member hosting the instance whether it's running, an offline member counts as stopped.
+func instanceRunningOnMember(r *http.Request, s *state.State, inst instance.Instance) (bool, error) {
+	var member db.NodeInfo
+	err := s.DB.Cluster.Transaction(r.Context(), func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+
+		member, err = tx.GetNodeByName(ctx, inst.Location())
+
+		return err
+	})
+	if err != nil {
+		return false, fmt.Errorf("Failed loading instance's member: %w", err)
+	}
+
+	if member.IsOffline(s.GlobalConfig.OfflineThreshold()) {
+		return false, nil
+	}
+
+	client, err := cluster.Connect(member.Address, s.Endpoints.NetworkCert(), s.ServerCert(), r, false)
+	if err != nil {
+		return false, err
+	}
+
+	instState, _, err := client.UseProject(inst.Project().Name).GetInstanceState(inst.Name())
+	if err != nil {
+		return false, err
+	}
+
+	return instState.StatusCode != api.Stopped, nil
+}
+
 // checkVolumesOnRemoteStorage checks whether root and dependent disks are located on remote storage.
 func checkVolumesOnRemoteStorage(s *state.State, pool *api.StoragePool, inst instance.Instance) error {
 	if !slices.Contains(db.StorageRemoteDriverNames(), pool.Driver) {
@@ -661,6 +692,38 @@ func createFromCopy(ctx context.Context, s *state.State, r *http.Request, projec
 		req.Config["volatile.apply_nvram"] = "true"
 	}
 
+	// When refreshing, the target keeps its own dependent volumes unless the request overrides them.
+	if req.Source.Refresh {
+		target, err := instance.LoadByProjectAndName(s, targetProject, req.Name)
+		if err == nil {
+			sourceDevices := source.LocalDevices()
+			targetDevices := target.LocalDevices()
+
+			err = source.ForEachDependentDiskType(func(dev deviceConfig.DeviceNamed) error {
+				targetDevice, ok := targetDevices[dev.Name]
+				if !ok {
+					return nil
+				}
+
+				reqDevice := req.Devices[dev.Name]
+				if reqDevice != nil && (reqDevice["source"] != sourceDevices[dev.Name]["source"] || reqDevice["pool"] != sourceDevices[dev.Name]["pool"]) {
+					return nil
+				}
+
+				if req.Devices == nil {
+					req.Devices = map[string]map[string]string{}
+				}
+
+				req.Devices[dev.Name] = maps.Clone(targetDevice)
+
+				return nil
+			})
+			if err != nil {
+				return response.SmartError(err)
+			}
+		}
+	}
+
 	err = validateDependentVolumes(s, source, targetProject, req)
 	if err != nil {
 		return response.SmartError(err)
@@ -706,6 +769,19 @@ func createFromCopy(ctx context.Context, s *state.State, r *http.Request, projec
 
 				return response.SmartError(err)
 			}
+
+			// Copying the volumes of a running instance here would mount them on two members at once.
+			if !source.IsSnapshot() {
+				running, err := instanceRunningOnMember(r, s, source)
+				if err != nil {
+					return response.SmartError(err)
+				}
+
+				if running {
+					// Redirect to migration
+					return clusterCopyContainerInternal(ctx, s, r, source, projectName, profiles, req)
+				}
+			}
 		}
 	}
 
@@ -716,7 +792,7 @@ func createFromCopy(ctx context.Context, s *state.State, r *http.Request, projec
 	}
 
 	for key, value := range sourceConfig {
-		if !internalInstance.InstanceIncludeWhenCopying(key, false) {
+		if !internalInstance.InstanceIncludeWhenCopying(key, false, req.Stateful) {
 			logger.Debug("Skipping key from copy source", logger.Ctx{"key": key, "sourceProject": source.Project().Name, "sourceInstance": source.Name(), "project": targetProject, "instance": req.Name})
 			continue
 		}
@@ -915,7 +991,7 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 		req = api.InstancesPost{
 			InstancePut: bInfo.Config.Container.InstancePut,
 			Name:        bInfo.Name,
-			Source:      api.InstanceSource{}, // Only relevant for "copy" or "migration", but may not be nil.
+			Source:      api.InstanceSource{Type: "backup"},
 			Type:        api.InstanceType(bInfo.Config.Container.Type),
 		}
 
@@ -1089,7 +1165,7 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 			req = api.InstancesPost{
 				InstancePut: instStateAPI.Writable(),
 				Name:        inst.Name(),
-				Source:      api.InstanceSource{},
+				Source:      api.InstanceSource{Type: "backup"},
 				Type:        inst.Type().ToAPI(),
 			}
 
@@ -1141,7 +1217,7 @@ func createFromBackup(s *state.State, r *http.Request, projectName string, data 
 						Profiles:     snapStateAPI.Profiles,
 					},
 					Name:   inst.Name(),
-					Source: api.InstanceSource{},
+					Source: api.InstanceSource{Type: "backup"},
 					Type:   inst.Type().ToAPI(),
 				}
 
@@ -1587,6 +1663,7 @@ func instancesPost(d *Daemon, r *http.Request) response.Response {
 
 			targetMemberInfo, err = scriptlet.InstancePlacementRun(r.Context(), logger.Log, s, &reqExpanded, candidateMembers, leaderAddress)
 			if err != nil {
+				logger.Warn("Instance placement scriptlet refused the instance", logger.Ctx{"project": targetProjectName, "instance": req.Name, "err": err})
 				return response.SmartError(fmt.Errorf("Failed instance placement scriptlet: %w", err))
 			}
 		}

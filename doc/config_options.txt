@@ -50,9 +50,10 @@ CPUベースラインに追加するフラグとCPUベースラインから削�
 ```
 
 ```{config:option} boot.priority devices-disk
+:default: "`0`"
 :required: "no"
-:shortdesc: "VM のブート優先度（高いほうが先にブート）"
-:type: "integer"
+:shortdesc: "VM のブート優先度（高いほうが先にブート）、`skip`でスキップ"
+:type: "string"
 
 ```
 
@@ -568,9 +569,10 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} boot.priority devices-nic_bridged
+:default: "`skip`"
 :managed: "no"
-:shortdesc: "VMのブート優先度（高いほうが先にブート）"
-:type: "integer"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）、`skip`でスキップ"
+:type: "string"
 
 ```
 
@@ -983,9 +985,10 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} boot.priority devices-nic_macvlan
+:default: "`skip`"
 :managed: "no"
-:shortdesc: "VMのブート優先度（高いほうが先にブート）"
-:type: "integer"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）、`skip`でスキップ"
+:type: "string"
 
 ```
 
@@ -1085,9 +1088,10 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} boot.priority devices-nic_ovn
+:default: "`skip`"
 :managed: "no"
-:shortdesc: "VMのブート優先度（高いほうが先にブート）"
-:type: "integer"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）、`skip`でスキップ"
+:type: "string"
 
 ```
 
@@ -1304,6 +1308,30 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
+```{config:option} security.ipv4_filtering devices-nic_ovn
+:default: "false"
+:managed: "no"
+:shortdesc: "インスタンスが他のインスタンスのIPv4アドレスに成りすますのを防ぐ（`security.mac_filtering`を有効にする）"
+:type: "bool"
+
+```
+
+```{config:option} security.ipv6_filtering devices-nic_ovn
+:default: "false"
+:managed: "no"
+:shortdesc: "インスタンスが他のインスタンスのIPv6アドレスに成りすますのを防ぐ（`security.mac_filtering`を有効にする）"
+:type: "bool"
+
+```
+
+```{config:option} security.mac_filtering devices-nic_ovn
+:default: "false"
+:managed: "no"
+:shortdesc: "インスタンスが他のインスタンスのMACアドレスに成りすますのを防ぐ"
+:type: "bool"
+
+```
+
 ```{config:option} security.promiscuous devices-nic_ovn
 :default: "false"
 :managed: "no"
@@ -1329,9 +1357,10 @@ VMでは、このオプションはファイルシステムディスクデバイ
 
 ```
 
-```{config:option} boot.priotiry devices-nic_p2p
-:shortdesc: "VMのブート優先度 （高いほうが先にブート）"
-:type: "integer"
+```{config:option} boot.priority devices-nic_p2p
+:default: "`skip`"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）、`skip`でスキップ"
+:type: "string"
 
 ```
 
@@ -1488,9 +1517,10 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} boot.priority devices-nic_physical
+:default: "`skip`"
 :managed: "no"
-:shortdesc: "VMのブート優先度（高いほうが先にブート）"
-:type: "integer"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）、`skip`でスキップ"
+:type: "string"
 
 ```
 
@@ -1831,9 +1861,17 @@ VMでは、このオプションはファイルシステムディスクデバイ
 ```
 
 ```{config:option} boot.priority devices-nic_sriov
+:default: "`skip`"
 :managed: "no"
-:shortdesc: "VMのブート優先度（高いほうが先にブート）"
-:type: "integer"
+:shortdesc: "VMのブート優先度（高いほうが先にブート）、`skip`でスキップ"
+:type: "string"
+
+```
+
+```{config:option} failover devices-nic_sriov
+:required: "no"
+:shortdesc: "NICをライブマイグレートする際に使うフェイルオーバーブリッジ"
+:type: "string"
 
 ```
 
@@ -1902,6 +1940,13 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :managed: "no"
 :shortdesc: "セキュリティーを低減させるかもしれないようなNICの設定をインスタンスに許可するか"
 :type: "bool"
+
+```
+
+```{config:option} variant devices-nic_sriov
+:required: "no"
+:shortdesc: "使用するVFIOバリアント（未設定なら汎用の`vfio-pci`ドライバーでNICを登録し、`mlx5`に設定すると`mlx5_vfio_pci`で登録）"
+:type: "string"
 
 ```
 
@@ -2305,6 +2350,14 @@ VMでは、このオプションはファイルシステムディスクデバイ
 :shortdesc: "インスタンスが停止するのに待つ秒数"
 :type: "integer"
 インスタンスを強制停止する前に停止するのを待つ秒数。
+```
+
+```{config:option} boot.pxe instance-boot
+:defaultdesc: "no"
+:liveupdate: "yes"
+:shortdesc: "PXEブートを有効にするかどうか"
+:type: "bool"
+
 ```
 
 ```{config:option} boot.stop.priority instance-boot
@@ -3035,6 +3088,7 @@ BPFファイルシステムはいずれかの`security.bpffs.delegate_*`オプ�
 :type: "bool"
 コンテナでは、これは（ネストした）Incusをインスタンス内部で動かせるかを制御します。
 仮想マシンでは、これを`false`に設定するとネストした仮想化を無効します（`svm`と`vmx` CPU フラグをオフにします）。
+また仮想マシンでこれを明示的に`true`に設定すると、デバイスが共有メモリーを必要としない限りは、共有されないメモリーを使用します（透過的なhuge pageを使えます）。{ref}`performance-tuning-vm-memory`を参照してください。
 ```
 
 ```{config:option} security.privileged instance-security
@@ -3361,6 +3415,12 @@ cron設定自体がカンマを含むため、他の多くの設定キーと異�
 
 ```
 
+```{config:option} volatile.<name>.failover.host_name instance-volatile
+:shortdesc: "フェイルオーバーインタフェース用のホスト上のネットワークデバイス名"
+:type: "string"
+
+```
+
 ```{config:option} volatile.<name>.host_name instance-volatile
 :shortdesc: "ホスト上のネットワークデバイス名"
 :type: "string"
@@ -3397,6 +3457,12 @@ cron設定自体がカンマを含むため、他の多くの設定キーと異�
 ネットワークデバイスの最後に使用されたIPアドレスのカンマ区切りリスト。
 ```
 
+```{config:option} volatile.<name>.last_state.migratable instance-volatile
+:shortdesc: "NICの元々のライブマイグレーション対応能力"
+:type: "string"
+元々のNICのライブマイグレーション対応能力
+```
+
 ```{config:option} volatile.<name>.last_state.mtu instance-volatile
 :shortdesc: "ネットワークデバイスの元のMTU"
 :type: "string"
@@ -3419,6 +3485,42 @@ PCIデバイスをインスタンスに割り当てる際に使用された親�
 :shortdesc: "PCIの親のスロット名"
 :type: "string"
 親のホストデバイスのPCIスロット名。
+```
+
+```{config:option} volatile.<name>.last_state.representor instance-volatile
+:shortdesc: "リプリゼンター名"
+:type: "string"
+リプリゼンターのポート名
+```
+
+```{config:option} volatile.<name>.last_state.representor.mtu instance-volatile
+:shortdesc: "リプリゼンターの元のMTU"
+:type: "string"
+リプリゼンターの元のMTU
+```
+
+```{config:option} volatile.<name>.last_state.representor.pvid instance-volatile
+:shortdesc: "リプリゼンターの元のPVID"
+:type: "string"
+リプリゼンターの元のPVID
+```
+
+```{config:option} volatile.<name>.last_state.representor.tagged instance-volatile
+:shortdesc: "リプリゼンターの元のタグVLAN"
+:type: "string"
+リプリゼンターの元のタグVLAN
+```
+
+```{config:option} volatile.<name>.last_state.representor.untagged instance-volatile
+:shortdesc: "リプリゼンターの元のタグ無しVLAN"
+:type: "string"
+リプリゼンターの元のタグ無しVLAN
+```
+
+```{config:option} volatile.<name>.last_state.representor.up instance-volatile
+:shortdesc: "リプリゼンターの元の状態"
+:type: "string"
+リプリゼンターの元の状態
 ```
 
 ```{config:option} volatile.<name>.last_state.usb.bus instance-volatile
@@ -3779,8 +3881,17 @@ NVIDIA仮想GPUインスタンスUUID。
 
 <!-- config group network_bridge-bgp end -->
 <!-- config group network_bridge-common start -->
+```{config:option} bgp.communities network_bridge-common
+:condition: "BGPサーバー"
+:default: "-"
+:scope: "global"
+:shortdesc: "広告されたプリフィクスにアタッチするBGPコミュニティーのカンマ区切りリスト"
+:type: "string"
+
+```
+
 ```{config:option} bgp.ipv4.instances network_bridge-common
-:condition: "BGP server"
+:condition: "BGPサーバー"
 :default: "`false`"
 :shortdesc: "それぞれの稼働中のインスタンスのIPv4アドレスの/32ルートを広告するかどうか"
 :type: "bool"
@@ -3797,7 +3908,7 @@ NVIDIA仮想GPUインスタンスUUID。
 ```
 
 ```{config:option} bgp.ipv6.instances network_bridge-common
-:condition: "BGP server"
+:condition: "BGPサーバー"
 :default: "`false`"
 :shortdesc: "それぞれの稼働中のインスタンスのIPv6アドレスの/128ルートを広告するかどうか"
 :type: "bool"
@@ -4396,6 +4507,14 @@ NVIDIA仮想GPUインスタンスUUID。
 
 <!-- config group network_macvlan-common end -->
 <!-- config group network_ovn-common start -->
+```{config:option} bgp.communities network_ovn-common
+:condition: "BGPサーバー"
+:default: "-"
+:shortdesc: "広告されたプリフィクスにアタッチするBGPコミュニティーのカンマ区切りリスト"
+:type: "string"
+
+```
+
 ```{config:option} bridge.external_interfaces network_ovn-common
 :scope: "local"
 :shortdesc: "ブリッジに含める未設定のネットワークインターフェースのカンマ区切りリスト"
@@ -4541,7 +4660,7 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```{config:option} ipv4.nat.address network_ovn-common
 :condition: "IPv4アドレス"
-:shortdesc: "送信時に使うソースアドレス（`ovn.ingress_mode=routed`であるアップリンクが必要）"
+:shortdesc: "ネットワークからの外向きトラフィックに使うソースアドレス"
 :type: "string"
 
 ```
@@ -4588,7 +4707,7 @@ NVIDIA仮想GPUインスタンスUUID。
 
 ```{config:option} ipv6.nat.address network_ovn-common
 :condition: "IPv6アドレス"
-:shortdesc: "送信時に使うソースアドレス（`ovn.ingress_mode=routed`であるアップリンクが必要）"
+:shortdesc: "ネットワークからの外向きトラフィックに使うソースアドレス"
 :type: "string"
 
 ```
@@ -4897,6 +5016,14 @@ NVIDIA仮想GPUインスタンスUUID。
 
 <!-- config group network_physical-ovn end -->
 <!-- config group network_sriov-common start -->
+```{config:option} failover network_sriov-common
+:condition: "-"
+:scope: "local"
+:shortdesc: "`sriov` NICをライブマイグレーションする際に使うフェイルオーバーブリッジ"
+:type: "string"
+
+```
+
 ```{config:option} mtu network_sriov-common
 :condition: "-"
 :shortdesc: "新しいインタフェースのMTU"
@@ -4915,6 +5042,12 @@ NVIDIA仮想GPUインスタンスUUID。
 ```{config:option} user.* network_sriov-common
 :condition: "-"
 :shortdesc: "ユーザー指定の自由形式のキー／バリューペア"
+:type: "string"
+
+```
+
+```{config:option} variant network_sriov-common
+:shortdesc: "使用するVFIOバリアント（未設定なら汎用の`vfio-pci`ドライバーでNICを登録し、`mlx5`に設定すると`mlx5_vfio_pci`で登録）"
 :type: "string"
 
 ```
@@ -5401,6 +5534,7 @@ Possible values are `allow` or `block`.
 :shortdesc: "証明書を発行する対象のドメイン"
 :type: "string"
 
+ドメイン、ワイルドカードドメイン（`*.example.com`）のカンマ区切りリスト。ワイルドカードドメインは`DNS-01`チャレンジが必要。
 ```
 
 ```{config:option} acme.eab.hmac server-acme
@@ -5536,6 +5670,15 @@ TLSクライアントがOpenFGAで認可される際に、OpenFGAユーザーと
 
 <!-- config group server-authorization end -->
 <!-- config group server-cluster start -->
+```{config:option} cluster.healing_delay server-cluster
+:defaultdesc: "`0`"
+:scope: "global"
+:shortdesc: "オフラインのクラスターメンバーを検出後退避するまでの待ち時間"
+:type: "integer"
+オフラインのクラスターメンバーを検出してから退避するまで待つ秒数を設定します。
+待ち時間の開始時に`cluster-member-offline`イベントが送られ、外部のツールがメンバーの電源をオフにする時間を与えます。
+```
+
 ```{config:option} cluster.healing_threshold server-cluster
 :defaultdesc: "`0`"
 :scope: "global"
@@ -5797,7 +5940,10 @@ See {ref}`cluster-https-address`.
 :scope: "global"
 :shortdesc: "CAで署名されたクライアントを自動的に信頼するかどうか"
 :type: "bool"
-
+これは`server.ca`ファイルが存在する場合にのみ適用されます。
+有効にすると、CAで発行され`ca.crl`内にリストされていない任意のクライアント証明書がトラストストアーに追加することなく信頼されます。
+それらの証明書はトラストストアーに制限付き証明書として登録されていない限りサーバーへのフルアクセスを得ます。
+無効の場合は、CAで発行した証明書であってもトラストストアーに追加する必要があります。
 ```
 
 <!-- config group server-core end -->
@@ -6024,6 +6170,15 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 この結果、より多くのシステムリソースを使いますが、クラッシュの影響範囲を狭められます。
 ```
 
+```{config:option} instances.migration.bwlimit server-miscellaneous
+:defaultdesc: "`128MiB` （QEMUのデフォルト）"
+:scope: "global"
+:shortdesc: "仮想マシンのライブマイグレーションのバンド幅の制限値"
+:type: "string"
+それぞれの仮想マシンのライブグレーションのメモリーと状態転送に使うバンド幅に対する上限値。
+未指定時は、QEMUのデフォルトの128MiB/s（約1Gbit/s）になります。
+```
+
 ```{config:option} instances.nic.host_name server-miscellaneous
 :defaultdesc: "`random`"
 :scope: "global"
@@ -6182,13 +6337,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :shortdesc: "アプリケーション用に期待されるaudienceの値"
 :type: "string"
 この値はいくつかのプロバイダーで必要です。
+不透明なアクセストークンは検証不可能なオーディエンスとして設定される場合は拒否されます。
 ```
 
 ```{config:option} oidc.claim server-oidc
 :scope: "global"
 :shortdesc: "ユーザー名として使用するOpenID Connectクレーム"
 :type: "string"
-アクセストークン内にクレームが含まれる必要があることに注意してください。
+クレームはアクセストークン内に含まれるか、不透明なアクセストークンの場合はIDトークン内に含まれる必要があることに注意してください。
 ```
 
 ```{config:option} oidc.client.id server-oidc
@@ -6827,6 +6983,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```
 
+```{config:option} migration.follow_instance storage_volume_btrfs-common
+:condition: "カスタムボリューム"
+:default: "`false`"
+:shortdesc: "仮想マシンに接続されたボリュームを仮想マシンが別のクラスターメンバーに移動する際に一緒に移動するかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} security.shared storage_volume_btrfs-common
 :condition: "カスタムブロックボリューム"
 :default: "`volume.security.shared`と同じか`false`"
@@ -7121,6 +7285,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```
 
+```{config:option} migration.follow_instance storage_volume_dir-common
+:condition: "custom volume"
+:default: "`false`"
+:shortdesc: "仮想マシンに接続されたボリュームを仮想マシンが別のクラスターメンバーに移動する際に一緒に移動するかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} security.shared storage_volume_dir-common
 :condition: "カスタムブロックボリューム"
 :default: "`volume.security.shared`と同じか`false`"
@@ -7412,6 +7584,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 
 ```
 
+```{config:option} migration.follow_instance storage_volume_lvm-common
+:condition: "custom volume"
+:default: "`false`"
+:shortdesc: "仮想マシンに接続されたボリュームを仮想マシンが別のクラスターメンバーに移動する際に一緒に移動するかどうか"
+:type: "bool"
+
+```
+
 ```{config:option} security.shared storage_volume_lvm-common
 :condition: "カスタムブロックボリューム"
 :default: "`volume.security.shared`と同じか`false`"
@@ -7660,6 +7840,14 @@ LXCFSは通常はホスト上の単一のファイルシステムを経由して
 :default: "`volume.initial.uid`と同じか`0`"
 :shortdesc: "インスタンス内のボリュームの所有者のUID"
 :type: "int"
+
+```
+
+```{config:option} migration.follow_instance storage_volume_zfs-common
+:condition: "custom volume"
+:default: "`false`"
+:shortdesc: "仮想マシンに接続されたボリュームを仮想マシンが別のクラスターメンバーに移動する際に一緒に移動するかどうか"
+:type: "bool"
 
 ```
 

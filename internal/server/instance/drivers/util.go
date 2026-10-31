@@ -2,8 +2,6 @@ package drivers
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -17,6 +15,7 @@ import (
 
 	yaml "go.yaml.in/yaml/v4"
 
+	internalInstance "github.com/lxc/incus/v7/internal/instance"
 	"github.com/lxc/incus/v7/internal/linux"
 	"github.com/lxc/incus/v7/internal/server/cluster"
 	"github.com/lxc/incus/v7/internal/server/db"
@@ -302,25 +301,30 @@ type qcow2BlockdevInfo struct {
 	index int
 }
 
-// classifyQcow2Blockdev classifies a block device as a qcow2 backing, root, or overlay device.
+// classifyQcow2Blockdev classifies a qcow2 backing, root or overlay node, recognizing the older underscore names too.
 func classifyQcow2Blockdev(name string, rootDevName string) (*qcow2BlockdevInfo, bool) {
-	reBacking := regexp.MustCompile(fmt.Sprintf(`^%s_backing(\d+)$`, rootDevName))
-	reOverlay := regexp.MustCompile(fmt.Sprintf(`^%s_overlay(\d+)$`, rootDevName))
-
 	if name == rootDevName {
 		return &qcow2BlockdevInfo{name: name, kind: rootBlockdevKind, index: 0}, true
 	}
 
-	m := reBacking.FindStringSubmatch(name)
-	if m != nil {
-		i, _ := strconv.Atoi(m[1])
-		return &qcow2BlockdevInfo{name: name, kind: backingBlockdevKind, index: i}, true
+	patterns := []struct {
+		prefix string
+		kind   qcow2BlockdevKind
+	}{
+		{derivedBlockNodeName(rootDevName, "backing"), backingBlockdevKind},
+		{derivedBlockNodeName(rootDevName, "overlay"), overlayBlockdevKind},
+		{rootDevName + "_backing", backingBlockdevKind},
+		{rootDevName + "_overlay", overlayBlockdevKind},
 	}
 
-	m = reOverlay.FindStringSubmatch(name)
-	if m != nil {
-		i, _ := strconv.Atoi(m[1])
-		return &qcow2BlockdevInfo{name: name, kind: overlayBlockdevKind, index: i}, true
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(fmt.Sprintf(`^%s(\d+)$`, regexp.QuoteMeta(pattern.prefix)))
+
+		m := re.FindStringSubmatch(name)
+		if m != nil {
+			i, _ := strconv.Atoi(m[1])
+			return &qcow2BlockdevInfo{name: name, kind: pattern.kind, index: i}, true
+		}
 	}
 
 	return nil, false
@@ -358,29 +362,35 @@ func filterAndSortQcow2Blockdevs(names []string, rootDevName string) []string {
 	return result
 }
 
-// hashValue returns a hash of the name if it exceeds the given length limit.
-// Otherwise, it returns the original name unchanged.
-func hashValue(value string, maxLength int) string {
-	if len(value) > maxLength {
-		// If the name is too long, hash it as SHA-256 (32 bytes).
-		// Then encode the SHA-256 binary hash as Base64 Raw URL format and trim down to 'maxLength' chars.
-		// Raw URL avoids the use of "+" character and the padding "=" character which QEMU doesn't allow.
-		hash256 := sha256.New()
-		hash256.Write([]byte(value))
-		binaryHash := hash256.Sum(nil)
-		value = base64.RawURLEncoding.EncodeToString(binaryHash)
-		value = value[0:maxLength]
+// derivedBlockNodeName returns the name of a helper block node tied to a device node, using a dash that encoded device names can't contain alone.
+func derivedBlockNodeName(nodeName string, suffix string) string {
+	base := strings.TrimPrefix(nodeName, qemuBlockDevIDPrefix)
+
+	// Keep room for the suffix within the 31 characters QEMU allows for node names.
+	if len(base) > 12 {
+		// Hashes may contain dashes, swap them out so the separator stays unambiguous.
+		base = strings.ReplaceAll(internalInstance.HashName(base, 12), "-", "_")
 	}
 
-	return value
+	return fmt.Sprintf("%s%s-%s", qemuBlockDevIDPrefix, base, suffix)
 }
 
-// ephemeralSnapshotName returns a snapshot name derived from the disk name.
-func ephemeralSnapshotName(diskName string) string {
-	return fmt.Sprintf("%s_snap", diskName)
+// ephemeralSnapshotName returns the node name of the temporary snapshot of a disk.
+func ephemeralSnapshotName(nodeName string) string {
+	return derivedBlockNodeName(nodeName, "snap")
 }
 
-// migrationNBDTarget returns a name for a disk exposed via the NBD server.
-func migrationNBDTarget(diskName string) string {
-	return fmt.Sprintf("%s_nbd", diskName)
+// migrationNBDTarget returns the node name of the NBD client used to migrate a disk.
+func migrationNBDTarget(nodeName string) string {
+	return derivedBlockNodeName(nodeName, "nbd")
+}
+
+// qcow2OverlayName returns the node name of a numbered qcow2 overlay of a disk.
+func qcow2OverlayName(nodeName string, index int) string {
+	return derivedBlockNodeName(nodeName, fmt.Sprintf("overlay%d", index))
+}
+
+// qcow2BackingName returns the node name of a numbered qcow2 backing layer of a disk.
+func qcow2BackingName(nodeName string, index int) string {
+	return derivedBlockNodeName(nodeName, fmt.Sprintf("backing%d", index))
 }

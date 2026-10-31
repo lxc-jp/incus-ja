@@ -23,12 +23,25 @@ if not os.path.islink('.sphinx/_static/swagger-ui/swagger-ui.css'):
 
 ### MAN PAGES ###
 # Find the path to the incus binary
-path = str(subprocess.check_output(['go', 'env', 'GOPATH'], encoding="utf-8").strip())
-incus = os.path.join(path, 'bin', 'incus')
-if os.path.isfile(incus):
+# "go install" puts binaries in $GOBIN if it is set, and in $GOPATH/bin
+# otherwise. Note that the asdf golang plugin used by Read the Docs sets
+# GOBIN to <asdf install dir>/bin, which differs from $GOPATH/bin.
+gobin = str(subprocess.check_output(['go', 'env', 'GOBIN'], encoding="utf-8").strip())
+gopath = str(subprocess.check_output(['go', 'env', 'GOPATH'], encoding="utf-8").strip())
+
+candidates = []
+if gobin:
+    candidates.append(os.path.join(gobin, 'incus'))
+for gopath_entry in gopath.split(os.pathsep):
+    if gopath_entry:
+        candidates.append(os.path.join(gopath_entry, 'bin', 'incus'))
+candidates.append(os.path.join(os.path.expanduser('~'), 'go', 'bin', 'incus'))
+
+incus = next((candidate for candidate in candidates if os.path.isfile(candidate)), None)
+if incus:
     print("Using " + incus + " to generate man pages.")
 else:
-    print("Cannot find incus in " + incus)
+    print("Cannot find the incus binary. Tried: " + ", ".join(candidates))
     exit(2)
 
 # Generate man pages content

@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"maps"
 	"net"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -40,6 +42,8 @@ type path struct {
 	owner   string
 	prefix  net.IPNet
 	nexthop net.IP
+
+	communities []uint32
 }
 
 type peer struct {
@@ -84,7 +88,13 @@ func (s *Server) start(address string, asn uint32, routerID net.IP) error {
 	}
 
 	// Setup the logger.
-	logHandler := logger.NewSlogHandler("bgp:", logger.Warn)
+	logHandler := logger.NewSlogHandler(func(lvl logger.SlogLevel, msg string, ctx, attrs logger.Ctx) {
+		if slices.Contains([]logger.SlogLevel{logger.SlogDebug, logger.SlogInfo}, lvl) {
+			return
+		}
+
+		logger.Warn("bgp: "+msg, ctx)
+	})
 	logLevel := &slog.LevelVar{}
 	logLevel.Set(slog.LevelWarn)
 
@@ -134,7 +144,7 @@ func (s *Server) start(address string, asn uint32, routerID net.IP) error {
 	// Add existing paths.
 	s.paths = map[string]path{}
 	for _, path := range oldPaths {
-		err := s.addPrefix(path.prefix, path.nexthop, path.owner)
+		err := s.addPrefix(path.prefix, path.nexthop, path.owner, path.communities)
 		if err != nil {
 			return err
 		}
@@ -146,11 +156,14 @@ func (s *Server) start(address string, asn uint32, routerID net.IP) error {
 
 	// Add existing peers.
 	s.peers = map[string]peer{}
-	for _, peer := range oldPeers {
+	for peerName, peer := range oldPeers {
 		err := s.addPeer(peer.address, peer.iface, peer.asn, peer.password, peer.holdtime)
 		if err != nil {
 			return err
 		}
+
+		// Preserve the reference count for shared peers.
+		s.peers[peerName] = peer
 	}
 
 	// Record the address.
@@ -241,18 +254,18 @@ func (s *Server) configure(address string, asn uint32, routerID net.IP) error {
 }
 
 // AddPrefix adds a new prefix to the BGP server.
-func (s *Server) AddPrefix(subnet net.IPNet, nexthop net.IP, owner string) error {
+func (s *Server) AddPrefix(subnet net.IPNet, nexthop net.IP, owner string, communities []uint32) error {
 	// Locking.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.addPrefix(subnet, nexthop, owner)
+	return s.addPrefix(subnet, nexthop, owner, communities)
 }
 
-func (s *Server) addPrefix(subnet net.IPNet, nexthop net.IP, owner string) error {
+func (s *Server) addPrefix(subnet net.IPNet, nexthop net.IP, owner string, communities []uint32) error {
 	// Check for an existing entry.
 	for _, path := range s.paths {
-		if path.owner != owner || path.prefix.String() != subnet.String() || path.nexthop.String() != nexthop.String() {
+		if path.owner != owner || path.prefix.String() != subnet.String() || path.nexthop.String() != nexthop.String() || !slices.Equal(path.communities, communities) {
 			continue
 		}
 
@@ -272,6 +285,10 @@ func (s *Server) addPrefix(subnet net.IPNet, nexthop net.IP, owner string) error
 		Origin: 0,
 	}}
 
+	aCommunities := &bgpAPI.Attribute_Communities{Communities: &bgpAPI.CommunitiesAttribute{
+		Communities: communities,
+	}}
+
 	// Add the prefix to the server.
 	var pathUUID string
 	if s.bgp != nil {
@@ -286,17 +303,23 @@ func (s *Server) addPrefix(subnet net.IPNet, nexthop net.IP, owner string) error
 				NextHop: nexthop.String(),
 			}}
 
+			pattrs := []*bgpAPI.Attribute{
+				{
+					Attr: aOrigin,
+				},
+				{
+					Attr: aNextHop,
+				},
+			}
+
+			if len(communities) > 0 {
+				pattrs = append(pattrs, &bgpAPI.Attribute{Attr: aCommunities})
+			}
+
 			path := &bgpAPI.Path{
 				Family: family,
 				Nlri:   nlri,
-				Pattrs: []*bgpAPI.Attribute{
-					{
-						Attr: aOrigin,
-					},
-					{
-						Attr: aNextHop,
-					},
-				},
+				Pattrs: pattrs,
 			}
 
 			utilNlri, err := bgpAPIutil.GetNativeNlri(path)
@@ -340,17 +363,23 @@ func (s *Server) addPrefix(subnet net.IPNet, nexthop net.IP, owner string) error
 				Nlris:    []*bgpAPI.NLRI{nlri},
 			}}
 
+			pattrs := []*bgpAPI.Attribute{
+				{
+					Attr: aOrigin,
+				},
+				{
+					Attr: v6Attrs,
+				},
+			}
+
+			if len(communities) > 0 {
+				pattrs = append(pattrs, &bgpAPI.Attribute{Attr: aCommunities})
+			}
+
 			path := &bgpAPI.Path{
 				Family: family,
 				Nlri:   nlri,
-				Pattrs: []*bgpAPI.Attribute{
-					{
-						Attr: aOrigin,
-					},
-					{
-						Attr: v6Attrs,
-					},
-				},
+				Pattrs: pattrs,
 			}
 
 			utilNlri, err := bgpAPIutil.GetNativeNlri(path)
@@ -389,9 +418,10 @@ func (s *Server) addPrefix(subnet net.IPNet, nexthop net.IP, owner string) error
 
 	// Add path to the map.
 	s.paths[pathUUID] = path{
-		prefix:  subnet,
-		nexthop: nexthop,
-		owner:   owner,
+		prefix:      subnet,
+		nexthop:     nexthop,
+		owner:       owner,
+		communities: communities,
 	}
 
 	return nil
@@ -461,7 +491,7 @@ func (s *Server) removePrefixByUUID(pathUUID string) error {
 		}
 
 		err = s.bgp.DeletePath(bgpAPIutil.DeletePathRequest{UUIDs: []uuid.UUID{nativeUUID}})
-		if err != nil && err.Error() != "can't find a specified path" {
+		if err != nil && !strings.HasPrefix(err.Error(), "can't find a specified path") {
 			return err
 		}
 	}

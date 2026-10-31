@@ -15,6 +15,9 @@ test_nvram_vm() {
     incus profile device remove default eth0
     incus profile device add default eth0 nic network=incusbr0 name=eth0
 
+    # Use non-shared memory so the VMs can get transparent huge pages.
+    incus profile set default security.nesting=true
+
     poolName="vmpool$$"
 
     echo "==> Create storage pool"
@@ -55,22 +58,42 @@ test_nvram_vm() {
     # Break and repair Secure Boot.
     incus low-level secureboot list v1 db --columns=fs --format=csv | grep -i "microsoft.*uefi" | cut -d, -f1 | xargs incus low-level secureboot remove v1 db
     incus start v1
-    sleep 5
+
+    # The firmware refuses to boot the now-untrusted image. Wait for it to log
+    # the rejection rather than assuming a fixed delay, as a loaded host can be
+    # slow to reach that point.
+    retries=60
+    while [ "${retries}" != "0" ]; do
+        incus console --show-log v1 | grep -q "Access Denied" && break
+        sleep 1
+        retries=$((retries - 1))
+    done
     incus console --show-log v1 | grep "Access Denied"
+    # Give current NVRAM operations some time to settle
+    sleep 5
     incus stop -f v1
-    curl -L "https://go.microsoft.com/fwlink/?linkid=2239872" | incus low-level secureboot add v1 db - --owner=microsoft
+    echo MIIFpDCCA4ygAwIBAgITMwAAABY2vzaJnxV1zAAAAAAAFjANBgkqhkiG9w0BAQsFADBaMQswCQYDVQQGEwJVUzEeMBwGA1UEChMVTWljcm9zb2Z0IENvcnBvcmF0aW9uMSswKQYDVQQDEyJNaWNyb3NvZnQgUlNBIERldmljZXMgUm9vdCBDQSAyMDIxMB4XDTIzMDYxMzE5MjE0N1oXDTM4MDYxMzE5MzE0N1owTjELMAkGA1UEBhMCVVMxHjAcBgNVBAoTFU1pY3Jvc29mdCBDb3Jwb3JhdGlvbjEfMB0GA1UEAxMWTWljcm9zb2Z0IFVFRkkgQ0EgMjAyMzCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAL0iKq7vGjGFE3hRp5v9/HjRY7gam2P1EgbbS0E1am+r9WoEzJfPu9QICRphOg3ms6BG/wmt3oAk3BKA8l/ZFu3iQp3NL01hAmGKHEsdGGI5hpdxrT5/XXETS+kqAMG+1bcAn15lsiwa/3Tt6oPSOYkzNXN9oKL6QORmUFiq/IfoXCCDNOyr4gvFXz7/SCsRkSbvGG5XxZ8Yc5nv4Wp0K7svf1COHdo9drYE5cwuEMeDG4Oj5KUTE3FuM3ijqDzsSCZex8ZeDYeaqsxVNIGtnZD15pZjpugHIBfIkx7SrqTcrn1Zv4heYgyuW/IpQFYdJkDehaatVtHPVUd2X5w52wMCAwEAAaOCAW0wggFpMA4GA1UdDwEB/wQEAwIBhjAQBgkrBgEEAYI3FQEEAwIBADAdBgNVHQ4EFgQUgaprMkTJNbzg1mKK85gnQh4ySX0wGQYJKwYBBAGCNxQCBAweCgBTAHUAYgBDAEEwDwYDVR0TAQH/BAUwAwEB/zAfBgNVHSMEGDAWgBSERIYGAJg/LKqzxYnzrC7J5p0JAzBlBgNVHR8EXjBcMFqgWKBWhlRodHRwOi8vd3d3Lm1pY3Jvc29mdC5jb20vcGtpb3BzL2NybC9NaWNyb3NvZnQlMjBSU0ElMjBEZXZpY2VzJTIwUm9vdCUyMENBJTIwMjAyMS5jcmwwcgYIKwYBBQUHAQEEZjBkMGIGCCsGAQUFBzAChlZodHRwOi8vd3d3Lm1pY3Jvc29mdC5jb20vcGtpb3BzL2NlcnRzL01pY3Jvc29mdCUyMFJTQSUyMERldmljZXMlMjBSb290JTIwQ0ElMjAyMDIxLmNydDANBgkqhkiG9w0BAQsFAAOCAgEAB2ATKlOHEg8a81oUlRfl2NeVVJuLDt2Rpe3HXUdQk0W3lYhfFxlBY3a1grCoxZ2ZFTaJSb4Swmb7gwywgc7lpKvCoJrr9Qc8/iH4mtwZIQyeJCzRXKIWCkvr7EicsVt02wFkwuOAaqsazXcbajmat7pwRP9nlMWBBvDLgQSTJyGZvYeIFJwicQ4LL1y+uJBUfMAevCubo1YXS5fn438TNPqwNGub9rIt99h72CDTXKeVTE8q+eceaK/8bI/Ihj2fyNHvTRrI0fb9LXzj6EHB6ifB+44lhlqJphC+zuOPpXvEGqDodZD9IbDBo8UWI148zi/+jJi/CFz2ucWyPLbMyOx/0nd0y+3zlsmLjRwqiQ+jj73OKoVGmiOij0LAmdbqhR9hGb4WNbd1oJWAZQaH1As1yMSqDs6iCmNgyksrXCcEgq8+WIN6WthnPxBT9QwW9yZLioC5xR+g3tjTYUQURaf1q5qIF/23lFQCi+S3U6E+jZ5QgqgA4HiUG76zxDAfsg7b8EaQweZX/nzBcLIcS2TZEAMbNPtmz4JunkCoETfyZYshCa88k2I987yD3T9VkBXSMa8R5/jKoILhuc+zV5PHVTesf0G/H5Y88yaU+djSVSSKirZB8OAWwCOSjHEKTGoNGVX3OpySIZah1fgKjJ2/yevKiEL8S7Tv/ycwIWE= | base64 -d | incus low-level secureboot add v1 db - --owner=microsoft
     PK="$(incus low-level secureboot export v1 pk -)"
     ! echo "$PK" | incus low-level secureboot add v1 pk - || false
     echo "$PK" | incus low-level secureboot add v1 pk - --skip
     incus start v1
-    sleep 5
-    ! incus console --show-log v1 | grep "Access Denied" || false
+
+    # A successful agent connection proves the repaired image booted past Secure
+    # Boot, so the console log must not then show a rejection.
     incus wait v1 agent
+    ! incus console --show-log v1 | grep "Access Denied" || false
     incus stop v1
 
     # Force our way into and out of the setup menu.
     incus start v1 --override-boot=0
-    sleep 10
+
+    # Wait for the firmware to render the boot menu.
+    retries=60
+    while [ "${retries}" != "0" ]; do
+        incus console --show-log v1 | grep -q "Boot Maintenance Manager" && break
+        sleep 1
+        retries=$((retries - 1))
+    done
     incus console --show-log v1 | grep "Boot Maintenance Manager"
     { sleep 3; printf "\033[A\033[A\r"; } | timeout -p 5 script -efc "incus console v1" /dev/null
     if [ -t 0 ]; then
@@ -199,5 +222,6 @@ EOF
     echo "==> Restoring profile and deleting network"
     incus profile device remove default eth0
     incus profile device add default eth0 nic nictype=p2p name=eth0
+    incus profile unset default security.nesting
     incus network delete incusbr0
 }

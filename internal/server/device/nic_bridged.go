@@ -376,9 +376,10 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 		// gendoc:generate(entity=devices, group=nic_bridged, key=boot.priority)
 		//
 		// ---
-		//  type: integer
+		//  type: string
+		//  default: `skip`
 		//  managed: no
-		//  shortdesc: Boot priority for VMs (higher value boots first)
+		//  shortdesc: Boot priority for VMs (higher value boots first), `skip` to skip
 		"boot.priority",
 
 		// gendoc:generate(entity=devices, group=nic_bridged, key=vlan)
@@ -423,7 +424,7 @@ func (d *nicBridged) validateConfig(instConf instance.ConfigReader, partialValid
 			return errors.New("Specified network is not fully created")
 		}
 
-		if n.Type() != "bridge" && (n.Type() != "physical" || !util.PathExists(fmt.Sprintf("/sys/class/net/%s/bridge", d.config["parent"]))) {
+		if n.Type() != "bridge" && (n.Type() != "physical" || !network.IsNativeBridge(d.config["parent"])) {
 			return errors.New("Specified network must be of type bridge")
 		}
 
@@ -839,7 +840,7 @@ func (d *nicBridged) validateEnvironment() error {
 		return errors.New("Requires name property to start")
 	}
 
-	if !util.PathExists(fmt.Sprintf("/sys/class/net/%s", d.config["parent"])) {
+	if !network.InterfaceExists(d.config["parent"]) {
 		return fmt.Errorf("Parent device %q doesn't exist", d.config["parent"])
 	}
 
@@ -854,7 +855,7 @@ func (d *nicBridged) UpdatableFields(oldDevice Type) []string {
 		return []string{}
 	}
 
-	return []string{"limits.ingress", "limits.egress", "limits.max", "limits.ingress.burst", "limits.egress.burst", "limits.max.burst", "limits.ingress.bucket", "limits.egress.bucket", "limits.max.bucket", "limits.priority", "queue.discipline", "queue.discipline.attach", "ipv4.routes", "ipv6.routes", "ipv4.routes.external", "ipv6.routes.external", "ipv4.address", "ipv6.address", "security.mac_filtering", "security.ipv4_filtering", "security.ipv6_filtering", "security.acls", "security.acls.default.egress.action", "security.acls.default.egress.logged", "security.acls.default.ingress.action", "security.acls.default.ingress.logged", "connected"}
+	return []string{"limits.ingress", "limits.egress", "limits.max", "limits.ingress.burst", "limits.egress.burst", "limits.max.burst", "limits.ingress.bucket", "limits.egress.bucket", "limits.max.bucket", "limits.priority", "queue.discipline", "queue.discipline.attach", "ipv4.routes", "ipv6.routes", "ipv4.routes.external", "ipv6.routes.external", "ipv4.address", "ipv6.address", "security.mac_filtering", "security.ipv4_filtering", "security.ipv6_filtering", "security.acls", "security.acls.default.egress.action", "security.acls.default.egress.logged", "security.acls.default.ingress.action", "security.acls.default.ingress.logged", "connected", "boot.priority"}
 }
 
 // Add is run when a device is added to a non-snapshot instance whether or not the instance is running.
@@ -1193,7 +1194,7 @@ func (d *nicBridged) Update(oldDevices deviceConfig.Devices, isRunning bool) err
 	// If an IPv6 address has changed, if the instance is running we should bounce the host-side
 	// veth interface to give the instance a chance to detect the change and re-apply for an
 	// updated lease with new IP address.
-	if d.config["ipv6.address"] != oldConfig["ipv6.address"] && d.config["host_name"] != "" && util.PathExists(fmt.Sprintf("/sys/class/net/%s", d.config["host_name"])) {
+	if d.config["ipv6.address"] != oldConfig["ipv6.address"] && d.config["host_name"] != "" && network.InterfaceExists(d.config["host_name"]) {
 		link := &ip.Link{Name: d.config["host_name"]}
 		err := link.SetDown()
 		if err != nil {
@@ -1869,7 +1870,7 @@ func (d *nicBridged) networkDHCPv4Release(srcMAC net.HardwareAddr, srcIP net.IP,
 		return err
 	}
 
-	defer logger.WarnOnError(conn.Close, "Failed to close connection")
+	defer logger.WarnOnErrorExcept(conn.Close, []error{net.ErrClosed}, "Failed to close connection")
 
 	// Random DHCP transaction ID
 	xid := rand.Uint32()
@@ -1921,7 +1922,7 @@ func (d *nicBridged) networkDHCPv6Release(srcDUID string, srcIAID string, srcIP 
 		return err
 	}
 
-	defer logger.WarnOnError(conn.Close, "Failed to close connection")
+	defer logger.WarnOnErrorExcept(conn.Close, []error{net.ErrClosed}, "Failed to close connection")
 
 	// Construct a DHCPv6 packet pretending to be from the source IP and MAC supplied.
 	dhcp := layers.DHCPv6{
@@ -2240,8 +2241,9 @@ func (d *nicBridged) State() (*api.InstanceStateNetwork, error) {
 		addresses = append(addresses, addr)
 	}
 
+	// The host interface is gone while the instance stops or migrates, which isn't worth reporting.
 	mtu, err := d.getHostMTU()
-	if err != nil {
+	if err != nil && network.InterfaceExists(d.config["host_name"]) {
 		d.logger.Warn("Failed getting host interface state for MTU", logger.Ctx{"host_name": d.config["host_name"], "err": err})
 	}
 

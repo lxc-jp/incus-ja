@@ -54,7 +54,7 @@ var (
 // InstanceOperation operation locking.
 type InstanceOperation struct {
 	action            Action
-	chanDone          chan error
+	chanDone          chan struct{}
 	err               error
 	projectName       string
 	instanceName      string
@@ -93,7 +93,7 @@ func Create(projectName string, instanceName string, apiOp *operations.Operation
 	op.instanceName = instanceName
 	op.action = action
 	op.reusable = createReusuable
-	op.chanDone = make(chan error)
+	op.chanDone = make(chan struct{})
 	op.op = apiOp
 
 	instanceOperations[opKey] = op
@@ -139,7 +139,8 @@ func CreateWaitGet(projectName string, instanceName string, apiOp *operations.Op
 	}
 
 	// Operation action matches one the inheritable actions, return the operation.
-	if op.ActionMatch(inheritableActions...) {
+	// Locks taken by the instance itself (stop hook) are never shared with other requests.
+	if op.ActionMatch(inheritableActions...) && !op.GetInstanceInitiated() {
 		logger.Debug("Instance operation lock inherited", logger.Ctx{"project": op.projectName, "instance": op.instanceName, "action": op.action, "reusable": op.reusable, "inheritedByAction": action})
 
 		return op, nil

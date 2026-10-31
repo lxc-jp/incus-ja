@@ -34,6 +34,27 @@ test_container_oci() {
     incus exec caddy -- printenv XDG_CONFIG_HOME | grep -q .
     incus delete -f caddy
 
+    # The entry point keys are populated from the image and follow it across rebuilds unless overridden.
+    incus init docker:caddy caddy3 --network=inct$$
+    [ "$(incus config get caddy3 oci.entrypoint)" != "" ]
+    [ "$(incus config get caddy3 oci.uid)" = "0" ]
+    entrypoint="$(incus config get caddy3 oci.entrypoint)"
+    incus config set caddy3 oci.cwd=/tmp
+    incus rebuild docker:hello-world caddy3
+    [ "$(incus config get caddy3 oci.entrypoint)" = "/hello" ]
+    [ "$(incus config get caddy3 oci.cwd)" = "/tmp" ]
+    incus rebuild docker:caddy caddy3
+    [ "$(incus config get caddy3 oci.entrypoint)" = "${entrypoint}" ]
+    [ "$(incus config get caddy3 oci.cwd)" = "/tmp" ]
+    incus delete -f caddy3
+
+    # Starting a rebuilt instance that was never started must not take the daemon down.
+    incus init docker:caddy caddy2 --network=inct$$
+    incus rebuild docker:caddy caddy2
+    incus start caddy2 || true
+    incus list caddy2 --format csv -c n | grep -xF caddy2
+    incus delete -f caddy2
+
     incus network delete inct$$
     incus remote remove docker
 }

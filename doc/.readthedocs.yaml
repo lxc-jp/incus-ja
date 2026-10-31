@@ -9,8 +9,8 @@ version: 2
 build:
   os: ubuntu-22.04
   tools:
-    golang: "1.21"
-    python: "3.11"
+    golang: "1.26"
+    python: "3.13"
   jobs:
     pre_build:
       - go install -v ./cmd/incus

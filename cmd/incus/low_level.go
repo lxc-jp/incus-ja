@@ -105,7 +105,7 @@ func (c *cmdLowLevelBitmapsCreate) command() *cobra.Command {
 	cmd.Use = cli.U("create", cmdLowLevelBitmapsCreateUsage...)
 	cmd.Short = i18n.G("Create a dirty bitmap on a virtual machine")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`Create a dirty bitmap on all the disks of a running virtual machine`,
+		`Create a dirty bitmap on the root and dependent disks of a running virtual machine`,
 	))
 
 	cmd.RunE = c.run
@@ -269,13 +269,13 @@ var cmdLowLevelNBDUsage = u.Usage{u.Instance.Remote()}
 func (c *cmdLowLevelNBD) command() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Use = cli.U("nbd", cmdLowLevelNBDUsage...)
-	cmd.Short = i18n.G("NBD access to all of a virtual machine's disks")
+	cmd.Short = i18n.G("NBD access to a virtual machine's root and dependent disks")
 	cmd.Long = cli.FormatSection(color.DescriptionPrefix, i18n.G(
-		`NBD access to all of a virtual machine's disks
+		`NBD access to a virtual machine's root and dependent disks
 
-This exposes all the disks of a running virtual machine over a local NBD
-server, with each disk reachable as an NBD export named after its Incus
-device name.`,
+This exposes the root and dependent disks of a running virtual machine over
+a local NBD server, with each disk reachable as an NBD export named after
+its Incus device name.`,
 	))
 
 	cli.AddStringFlag(cmd.Flags(), &c.flagAddress, "address", "", "", i18n.G("Specific address to listen on"))
@@ -1261,7 +1261,7 @@ func (c *cmdLowLevelSecureBootAdd) run(cmd *cobra.Command, args []string) error 
 
 	d := parsed[0].RemoteServer
 	instanceName := parsed[0].RemoteObject.String
-	guid, varName := util.ESLGUIDVar(parsed[1].String)
+	guid, varName := uefi.ESLGUIDVar(parsed[1].String)
 	fileName := parsed[2].String
 	var input []byte
 	if isStdin(fileName) {
@@ -1440,7 +1440,7 @@ func (c *cmdLowLevelSecureBootExport) run(cmd *cobra.Command, args []string) err
 	d := parsed[0].RemoteServer
 	instanceName := parsed[0].RemoteObject.String
 	db := parsed[1].String
-	guid, varName := util.ESLGUIDVar(db)
+	guid, varName := uefi.ESLGUIDVar(db)
 	hasTarget := !parsed[2].Skipped
 	targetName := parsed[2].Get(instanceName + "." + db + ".pem")
 	if hasTarget && !isStdout(targetName) && !c.flagForce && util.PathExists(targetName) {
@@ -1555,7 +1555,7 @@ func (c *cmdLowLevelSecureBootImport) run(cmd *cobra.Command, args []string) err
 
 	d := parsed[0].RemoteServer
 	instanceName := parsed[0].RemoteObject.String
-	guid, varName := util.ESLGUIDVar(parsed[1].String)
+	guid, varName := uefi.ESLGUIDVar(parsed[1].String)
 	fileName := parsed[2].String
 	var input []byte
 	if isStdin(fileName) {
@@ -1775,7 +1775,7 @@ func (c *cmdLowLevelSecureBootList) run(cmd *cobra.Command, args []string) error
 
 	d := parsed[0].RemoteServer
 	instanceName := parsed[0].RemoteObject.String
-	guid, varName := util.ESLGUIDVar(parsed[1].String)
+	guid, varName := uefi.ESLGUIDVar(parsed[1].String)
 
 	v, _, err := d.GetInstanceNVRAMGUIDVar(instanceName, guid, varName)
 	if err != nil {
@@ -1873,7 +1873,7 @@ func (c *cmdLowLevelSecureBootRemove) run(cmd *cobra.Command, args []string) err
 
 	d := parsed[0].RemoteServer
 	instanceName := parsed[0].RemoteObject.String
-	guid, varName := util.ESLGUIDVar(parsed[1].String)
+	guid, varName := uefi.ESLGUIDVar(parsed[1].String)
 	hasFingerprint := parsed[2].BranchID == 0
 	var fingerprint string
 	if hasFingerprint {

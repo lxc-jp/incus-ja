@@ -104,8 +104,8 @@ func AllowInstanceCreation(tx *db.ClusterTx, projectName string, req api.Instanc
 			return err
 		}
 
-		// Check if we have image server restrictions.
-		if req.Source.Type == "image" && info.Project.Config["restricted.images.servers"] != "" {
+		// Check if we have image server restrictions (local images have no server).
+		if req.Source.Type == "image" && req.Source.Server != "" && info.Project.Config["restricted.images.servers"] != "" {
 			u, err := url.Parse(req.Source.Server)
 			if err != nil {
 				return err
@@ -138,14 +138,18 @@ func AllowInstanceCreation(tx *db.ClusterTx, projectName string, req api.Instanc
 
 	// Special case restriction checks on volatile.* keys.
 	strip := false // nolint:staticcheck
+	keepVMState := false
 
-	if slices.Contains([]string{"copy", "migration"}, req.Source.Type) {
-		// Allow stripping volatile keys if dealing with a copy or migration.
+	if slices.Contains([]string{"copy", "migration", "backup"}, req.Source.Type) {
+		// Allow stripping volatile keys if dealing with a copy, migration or backup.
 		strip = true
+
+		// A transferred VM state can only be restored with the QEMU layout it was started with.
+		keepVMState = req.Stateful || req.Source.Live
 	}
 
 	err = checkRestrictionsOnVolatileConfig(
-		info.Project, instanceType, req.Name, req.Config, map[string]string{}, strip,
+		info.Project, instanceType, req.Name, req.Config, map[string]string{}, strip, keepVMState,
 	)
 	if err != nil {
 		return err
@@ -347,7 +351,7 @@ func isSafeVolatileKey(key string) bool {
 }
 
 // Check restrictions on setting volatile.* keys.
-func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instancetype.Type, instanceName string, config, currentConfig map[string]string, strip bool) error {
+func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instancetype.Type, instanceName string, config, currentConfig map[string]string, strip bool, keepVMState bool) error {
 	if !isVolatileConfigRestricted(project, instanceType) {
 		return nil
 	}
@@ -363,6 +367,11 @@ func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instanc
 		}
 
 		if strip {
+			// The recorded QEMU layout is server generated, not a user override.
+			if keepVMState && instance.IsVMBootStateKey(key) {
+				continue
+			}
+
 			delete(config, key)
 			continue
 		}
@@ -375,6 +384,29 @@ func checkRestrictionsOnVolatileConfig(project api.Project, instanceType instanc
 		if currentValue != value {
 			return fmt.Errorf("Changing %q on %s %q in project %q is forbidden", key, instanceType, instanceName, project.Name)
 		}
+	}
+
+	return nil
+}
+
+// StripRestrictedVolatileConfig drops the unsafe volatile.* keys of an imported backup in restricted projects, keeping the on-disk idmap state.
+func StripRestrictedVolatileConfig(tx *db.ClusterTx, projectName string, instanceType instancetype.Type, config map[string]string) error {
+	info, err := fetchProject(tx, projectName, true)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		return nil
+	}
+
+	lastIdmap, ok := config["volatile.last_state.idmap"]
+
+	// Never fails when stripping.
+	_ = checkRestrictionsOnVolatileConfig(info.Project, instanceType, "", config, nil, true, false)
+
+	if ok {
+		config["volatile.last_state.idmap"] = lastIdmap
 	}
 
 	return nil
@@ -438,6 +470,24 @@ func AllowVolumeCreation(tx *db.ClusterTx, projectName string, poolName string, 
 	err = checkRestrictionsAndAggregateLimits(tx, info)
 	if err != nil {
 		return fmt.Errorf("Failed checking if volume creation allowed: %w", err)
+	}
+
+	return nil
+}
+
+// AllowBucketCreation returns an error if the project's storage pool restrictions forbid the pool.
+func AllowBucketCreation(tx *db.ClusterTx, projectName string, poolName string) error {
+	info, err := fetchProject(tx, projectName, true)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		return nil
+	}
+
+	if !StoragePoolAllowed(info.Project.Config, poolName) {
+		return fmt.Errorf("Storage pool %q not allowed for project %q", poolName, projectName)
 	}
 
 	return nil
@@ -894,6 +944,10 @@ func checkRestrictions(project api.Project, instances []api.Instance, profiles [
 					}
 				}
 
+				if device["failover"] != "" && !NetworkAllowed(project.Config, device["failover"], false) {
+					return errors.New("Failover network not allowed in project")
+				}
+
 				return nil
 			}
 
@@ -1253,7 +1307,7 @@ func allowInstanceUpdate(tx *db.ClusterTx, projectName, instanceName string, req
 	// Special case restriction checks on volatile.* keys, since we want to
 	// detect if they were changed or added.
 	err = checkRestrictionsOnVolatileConfig(
-		info.Project, instType, updatedInstance.Name, req.Config, currentConfig, false,
+		info.Project, instType, updatedInstance.Name, req.Config, currentConfig, false, false,
 	)
 	if err != nil {
 		return err

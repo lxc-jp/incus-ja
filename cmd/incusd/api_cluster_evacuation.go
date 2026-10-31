@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cowsql/go-cowsql/cluster/membership"
 	"golang.org/x/sync/errgroup"
 
 	incus "github.com/lxc/incus/v7/client"
@@ -40,7 +41,7 @@ import (
 )
 
 type (
-	evacuateStopFunc    func(inst instance.Instance, action string) error
+	evacuateStopFunc    func(s *state.State, inst instance.Instance, action string) error
 	evacuateMigrateFunc func(ctx context.Context, s *state.State, inst instance.Instance, sourceMemberInfo *db.NodeInfo, targetMemberInfo *db.NodeInfo, action string, startInstance bool, op *operations.Operation) error
 )
 
@@ -77,6 +78,36 @@ type evacuateOpts struct {
 	op              *operations.Operation
 }
 
+// evacuateReconcileState reverts the transient state left on a member by an interrupted evacuation or restore.
+func evacuateReconcileState(s *state.State, name string) error {
+	return s.DB.Cluster.Transaction(context.Background(), func(ctx context.Context, tx *db.ClusterTx) error {
+		node, err := tx.GetNodeByName(ctx, name)
+		if err != nil {
+			return fmt.Errorf("Failed to get cluster member by name: %w", err)
+		}
+
+		// Match what the operation's own reverter would have done.
+		var newState int
+		switch node.State {
+		case db.ClusterMemberStateEvacuating:
+			newState = db.ClusterMemberStateCreated
+		case db.ClusterMemberStateRestoring:
+			newState = db.ClusterMemberStateEvacuated
+		default:
+			return nil
+		}
+
+		logger.Warn("Reverting cluster member state left by an interrupted operation", logger.Ctx{"state": node.State, "newState": newState})
+
+		err = tx.UpdateNodeStatus(node.ID, newState)
+		if err != nil {
+			return fmt.Errorf("Failed to update cluster member status: %w", err)
+		}
+
+		return nil
+	})
+}
+
 func evacuateClusterSetState(s *state.State, name string, newState int) error {
 	return s.DB.Cluster.Transaction(context.Background(), func(ctx context.Context, tx *db.ClusterTx) error {
 		// Get the node.
@@ -111,7 +142,7 @@ func evacuateClusterSetState(s *state.State, name string, newState int) error {
 	})
 }
 
-func evacuateStopInstance(inst instance.Instance, action string) error {
+func evacuateStopInstance(s *state.State, inst instance.Instance, action string) error {
 	l := logger.AddContext(logger.Ctx{"project": inst.Project().Name, "instance": inst.Name()})
 
 	switch action {
@@ -131,7 +162,7 @@ func evacuateStopInstance(inst instance.Instance, action string) error {
 
 	default:
 		// Clean shutdown, falling back to a forced stop.
-		err := instanceShutdownOrForceStop(inst)
+		err := instanceShutdownOrForceStop(s, inst, "evacuation")
 		if err != nil {
 			return err
 		}
@@ -403,7 +434,7 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 		if opts.stopInstance != nil && isRunning {
 			_ = opts.op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Stopping %q in project %q", inst.Name(), instProject.Name)})
 
-			err := opts.stopInstance(inst, action)
+			err := opts.stopInstance(opts.s, inst, action)
 			if err != nil {
 				return err
 			}
@@ -428,7 +459,7 @@ func evacuateInstancesFunc(ctx context.Context, inst instance.Instance, opts eva
 			if opts.stopInstance != nil && isRunning {
 				_ = opts.op.ExtendMetadata(map[string]any{"evacuation_progress": fmt.Sprintf("Stopping %q in project %q", inst.Name(), instProject.Name)})
 
-				return opts.stopInstance(inst, "")
+				return opts.stopInstance(opts.s, inst, "")
 			}
 
 			return nil
@@ -672,7 +703,8 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 		// Wait for the stop operation to complete or timeout.
 		err = stopOp.Wait()
 		if err != nil {
-			l.Warn("Failed shutting down instance, forcing stop", logger.Ctx{"err": err})
+			l.Warn("Failed shutting down instance, forcing stop", logger.Ctx{"timeout": time.Duration(val) * time.Second, "err": err})
+			instanceForcedStopWarn(s, inst, fmt.Sprintf("Didn't shut down within %s during cluster member restore", time.Duration(val)*time.Second))
 
 			// On failure, attempt a forceful stop.
 			stopOp, err = source.UpdateInstanceState(inst.Name(), api.InstanceStatePut{Action: "stop", Force: true}, "")
@@ -686,6 +718,8 @@ func restoreClusterMemberFunc(inst instance.Instance, op *operations.Operation, 
 			if err != nil && !strings.Contains(err.Error(), "The instance is already stopped") {
 				return fmt.Errorf("Failed to stop instance %q: %w", inst.Name(), err)
 			}
+		} else {
+			instanceForcedStopResolve(s, inst)
 		}
 	}
 
@@ -855,6 +889,46 @@ func evacuateClusterSelectTarget(ctx context.Context, s *state.State, inst insta
 	return sourceMemberInfo, targetMemberInfo, nil
 }
 
+// findMembersToHeal returns the members offline for longer than the healing threshold which also fail a ping.
+func findMembersToHeal(ctx context.Context, s *state.State, healingThreshold time.Duration) ([]db.NodeInfo, error) {
+	var members []db.NodeInfo
+	err := s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
+		var err error
+		members, err = tx.GetNodes(ctx)
+		if err != nil {
+			return fmt.Errorf("Failed getting cluster members: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var offlineMembers []db.NodeInfo
+	for _, member := range members {
+		// Ignore members which have been evacuated, and those which haven't exceeded the
+		// healing offline trigger threshold.
+		if member.State == db.ClusterMemberStateEvacuated || !member.IsOffline(healingThreshold) {
+			continue
+		}
+
+		// As an extra safety net, make sure the dead system doesn't still respond on the network.
+		hostAddress, _, err := net.SplitHostPort(member.Address)
+		if err == nil {
+			_, err := subprocess.RunCommand("ping", "-w1", "-c1", "-n", "-q", hostAddress)
+			if err == nil {
+				// Server isn't fully dead, not risking auto-healing.
+				continue
+			}
+		}
+
+		offlineMembers = append(offlineMembers, member)
+	}
+
+	return offlineMembers, nil
+}
+
 func autoHealClusterTask(d *Daemon) (task.Func, task.Schedule) {
 	f := func(ctx context.Context) {
 		s := d.State()
@@ -865,7 +939,7 @@ func autoHealClusterTask(d *Daemon) (task.Func, task.Schedule) {
 
 		leader, err := s.Cluster.LeaderAddress()
 		if err != nil {
-			if errors.Is(err, cluster.ErrNodeIsNotClustered) {
+			if errors.Is(err, membership.ErrNodeIsNotClustered) {
 				return // Skip healing if not clustered.
 			}
 
@@ -877,45 +951,44 @@ func autoHealClusterTask(d *Daemon) (task.Func, task.Schedule) {
 			return // Skip healing if not cluster leader.
 		}
 
-		var offlineMembers []db.NodeInfo
-		{
-			var members []db.NodeInfo
-			err = s.DB.Cluster.Transaction(ctx, func(ctx context.Context, tx *db.ClusterTx) error {
-				members, err = tx.GetNodes(ctx)
-				if err != nil {
-					return fmt.Errorf("Failed getting cluster members: %w", err)
-				}
+		offlineMembers, err := findMembersToHeal(ctx, s, healingThreshold)
+		if err != nil {
+			logger.Error("Failed healing cluster instances", logger.Ctx{"err": err})
+			return
+		}
 
-				return nil
-			})
+		if len(offlineMembers) == 0 {
+			return // Skip healing if there are no cluster members to evacuate.
+		}
+
+		// Announce the offline members so external tooling can power them off before the evacuation.
+		healingDelay := s.GlobalConfig.ClusterHealingDelay()
+		for _, member := range offlineMembers {
+			logger.Warn("Cluster member detected as offline, scheduling healing", logger.Ctx{"server": member.Name, "delay": healingDelay})
+			s.Events.SendLifecycle(api.ProjectDefaultName, lifecycle.ClusterMemberOffline.Event(member.Name, nil, map[string]any{"healing_delay": int64(healingDelay.Seconds())}))
+		}
+
+		if healingDelay > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(healingDelay):
+			}
+
+			// Only heal the members which are still offline after the delay.
+			stillOffline, err := findMembersToHeal(ctx, s, healingThreshold)
 			if err != nil {
 				logger.Error("Failed healing cluster instances", logger.Ctx{"err": err})
 				return
 			}
 
-			for _, member := range members {
-				// Ignore members which have been evacuated, and those which haven't exceeded the
-				// healing offline trigger threshold.
-				if member.State == db.ClusterMemberStateEvacuated || !member.IsOffline(healingThreshold) {
-					continue
-				}
+			offlineMembers = slices.DeleteFunc(offlineMembers, func(member db.NodeInfo) bool {
+				return !slices.ContainsFunc(stillOffline, func(m db.NodeInfo) bool { return m.Name == member.Name })
+			})
 
-				// As an extra safety net, make sure the dead system doesn't still respond on the network.
-				hostAddress, _, err := net.SplitHostPort(member.Address)
-				if err == nil {
-					_, err := subprocess.RunCommand("ping", "-w1", "-c1", "-n", "-q", hostAddress)
-					if err == nil {
-						// Server isn't fully dead, not risking auto-healing.
-						continue
-					}
-				}
-
-				offlineMembers = append(offlineMembers, member)
+			if len(offlineMembers) == 0 {
+				return
 			}
-		}
-
-		if len(offlineMembers) == 0 {
-			return // Skip healing if there are no cluster members to evacuate.
 		}
 
 		opRun := func(op *operations.Operation) error {
@@ -1007,18 +1080,27 @@ func healClusterMember(d *Daemon, op *operations.Operation, name string) error {
 			return nil
 		}
 
-		// Start it back up on target.
-		startOp, err := dest.UpdateInstanceState(inst.Name(), api.InstanceStatePut{Action: "start"}, "")
-		if err != nil {
-			return err
-		}
+		// Start it back up on target, retrying while the dead member's storage locks expire.
+		startCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
 
-		err = startOp.Wait()
-		if err != nil {
-			return err
-		}
+		for {
+			startOp, err := dest.UpdateInstanceState(inst.Name(), api.InstanceStatePut{Action: "start"}, "")
+			if err == nil {
+				err = startOp.Wait()
+				if err == nil {
+					return nil
+				}
+			}
 
-		return nil
+			logger.Warn("Failed starting healed instance, retrying", logger.Ctx{"instance": inst.Name(), "err": err})
+
+			select {
+			case <-startCtx.Done():
+				return err
+			case <-time.After(10 * time.Second):
+			}
+		}
 	}
 
 	// Attempt up to 5 evacuations.

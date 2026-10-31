@@ -5,16 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/idna"
 
 	internalInstance "github.com/lxc/incus/v7/internal/instance"
 	"github.com/lxc/incus/v7/internal/server/config"
 	"github.com/lxc/incus/v7/internal/server/db"
 	scriptletLoad "github.com/lxc/incus/v7/internal/server/scriptlet/load"
+	"github.com/lxc/incus/v7/shared/util"
 	"github.com/lxc/incus/v7/shared/validate"
 )
 
@@ -256,6 +259,11 @@ func (c *Config) InstancesLXCFSPerInstance() bool {
 	return c.m.GetBool("instances.lxcfs.per_instance")
 }
 
+// InstancesMigrationBwlimit returns the bandwidth limit to apply to live migrations.
+func (c *Config) InstancesMigrationBwlimit() string {
+	return c.m.GetString("instances.migration.bwlimit")
+}
+
 // InstancesTPMPlatformCert returns the platform CA certificate and matching
 // private key (both PEM-encoded) used to provision the EK and platform
 // certificate of newly created TPM devices.
@@ -324,6 +332,11 @@ func (c *Config) RemoteTokenExpiry() string {
 // OIDCServer returns all the OpenID Connect settings needed to connect to a server.
 func (c *Config) OIDCServer() (string, string, string, string, string) {
 	return c.m.GetString("oidc.issuer"), c.m.GetString("oidc.client.id"), c.m.GetString("oidc.scopes"), c.m.GetString("oidc.audience"), c.m.GetString("oidc.claim")
+}
+
+// ClusterHealingDelay returns how long to wait between detecting an offline member and evacuating it.
+func (c *Config) ClusterHealingDelay() time.Duration {
+	return time.Duration(c.m.GetInt64("cluster.healing_delay")) * time.Second
 }
 
 // ClusterHealingThreshold returns the configured healing threshold, i.e. the
@@ -495,12 +508,12 @@ var ConfigSchema = config.Schema{
 	"acme.ca_url": {Default: "https://acme-v02.api.letsencrypt.org/directory"},
 
 	// gendoc:generate(entity=server, group=acme, key=acme.domain)
-	//
+	// Comma separated list of domains, wildcard domains (`*.example.com`) require the `DNS-01` challenge.
 	// ---
 	//  type: string
 	//  scope: global
 	//  shortdesc: Domain for which the certificate is issued
-	"acme.domain": {},
+	"acme.domain": {Validator: validate.Optional(validateACMEDomains)},
 
 	// gendoc:generate(entity=server, group=acme, key=acme.email)
 	//
@@ -705,6 +718,16 @@ var ConfigSchema = config.Schema{
 	//  shortdesc: Threshold when to evacuate an offline cluster member
 	"cluster.healing_threshold": {Type: config.Int64, Default: "0"},
 
+	// gendoc:generate(entity=server, group=cluster, key=cluster.healing_delay)
+	// Specify the number of seconds to wait between an offline cluster member being detected and its evacuation.
+	// The `cluster-member-offline` event is sent at the start of that delay, giving external tooling time to power off the member.
+	// ---
+	//  type: integer
+	//  scope: global
+	//  defaultdesc: `0`
+	//  shortdesc: Delay between detecting an offline cluster member and evacuating it
+	"cluster.healing_delay": {Type: config.Int64, Default: "0"},
+
 	// gendoc:generate(entity=server, group=cluster, key=cluster.join_token_expiry)
 	//
 	// ---
@@ -891,7 +914,10 @@ var ConfigSchema = config.Schema{
 	"core.shutdown_timeout": {Type: config.Int64, Default: "5"},
 
 	// gendoc:generate(entity=server, group=core, key=core.trust_ca_certificates)
-	//
+	// This only applies when a `server.ca` file is present.
+	// When enabled, any valid client certificate issued by the CA and not listed in `ca.crl` is trusted without being added to the trust store.
+	// Such certificates get full access to the server unless they are added to the trust store as restricted certificates.
+	// When disabled, certificates issued by the CA still need to be added to the trust store.
 	// ---
 	//  type: bool
 	//  scope: global
@@ -959,6 +985,17 @@ var ConfigSchema = config.Schema{
 	//  defaultdesc: `false`
 	//  shortdesc: Whether to run LXCFS on a per-instance basis
 	"instances.lxcfs.per_instance": {Type: config.Bool, Validator: validate.Optional(validate.IsBool)},
+
+	// gendoc:generate(entity=server, group=miscellaneous, key=instances.migration.bwlimit)
+	// The upper limit to be placed on the bandwidth used by the memory and state
+	// transfer of each virtual machine live migration.
+	// When unset, the QEMU default of 128MiB/s (about 1Gbit/s) applies.
+	// ---
+	//  type: string
+	//  scope: global
+	//  defaultdesc: `128MiB` (QEMU default)
+	//  shortdesc: Bandwidth limit for virtual machine live migrations
+	"instances.migration.bwlimit": {Validator: validate.Optional(validate.IsSize)},
 
 	// gendoc:generate(entity=server, group=miscellaneous, key=instances.nic.host_name)
 	// Possible values are `random` and `mac`.
@@ -1106,6 +1143,7 @@ var ConfigSchema = config.Schema{
 
 	// gendoc:generate(entity=server, group=oidc, key=oidc.audience)
 	// This value is required by some providers.
+	// Opaque access tokens are rejected when set as the audience can't be verified on those.
 	// ---
 	//  type: string
 	//  scope: global
@@ -1113,7 +1151,7 @@ var ConfigSchema = config.Schema{
 	"oidc.audience": {},
 
 	// gendoc:generate(entity=server, group=oidc, key=oidc.claim)
-	// Note that the claim must be contained in the access token.
+	// Note that the claim must be contained in the access token or, for opaque access tokens, in the ID token.
 	// ---
 	//  type: string
 	//  scope: global
@@ -1277,6 +1315,28 @@ func rebalanceThresholdValidator(value string) error {
 
 	if n < 10 || n > 100 {
 		return errors.New("Value must be between 10 and 100")
+	}
+
+	return nil
+}
+
+// validateACMEDomains checks that each domain is a valid hostname, optionally starting with a wildcard label.
+func validateACMEDomains(value string) error {
+	labelRegex := regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+	for _, domain := range util.SplitNTrimSpace(value, ",", -1, false) {
+		name, _ := strings.CutPrefix(domain, "*.")
+
+		ascii, err := idna.Lookup.ToASCII(name)
+		if err != nil {
+			return fmt.Errorf("Invalid domain %q: %w", domain, err)
+		}
+
+		for _, label := range strings.Split(ascii, ".") {
+			if !labelRegex.MatchString(label) {
+				return fmt.Errorf("Invalid domain %q", domain)
+			}
+		}
 	}
 
 	return nil

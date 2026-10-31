@@ -80,7 +80,7 @@ func (d *nicOVN) UpdatableFields(oldDevice Type) []string {
 		return []string{}
 	}
 
-	return []string{"security.acls", "limits.ingress", "limits.egress", "limits.max", "limits.ingress.bucket", "limits.egress.bucket", "limits.max.bucket", "limits.priority", "connected", "ipv4.address.external", "ipv6.address.external"}
+	return []string{"security.acls", "security.mac_filtering", "security.ipv4_filtering", "security.ipv6_filtering", "limits.ingress", "limits.egress", "limits.max", "limits.ingress.bucket", "limits.egress.bucket", "limits.max.bucket", "limits.priority", "connected", "ipv4.address.external", "ipv6.address.external", "boot.priority"}
 }
 
 // validateConfig checks the supplied config for correctness.
@@ -219,9 +219,10 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		// gendoc:generate(entity=devices, group=nic_ovn, key=boot.priority)
 		//
 		// ---
-		//  type: integer
+		//  type: string
+		//  default: `skip`
 		//  managed: no
-		//  shortdesc: Boot priority for VMs (higher value boots first)
+		//  shortdesc: Boot priority for VMs (higher value boots first), `skip` to skip
 		"boot.priority",
 
 		// gendoc:generate(entity=devices, group=nic_ovn, key=security.acls)
@@ -276,6 +277,33 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		//  managed: no
 		//  shortdesc: Have OVN send unknown network traffic to this network interface (required for some nesting cases)
 		"security.promiscuous",
+
+		// gendoc:generate(entity=devices, group=nic_ovn, key=security.mac_filtering)
+		//
+		// ---
+		//  type: bool
+		//  default: false
+		//  managed: no
+		//  shortdesc: Prevent the instance from spoofing another instance's MAC address
+		"security.mac_filtering",
+
+		// gendoc:generate(entity=devices, group=nic_ovn, key=security.ipv4_filtering)
+		//
+		// ---
+		//  type: bool
+		//  default: false
+		//  managed: no
+		//  shortdesc: Prevent the instance from spoofing another instance's IPv4 address (enables `security.mac_filtering`)
+		"security.ipv4_filtering",
+
+		// gendoc:generate(entity=devices, group=nic_ovn, key=security.ipv6_filtering)
+		//
+		// ---
+		//  type: bool
+		//  default: false
+		//  managed: no
+		//  shortdesc: Prevent the instance from spoofing another instance's IPv6 address (enables `security.mac_filtering`)
+		"security.ipv6_filtering",
 
 		// gendoc:generate(entity=devices, group=nic_ovn, key=acceleration)
 		//
@@ -525,6 +553,9 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 	}
 
 	rules := nicValidationRules(requiredFields, optionalFields, instConf)
+	rules["security.mac_filtering"] = validate.Optional(validate.IsBool)
+	rules["security.ipv4_filtering"] = validate.Optional(validate.IsBool)
+	rules["security.ipv6_filtering"] = validate.Optional(validate.IsBool)
 
 	// Override ipv4.address and ipv6.address to allow none value.
 	// A CIDR value is allowed for static address configuration inside OCI containers.
@@ -607,6 +638,11 @@ func (d *nicOVN) validateConfig(instConf instance.ConfigReader, partialValidatio
 		if err != nil {
 			return err
 		}
+	}
+
+	// Port security restricts the destination MAC, which defeats the purpose of promiscuous mode.
+	if util.IsTrue(d.config["security.promiscuous"]) && (util.IsTrue(d.config["security.mac_filtering"]) || util.IsTrue(d.config["security.ipv4_filtering"]) || util.IsTrue(d.config["security.ipv6_filtering"])) {
+		return errors.New("security.promiscuous is mutually exclusive with security.mac_filtering, security.ipv4_filtering and security.ipv6_filtering")
 	}
 
 	// Avoid setting both ingress/egress and max to avoid confusion or implicit behavior.
@@ -775,7 +811,7 @@ func (d *nicOVN) validateEnvironment() error {
 
 	integrationBridge := d.state.GlobalConfig.NetworkOVNIntegrationBridge()
 
-	if !util.PathExists(fmt.Sprintf("/sys/class/net/%s", integrationBridge)) {
+	if !network.InterfaceExists(integrationBridge) {
 		return fmt.Errorf("OVS integration bridge device %q doesn't exist", integrationBridge)
 	}
 
@@ -884,7 +920,7 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 			}
 
 			// Claim the SR-IOV virtual function (VF) on the parent (PF) and get the PCI information.
-			vfPCIDev, pciIOMMUGroup, err = networkSRIOVSetupVF(d.deviceCommon, vfParent, vfDev, vfID, saveData)
+			vfPCIDev, pciIOMMUGroup, err = networkSRIOVSetupVF(d.deviceCommon, vfParent, vfDev, vfID, saveData, "vfio-pci")
 			if err != nil {
 				network.SRIOVVirtualFunctionMutex.Unlock()
 				return nil, fmt.Errorf("Failed setting up VF: %w", err)
@@ -945,7 +981,7 @@ func (d *nicOVN) Start() (*deviceConfig.RunConfig, error) {
 			}
 
 			// Claim the SR-IOV virtual function (VF) on the parent (PF) and get the PCI information.
-			vfPCIDev, pciIOMMUGroup, err = networkSRIOVSetupVF(d.deviceCommon, vfParent, vfDev, vfID, saveData)
+			vfPCIDev, pciIOMMUGroup, err = networkSRIOVSetupVF(d.deviceCommon, vfParent, vfDev, vfID, saveData, "vfio-pci")
 			if err != nil {
 				network.SRIOVVirtualFunctionMutex.Unlock()
 				return nil, err
@@ -1193,8 +1229,11 @@ func (d *nicOVN) Update(oldDevices deviceConfig.Devices, isRunning bool) error {
 		}
 	}
 
-	// Apply any changes needed when assigned ACLs, external NAT addresses or nic limit changes.
+	// Apply any changes needed when assigned ACLs, filtering, external NAT addresses or nic limit changes.
 	if d.config["security.acls"] != oldConfig["security.acls"] ||
+		d.config["security.mac_filtering"] != oldConfig["security.mac_filtering"] ||
+		d.config["security.ipv4_filtering"] != oldConfig["security.ipv4_filtering"] ||
+		d.config["security.ipv6_filtering"] != oldConfig["security.ipv6_filtering"] ||
 		d.config["ipv4.address.external"] != oldConfig["ipv4.address.external"] ||
 		d.config["ipv6.address.external"] != oldConfig["ipv6.address.external"] ||
 		d.config["limits.ingress"] != oldConfig["limits.ingress"] ||
@@ -1404,17 +1443,24 @@ func (d *nicOVN) Stop() (*deviceConfig.RunConfig, error) {
 func (d *nicOVN) postStop() error {
 	defer func() {
 		_ = d.volatileSet(map[string]string{
-			"host_name":                "",
-			"last_state.hwaddr":        "",
-			"last_state.mtu":           "",
-			"last_state.created":       "",
-			"last_state.vdpa.name":     "",
-			"last_state.vf.parent":     "",
-			"last_state.vf.id":         "",
-			"last_state.vf.hwaddr":     "",
-			"last_state.vf.vlan":       "",
-			"last_state.vf.spoofcheck": "",
-			"last_state.pci.driver":    "",
+			"host_name":                       "",
+			"last_state.hwaddr":               "",
+			"last_state.mtu":                  "",
+			"last_state.created":              "",
+			"last_state.vdpa.name":            "",
+			"last_state.vf.parent":            "",
+			"last_state.vf.id":                "",
+			"last_state.vf.hwaddr":            "",
+			"last_state.vf.vlan":              "",
+			"last_state.vf.spoofcheck":        "",
+			"last_state.pci.driver":           "",
+			"last_state.representor":          "",
+			"last_state.representor.mtu":      "",
+			"last_state.representor.pvid":     "",
+			"last_state.representor.tagged":   "",
+			"last_state.representor.untagged": "",
+			"last_state.representor.up":       "",
+			"last_state.migratable":           "",
 		})
 	}()
 
@@ -1469,7 +1515,7 @@ func (d *nicOVN) postStop() error {
 		if err != nil {
 			return fmt.Errorf("Failed to bring down the host interface %q: %w", d.config["host_name"], err)
 		}
-	} else if d.config["host_name"] != "" && util.PathExists(fmt.Sprintf("/sys/class/net/%s", d.config["host_name"])) {
+	} else if d.config["host_name"] != "" && network.InterfaceExists(d.config["host_name"]) {
 		// Removing host-side end of veth pair will delete the peer end too.
 		err := network.InterfaceRemove(d.config["host_name"])
 		if err != nil {
@@ -1594,8 +1640,9 @@ func (d *nicOVN) State() (*api.InstanceStateNetwork, error) {
 	// When not on a nested NIC, fetch some details from the host.
 	if d.config["nested"] == "" {
 		// Get MTU of host interface that connects to OVN integration bridge if exists.
+		// The host interface is gone while the instance stops or migrates, which isn't worth reporting.
 		iface, err := net.InterfaceByName(d.config["host_name"])
-		if err != nil {
+		if err != nil && network.InterfaceExists(d.config["host_name"]) {
 			d.logger.Warn("Failed getting host interface state for MTU", logger.Ctx{"host_name": d.config["host_name"], "err": err})
 		}
 

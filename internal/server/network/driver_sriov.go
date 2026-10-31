@@ -1,6 +1,7 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/lxc/incus/v7/internal/server/cluster/request"
@@ -49,6 +50,22 @@ func (n *sriov) Validate(config map[string]string, clientType request.ClientType
 		// shortdesc: The VLAN ID to attach to
 		"vlan": validate.Optional(validate.IsNetworkVLAN),
 
+		// gendoc:generate(entity=network_sriov, group=common, key=failover)
+		//
+		// ---
+		// type: string
+		// scope: local
+		// condition: -
+		// shortdesc: Failover bridge to use when live-migrating `sriov` NICs
+		"failover": validate.Optional(validate.IsInterfaceName),
+
+		// gendoc:generate(entity=network_sriov, group=common, key=variant)
+		//
+		// ---
+		// type: string
+		// shortdesc: VFIO variant to use (registers `sriov` NICs with the generic `vfio-pci` driver if unset, or with `mlx5_vfio_pci` if set to `mlx5`)
+		"variant": validate.Optional(validate.IsOneOf("mlx5")),
+
 		// gendoc:generate(entity=network_sriov, group=common, key=user.*)
 		//
 		// ---
@@ -60,6 +77,10 @@ func (n *sriov) Validate(config map[string]string, clientType request.ClientType
 	err := n.validate(config, rules)
 	if err != nil {
 		return err
+	}
+
+	if config["failover"] != "" && config["variant"] != "" {
+		return errors.New("Failover bridges cannot be used when a VFIO variant is set")
 	}
 
 	return nil
@@ -85,6 +106,32 @@ func (n *sriov) Rename(newName string) error {
 	return nil
 }
 
+// checkParent checks that the parent is usable for the network.
+func (n *sriov) checkParent(parent string) error {
+	if !InterfaceExists(parent) {
+		return fmt.Errorf("Parent interface %q not found", parent)
+	}
+
+	return nil
+}
+
+// checkFailover checks that the failover is usable for the network.
+func (n *sriov) checkFailover(failover string) error {
+	if failover == "" {
+		return nil
+	}
+
+	if !IsNativeBridge(failover) {
+		// Check whether a non-native managed bridge exists.
+		_, err := LoadByName(n.state, api.ProjectDefaultName, failover)
+		if err != nil {
+			return fmt.Errorf("Failover network %q not found", failover)
+		}
+	}
+
+	return nil
+}
+
 // Start starts is a no-op.
 func (n *sriov) Start() error {
 	n.logger.Debug("Start")
@@ -94,8 +141,14 @@ func (n *sriov) Start() error {
 
 	reverter.Add(func() { n.setUnavailable() })
 
-	if !InterfaceExists(n.config["parent"]) {
-		return fmt.Errorf("Parent interface %q not found", n.config["parent"])
+	err := n.checkParent(n.config["parent"])
+	if err != nil {
+		return err
+	}
+
+	err = n.checkFailover(n.config["failover"])
+	if err != nil {
+		return err
 	}
 
 	reverter.Success()
@@ -118,7 +171,7 @@ func (n *sriov) Stop() error {
 func (n *sriov) Update(newNetwork api.NetworkPut, targetNode string, clientType request.ClientType) error {
 	n.logger.Debug("Update", logger.Ctx{"clientType": clientType, "newNetwork": newNetwork})
 
-	dbUpdateNeeded, _, oldNetwork, err := n.configChanged(newNetwork)
+	dbUpdateNeeded, changedKeys, oldNetwork, err := n.configChanged(newNetwork)
 	if err != nil {
 		return err
 	}
@@ -142,6 +195,22 @@ func (n *sriov) Update(newNetwork api.NetworkPut, targetNode string, clientType 
 		// Reset changes to all nodes and database.
 		_ = n.update(oldNetwork, targetNode, clientType)
 	})
+
+	for _, k := range changedKeys {
+		switch k {
+		case "parent":
+			err = n.checkParent(newNetwork.Config["parent"])
+			if err != nil {
+				return err
+			}
+
+		case "failover":
+			err = n.checkFailover(newNetwork.Config["failover"])
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	// Apply changes to all nodes and database.
 	err = n.update(newNetwork, targetNode, clientType)

@@ -35,6 +35,37 @@ Incus サーバーをリモートサーバーとして追加できるように�
    :end-before: <!-- Include end add remotes -->
 ```
 
+(remote-client-certificate)=
+## クライアント証明書を生成する
+
+クライアント証明書と秘密鍵の出力ファイルを指定するには、`--tls-cert`と`--tls-key`を両方指定してください：
+
+```sh
+incus remote generate-certificate --tls-cert ./my-client.crt --tls-key ./my-client.key
+```
+
+新しく生成される秘密鍵をパスフレーズで保護するには`--encrypt`を追加してください：
+
+```sh
+incus remote generate-certificate --tls-cert ./my-client.crt --tls-key ./my-client.key --encrypt
+```
+
+このコマンドは`./my-client.crt`と`./my-client.key`を出力します。
+出力ファイルのいずれかが既に存在する場合は生成は失敗します。これはサーバーが既に信頼しているかもしれない資格情報を上書きすることを防ぐためです。
+サーバーをリモートとして追加する前にサーバーにプリシードするために証明書を使えます。
+
+生成された資格情報でリモートを追加するには、トラストトークンとともにそれを渡します：
+
+```sh
+incus remote add my-remote <token> --tls-cert ./my-client.crt --tls-key ./my-client.key
+```
+
+資格情報はそのリモート用のIncusの設定ディレクトリーにコピーされます。
+暗号化された秘密鍵はディスク上でも暗号化されたままになり、必要時にIncusがプロンプトを表示してパスフレーズの入力を求めます。
+
+このオプションがなければ、`generate-certificate`はIncusの設定ディレクトリー内で共有される`client.crt`と`client.key`を生成します。
+クライアント証明書を登録する他の方法については{ref}`authentication-trusted-clients`を参照してください。
+
 ## デフォルトのリモートを選択する
 
 Incus コマンドラインクライアントは`local`リモート、つまりローカルの Incus デーモン、に接続する用に初期設定されています。
