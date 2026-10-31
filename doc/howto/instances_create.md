@@ -276,7 +276,7 @@ NetBSDシステムでは、ターミナルを**rootユーザーで**開いて以
 
 - Linuxでは`/etc/incus-agent.yml`
 - サポート対象のBSDライクなOS（MacOSとFreeBSD）では`/usr/local/etc/incus-agent.yml`
-- Windowsでは`C:\Program Files\Incus Agent\incus-agent.yml`
+- Windowsでは`C:\Program Files\Incus-Agent\incus-agent.yml`
 
 ファイルが存在しないか空であれば、すべての機能が有効になります。
 ファイルに`features`というマップがあれば、個別に有効しない限りすべての機能が無効になります。

@@ -42,3 +42,14 @@ Distrobuilder は既存のイメージを再パッケージするというより
 
 ## Incant
 [Incant](https://github.com/lnussbaum/incant)は開発環境を宣言的に定義と管理する方法を提供するIncusのフロントエンドです。YAMLベースの設定ファイルを使って、Incusインスタンスの作成、設定、プロビジョニングを簡素化します。
+
+## Community Scripts
+[Community Scripts](https://community-scripts.org)はセルフホストするアプリケーションのインストール用スクリプトのコレクションです。スクリプトはコンテナを作成したり、アプリケーションをインストールしてサービスをつなぎあわせたり、後にそれを更新したりします。
+このカタログはProxmox VE上に始まり、数百のアプリケーションに成長しました。
+[Incus repository](https://github.com/community-scripts/Incus)では同じスクリプトをIncusホスト用にしたものを提供します。
+
+スクリプトは何をインストールするかについてのみ説明があります。インスタンスを作成し設定するのは共有のエンジンで行い、それは`incus` CLIを通じてIncusと対話しますので、スクリプトはローカルとリモートのIncusサーバーで変更なしで動作します：
+
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/Incus/main/ct/debian.sh)"
+
+ウェブサイトではそれぞれのアプリケーションをリソースのデフォルトとともに一覧表示していて、あなたのホスト用にインストールコマンドをあなたがビルドできます。
